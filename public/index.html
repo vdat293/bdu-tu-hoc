@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BDU Grade Portal - Tra Cứu Bảng Điểm Sinh Viên Đại Học Bình Dương</title>
+  <meta name="description" content="Cổng thông tin tra cứu bảng điểm sinh viên, phân tích GPA và quản lý tiến độ học tập Đại học Bình Dương (BDU).">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark">
+  
+  <!-- Background Glow FX -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-glow bg-glow-3"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- View 1: Login Screen -->
+  <main id="login-view" class="view-section active">
+    <div class="login-wrapper">
+      <div class="login-card glass-panel">
+        <div class="login-header">
+          <div class="university-badge">
+            <div class="badge-icon">🎓</div>
+            <span class="badge-tag">BDU PORTAL</span>
+          </div>
+          <h1 class="login-title">Tra Cứu Bảng Điểm</h1>
+          <p class="login-subtitle">Đăng nhập bằng tài khoản Cổng Thông Tin Sinh Viên BDU</p>
+        </div>
+
+        <form id="login-form" class="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="username" class="form-label">
+              <span class="label-text">Mã Số Sinh Viên (MSSV)</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </span>
+              <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                class="form-input" 
+                placeholder="Ví dụ: 24050126" 
+                required 
+                autocomplete="username"
+              >
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password" class="form-label">
+              <span class="label-text">Mật Khẩu</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </span>
+              <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-input" 
+                placeholder="Mật khẩu của bạn" 
+                required 
+                autocomplete="current-password"
+              >
+              <button type="button" id="toggle-password" class="input-btn" title="Hiện/Ẩn mật khẩu" tabindex="-1">
+                <svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-.722-3.25"/><path d="M2 8a10.645 10.645 0 0 0 20 0"/><path d="m20 15-1.726-2.05"/><path d="m4 15 1.726-2.05"/><path d="m9 18 .722-3.25"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <label class="checkbox-label">
+              <input type="checkbox" id="remember-me">
+              <span class="checkbox-custom"></span>
+              <span class="checkbox-text">Ghi nhớ tài khoản</span>
+            </label>
+          </div>
+
+          <button type="submit" id="btn-login" class="btn btn-primary btn-block">
+            <span class="btn-text">Đăng Nhập & Xem Điểm</span>
+            <span class="btn-loader hidden">
+              <svg class="spinner" viewBox="0 0 50 50">
+                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+              </svg>
+            </span>
+          </button>
+        </form>
+
+        <div class="login-footer">
+          <p class="login-note">
+            🔒 Kết nối bảo mật trực tiếp với hệ thống <strong>sv.bdu.edu.vn</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- View 2: Student Dashboard -->
+  <main id="dashboard-view" class="view-section hidden">
+    <!-- Navigation Bar -->
+    <header class="navbar glass-panel">
+      <div class="navbar-container">
+        <div class="navbar-brand">
+          <div class="brand-logo">🎓</div>
+          <div class="brand-info">
+            <h2 class="brand-name">BDU Grade Viewer</h2>
+            <span class="brand-badge">Đại Học Bình Dương</span>
+          </div>
+        </div>
+
+        <div class="navbar-actions">
+          <button id="btn-refresh" class="nav-btn" title="Tải lại bảng điểm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+            <span class="btn-label">Làm mới</span>
+          </button>
+          
+          <button id="btn-print" class="nav-btn" title="In hoặc Lưu PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+            <span class="btn-label">In Bảng Điểm</span>
+          </button>
+
+          <button id="btn-export-csv" class="nav-btn" title="Xuất file CSV/Excel">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span class="btn-label">Xuất CSV</span>
+          </button>
+
+          <div class="user-profile-pill">
+            <div id="user-avatar" class="avatar-circle">SV</div>
+            <div class="user-details">
+              <span id="nav-user-name" class="user-fullname">Đang tải...</span>
+              <span id="nav-user-mssv" class="user-mssv-text">MSSV</span>
+            </div>
+          </div>
+
+          <button id="btn-logout" class="nav-btn btn-danger" title="Đăng xuất">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="dashboard-content">
+      
+      <!-- Student Info Hero Header -->
+      <section class="hero-section glass-panel">
+        <div class="hero-profile">
+          <div id="hero-avatar" class="hero-avatar">SV</div>
+          <div class="hero-info">
+            <div class="hero-tags">
+              <span id="hero-role" class="tag tag-role">Sinh Viên</span>
+              <span id="hero-status" class="tag tag-active">Đang Học</span>
+            </div>
+            <h1 id="hero-name" class="hero-name">Nguyễn Văn A</h1>
+            <div class="hero-meta">
+              <span class="meta-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                MSSV: <strong id="hero-mssv">24050126</strong>
+              </span>
+              <span class="meta-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                Email: <span id="hero-email">24050126@student.bdu.edu.vn</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Summary Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon icon-gpa-10">🏆</div>
+            <div class="stat-info">
+              <span class="stat-title">GPA Tích Lũy (10)</span>
+              <h3 id="stat-gpa-10" class="stat-value text-gradient-amber">--</h3>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon icon-gpa-4">⭐</div>
+            <div class="stat-info">
+              <span class="stat-title">GPA Tích Lũy (4.0)</span>
+              <h3 id="stat-gpa-4" class="stat-value text-gradient-emerald">--</h3>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon icon-credits">📚</div>
+            <div class="stat-info">
+              <span class="stat-title">Tín Chỉ Đạt Tích Lũy</span>
+              <h3 id="stat-credits" class="stat-value text-gradient-blue">--</h3>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon icon-rank">🎖️</div>
+            <div class="stat-info">
+              <span class="stat-title">Xếp Loại Tổng Thể</span>
+              <h3 id="stat-rank" class="stat-value text-gradient-purple">--</h3>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Charts & Visual Analytics Section -->
+      <section class="analytics-grid">
+        <!-- GPA Trend Chart -->
+        <div class="chart-card glass-panel">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h3 class="card-title">📈 Biểu Đồ Tiến Trình Học Tập (GPA)</h3>
+              <p class="card-desc">Biến động điểm trung bình học kỳ qua từng giai đoạn</p>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="gpaTrendChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Grade Distribution & Summary Donut -->
+        <div class="chart-card glass-panel">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h3 class="card-title">📊 Phân Bố Điểm Chữ</h3>
+              <p class="card-desc">Tỷ lệ các thang điểm chữ (A, B+, B, C, D, F)</p>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="gradeDistChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gradebook Table Section -->
+      <section class="gradebook-section glass-panel">
+        
+        <!-- Controls & Filters Toolbar -->
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <div class="filter-group">
+              <label for="semester-select" class="filter-label">Chọn Học Kỳ:</label>
+              <select id="semester-select" class="custom-select">
+                <option value="ALL">📁 Tất cả các học kỳ</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label for="status-filter" class="filter-label">Trạng Thái:</label>
+              <select id="status-filter" class="custom-select">
+                <option value="ALL">Tất cả môn</option>
+                <option value="PASS">✅ Môn đạt</option>
+                <option value="FAIL">❌ Môn chưa đạt (F)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <div class="search-box">
+              <span class="search-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <input type="text" id="search-subject" class="search-input" placeholder="Tìm tên môn, mã môn...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Semester Groups Container (Rendered by Semester Groups) -->
+        <div id="semester-groups-container" class="semester-groups-container">
+          <!-- Dynamically Populated by Semesters -->
+        </div>
+
+        <!-- Empty state -->
+        <div id="table-empty" class="empty-state hidden">
+          <div class="empty-icon">🔍</div>
+          <p class="empty-text">Không tìm thấy môn học nào phù hợp với bộ lọc.</p>
+        </div>
+
+        <div class="table-footer">
+          <div class="footer-stats">
+            Tổng cộng hiển thị: <strong id="visible-courses-count">0</strong> môn học (<strong id="visible-credits-count">0</strong> tín chỉ)
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Component Grades Modal (Điểm thành phần chi tiết) -->
+  <div id="detail-modal" class="modal-backdrop hidden">
+    <div class="modal-dialog glass-panel">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3 id="modal-course-name" class="modal-title">Tên Môn Học</h3>
+          <span id="modal-course-code" class="modal-badge">MÃ MÔN</span>
+        </div>
+        <button id="modal-close" class="modal-close-btn" title="Đóng">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="course-summary-row">
+          <div class="m-summary-item">Số Tín Chỉ: <strong id="modal-credits">3</strong></div>
+          <div class="m-summary-item">Điểm Tổng Kết (10): <strong id="modal-tk-10">9.0</strong></div>
+          <div class="m-summary-item">Điểm Hệ 4: <strong id="modal-tk-4">4.0</strong></div>
+          <div class="m-summary-item">Điểm Chữ: <strong id="modal-letter" class="grade-pill grade-a">A</strong></div>
+        </div>
+
+        <h4 class="component-section-title">Bảng Điểm Thành Phần Chi Tiết:</h4>
+        
+        <div class="table-responsive">
+          <table class="modal-table">
+            <thead>
+              <tr>
+                <th>Tên Thành Phần</th>
+                <th>Tỷ Lệ (%)</th>
+                <th>Điểm Số</th>
+                <th>Ghi Chú</th>
+              </tr>
+            </thead>
+            <tbody id="modal-components-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modal-btn-dismiss" class="btn btn-secondary">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

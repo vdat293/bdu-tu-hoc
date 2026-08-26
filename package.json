@@ -1,0 +1,14 @@
+{
+  "name": "bdu-grade-viewer",
+  "version": "1.0.0",
+  "description": "Ứng dụng tra cứu bảng điểm sinh viên BDU - Đại học Bình Dương",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
