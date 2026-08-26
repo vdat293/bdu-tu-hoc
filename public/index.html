@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BDU Grade Portal - Tra Cứu Bảng Điểm Sinh Viên Đại Học Bình Dương</title>
-  <meta name="description" content="Cổng thông tin tra cứu bảng điểm sinh viên, phân tích GPA và quản lý tiến độ học tập Đại học Bình Dương (BDU).">
+  <title>BDU Tự Học - Cổng Tiện Ích & Tự Động Hóa Sinh Viên Đại Học Bình Dương</title>
+  <meta name="description" content="Nền tảng tự học, tra cứu bảng điểm, xem lý lịch, thời khóa biểu, chuẩn hóa Word chuẩn viện và tự động hóa khảo sát dành riêng cho sinh viên BDU.">
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -27,17 +27,19 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- View 1: Login Screen -->
+  <!-- ========================================================================= -->
+  <!-- VIEW 1: LOGIN SCREEN                                                      -->
+  <!-- ========================================================================= -->
   <main id="login-view" class="view-section active">
     <div class="login-wrapper">
       <div class="login-card glass-panel">
         <div class="login-header">
           <div class="university-badge">
-            <div class="badge-icon">🎓</div>
-            <span class="badge-tag">BDU PORTAL</span>
+            <span class="badge-icon">🎓</span>
+            <span class="badge-tag">BDU HUB</span>
           </div>
-          <h1 class="login-title">Tra Cứu Bảng Điểm</h1>
-          <p class="login-subtitle">Đăng nhập bằng tài khoản Cổng Thông Tin Sinh Viên BDU</p>
+          <h1 class="login-title">BDU Tự Học & Tiện Ích</h1>
+          <p class="login-subtitle">Đăng nhập bằng tài khoản Cổng Sinh Viên <strong>sv.bdu.edu.vn</strong></p>
         </div>
 
         <form id="login-form" class="login-form" autocomplete="on">
@@ -87,222 +89,754 @@
 
           <div class="form-actions">
             <label class="checkbox-label">
-              <input type="checkbox" id="remember-me">
+              <input type="checkbox" id="remember-me" checked>
               <span class="checkbox-custom"></span>
-              <span class="checkbox-text">Ghi nhớ tài khoản</span>
+              <span class="checkbox-text">Ghi nhớ phiên đăng nhập</span>
             </label>
           </div>
 
           <button type="submit" id="btn-login" class="btn btn-primary btn-block">
-            <span class="btn-text">Đăng Nhập & Xem Điểm</span>
+            <span class="btn-text">Đăng Nhập Vào BDU Hub</span>
             <span class="btn-loader hidden">
-              <svg class="spinner" viewBox="0 0 50 50">
-                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
-              </svg>
+              <svg class="spinner" viewBox="0 0 50 50"><circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle></svg>
             </span>
           </button>
         </form>
 
         <div class="login-footer">
           <p class="login-note">
-            🔒 Kết nối bảo mật trực tiếp với hệ thống <strong>sv.bdu.edu.vn</strong>
+            🔒 Kết nối an toàn trực tiếp máy chủ trường BDU. Hệ thống không lưu mật khẩu.
           </p>
         </div>
       </div>
     </div>
   </main>
 
-  <!-- View 2: Student Dashboard -->
-  <main id="dashboard-view" class="view-section hidden">
-    <!-- Navigation Bar -->
-    <header class="navbar glass-panel">
-      <div class="navbar-container">
-        <div class="navbar-brand">
+  <!-- ========================================================================= -->
+  <!-- VIEW 2: DASHBOARD SHELL (SIDEBAR + MAIN CONTENT)                          -->
+  <!-- ========================================================================= -->
+  <div id="dashboard-view" class="app-layout hidden">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar glass-panel">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
           <div class="brand-logo">🎓</div>
-          <div class="brand-info">
-            <h2 class="brand-name">BDU Grade Viewer</h2>
-            <span class="brand-badge">Đại Học Bình Dương</span>
+          <div class="brand-meta">
+            <span class="brand-title">BDU Tự Học</span>
+            <span class="brand-subtitle">Smart Student Hub</span>
           </div>
-        </div>
-
-        <div class="navbar-actions">
-          <button id="btn-refresh" class="nav-btn" title="Tải lại bảng điểm">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-            <span class="btn-label">Làm mới</span>
-          </button>
-          
-          <button id="btn-print" class="nav-btn" title="In hoặc Lưu PDF">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-            <span class="btn-label">In Bảng Điểm</span>
-          </button>
-
-          <button id="btn-export-csv" class="nav-btn" title="Xuất file CSV/Excel">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            <span class="btn-label">Xuất CSV</span>
-          </button>
-
-          <div class="user-profile-pill">
-            <div id="user-avatar" class="avatar-circle">SV</div>
-            <div class="user-details">
-              <span id="nav-user-name" class="user-fullname">Đang tải...</span>
-              <span id="nav-user-mssv" class="user-mssv-text">MSSV</span>
-            </div>
-          </div>
-
-          <button id="btn-logout" class="nav-btn btn-danger" title="Đăng xuất">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-          </button>
         </div>
       </div>
-    </header>
 
-    <!-- Main Content Layout -->
-    <div class="dashboard-content">
+      <nav class="sidebar-nav">
+        <!-- Group 1: Portal -->
+        <div class="nav-group">
+          <div class="nav-group-title">CỔNG SINH VIÊN</div>
+          <button class="nav-item active" data-tab="tab-grades">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">Bảng Điểm & GPA</span>
+          </button>
+          <button class="nav-item" data-tab="tab-profile">
+            <span class="nav-icon">👤</span>
+            <span class="nav-text">Lý Lịch Sinh Viên</span>
+          </button>
+          <button class="nav-item" data-tab="tab-schedule">
+            <span class="nav-icon">📅</span>
+            <span class="nav-text">Thời Khóa Biểu</span>
+            <span class="badge-mini badge-pill-blue">Mock</span>
+          </button>
+        </div>
+
+        <!-- Group 2: Tools -->
+        <div class="nav-group">
+          <div class="nav-group-title">BỘ CÔNG CỤ TỰ ĐỘNG</div>
+          <button class="nav-item" data-tab="tab-wordfmt">
+            <span class="nav-icon">📄</span>
+            <span class="nav-text">Chuẩn Hóa Word BDU</span>
+            <span class="badge-mini badge-pill-emerald">Pro</span>
+          </button>
+          <button class="nav-item" data-tab="tab-survey">
+            <span class="nav-icon">🤖</span>
+            <span class="nav-text">Auto Đánh Giá Khảo Sát</span>
+            <span class="badge-mini badge-pill-purple">Bot</span>
+          </button>
+          <button class="nav-item" data-tab="tab-enrollment">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-text">Auto Đăng Ký Môn</span>
+            <span class="badge-mini badge-pill-amber">Soon</span>
+          </button>
+        </div>
+
+        <!-- Group 3: E-Learning Hub -->
+        <div class="nav-group">
+          <div class="nav-group-title">GÓC TỰ HỌC SỐ</div>
+          <button class="nav-item" data-tab="tab-learning">
+            <span class="nav-icon">📚</span>
+            <span class="nav-text">Kho Tài Liệu & Video</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile-pill">
+          <div id="user-avatar" class="avatar-circle">SV</div>
+          <div class="user-details">
+            <span id="nav-user-name" class="user-fullname">Đang tải...</span>
+            <span id="nav-user-mssv" class="user-mssv-text">MSSV</span>
+          </div>
+        </div>
+        <button id="btn-logout" class="btn-logout" title="Đăng xuất">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main App Content -->
+    <div class="main-content-wrapper">
       
-      <!-- Student Info Hero Header -->
-      <section class="hero-section glass-panel">
-        <div class="hero-profile">
-          <div id="hero-avatar" class="hero-avatar">SV</div>
-          <div class="hero-info">
-            <div class="hero-tags">
-              <span id="hero-role" class="tag tag-role">Sinh Viên</span>
-              <span id="hero-status" class="tag tag-active">Đang Học</span>
-            </div>
-            <h1 id="hero-name" class="hero-name">Nguyễn Văn A</h1>
-            <div class="hero-meta">
-              <span class="meta-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-                MSSV: <strong id="hero-mssv">24050126</strong>
-              </span>
-              <span class="meta-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                Email: <span id="hero-email">24050126@student.bdu.edu.vn</span>
-              </span>
-            </div>
+      <!-- Topbar Header -->
+      <header class="topbar glass-panel">
+        <div class="topbar-left">
+          <button id="btn-toggle-sidebar" class="btn-icon mobile-only" title="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+          </button>
+          <div class="page-title-group">
+            <h2 id="topbar-page-title" class="topbar-title">Bảng Điểm & GPA</h2>
+            <span class="topbar-badge">Cổng Đại Học Bình Dương</span>
           </div>
         </div>
 
-        <!-- Quick Summary Stats Grid -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon icon-gpa-10">🏆</div>
-            <div class="stat-info">
-              <span class="stat-title">GPA Tích Lũy (10)</span>
-              <h3 id="stat-gpa-10" class="stat-value text-gradient-amber">--</h3>
-            </div>
-          </div>
+        <div class="topbar-actions">
+          <button id="btn-refresh" class="topbar-btn" title="Làm mới dữ liệu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+            <span class="btn-label">Làm mới</span>
+          </button>
 
-          <div class="stat-card">
-            <div class="stat-icon icon-gpa-4">⭐</div>
-            <div class="stat-info">
-              <span class="stat-title">GPA Tích Lũy (4.0)</span>
-              <h3 id="stat-gpa-4" class="stat-value text-gradient-emerald">--</h3>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon icon-credits">📚</div>
-            <div class="stat-info">
-              <span class="stat-title">Tín Chỉ Đạt Tích Lũy</span>
-              <h3 id="stat-credits" class="stat-value text-gradient-blue">--</h3>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon icon-rank">🎖️</div>
-            <div class="stat-info">
-              <span class="stat-title">Xếp Loại Tổng Thể</span>
-              <h3 id="stat-rank" class="stat-value text-gradient-purple">--</h3>
-            </div>
-          </div>
+          <button id="btn-theme-toggle" class="btn-icon" title="Chuyển đổi giao diện Sáng / Tối">
+            <svg class="icon-sun hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          </button>
         </div>
-      </section>
+      </header>
 
-      <!-- Charts & Visual Analytics Section -->
-      <section class="analytics-grid">
-        <!-- GPA Trend Chart -->
-        <div class="chart-card glass-panel">
-          <div class="card-header">
-            <div class="card-title-group">
-              <h3 class="card-title">📈 Biểu Đồ Tiến Trình Học Tập (GPA)</h3>
-              <p class="card-desc">Biến động điểm trung bình học kỳ qua từng giai đoạn</p>
-            </div>
-          </div>
-          <div class="chart-container">
-            <canvas id="gpaTrendChart"></canvas>
-          </div>
-        </div>
+      <!-- Scrollable Tab Container -->
+      <main class="dashboard-body">
 
-        <!-- Grade Distribution & Summary Donut -->
-        <div class="chart-card glass-panel">
-          <div class="card-header">
-            <div class="card-title-group">
-              <h3 class="card-title">📊 Phân Bố Điểm Chữ</h3>
-              <p class="card-desc">Tỷ lệ các thang điểm chữ (A, B+, B, C, D, F)</p>
-            </div>
-          </div>
-          <div class="chart-container">
-            <canvas id="gradeDistChart"></canvas>
-          </div>
-        </div>
-      </section>
-
-      <!-- Gradebook Table Section -->
-      <section class="gradebook-section glass-panel">
-        
-        <!-- Controls & Filters Toolbar -->
-        <div class="toolbar">
-          <div class="toolbar-left">
-            <div class="filter-group">
-              <label for="semester-select" class="filter-label">Chọn Học Kỳ:</label>
-              <select id="semester-select" class="custom-select">
-                <option value="ALL">📁 Tất cả các học kỳ</option>
-              </select>
+        <!-- ================================================================= -->
+        <!-- TAB 1: BẢNG ĐIỂM & GPA                                            -->
+        <!-- ================================================================= -->
+        <section id="tab-grades" class="tab-pane active">
+          <!-- Student Hero Header -->
+          <div class="hero-section glass-panel">
+            <div class="hero-profile">
+              <div id="hero-avatar" class="hero-avatar">SV</div>
+              <div class="hero-info">
+                <div class="hero-tags">
+                  <span id="hero-role" class="tag tag-role">Sinh Viên</span>
+                  <span id="hero-status" class="tag tag-active">Đang Học</span>
+                </div>
+                <h1 id="hero-name" class="hero-name">Đang tải...</h1>
+                <div class="hero-meta">
+                  <span class="meta-item">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                    MSSV: <strong id="hero-mssv">--</strong>
+                  </span>
+                  <span class="meta-item">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                    Email: <span id="hero-email">--</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div class="filter-group">
-              <label for="status-filter" class="filter-label">Trạng Thái:</label>
-              <select id="status-filter" class="custom-select">
-                <option value="ALL">Tất cả môn</option>
-                <option value="PASS">✅ Môn đạt</option>
-                <option value="FAIL">❌ Môn chưa đạt (F)</option>
-              </select>
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon icon-gpa-10">🏆</div>
+                <div class="stat-info">
+                  <span class="stat-title">GPA Tích Lũy (10)</span>
+                  <h3 id="stat-gpa-10" class="stat-value text-gradient-amber">--</h3>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-gpa-4">⭐</div>
+                <div class="stat-info">
+                  <span class="stat-title">GPA Tích Lũy (4.0)</span>
+                  <h3 id="stat-gpa-4" class="stat-value text-gradient-emerald">--</h3>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-credits">📚</div>
+                <div class="stat-info">
+                  <span class="stat-title">Tín Chỉ Đạt</span>
+                  <h3 id="stat-credits" class="stat-value text-gradient-blue">--</h3>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-rank">🎖️</div>
+                <div class="stat-info">
+                  <span class="stat-title">Xếp Loại</span>
+                  <h3 id="stat-rank" class="stat-value text-gradient-purple">--</h3>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="toolbar-right">
-            <div class="search-box">
-              <span class="search-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              </span>
-              <input type="text" id="search-subject" class="search-input" placeholder="Tìm tên môn, mã môn...">
+          <!-- Charts -->
+          <div class="analytics-grid">
+            <div class="chart-card glass-panel">
+              <div class="card-header">
+                <div class="card-title-group">
+                  <h3 class="card-title">📈 Biểu Đồ Tiến Trình Học Tập (GPA)</h3>
+                  <p class="card-desc">Biến động điểm trung bình qua từng học kỳ</p>
+                </div>
+              </div>
+              <div class="chart-container">
+                <canvas id="gpaTrendChart"></canvas>
+              </div>
+            </div>
+
+            <div class="chart-card glass-panel">
+              <div class="card-header">
+                <div class="card-title-group">
+                  <h3 class="card-title">📊 Phân Bố Điểm Chữ</h3>
+                  <p class="card-desc">Tỷ lệ các thang điểm chữ (A, B, C, D, F)</p>
+                </div>
+              </div>
+              <div class="chart-container">
+                <canvas id="gradeDistChart"></canvas>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Semester Groups Container (Rendered by Semester Groups) -->
-        <div id="semester-groups-container" class="semester-groups-container">
-          <!-- Dynamically Populated by Semesters -->
-        </div>
+          <!-- Gradebook Table Section -->
+          <div class="gradebook-section glass-panel">
+            <div class="toolbar">
+              <div class="toolbar-left">
+                <div class="filter-group">
+                  <label for="semester-select" class="filter-label">Chọn Học Kỳ:</label>
+                  <select id="semester-select" class="custom-select">
+                    <option value="ALL">📁 Tất cả các học kỳ</option>
+                  </select>
+                </div>
 
-        <!-- Empty state -->
-        <div id="table-empty" class="empty-state hidden">
-          <div class="empty-icon">🔍</div>
-          <p class="empty-text">Không tìm thấy môn học nào phù hợp với bộ lọc.</p>
-        </div>
+                <div class="filter-group">
+                  <label for="status-filter" class="filter-label">Trạng Thái:</label>
+                  <select id="status-filter" class="custom-select">
+                    <option value="ALL">Tất cả môn</option>
+                    <option value="PASS">✅ Môn đạt</option>
+                    <option value="FAIL">❌ Môn chưa đạt (F)</option>
+                  </select>
+                </div>
+              </div>
 
-        <div class="table-footer">
-          <div class="footer-stats">
-            Tổng cộng hiển thị: <strong id="visible-courses-count">0</strong> môn học (<strong id="visible-credits-count">0</strong> tín chỉ)
+              <div class="toolbar-right">
+                <div class="search-box">
+                  <span class="search-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  </span>
+                  <input type="text" id="search-subject" class="search-input" placeholder="Tìm tên môn, mã môn...">
+                </div>
+
+                <button id="btn-export-csv" class="btn-action-sm" title="Xuất file CSV">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  <span>CSV</span>
+                </button>
+
+                <button id="btn-print" class="btn-action-sm" title="In hoặc lưu PDF">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                  <span>In</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="semester-groups-container" class="semester-groups-container">
+              <!-- Dynamically populated -->
+            </div>
+
+            <div id="table-empty" class="empty-state hidden">
+              <div class="empty-icon">🔍</div>
+              <p class="empty-text">Không tìm thấy môn học nào phù hợp với bộ lọc.</p>
+            </div>
+
+            <div class="table-footer">
+              <div class="footer-stats">
+                Tổng cộng hiển thị: <strong id="visible-courses-count">0</strong> môn học (<strong id="visible-credits-count">0</strong> tín chỉ)
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-      </section>
+        <!-- ================================================================= -->
+        <!-- TAB 2: LÝ LỊCH SINH VIÊN                                          -->
+        <!-- ================================================================= -->
+        <section id="tab-profile" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <h2 class="section-title">👤 Lý Lịch & Hồ Sơ Sinh Viên</h2>
+            <p class="section-desc">Thông tin học vụ cá nhân được đồng bộ từ cổng quản lý sinh viên BDU</p>
+          </div>
 
+          <div class="bdu-profile-bento-grid">
+            <!-- 1. Hero Master Student Card -->
+            <div class="profile-hero-card glass-panel">
+              <div class="hero-card-header">
+                <div class="bdu-badge-brand">
+                  <span class="brand-dot"></span>
+                  <span>TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG</span>
+                  <span class="badge-pipe">|</span>
+                  <span class="brand-sub">CỔNG QUẢN LÝ ĐÀO TẠO BDU</span>
+                </div>
+                <div class="live-sync-badge">
+                  <span class="pulse-dot"></span>
+                  <span>Đồng bộ thời gian thực</span>
+                </div>
+              </div>
+
+              <div class="hero-card-body">
+                <div class="student-avatar-box">
+                  <div class="avatar-ring">
+                    <img id="profile-student-photo" src="" alt="Ảnh sinh viên" class="student-avatar-img hidden">
+                    <div id="card-avatar" class="student-avatar-fallback">NĐ</div>
+                  </div>
+                  <div class="student-status-badge">
+                    <span class="status-indicator"></span>
+                    <span id="p-status">Đang học</span>
+                  </div>
+                </div>
+
+                <div class="student-core-info">
+                  <div class="name-row">
+                    <h2 id="p-fullname" class="student-main-name">Nguyễn Vũ Đạt</h2>
+                    <span class="verified-icon" title="Hồ sơ đã xác thực từ BDU">✓</span>
+                  </div>
+
+                  <div class="mssv-copy-row">
+                    <div class="mssv-badge" onclick="navigator.clipboard.writeText(document.getElementById('p-mssv').textContent); window.showToast('Đã sao chép MSSV: ' + document.getElementById('p-mssv').textContent, 'success');" title="Bấm để sao chép MSSV">
+                      <span class="mssv-label">MSSV:</span>
+                      <strong id="p-mssv" class="mssv-number">24050126</strong>
+                      <span class="copy-icon">📋</span>
+                    </div>
+                    <span class="meta-tag">
+                      <span>🎂</span> <span id="p-dob">02/09/2003</span>
+                    </span>
+                    <span class="meta-tag">
+                      <span>🚻</span> <span id="p-gender">Nam</span>
+                    </span>
+                  </div>
+
+                  <div class="quick-chips-row">
+                    <div class="info-chip">
+                      <span class="chip-icon">🏫</span>
+                      <div class="chip-content">
+                        <span class="chip-title">Khoa</span>
+                        <span id="p-faculty" class="chip-val">Công nghệ thông tin</span>
+                      </div>
+                    </div>
+
+                    <div class="info-chip">
+                      <span class="chip-icon">💻</span>
+                      <div class="chip-content">
+                        <span class="chip-title">Ngành</span>
+                        <span id="p-major" class="chip-val">Công nghệ thông tin</span>
+                      </div>
+                    </div>
+
+                    <div class="info-chip">
+                      <span class="chip-icon">🏷️</span>
+                      <div class="chip-content">
+                        <span class="chip-title">Lớp</span>
+                        <span id="p-class" class="chip-val chip-highlight">27TH03</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Dual Sub Bento Grid -->
+            <div class="profile-sub-grid">
+              <!-- Sub Card A: Chi tiết học vụ -->
+              <div class="sub-bento-card glass-panel">
+                <div class="card-head-mini">
+                  <div class="card-head-title">
+                    <span class="head-icon">📚</span>
+                    <h3>Thông Tin Khóa Học & Đào Tạo</h3>
+                  </div>
+                  <span class="badge-mini badge-pill-blue">Chính Quy</span>
+                </div>
+
+                <div class="bento-list-items">
+                  <div class="bento-item">
+                    <div class="item-left">
+                      <span class="item-icon">📜</span>
+                      <span class="item-label">Bậc hệ đào tạo</span>
+                    </div>
+                    <strong id="p-education-level" class="item-value">Đại học chính quy</strong>
+                  </div>
+
+                  <div class="bento-item">
+                    <div class="item-left">
+                      <span class="item-icon">⏳</span>
+                      <span class="item-label">Niên khóa đào tạo</span>
+                    </div>
+                    <strong id="p-cohort-years" class="item-value text-blue">2024 - 2028</strong>
+                  </div>
+
+                  <div class="bento-item">
+                    <div class="item-left">
+                      <span class="item-icon">🎓</span>
+                      <span class="item-label">Hình thức học</span>
+                    </div>
+                    <span class="item-value">Tích lũy tín chỉ</span>
+                  </div>
+
+                  <div class="bento-item">
+                    <div class="item-left">
+                      <span class="item-icon">🛡️</span>
+                      <span class="item-label">Trạng thái hồ sơ</span>
+                    </div>
+                    <span class="item-value text-emerald">Đầy đủ & Hợp lệ</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub Card B: Cố vấn học tập -->
+              <div class="sub-bento-card glass-panel">
+                <div class="card-head-mini">
+                  <div class="card-head-title">
+                    <span class="head-icon">👨‍🏫</span>
+                    <h3>Cố Vấn Học Tập (CVHT)</h3>
+                  </div>
+                  <span class="badge-mini badge-pill-emerald">Quản Nhiệm</span>
+                </div>
+
+                <div class="advisor-profile-box">
+                  <div class="advisor-header-inline">
+                    <div class="advisor-avatar-circle">
+                      <span>GV</span>
+                    </div>
+                    <div class="advisor-title-info">
+                      <h4 id="p-advisor-name" class="advisor-name">Nguyễn Thị Ngọc Mai</h4>
+                      <div class="advisor-sub">
+                        <span>Mã CB: <strong id="p-advisor-id">91044</strong></span>
+                        <span class="dot-separator">•</span>
+                        <span>Khoa CNTT</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="advisor-actions">
+                    <a id="btn-mail-advisor" href="mailto:91044@bdu.edu.vn" class="btn-advisor-action" title="Gửi email cho cố vấn">
+                      <span>✉️ Gửi Email Trao Đổi</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: THỜI KHÓA BIỂU                                             -->
+        <!-- ================================================================= -->
+        <section id="tab-schedule" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <div class="header-split">
+              <div>
+                <h2 class="section-title">📅 Thời Khóa Biểu Học Tập</h2>
+                <p id="schedule-subtitle" class="section-desc">Đồng bộ tự động từ Cổng Quản Lý Đào Tạo Đại Học Bình Dương</p>
+              </div>
+              <div class="schedule-controls-row">
+                <div class="schedule-select-wrapper">
+                  <span class="select-icon">🎓</span>
+                  <select id="schedule-semester-select" class="form-select schedule-dropdown" title="Chọn học kỳ tra cứu thời khóa biểu">
+                    <option value="20261">Học kỳ 1 (2026 - 2027)</option>
+                    <option value="20252">Học kỳ 2 (2025 - 2026)</option>
+                    <option value="20251">Học kỳ 1 (2025 - 2026)</option>
+                  </select>
+                </div>
+                <div id="schedule-badge-status" class="schedule-badge">
+                  <span class="pulse-dot"></span>
+                  <span id="schedule-status-text">Đang tải...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Schedule Grid & Cards -->
+          <div id="schedule-grid" class="schedule-grid">
+            <!-- Dynamically populated with schedule cards -->
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: CHUẨN HÓA WORD BDU (INTEGRATED WORDFMT ENGINE)              -->
+        <!-- ================================================================= -->
+        <section id="tab-wordfmt" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <div class="header-split">
+              <div>
+                <h2 class="section-title">📄 Chuẩn Hóa Văn Bản Word (BDU WordFmt)</h2>
+                <p class="section-desc">Tự động định dạng lề A4, font chữ, Heading H1-H4, mục lục, bảng/hình, bìa chuẩn viện HTTT/BDU</p>
+              </div>
+              <span class="badge-mini badge-pill-emerald">.NET 10 Engine</span>
+            </div>
+          </div>
+
+          <div class="wordfmt-layout">
+            <!-- Left: Upload & Config Form -->
+            <div class="wordfmt-card glass-panel">
+              <form id="form-wordfmt">
+                <!-- Dropzone -->
+                <div class="form-group">
+                  <label class="form-label">Chọn hoặc Kéo Thả File Tiểu Luận / Báo Cáo (.docx):</label>
+                  <div id="docx-dropzone" class="dropzone-box">
+                    <input type="file" id="docx-file-input" accept=".docx" class="hidden-file-input">
+                    <div class="dropzone-content">
+                      <div class="dropzone-icon">📁</div>
+                      <h4 class="dropzone-title">Kéo & Thả file .docx vào đây</h4>
+                      <p class="dropzone-subtitle">hoặc <span class="text-blue cursor-pointer">Bấm để chọn file từ máy tính</span></p>
+                      <span class="dropzone-hint">Dung lượng tối đa 25MB (.docx)</span>
+                    </div>
+                    <div id="dropzone-file-info" class="file-info-badge hidden">
+                      <span class="file-icon">📄</span>
+                      <span id="selected-file-name" class="file-name">document.docx</span>
+                      <button type="button" id="btn-remove-file" class="btn-remove-file" title="Xóa file">✕</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Form Details -->
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label for="wf-instructor" class="form-label">Giảng Viên Hướng Dẫn (GVHD): <span class="required">*</span></label>
+                    <input type="text" id="wf-instructor" class="form-input" placeholder="Ví dụ: ThS. Nguyễn Hồ Hải" required value="ThS. Nguyễn Hồ Hải">
+                  </div>
+                  <div class="form-group">
+                    <label for="wf-student" class="form-label">Tên Sinh Viên / Nhóm: <span class="required">*</span></label>
+                    <input type="text" id="wf-student" class="form-input" placeholder="Ví dụ: Nhóm 03 hoặc Nguyễn Vũ Đạt" required>
+                  </div>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label for="wf-student-id" class="form-label">Mã Số Sinh Viên (MSSV):</label>
+                    <input type="text" id="wf-student-id" class="form-input" placeholder="Ví dụ: 24050126">
+                  </div>
+                  <div class="form-group">
+                    <label for="wf-class-name" class="form-label">Lớp Sinh Hoạt:</label>
+                    <input type="text" id="wf-class-name" class="form-input" placeholder="Ví dụ: 27TH03" value="27TH03">
+                  </div>
+                </div>
+
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label for="wf-topic" class="form-label">Tên Đề Tài / Báo Cáo:</label>
+                    <input type="text" id="wf-topic" class="form-input" placeholder="Ví dụ: Xây dựng hệ thống tra cứu điểm BDU">
+                  </div>
+                  <div class="form-group">
+                    <label for="wf-doc-title" class="form-label">Loại Văn Bản / Tiêu Đề Bìa:</label>
+                    <input type="text" id="wf-doc-title" class="form-input" placeholder="TIỂU LUẬN MÔN HỌC" value="TIỂU LUẬN MÔN HỌC">
+                  </div>
+                </div>
+
+                <!-- Front Matter Sections Selector -->
+                <div class="form-group">
+                  <label class="form-label">Tự Động Tạo Các Trang Đầu Tài Liệu (Front-Matter):</label>
+                  <div class="features-checklist">
+                    <label class="feature-item">
+                      <input type="checkbox" id="wf-include-cover" checked> 
+                      <span><strong>Trang bìa:</strong> Khung viền chuẩn BDU, đề tài, GVHD, SVTH, Lớp, MSSV</span>
+                    </label>
+                    <label class="feature-item">
+                      <input type="checkbox" id="wf-include-comments" checked> 
+                      <span><strong>Nhận xét giảng viên:</strong> Trang 27 dòng kẻ chấm chuẩn khoa</span>
+                    </label>
+                    <label class="feature-item">
+                      <input type="checkbox" id="wf-include-thanks" checked> 
+                      <span><strong>Lời cảm ơn:</strong> Khung viền góc gấp bao quanh trang</span>
+                    </label>
+                    <label class="feature-item">
+                      <input type="checkbox" checked disabled> 
+                      <span><strong>Mục lục & Danh mục Bảng/Hình:</strong> Tự động cập nhật số trang La Mã/Số</span>
+                    </label>
+                  </div>
+                </div>
+
+                <button type="submit" id="btn-start-wordfmt" class="btn btn-primary btn-block btn-lg">
+                  <span class="btn-text">🚀 Bắt Đầu Chuẩn Hóa Văn Bản (Core Engine)</span>
+                  <span class="btn-loader hidden">
+                    <svg class="spinner" viewBox="0 0 50 50"><circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle></svg>
+                  </span>
+                </button>
+              </form>
+            </div>
+
+            <!-- Right: Result & Diagnostics -->
+            <div class="wordfmt-result-column">
+              <div id="wordfmt-status-card" class="wordfmt-card glass-panel result-placeholder">
+                <div class="status-placeholder-content">
+                  <div class="placeholder-icon">⚡</div>
+                  <h3>Sẵn sàng định dạng văn bản</h3>
+                  <p>Chọn file `.docx` và điền thông tin bên trái để bắt đầu chuẩn hóa trong 1 giây.</p>
+                </div>
+
+                <!-- Success Box (Hidden by default) -->
+                <div id="wordfmt-success-box" class="wordfmt-success-box hidden">
+                  <div class="success-header">
+                    <div class="success-badge">✅ ĐỊNH DẠNG HOÀN TẤT</div>
+                    <h3 class="success-title">Văn bản đã được chuẩn hóa 100%!</h3>
+                    <p class="success-desc">Đã xử lý cấu trúc Heading, Mục lục, Bìa và Header/Footer chuẩn BDU.</p>
+                  </div>
+
+                  <a id="btn-download-docx" href="#" class="btn btn-success btn-block btn-lg" download>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    <span>Tải Về File DOCX Đã Chuẩn Hóa</span>
+                  </a>
+
+                  <div id="wordfmt-diagnostics-box" class="diagnostics-box">
+                    <h4 class="diag-title">📋 Báo Cáo Kiểm Tra (WordFmt Diagnostics):</h4>
+                    <div id="diag-items" class="diag-items">
+                      <!-- Populated dynamically -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 5: AUTO ĐÁNH GIÁ KHẢO SÁT                                      -->
+        <!-- ================================================================= -->
+        <section id="tab-survey" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <div class="header-split">
+              <div>
+                <h2 class="section-title">🤖 Tự Động Đánh Giá Khảo Sát Giảng Viên</h2>
+                <p class="section-desc">Tự động hoàn thành phiếu khảo sát môn học và giảng viên trên cổng BDU siêu tốc</p>
+              </div>
+              <span class="badge-mini badge-pill-purple">Direct API Bot</span>
+            </div>
+          </div>
+
+          <div class="survey-layout">
+            <!-- Left: Settings -->
+            <div class="survey-card glass-panel">
+              <h3 class="card-subheading">Cấu Hình Đánh Giá Khảo Sát</h3>
+              
+              <div class="form-group">
+                <label class="form-label">Mức Độ Đánh Giá Mặc Định:</label>
+                <div class="radio-options-grid">
+                  <label class="radio-card active">
+                    <input type="radio" name="survey-rating" value="5" checked>
+                    <div class="radio-content">
+                      <span class="r-title">⭐ Rất Tốt / Rất Hài Lòng (5/5)</span>
+                      <span class="r-desc">Tự động tick mức điểm cao nhất cho tất cả 40 tiêu chí</span>
+                    </div>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="survey-rating" value="4">
+                    <div class="radio-content">
+                      <span class="r-title">👍 Tốt / Hài Lòng (4/5)</span>
+                      <span class="r-desc">Tự động tick mức điểm tốt</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Nhận Xét & Đóng Góp Ý Kiến Tự Động:</label>
+                <textarea class="form-textarea" rows="3" readonly>Giảng viên dạy nhiệt tình, phương pháp sinh động, tài liệu đầy đủ và hỗ trợ giải đáp thắc mắc của sinh viên rất tốt.</textarea>
+              </div>
+
+              <button id="btn-start-survey" class="btn btn-primary btn-block btn-lg">
+                <span class="btn-text">⚡ Bắt Đầu Khảo Sát Tự Động 1-Click</span>
+                <span class="btn-loader hidden">
+                  <svg class="spinner" viewBox="0 0 50 50"><circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle></svg>
+                </span>
+              </button>
+            </div>
+
+            <!-- Right: Terminal Live Console -->
+            <div class="terminal-card glass-panel">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <span class="dot dot-red"></span>
+                  <span class="dot dot-yellow"></span>
+                  <span class="dot dot-green"></span>
+                </div>
+                <span class="terminal-title">SURVEY_BOT_CONSOLE // LIVE LOG</span>
+                <button id="btn-clear-terminal" class="btn-terminal-clear">Xóa Log</button>
+              </div>
+              <div id="survey-terminal" class="terminal-body">
+                <div class="term-line term-info"><span class="term-time">[00:00:00]</span> Sẵn sàng kết nối máy chủ BDU...</div>
+                <div class="term-line term-muted"><span class="term-time">[00:00:00]</span> Nhấn "Bắt Đầu Khảo Sát" để khởi chạy bot.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 6: AUTO ĐĂNG KÝ MÔN HỌC (COMING SOON PREVIEW)                 -->
+        <!-- ================================================================= -->
+        <section id="tab-enrollment" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <h2 class="section-title">🎯 Tự Động Đăng Ký Tín Chỉ & Môn Học</h2>
+            <p class="section-desc">Hệ thống săn lớp học phần và đăng ký tín chỉ tự động đúng giờ mở cổng</p>
+          </div>
+
+          <div class="coming-soon-card glass-panel">
+            <div class="cs-icon">⚡</div>
+            <h3 class="cs-title">Tính Năng Đang Được Hoàn Thiện</h3>
+            <p class="cs-desc">
+              Chức năng cho phép bạn lên danh sách môn học mong muốn, tự động canh đếm ngược thời gian mở cổng đăng ký tín chỉ BDU và gửi request siêu tốc trong mili-giây.
+            </p>
+            <div class="cs-features">
+              <div class="cs-feat-item">⏱️ Hẹn giờ kích hoạt chính xác theo giờ máy chủ BDU</div>
+              <div class="cs-feat-item">🛡️ Tự động chọn lớp phụ khi lớp chính bị trùng hoặc hết chỗ</div>
+              <div class="cs-feat-item">📱 Thông báo kết quả đăng ký thành công ngay lập tức</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 7: GÓC TỰ HỌC SỐ & VIDEO                                      -->
+        <!-- ================================================================= -->
+        <section id="tab-learning" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <h2 class="section-title">📚 Kho Tài Liệu & Video Bài Giảng BDU</h2>
+            <p class="section-desc">Tài liệu tham khảo, slide môn học, đề thi có giải và video bài giảng nhúng Google Drive</p>
+          </div>
+
+          <!-- Document Materials -->
+          <div class="learning-section-block">
+            <h3 class="learning-block-title">📑 Tài Liệu & Đề Thi Mẫu</h3>
+            <div id="learning-docs-grid" class="docs-grid">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Video Lectures -->
+          <div class="learning-section-block">
+            <h3 class="learning-block-title">🎥 Video Bài Giảng Trực Tuyến</h3>
+            <div id="learning-videos-grid" class="videos-grid">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </section>
+
+      </main>
     </div>
-  </main>
+  </div>
 
-  <!-- Component Grades Modal (Điểm thành phần chi tiết) -->
+  <!-- ========================================================================= -->
+  <!-- MODAL: COMPONENT GRADES DETAIL                                            -->
+  <!-- ========================================================================= -->
   <div id="detail-modal" class="modal-backdrop hidden">
     <div class="modal-dialog glass-panel">
       <div class="modal-header">

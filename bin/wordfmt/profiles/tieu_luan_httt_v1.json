@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "profile_id": "tieu_luan_httt_v1",
+  "locale": "vi-VN",
+  "source_revision": "2026-08-17",
+  "page": { "paper": "A4", "margins_cm": { "top": 2, "bottom": 2, "left": 3, "right": 2 } },
+  "body": { "font": "Times New Roman", "size_pt": 13, "alignment": "justify", "line_spacing": 1.2, "space_after_pt": 6 },
+  "heading_rules_file": "heading_marking_rules_vi_v1.json",
+  "headings": {
+    "chapter": { "level": 1, "size_pt": 18, "bold": true, "uppercase": true, "alignment": "center" },
+    "level2": { "level": 2, "size_pt": 16, "bold": true },
+    "level3": { "level": 3, "size_pt": 14, "bold": true, "italic": true },
+    "level4": { "level": 4, "size_pt": 13, "italic": true }
+  },
+  "front_matter": {
+    "titles": ["NHẬN XÉT CỦA GIẢNG VIÊN", "MỤC LỤC", "DANH MỤC BẢNG", "DANH MỤC BẢNG BIỂU", "DANH MỤC HÌNH ẢNH", "LỜI CẢM ƠN", "LỜI MỞ ĐẦU", "KẾT LUẬN", "TÀI LIỆU THAM KHẢO", "PHỤ LỤC"],
+    "cover_anchors": ["TRƯỜNG", "KHOA", "BỘ MÔN", "BÁO CÁO", "SINH VIÊN", "MSSV", "LỚP", "GIẢNG VIÊN"]
+  },
+  "cover": {
+    "institution": "TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG",
+    "faculty": "KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO",
+    "document_type": "TIỂU LUẬN MÔN HỌC",
+    "course": "XÂY DỰNG HỆ THỐNG THÔNG TIN TRÊN CÁC FRAMEWORK",
+    "location": "TP. Hồ Chí Minh"
+  },
+  "header_footer": {
+    "enabled": true,
+    "font": "Times New Roman",
+    "size_pt": 10,
+    "header_right": "TIỂU LUẬN MÔN HỌC",
+    "suppress_header_on_heading1_page": false,
+    "footer_left": "GVHD: {instructor_name}",
+    "footer_center": "{PAGE}",
+    "footer_right": "SVTH: {student_display}",
+    "front_matter_page_format": "lowerRoman",
+    "body_page_format": "decimal",
+    "restart_body_at": 1
+  },
+  "captions": { "figure_pattern": "^Hình\\s+", "table_pattern": "^Bảng\\s+", "number_scope": "chapter" },
+  "policies": { "ambiguous_heading": "warn_and_preserve", "missing_caption": "require_marker", "wide_table": "landscape_section", "toc_mode": "field", "preserve_unknown_parts": true },
+  "locked_rules": ["A4", "body Times New Roman 13pt", "heading levels 1-4", "never overwrite input by default"]
+}

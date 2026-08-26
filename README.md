@@ -1,69 +1,78 @@
-# 🎓 BDU Grade Viewer - Ứng Dụng Tra Cứu Bảng Điểm Đại Học Bình Dương
+# 🎓 BDU Tự Học (BDU Smart Student Hub)
 
-Ứng dụng web hiện đại giúp sinh viên Đại học Bình Dương (BDU) tra cứu bảng điểm trực tiếp, theo dõi biểu đồ GPA qua các học kỳ, phân tích điểm chữ, xem điểm thành phần chi tiết và xuất báo cáo điểm ra file CSV hoặc in PDF.
-
----
-
-## ✨ Tính Năng Nổi Bật
-
-- 🔐 **Xác thực trực tiếp**: Kết nối API đăng nhập trường BDU (`sv.bdu.edu.vn/public/api/auth/login`).
-- 📊 **Phân tích GPA trực quan**:
-  - Biểu đồ đường (Line Chart) theo dõi tiến trình GPA Hệ 10 & Hệ 4 qua từng học kỳ.
-  - Biểu đồ tròn (Doughnut Chart) thống kê phân bố điểm chữ (A, B+, B, C, D, F).
-- 📑 **Bảng điểm thông minh**:
-  - Tra cứu theo từng học kỳ hoặc toàn bộ quá trình học.
-  - Tìm kiếm nhanh theo tên môn hoặc mã môn học.
-  - Lọc theo trạng thái môn (Đạt / Chưa đạt).
-  - Xem chi tiết điểm thành phần (chuyên cần, kiểm tra, thi...) trong Modal.
-- 💾 **Tiện ích xuất dữ liệu**:
-  - Xuất bảng điểm ra file **CSV (hỗ trợ tiếng Việt UTF-8 BOM mở bằng Excel)**.
-  - Tối ưu hóa giao diện **In / Xuất PDF (Print Friendly)**.
-- 🎨 **Giao diện hiện đại (Modern Dark Theme)**: Glassmorphism, hiệu ứng chuyển động mượt mà, hỗ trợ tốt trên cả máy tính và điện thoại.
-- 🛡️ **Tích hợp Backend Proxy**: Giải quyết triệt để vấn đề chặn CORS trên trình duyệt khi gọi API BDU.
+Cổng tiện ích học tập & tự động hóa **"All-in-One"** dành riêng cho sinh viên **Trường Đại học Bình Dương (BDU)**.
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Chạy Ứng Dụng
+## 🌟 Tính Năng Cốt Lõi
 
-### Yêu cầu:
-- Đã cài đặt **Node.js** (phiên bản 18+ trở lên).
+1. **Cổng Thông Tin Sinh Viên:**
+   * 📊 **Bảng Điểm & GPA:** Tra cứu điểm chi tiết trực tiếp từ `sv.bdu.edu.vn`, phân tích GPA hệ 10 và hệ 4, biểu đồ tiến độ học tập qua các kỳ, xem điểm thành phần chi tiết từng môn, xuất CSV & in bảng điểm PDF.
+   * 👤 **Lý Lịch Sinh Viên:** Xem hồ sơ sinh viên, thông tin lớp học, khoa, ngành đào tạo và cố vấn học tập.
+    * 📅 **Thời Khóa Biểu Trực Tuyến:** Đồng bộ 100% dữ liệu lịch học thực tế theo tuần từ cổng BDU (`/public/api/sch/w-locdstkbtuanusertheohocky`), hỗ trợ chuyển đổi linh hoạt giữa các học kỳ (2026-2027, 2025-2026,...), hiển thị phòng học, tiết học, giảng viên và trạng thái đồng bộ thời gian thực.
+
+2. **Bộ Công Cụ Tự Động Hóa (Integrated Tools):**
+   * 📄 **Chuẩn Hóa Word BDU (`WordFmt`):** Kéo thả file `.docx` -> Tự động căn lề A4 chuẩn, phân cấp Heading H1–H4, tạo Mục Lục Tự Động, danh mục hình ảnh/bảng biểu, trang bìa và Header/Footer chứa tên GVHD & Sinh viên/Nhóm chỉ trong 1 giây (Tích hợp **Hàng đợi Concurrency Queue** chống nghẽn CPU/RAM).
+   * 🤖 **Auto Đánh Giá Khảo Sát:** Tự động hoàn thành toàn bộ phiếu đánh giá giảng viên & môn học trên cổng BDU siêu tốc kèm cửa sổ Live Terminal Log trực tiếp trên web.
+   * 🎯 **Auto Đăng Ký Môn Học (Sắp ra mắt):** Hẹn giờ và tự động gửi request săn lớp học phần theo danh sách ưu tiên.
+
+3. **Kho Tự Học Số (E-Learning Hub):**
+   * 📑 **Kho Tài Liệu:** Giáo trình, slide bài giảng (PDF, PPTX, DOCX), đề thi mẫu có đáp án.
+   * 🎥 **Video Bài Giảng:** Xem video bài giảng trực tuyến (nhúng Google Drive / YouTube) với hệ thống ghi chú học tập.
+
+---
+
+## 🚀 Hướng Dẫn Chạy Cục Bộ (Local Development)
+
+### Yêu cầu môi trường:
+* **Node.js**: Phiên bản 18+ hoặc 20+
+* **.NET SDK / Runtime 8.0+**: Cho module WordFmt
 
 ### Các bước khởi chạy:
 
-1. Mở terminal tại thư mục dự án:
-   ```bash
-   cd /Users/nor/Documents/Nor/tool/tool-crawl
-   ```
+1. Di chuyển vào thư mục dự án:
+```bash
+cd bdu-tu-hoc
+```
 
-2. Cài đặt các gói phụ thuộc (nếu chưa cài):
-   ```bash
-   npm install
-   ```
+2. Cài đặt dependencies:
+```bash
+npm install
+```
 
-3. Khởi động server:
-   ```bash
-   npm start
-   ```
+3. Chạy kiểm thử hàng đợi & tải HTTP mô phỏng 30 người dùng:
+```bash
+npm test         # Chạy unit test hàng đợi & phục hồi lỗi
+npm run test:load  # Mô phỏng 30 concurrent users
+```
 
-4. Mở trình duyệt và truy cập:
-   ```
-   http://localhost:3000
-   ```
+4. Khởi chạy Server ở chế độ dev:
+```bash
+npm run dev
+```
+
+5. Mở trình duyệt tại: `http://localhost:3000`
 
 ---
 
-## 📂 Cấu Trúc Dự Án
+## 🐳 Đóng Gói & Triển Khai Production (Docker Deployment)
 
+Dự án đã được cấu hình sẵn **Multi-Stage Dockerfile** để đóng gói toàn bộ server Node.js và engine C# WordFmt thành một container nguyên khối:
+
+### Cách 1: Sử dụng Docker Compose (Khuyên dùng)
+```bash
+docker-compose up -d --build
 ```
-tool-crawl/
-├── package.json          # Cấu hình dự án & thư viện Express
-├── server.js             # Backend Express & Proxy API BDU
-├── public/
-│   ├── index.html        # Giao diện chính (Single Page Dashboard & Login)
-│   ├── css/
-│   │   └── style.css     # Thiết kế Glassmorphism & Responsive CSS
-│   └── js/
-│       ├── api.js        # Module gọi API backend
-│       └── app.js        # Logic ứng dụng, render bảng điểm & biểu đồ
-└── README.md
+
+### Cách 2: Sử dụng Docker CLI thuần
+```bash
+docker build -t bdu-tu-hoc:latest .
+docker run -d -p 3000:3000 --name bdu-app bdu-tu-hoc:latest
 ```
+
+---
+
+## 🔒 Bảo Mật & Lưu Ý
+* Hệ thống **không lưu trữ mật khẩu** sinh viên trên máy chủ.
+* Phiên đăng nhập sử dụng **Bearer Token ngắn hạn** trao đổi trực tiếp với hệ thống máy chủ `sv.bdu.edu.vn`.
+* Toàn bộ file tạm (upload/output) của công cụ Word được tự động dọn dẹp định kỳ.

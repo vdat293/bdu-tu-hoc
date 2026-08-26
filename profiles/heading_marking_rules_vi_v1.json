@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "ruleset_id": "heading_marking_vi_v1",
+  "locale": "vi-VN",
+  "purpose": "Phân loại từng đoạn văn thành Heading 1-4 hoặc nhóm không phải heading trước khi chỉnh style DOCX; tuyệt đối không sửa nội dung và không tự đánh lại số.",
+  "ai_contract": {
+    "task": "Đọc các block theo đúng thứ tự tài liệu, phân loại cấu trúc rồi chỉ gán nhãn/style. Không viết lại văn bản của người dùng.",
+    "allowed_labels": [
+      "heading_1",
+      "heading_2",
+      "heading_3",
+      "heading_4",
+      "body",
+      "front_matter",
+      "caption",
+      "table",
+      "uncertain"
+    ],
+    "preserve_original_text": true,
+    "never_renumber_automatically": true,
+    "uncertain_label": "uncertain",
+    "minimum_confidence": 0.9,
+    "required_output_fields": [
+      "block_index",
+      "label",
+      "target_style",
+      "number",
+      "parent_number",
+      "confidence",
+      "evidence",
+      "requires_review"
+    ],
+    "instructions": [
+      "Xét các điều kiện loại trừ trước khi xét heading.",
+      "Dùng số mục và quan hệ cha-con làm tín hiệu chính; style, cỡ chữ, đậm, nghiêng và căn lề chỉ là tín hiệu phụ.",
+      "Giữ nguyên original_text từng ký tự; không sửa chính tả, không đổi tiêu đề và không tự đánh lại số.",
+      "Một đoạn chỉ được nhận đúng một nhãn trong allowed_labels.",
+      "Nếu số mục đúng mẫu nhưng thiếu cha, nhảy số hoặc xung đột ngữ cảnh thì vẫn giữ nguyên văn bản, đặt requires_review=true và giải thích trong evidence.",
+      "Nếu không đạt minimum_confidence thì dùng nhãn uncertain; không đoán ngầm để áp style heading.",
+      "Không biến mục lục, danh mục bảng/hình, caption, nội dung trong bảng hay danh sách thông thường thành heading."
+    ]
+  },
+  "content_suggestion_rules": {
+    "allowed_kinds": [
+      "table_caption",
+      "figure_caption",
+      "insert_chapter",
+      "restore_chapter_prefix"
+    ],
+    "require_human_approval": true,
+    "never_apply_directly": true,
+    "instructions": [
+      "Được phép đề xuất tên bảng/hình còn thiếu từ nội dung ô bảng, alt text và ngữ cảnh thật; suggested_text chỉ chứa phần tên, không tự thêm số.",
+      "Nếu bằng chứng không đủ để đặt tên bảng/hình có ý nghĩa thì chỉ cảnh báo, không đoán bừa.",
+      "Khi các mục con n.1, n.2 tồn tại nhưng nhãn CHƯƠNG n bị mất, phải báo bất thường và có thể đề xuất khôi phục tiền tố hoặc chèn dòng chương.",
+      "Đề xuất chương phải nêu số chương suy ra, vị trí anchor, căn cứ và luôn requires_review=true.",
+      "Mọi nội dung đề xuất phải cho người dùng sửa và chọn approved; AI không được tự áp vào DOCX."
+    ]
+  },
+  "global_rules": {
+    "primary_signal": "Cú pháp số mục kết hợp cây cha-con trong thứ tự tài liệu",
+    "secondary_signals": [
+      "style Word hiện có",
+      "cỡ chữ",
+      "in đậm hoặc in nghiêng",
+      "căn lề",
+      "khoảng cách trước và sau đoạn"
+    ],
+    "never_use_typography_alone": true,
+    "exclude_if_inside_table": true,
+    "excluded_style_prefixes": ["TOC"],
+    "excluded_styles": ["TableofFigures", "WFCaption"],
+    "excluded_text_prefixes": ["Hình ", "Hình:", "Bảng ", "Bảng:"],
+    "front_matter_titles": [
+      "NHẬN XÉT CỦA GIẢNG VIÊN",
+      "MỤC LỤC",
+      "DANH MỤC BẢNG",
+      "DANH MỤC BẢNG BIỂU",
+      "DANH MỤC HÌNH ẢNH",
+      "LỜI CẢM ƠN",
+      "LỜI MỞ ĐẦU",
+      "KẾT LUẬN",
+      "TÀI LIỆU THAM KHẢO",
+      "PHỤ LỤC"
+    ],
+    "ambiguity_action": "preserve_and_flag"
+  },
+  "decision_order": [
+    "1. Bảo vệ kết quả field của MỤC LỤC và DANH MỤC BẢNG/HÌNH dựa trên style TOC*/TableofFigures.",
+    "2. Loại trừ trang bìa, front matter, đoạn trong bảng và caption Hình/Bảng.",
+    "3. So khớp Heading 1, Heading 2, Heading 3, Heading 4 bằng pattern chính xác theo độ sâu số.",
+    "4. Kiểm tra heading cha đã xuất hiện trước đó và các phần số cha phải trùng nhau.",
+    "5. Kiểm tra nhảy số; chỉ cảnh báo, không tự sửa số mục.",
+    "6. Không khớp thì là body; có dấu hiệu mâu thuẫn thì là uncertain và yêu cầu người dùng duyệt."
+  ],
+  "levels": [
+    {
+      "level": 1,
+      "label": "heading_1",
+      "target_style": "WFHeading1",
+      "description": "Tiêu đề chương; bắt đầu bằng CHƯƠNG và một số nguyên, có thể có dấu phân cách rồi tới tên chương.",
+      "pattern": "^CHƯƠNG\\s+(?<number>\\d+)\\s*(?:[-:–—.]\\s*)?(?<title>\\S.*)?$",
+      "number_depth": 1,
+      "required_parent_level": null,
+      "positive_examples": [
+        "CHƯƠNG 1",
+        "CHƯƠNG 2 HỆ THỐNG CẢNH BÁO MƯA",
+        "Chương 3: THIẾT KẾ HỆ THỐNG"
+      ],
+      "negative_examples": [
+        "1 GIỚI THIỆU",
+        "CHƯƠNG HAI",
+        "Trong chương 2 trình bày hệ thống"
+      ]
+    },
+    {
+      "level": 2,
+      "label": "heading_2",
+      "target_style": "WFHeading2",
+      "description": "Mục trực tiếp trong chương; số có đúng hai thành phần a.b và phải có tên mục.",
+      "pattern": "^(?<number>\\d+\\.\\d+)\\.?\\s+(?<title>\\S.*)$",
+      "number_depth": 2,
+      "required_parent_level": 1,
+      "positive_examples": [
+        "1.1 Tổng quan",
+        "2.3. Thiết kế phần cứng"
+      ],
+      "negative_examples": [
+        "1. Danh sách thứ nhất",
+        "1.1.1 Kiến trúc",
+        "Bảng 1.1: Thành phần hệ thống"
+      ]
+    },
+    {
+      "level": 3,
+      "label": "heading_3",
+      "target_style": "WFHeading3",
+      "description": "Tiểu mục trực tiếp của Heading 2; số có đúng ba thành phần a.b.c và phải có tên mục.",
+      "pattern": "^(?<number>\\d+\\.\\d+\\.\\d+)\\.?\\s+(?<title>\\S.*)$",
+      "number_depth": 3,
+      "required_parent_level": 2,
+      "positive_examples": [
+        "1.2.1 Kiến trúc tổng thể",
+        "3.1.4. Kết quả triển khai"
+      ],
+      "negative_examples": [
+        "1.2 Tổng quan",
+        "1.2.1.1 Thành phần",
+        "Hình 1.2.1: Sơ đồ khối"
+      ]
+    },
+    {
+      "level": 4,
+      "label": "heading_4",
+      "target_style": "WFHeading4",
+      "description": "Tiểu mục trực tiếp của Heading 3; số có đúng bốn thành phần a.b.c.d và phải có tên mục.",
+      "pattern": "^(?<number>\\d+\\.\\d+\\.\\d+\\.\\d+)\\.?\\s+(?<title>\\S.*)$",
+      "number_depth": 4,
+      "required_parent_level": 3,
+      "positive_examples": [
+        "1.2.1.1 Cấu hình cảm biến",
+        "4.3.2.2. Đánh giá hiệu quả"
+      ],
+      "negative_examples": [
+        "1.2.1 Kiến trúc",
+        "1.2.1.1.1 Quá sâu",
+        "Theo mục 1.2.1.1 ta có kết quả"
+      ]
+    }
+  ],
+  "hierarchy_rules": [
+    "Heading 1 mở một chapter mới và đặt lại trạng thái Heading 2-4.",
+    "Heading 2 phải có số chapter trùng Heading 1 gần nhất ở trước.",
+    "Heading 3 phải có hai phần số đầu trùng Heading 2 gần nhất hợp lệ ở trước.",
+    "Heading 4 phải có ba phần số đầu trùng Heading 3 gần nhất hợp lệ ở trước.",
+    "Không dùng tiêu đề xuất hiện trong MỤC LỤC để thiết lập context heading.",
+    "Nhảy số hoặc thiếu cha tạo cảnh báo requires_review; không được sửa nội dung hay tự đánh lại số."
+  ]
+}
