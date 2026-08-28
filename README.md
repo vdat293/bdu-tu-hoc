@@ -4,6 +4,24 @@ Cổng tiện ích học tập & tự động hóa **"All-in-One"** dành riêng
 
 ---
 
+## Frontend Showcase
+
+Giao diện sử dụng progressive enhancement: các chức năng cốt lõi vẫn hoạt động khi trình duyệt không hỗ trợ API mới, còn trình duyệt hiện đại được bổ sung:
+
+- Interactive CSS character scene trên màn hình đăng nhập.
+- Art-directed dashboard với nhiều lớp parallax phản hồi theo con trỏ và vị trí cuộn.
+- View Transitions khi chuyển khu vực trong dashboard.
+- Command palette bằng `Ctrl/Cmd + K`, hỗ trợ tìm kiếm tiếng Việt không dấu và từ khóa ngữ nghĩa.
+- Điều hướng sidebar bằng phím mũi tên, focus ring và course row có thể thao tác bằng bàn phím.
+- Intersection Observer choreography, pointer spotlight, card perspective và button ripple có capability gating.
+- Animated counters, skeleton state, sticky data headers, scroll progress và live network status.
+- WordFmt processing scene có document scan, stage timeline và thời gian hiển thị tối thiểu 3 giây.
+- Container queries, responsive sidebar có focus-safe backdrop, `prefers-reduced-motion` và forced-colors support.
+
+Lớp enhancement được tách riêng tại `public/css/showcase.css` và `public/js/interactions.js` để không trộn hiệu ứng trình bày với logic nghiệp vụ.
+
+---
+
 ## 🌟 Tính Năng Cốt Lõi
 
 1. **Cổng Thông Tin Sinh Viên:**

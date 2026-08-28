@@ -125,7 +125,7 @@ export const BduService = {
     }
 
     const queryParam = idsv ? `?IDSV=${encodeURIComponent(idsv)}` : '';
-    
+
     // Fetch profile and photo in parallel
     const [profileRes, imageBase64] = await Promise.all([
       fetch(`${BDU_BASE_URL}/sms/w-locdsthongtinhhscanhan${queryParam}`, {

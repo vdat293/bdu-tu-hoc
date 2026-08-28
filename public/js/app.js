@@ -23,6 +23,7 @@ const AppState = {
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initAuth();
+  initLoginCharacters();
   initNavigation();
   initGradeFilters();
   initScheduleTab();
@@ -35,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // THEME & UTILITIES
 // ============================================================================
 function initTheme() {
-  const savedTheme = localStorage.getItem('bdu_theme') || 'theme-dark';
+  const savedTheme = localStorage.getItem('bdu_theme_product') || 'theme-light';
   document.body.className = savedTheme;
   updateThemeIcons(savedTheme);
 
@@ -44,7 +45,7 @@ function initTheme() {
     themeBtn.addEventListener('click', () => {
       const newTheme = document.body.classList.contains('theme-dark') ? 'theme-light' : 'theme-dark';
       document.body.className = newTheme;
-      localStorage.setItem('bdu_theme', newTheme);
+      localStorage.setItem('bdu_theme_product', newTheme);
       updateThemeIcons(newTheme);
       if (AppState.gpaChart) renderCharts(AppState.semesters);
     });
@@ -70,13 +71,49 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span> <span>${message}</span>`;
+  toast.innerHTML = `<span class="toast-mark" aria-hidden="true"></span><span>${message}</span>`;
   container.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
+}
+
+function initLoginCharacters() {
+  const wrapper = document.querySelector('.login-wrapper');
+  const loginCard = document.querySelector('.login-card');
+  const usernameInput = document.getElementById('username');
+  const passwordInput = document.getElementById('password');
+  const togglePassword = document.getElementById('toggle-password');
+  if (!wrapper || !loginCard || !usernameInput || !passwordInput) return;
+
+  const updatePasswordMode = () => {
+    const shouldLookAway = document.activeElement === passwordInput && passwordInput.type === 'password';
+    wrapper.classList.toggle('password-active', shouldLookAway);
+  };
+
+  const updateLookFromValue = () => {
+    if (wrapper.classList.contains('password-active')) return;
+    const progress = Math.min(usernameInput.value.length / 12, 1);
+    wrapper.style.setProperty('--look-x', `${-1 + progress * 5}px`);
+    wrapper.style.setProperty('--look-y', `${progress * 1.5}px`);
+  };
+
+  loginCard.addEventListener('pointermove', (event) => {
+    if (wrapper.classList.contains('password-active')) return;
+    const bounds = loginCard.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 6;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 4;
+    wrapper.style.setProperty('--look-x', `${x.toFixed(2)}px`);
+    wrapper.style.setProperty('--look-y', `${y.toFixed(2)}px`);
+  });
+
+  usernameInput.addEventListener('input', updateLookFromValue);
+  passwordInput.addEventListener('focus', updatePasswordMode);
+  passwordInput.addEventListener('input', updatePasswordMode);
+  passwordInput.addEventListener('blur', () => setTimeout(updatePasswordMode, 0));
+  togglePassword?.addEventListener('click', updatePasswordMode);
 }
 
 // ============================================================================
@@ -93,8 +130,8 @@ function initAuth() {
     togglePassBtn.addEventListener('click', () => {
       const isPass = passInput.type === 'password';
       passInput.type = isPass ? 'text' : 'password';
-      togglePassBtn.querySelector('.eye-open').classList.toggle('hidden', !isPass);
-      togglePassBtn.querySelector('.eye-closed').classList.toggle('hidden', isPass);
+      togglePassBtn.querySelector('.password-show')?.classList.toggle('hidden', isPass);
+      togglePassBtn.querySelector('.password-hide')?.classList.toggle('hidden', !isPass);
     });
   }
 
@@ -118,9 +155,17 @@ function initAuth() {
         };
         AppState.token = res.token;
 
+        // Tính thời gian hết hạn của token
+        const expiresAt = getTokenExpTime(res.token, res.expires_in);
+
         if (remember) {
           localStorage.setItem('bdu_token', res.token);
           localStorage.setItem('bdu_user', JSON.stringify(AppState.user));
+          localStorage.setItem('bdu_token_expires_at', expiresAt.toString());
+        } else {
+          sessionStorage.setItem('bdu_token', res.token);
+          sessionStorage.setItem('bdu_user', JSON.stringify(AppState.user));
+          sessionStorage.setItem('bdu_token_expires_at', expiresAt.toString());
         }
 
         showToast(`Xin chào, ${res.name}!`, 'success');
@@ -136,14 +181,7 @@ function initAuth() {
 
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('bdu_token');
-      localStorage.removeItem('bdu_user');
-      AppState.user = null;
-      AppState.token = null;
-      AppState.semesters = [];
-      document.getElementById('dashboard-view').classList.add('hidden');
-      document.getElementById('login-view').classList.remove('hidden');
-      showToast('Đã đăng xuất tài khoản.', 'info');
+      handleLogout({ reason: 'Đã đăng xuất tài khoản.', isExpired: false });
     });
   }
 
@@ -155,17 +193,100 @@ function initAuth() {
     });
   }
 
-  // Check saved session
-  const savedToken = localStorage.getItem('bdu_token');
-  const savedUser = localStorage.getItem('bdu_user');
+  // Lắng nghe sự kiện hết hạn token từ API client
+  window.addEventListener('bdu:session_expired', (e) => {
+    const msg = e.detail?.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    handleLogout({ reason: msg, isExpired: true });
+  });
+
+  // Kiểm tra phiên đăng nhập đã lưu
+  const savedToken = localStorage.getItem('bdu_token') || sessionStorage.getItem('bdu_token');
+  const savedUser = localStorage.getItem('bdu_user') || sessionStorage.getItem('bdu_user');
+  const savedExp = localStorage.getItem('bdu_token_expires_at') || sessionStorage.getItem('bdu_token_expires_at');
+
   if (savedToken && savedUser) {
+    if (savedExp && Date.now() >= parseInt(savedExp, 10)) {
+      handleLogout({ reason: 'Phiên đăng nhập trước đó đã hết hạn. Vui lòng đăng nhập lại.', isExpired: true });
+    } else {
+      try {
+        AppState.token = savedToken;
+        AppState.user = JSON.parse(savedUser);
+        switchToDashboard();
+        loadAllDashboardData();
+      } catch (e) {
+        handleLogout({ reason: 'Dữ liệu phiên không hợp lệ. Vui lòng đăng nhập lại.', isExpired: true });
+      }
+    }
+  }
+
+  // Định kỳ kiểm tra hết hạn token (mỗi 30 giây và khi quay lại tab)
+  setInterval(checkTokenExpiration, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkTokenExpiration();
+  });
+}
+
+/**
+ * Xử lý đăng xuất / kết thúc phiên làm việc
+ */
+function handleLogout(options = {}) {
+  const { reason = 'Đã đăng xuất tài khoản.', isExpired = false } = options;
+  localStorage.removeItem('bdu_token');
+  localStorage.removeItem('bdu_user');
+  localStorage.removeItem('bdu_token_expires_at');
+  sessionStorage.removeItem('bdu_token');
+  sessionStorage.removeItem('bdu_user');
+  sessionStorage.removeItem('bdu_token_expires_at');
+
+  AppState.user = null;
+  AppState.token = null;
+  AppState.semesters = [];
+  AppState.rawGradeData = null;
+
+  const dashView = document.getElementById('dashboard-view');
+  const loginView = document.getElementById('login-view');
+  if (dashView) dashView.classList.add('hidden');
+  if (loginView) loginView.classList.remove('hidden');
+
+  if (isExpired) {
+    showToast(reason || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', 'warning');
+  } else {
+    showToast(reason, 'info');
+  }
+}
+
+/**
+ * Tính toán thời điểm hết hạn của Token (miliseconds timestamp)
+ */
+function getTokenExpTime(token, expiresInSeconds) {
+  if (expiresInSeconds && !isNaN(expiresInSeconds)) {
+    return Date.now() + parseInt(expiresInSeconds, 10) * 1000;
+  }
+  if (typeof token === 'string' && token.includes('.')) {
     try {
-      AppState.token = savedToken;
-      AppState.user = JSON.parse(savedUser);
-      switchToDashboard();
-      loadAllDashboardData();
-    } catch (e) {
-      localStorage.clear();
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.exp) {
+          return payload.exp * 1000;
+        }
+      }
+    } catch (e) { }
+  }
+  // Mặc định 24 tiếng nếu không rõ
+  return Date.now() + 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Kiểm tra xem token đã hết hạn chưa và tự động ngắt phiên
+ */
+function checkTokenExpiration() {
+  if (!AppState.token) return;
+  const expStr = localStorage.getItem('bdu_token_expires_at') || sessionStorage.getItem('bdu_token_expires_at');
+  if (expStr) {
+    const expTime = parseInt(expStr, 10);
+    if (!isNaN(expTime) && Date.now() >= expTime) {
+      handleLogout({ reason: 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', isExpired: true });
     }
   }
 }
@@ -241,19 +362,28 @@ function initNavigation() {
       const tabId = item.getAttribute('data-tab');
       if (!tabId) return;
 
-      navItems.forEach(n => n.classList.remove('active'));
-      tabPanes.forEach(p => p.classList.remove('active'));
+      const activateTab = () => {
+        navItems.forEach(n => n.classList.remove('active'));
+        tabPanes.forEach(p => p.classList.remove('active'));
 
-      item.classList.add('active');
-      const targetPane = document.getElementById(tabId);
-      if (targetPane) targetPane.classList.add('active');
+        item.classList.add('active');
+        const targetPane = document.getElementById(tabId);
+        if (targetPane) targetPane.classList.add('active');
 
-      if (topbarTitle && tabTitles[tabId]) {
-        topbarTitle.textContent = tabTitles[tabId];
-      }
+        if (topbarTitle && tabTitles[tabId]) {
+          topbarTitle.textContent = tabTitles[tabId];
+        }
 
-      if (sidebar && window.innerWidth <= 992) {
-        sidebar.classList.remove('open');
+        if (sidebar && window.innerWidth <= 992) {
+          sidebar.classList.remove('open');
+        }
+      };
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (document.startViewTransition && !reduceMotion) {
+        document.startViewTransition(activateTab);
+      } else {
+        activateTab();
       }
     });
   });
@@ -326,18 +456,18 @@ function renderStudentOverview() {
 
 function calculateRank(gpa10, gpa4) {
   if (!isNaN(gpa4) && gpa4 > 0) {
-    if (gpa4 >= 3.6) return 'Xuất sắc 🏆';
-    if (gpa4 >= 3.2) return 'Giỏi ⭐';
-    if (gpa4 >= 2.5) return 'Khá 👍';
-    if (gpa4 >= 2.0) return 'Trung bình 📘';
-    return 'Yếu ⚠️';
+    if (gpa4 >= 3.6) return 'Xuất sắc';
+    if (gpa4 >= 3.2) return 'Giỏi';
+    if (gpa4 >= 2.5) return 'Khá';
+    if (gpa4 >= 2.0) return 'Trung bình';
+    return 'Yếu';
   }
   if (!isNaN(gpa10) && gpa10 > 0) {
-    if (gpa10 >= 9.0) return 'Xuất sắc 🏆';
-    if (gpa10 >= 8.0) return 'Giỏi ⭐';
-    if (gpa10 >= 6.5) return 'Khá 👍';
-    if (gpa10 >= 5.0) return 'Trung bình 📘';
-    return 'Yếu ⚠️';
+    if (gpa10 >= 9.0) return 'Xuất sắc';
+    if (gpa10 >= 8.0) return 'Giỏi';
+    if (gpa10 >= 6.5) return 'Khá';
+    if (gpa10 >= 5.0) return 'Trung bình';
+    return 'Yếu';
   }
   return 'Đang học';
 }
@@ -363,8 +493,8 @@ function renderCharts(semesters) {
   if (!semesters || semesters.length === 0) return;
 
   const isDark = document.body.classList.contains('theme-dark');
-  const textColor = isDark ? '#94a3b8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
+  const textColor = isDark ? '#c0b8ae' : '#625f59';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(79, 70, 61, 0.09)';
 
   // 1. GPA Trend Chart (Reverse to show chronological order: past -> now)
   const chronoSemesters = [...semesters].reverse();
@@ -387,8 +517,8 @@ function renderCharts(semesters) {
           {
             label: 'GPA HK (Thang 10)',
             data: gpa10Values,
-            borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderColor: '#8c1515',
+            backgroundColor: 'rgba(140, 21, 21, 0.08)',
             tension: 0.35,
             fill: true,
             yAxisID: 'y10',
@@ -398,8 +528,8 @@ function renderCharts(semesters) {
           {
             label: 'GPA HK (Thang 4)',
             data: gpa4Values,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderColor: '#9a6700',
+            backgroundColor: 'rgba(154, 103, 0, 0.06)',
             tension: 0.35,
             fill: true,
             yAxisID: 'y4',
@@ -413,11 +543,11 @@ function renderCharts(semesters) {
         maintainAspectRatio: false,
         scales: {
           x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
-          y10: { type: 'linear', position: 'left', min: 0, max: 10, ticks: { color: '#f59e0b' }, grid: { color: gridColor } },
-          y4: { type: 'linear', position: 'right', min: 0, max: 4, ticks: { color: '#3b82f6' }, grid: { display: false } }
+          y10: { type: 'linear', position: 'left', min: 0, max: 10, ticks: { color: '#8c1515' }, grid: { color: gridColor } },
+          y4: { type: 'linear', position: 'right', min: 0, max: 4, ticks: { color: '#9a6700' }, grid: { display: false } }
         },
         plugins: {
-          legend: { labels: { color: textColor, font: { family: 'Plus Jakarta Sans', weight: '600' } } }
+          legend: { labels: { color: textColor, font: { family: 'Manrope', weight: '600' } } }
         }
       }
     });
@@ -447,14 +577,14 @@ function renderCharts(semesters) {
         datasets: [{
           data: Object.values(counts),
           backgroundColor: [
-            '#10b981', // A
-            '#06b6d4', // B+
-            '#3b82f6', // B
-            '#8b5cf6', // C+
-            '#f59e0b', // C
-            '#fb923c', // D+
-            '#ea580c', // D
-            '#ef4444'  // F
+            '#285943', // A
+            '#4f745f', // B+
+            '#718477', // B
+            '#9b8f7b', // C+
+            '#b89a56', // C
+            '#b66d4a', // D+
+            '#a54532', // D
+            '#8c1515'  // F
           ],
           borderWidth: 0
         }]
@@ -474,12 +604,12 @@ function renderCharts(semesters) {
 function populateSemesterDropdown() {
   const select = document.getElementById('semester-select');
   if (!select) return;
-  select.innerHTML = '<option value="ALL">📁 Tất cả các học kỳ</option>';
+  select.innerHTML = '<option value="ALL">Tất cả các học kỳ</option>';
 
   AppState.semesters.forEach(sem => {
     const opt = document.createElement('option');
     opt.value = sem.hoc_ky || sem.ten_hoc_ky;
-    opt.textContent = `📅 ${sem.ten_hoc_ky || ('Học kỳ ' + sem.hoc_ky)}`;
+    opt.textContent = sem.ten_hoc_ky || ('Học kỳ ' + sem.hoc_ky);
     select.appendChild(opt);
   });
 }
@@ -550,7 +680,7 @@ function renderGradeTable() {
 
     semBlock.innerHTML = `
       <div class="semester-header">
-        <div class="sem-title">📅 ${semTitle}</div>
+        <div class="sem-title">${semTitle}</div>
         <div class="sem-meta">
           Môn học: <strong>${courses.length}</strong> | 
           Tín chỉ HK: <strong>${sem.so_tin_chi_dat_hk || semCredits}</strong> | 
@@ -581,13 +711,13 @@ function renderGradeTable() {
                 </td>
               </tr>
             ` : courses.map(c => {
-              const isPass = c.ket_qua == 1 || (c.diem_tk_chu && c.diem_tk_chu.toUpperCase() !== 'F');
-              const courseJson = encodeURIComponent(JSON.stringify({ ...c, sem_name: semTitle }));
-              return `
+      const isPass = c.ket_qua == 1 || (c.diem_tk_chu && c.diem_tk_chu.toUpperCase() !== 'F');
+      const courseJson = encodeURIComponent(JSON.stringify({ ...c, sem_name: semTitle }));
+      return `
                 <tr class="course-row" onclick="window.showCourseDetail('${courseJson}')">
                   <td><code>${c.ma_mon || '--'}</code></td>
                   <td class="course-name-cell" title="Bấm để xem chi tiết điểm thành phần">
-                    ${c.ten_mon || '--'} 🔍
+                    ${c.ten_mon || '--'}
                   </td>
                   <td><strong>${c.so_tin_chi || 0}</strong></td>
                   <td>${c.diem_giua_ky !== undefined && c.diem_giua_ky !== null && c.diem_giua_ky !== '' ? c.diem_giua_ky : '--'}</td>
@@ -598,7 +728,7 @@ function renderGradeTable() {
                   <td>${isPass ? '<span class="tag tag-active">Đạt</span>' : '<span class="tag" style="background:rgba(239,68,68,0.2);color:#f87171;">Chưa đạt</span>'}</td>
                 </tr>
               `;
-            }).join('')}
+    }).join('')}
           </tbody>
         </table>
       </div>
@@ -797,7 +927,7 @@ function renderSchedule(scheduleData) {
 
   // 1. Update status badges
   if (statusText) {
-    statusText.textContent = scheduleData.isRealData ? '🟢 Cổng BDU (Thời gian thực)' : '🟡 Dữ liệu mẫu học tập';
+    statusText.textContent = scheduleData.isRealData ? 'Cổng BDU · Thời gian thực' : 'Dữ liệu mẫu học tập';
   }
 
   // 2. Populate semester dropdown if semesters list is available
@@ -838,7 +968,7 @@ function renderSchedule(scheduleData) {
   if (!items || items.length === 0) {
     container.innerHTML = `
       <div class="glass-panel" style="grid-column: 1 / -1; text-align: center; padding: 48px 24px; color: var(--text-muted);">
-        <div style="font-size: 40px; margin-bottom: 12px;">📅</div>
+        <div class="empty-monogram">TKB</div>
         <h4 style="color: var(--text-main); font-size: 16px; margin-bottom: 6px;">Không có lịch học trong học kỳ này</h4>
         <p style="font-size: 13px;">Sinh viên chưa đăng ký học phần hoặc chưa có lịch xếp phòng từ phòng đào tạo.</p>
       </div>
@@ -852,7 +982,7 @@ function renderSchedule(scheduleData) {
     const courseName = rawItem.ten_mon_hoc || rawItem.ten_mon || rawItem.ten_hp || rawItem.courseName || 'Môn học BDU';
     const courseCode = rawItem.ma_mon_hoc || rawItem.ma_mon || rawItem.ma_hp || rawItem.courseCode || '--';
     const credits = rawItem.so_tin_chi || rawItem.credits || '3';
-    
+
     let periods = rawItem.periods || '';
     if (!periods) {
       const startPeriod = rawItem.tiet_bat_dau || rawItem.tiet_bd;
@@ -875,26 +1005,21 @@ function renderSchedule(scheduleData) {
       <div class="schedule-card glass-panel">
         <div>
           <div class="sch-day-badge">
-            <span class="sch-day-icon">📌</span>
             <span class="sch-day">${day}</span>
           </div>
           <h4 class="sch-name" title="${courseName}">${courseName}</h4>
           <div class="sch-meta">
             <div class="sch-meta-item">
-              <span class="meta-icon">⏱️</span> 
               <strong>${periods}</strong>
             </div>
             <div class="sch-meta-item">
-              <span class="meta-icon">📍</span> 
               <span class="sch-room-pill">${room}</span>
             </div>
             <div class="sch-meta-item">
-              <span class="meta-icon">👨‍🏫</span> 
               <span>${lecturer}</span>
             </div>
             ${note ? `
             <div class="sch-meta-item sch-note">
-              <span class="meta-icon">🏷️</span>
               <span style="font-size: 12px; color: var(--text-muted);">${note}</span>
             </div>` : ''}
           </div>
@@ -922,8 +1047,101 @@ function initWordFmtTool() {
 
   const statusCard = document.getElementById('wordfmt-status-card');
   const successBox = document.getElementById('wordfmt-success-box');
+  const progressBox = document.getElementById('wordfmt-progress-box');
   const downloadBtn = document.getElementById('btn-download-docx');
   const diagContainer = document.getElementById('diag-items');
+
+  function createProgressSession() {
+    const placeholder = statusCard?.querySelector('.status-placeholder-content');
+    const progressFill = document.getElementById('wordfmt-progress-fill');
+    const progressPercent = document.getElementById('wordfmt-progress-percent');
+    const progressTime = document.getElementById('wordfmt-progress-time');
+    const progressTitle = document.getElementById('wordfmt-progress-title');
+    const progressDesc = document.getElementById('wordfmt-progress-desc');
+    const progressRail = progressBox?.querySelector('.progress-rail');
+    const stageItems = [...(progressBox?.querySelectorAll('.processing-stages li') || [])];
+    const startedAt = performance.now();
+    const timers = [];
+    let currentProgress = 3;
+
+    const stages = [
+      { value: 12, title: 'Đang kiểm tra tài liệu', desc: 'Xác thực cấu trúc và khả năng tương thích của file DOCX.' },
+      { value: 34, title: 'Đang phân tích cấu trúc', desc: 'Nhận diện heading, bảng biểu, hình ảnh và các phần nội dung.' },
+      { value: 67, title: 'Đang áp dụng định dạng', desc: 'Chuẩn hóa font chữ, lề trang, mục lục và header/footer.' },
+      { value: 88, title: 'Đang xác minh kết quả', desc: 'Kiểm tra tính toàn vẹn trước khi tạo file tải xuống.' }
+    ];
+
+    const render = (value, stageIndex, title, desc) => {
+      currentProgress = Math.max(currentProgress, value);
+      if (progressFill) progressFill.style.width = `${currentProgress}%`;
+      if (progressPercent) progressPercent.textContent = `${Math.round(currentProgress)}%`;
+      if (progressTitle && title) progressTitle.textContent = title;
+      if (progressDesc && desc) progressDesc.textContent = desc;
+      progressRail?.setAttribute('aria-valuenow', String(Math.round(currentProgress)));
+      stageItems.forEach((item, index) => {
+        item.classList.toggle('is-active', index === stageIndex);
+        item.classList.toggle('is-complete', index < stageIndex);
+      });
+    };
+
+    const schedule = (callback, delay) => {
+      const timer = setTimeout(callback, delay);
+      timers.push({ type: 'timeout', id: timer });
+    };
+
+    const clearTimers = () => {
+      timers.forEach(timer => {
+        if (timer.type === 'interval') clearInterval(timer.id);
+        else clearTimeout(timer.id);
+      });
+      timers.length = 0;
+    };
+
+    placeholder?.classList.add('hidden');
+    successBox?.classList.add('hidden');
+    progressBox?.classList.remove('hidden', 'is-complete', 'is-error');
+    statusCard?.classList.add('is-processing');
+    stageItems.forEach(item => item.classList.remove('is-active', 'is-complete'));
+    render(3, 0, stages[0].title, stages[0].desc);
+
+    schedule(() => render(stages[0].value, 0, stages[0].title, stages[0].desc), 220);
+    schedule(() => render(stages[1].value, 1, stages[1].title, stages[1].desc), 760);
+    schedule(() => render(stages[2].value, 2, stages[2].title, stages[2].desc), 1450);
+    schedule(() => render(stages[3].value, 3, stages[3].title, stages[3].desc), 2250);
+
+    const clockTimer = setInterval(() => {
+      const elapsedSeconds = Math.floor((performance.now() - startedAt) / 1000);
+      const minutes = Math.floor(elapsedSeconds / 60);
+      const seconds = elapsedSeconds % 60;
+      if (progressTime) progressTime.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      if (elapsedSeconds >= 3 && currentProgress < 96) {
+        render(Math.min(currentProgress + 0.6, 96), 3, 'Đang hoàn thiện file đầu ra', 'Engine đang hoàn tất những kiểm tra cuối cùng.');
+      }
+    }, 200);
+    timers.push({ type: 'interval', id: clockTimer });
+
+    const minimum = new Promise(resolve => schedule(resolve, 3000));
+
+    return {
+      minimum,
+      async complete() {
+        clearTimers();
+        render(100, 3, 'Hoàn tất chuẩn hóa', 'Tài liệu đã vượt qua toàn bộ bước kiểm tra.');
+        stageItems.forEach(item => item.classList.add('is-complete'));
+        progressBox?.classList.add('is-complete');
+        await new Promise(resolve => setTimeout(resolve, 480));
+        progressBox?.classList.add('hidden');
+        statusCard?.classList.remove('is-processing');
+      },
+      fail(message) {
+        clearTimers();
+        progressBox?.classList.add('is-error');
+        statusCard?.classList.remove('is-processing');
+        if (progressTitle) progressTitle.textContent = 'Không thể hoàn tất tài liệu';
+        if (progressDesc) progressDesc.textContent = message || 'Vui lòng kiểm tra file và thử lại.';
+      }
+    };
+  }
 
   if (dropzone && fileInput) {
     dropzone.addEventListener('click', (e) => {
@@ -1007,25 +1225,30 @@ function initWordFmtTool() {
       if (frontMatter) formData.append('frontMatter', frontMatter);
 
       setButtonLoading(btnStart, true);
+      const progressSession = createProgressSession();
 
       try {
-        const res = await BduApi.formatDocx(formData);
+        const [res] = await Promise.all([
+          BduApi.formatDocx(formData),
+          progressSession.minimum
+        ]);
+        await progressSession.complete();
         showToast('Chuẩn hóa văn bản thành công!', 'success');
 
-        statusCard.querySelector('.status-placeholder-content').classList.add('hidden');
         successBox.classList.remove('hidden');
         downloadBtn.href = res.downloadUrl;
 
         if (diagContainer) {
           diagContainer.innerHTML = `
-            <div class="diag-line diag-pass">✅ Engine: .NET 10 LTS WordFmt (BDU Profile v1)</div>
-            <div class="diag-line diag-pass">✅ Canh lề A4: Top 2cm, Bottom 2cm, Left 3cm, Right 2cm</div>
-            <div class="diag-line diag-pass">✅ Phân cấp Headings H1–H4 Times New Roman chuẩn viện</div>
-            <div class="diag-line diag-pass">✅ Tự động xây dựng Mục Lục & Header/Footer</div>
-            <div class="diag-line diag-info">ℹ️ File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>
+            <div class="diag-line diag-pass">Engine: .NET 10 LTS WordFmt (BDU Profile v1)</div>
+            <div class="diag-line diag-pass">Canh lề A4: Top 2cm, Bottom 2cm, Left 3cm, Right 2cm</div>
+            <div class="diag-line diag-pass">Phân cấp Headings H1–H4 Times New Roman chuẩn viện</div>
+            <div class="diag-line diag-pass">Tự động xây dựng Mục Lục & Header/Footer</div>
+            <div class="diag-line diag-info">File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>
           `;
         }
       } catch (err) {
+        progressSession.fail(err.message);
         showToast(err.message, 'error');
       } finally {
         setButtonLoading(btnStart, false);
@@ -1179,7 +1402,7 @@ function initModals() {
   });
 }
 
-window.showCourseDetail = function(encodedData) {
+window.showCourseDetail = function (encodedData) {
   try {
     const course = JSON.parse(decodeURIComponent(encodedData));
     const modal = document.getElementById('detail-modal');
@@ -1188,16 +1411,16 @@ window.showCourseDetail = function(encodedData) {
     document.getElementById('modal-course-name').textContent = course.ten_mon || 'Chi Tiết Môn Học';
     document.getElementById('modal-course-code').textContent = course.ma_mon || '--';
     document.getElementById('modal-credits').textContent = course.so_tin_chi || '0';
-    document.getElementById('modal-tk-10').textContent = course.diem_tk !== undefined && course.diem_tk !== '' ? course.diem_tk : '--';
-    document.getElementById('modal-tk-4').textContent = course.diem_tk_so !== undefined && course.diem_tk_so !== '' ? course.diem_tk_so : '--';
-    
+    document.getElementById('modal-tk-10').textContent = course.diem_tk !== undefined && course.diem_tk !== null && course.diem_tk !== '' ? course.diem_tk : '--';
+    document.getElementById('modal-tk-4').textContent = course.diem_tk_so !== undefined && course.diem_tk_so !== null && course.diem_tk_so !== '' ? course.diem_tk_so : '--';
+
     const letterEl = document.getElementById('modal-letter');
     letterEl.textContent = course.diem_tk_chu || '--';
     letterEl.className = `grade-pill ${getGradeLetterClass(course.diem_tk_chu)}`;
 
     const tbody = document.getElementById('modal-components-body');
     if (tbody) {
-      const components = course.ds_diem_thanh_phan || [];
+      const components = extractComponentDetailList(course);
       if (components.length === 0) {
         tbody.innerHTML = `
           <tr>
@@ -1209,10 +1432,10 @@ window.showCourseDetail = function(encodedData) {
       } else {
         tbody.innerHTML = components.map(comp => `
           <tr>
-            <td><strong>${comp.ten_thanh_phan || comp.ten_tp || 'Thành phần'}</strong></td>
-            <td style="font-family: var(--font-mono);">${comp.trong_so || comp.ty_le || '--'}%</td>
-            <td style="font-family: var(--font-mono); color: #38bdf8; font-weight: 700;">${comp.diem !== undefined ? comp.diem : comp.diem_tp !== undefined ? comp.diem_tp : '--'}</td>
-            <td style="color: var(--text-muted);">${comp.ghi_chu || '--'}</td>
+            <td><strong>${comp.name}</strong></td>
+            <td style="font-family: var(--font-mono);">${comp.weight}</td>
+            <td style="font-family: var(--font-mono); color: #38bdf8; font-weight: 700;">${comp.score}</td>
+            <td style="color: var(--text-muted);">${comp.note}</td>
           </tr>
         `).join('');
       }
@@ -1223,3 +1446,119 @@ window.showCourseDetail = function(encodedData) {
     console.error('Show detail error:', err);
   }
 };
+
+/**
+ * Trích xuất và gán điểm thành phần chi tiết cho môn học
+ */
+function extractComponentDetailList(course) {
+  const rawComponents = Array.isArray(course.ds_diem_thanh_phan) ? course.ds_diem_thanh_phan : [];
+
+  const getDirectScore = (item) => {
+    if (!item || typeof item !== 'object') return null;
+    const candidateKeys = [
+      'diem', 'diem_thanh_phan', 'diem_tp', 'diem_so', 'gia_tri', 'so_diem',
+      'diem_danh_gia', 'diem_thi', 'diem_giua_ky', 'diem_ck', 'diem_gk',
+      'diem_qt', 'diem_chua_lam_tron', 'diem_tk', 'point', 'score', 'mark', 'value'
+    ];
+    for (const key of candidateKeys) {
+      const val = item[key];
+      if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '--') {
+        return val;
+      }
+    }
+    return null;
+  };
+
+  const getWeight = (item) => {
+    if (!item || typeof item !== 'object') return '--';
+    const candidateKeys = ['trong_so', 'ty_le', 'ty_le_phan_tram', 'trong_so_phan_tram', 'phan_tram', 'weight'];
+    for (const key of candidateKeys) {
+      const val = item[key];
+      if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '--') {
+        const str = String(val).trim();
+        return str.endsWith('%') ? str : `${str}%`;
+      }
+    }
+    return '--';
+  };
+
+  if (rawComponents.length > 0) {
+    return rawComponents.map((comp, idx) => {
+      const name = comp.ten_thanh_phan || comp.ten_tp || comp.loai_diem || comp.ten_thanh_phan_danh_gia || `Thành phần ${idx + 1}`;
+      const weight = getWeight(comp);
+      let score = getDirectScore(comp);
+      let note = comp.ghi_chu || comp.note || comp.ten_hinh_thuc_danh_gia || comp.hinh_thuc_danh_gia || '';
+
+      // Tự động ánh xạ điểm từ môn học nếu đối tượng thành phần chưa có điểm trực tiếp
+      if (score === null || score === undefined) {
+        const lowerName = name.toLowerCase();
+
+        const isMidterm = lowerName.includes('giữa') || lowerName.includes('giua') || lowerName.includes('gk') ||
+          lowerName.includes('quá trình') || lowerName.includes('qua trinh') || lowerName.includes('qt') ||
+          lowerName.includes('thường kỳ') || lowerName.includes('chuyên cần') || lowerName.includes('tiểu luận') ||
+          lowerName.includes('bài tập');
+
+        const isFinal = lowerName.includes('cuối') || lowerName.includes('cuoi') || lowerName.includes('ck') ||
+          lowerName.includes('thi') || lowerName.includes('kết thúc') || lowerName.includes('ket thuc') ||
+          lowerName.includes('đồ án') || lowerName.includes('bảo vệ');
+
+        if (isMidterm) {
+          score = getDirectScore({ diem: course.diem_giua_ky ?? course.diem_gk ?? course.diem_qt });
+          if (!note && score !== null) note = 'Điểm đánh giá giữa kỳ';
+        } else if (isFinal) {
+          score = getDirectScore({ diem: course.diem_thi ?? course.diem_ck ?? course.diem_cuoi_ky });
+          if (!note && score !== null) note = 'Điểm thi kết thúc học phần';
+        } else if (rawComponents.length === 2) {
+          if (idx === 0) {
+            score = getDirectScore({ diem: course.diem_giua_ky ?? course.diem_gk ?? course.diem_qt });
+            if (!note && score !== null) note = 'Điểm đánh giá giữa kỳ';
+          } else if (idx === 1) {
+            score = getDirectScore({ diem: course.diem_thi ?? course.diem_ck ?? course.diem_cuoi_ky });
+            if (!note && score !== null) note = 'Điểm thi kết thúc học phần';
+          }
+        }
+      }
+
+      return {
+        name,
+        weight,
+        score: score !== null && score !== undefined ? score : '--',
+        note: note || '--'
+      };
+    });
+  }
+
+  // Phương án dự phòng nếu ds_diem_thanh_phan trống nhưng môn học có điểm GK / Thi
+  const list = [];
+  const hasGK = course.diem_giua_ky !== undefined && course.diem_giua_ky !== null && String(course.diem_giua_ky).trim() !== '' && String(course.diem_giua_ky).trim() !== '--';
+  const hasThi = course.diem_thi !== undefined && course.diem_thi !== null && String(course.diem_thi).trim() !== '' && String(course.diem_thi).trim() !== '--';
+  const hasTK = course.diem_tk !== undefined && course.diem_tk !== null && String(course.diem_tk).trim() !== '' && String(course.diem_tk).trim() !== '--';
+
+  if (hasGK) {
+    list.push({
+      name: 'Điểm Quá Trình / Giữa Kỳ',
+      weight: '40% - 50%',
+      score: course.diem_giua_ky,
+      note: 'Điểm đánh giá quá trình'
+    });
+  }
+  if (hasThi) {
+    list.push({
+      name: 'Điểm Thi Kết Thúc Học Phần',
+      weight: '50% - 60%',
+      score: course.diem_thi,
+      note: 'Điểm thi cuối kỳ'
+    });
+  }
+  if (hasTK && list.length === 0) {
+    list.push({
+      name: 'Điểm Tổng Kết Học Phần',
+      weight: '100%',
+      score: course.diem_tk,
+      note: `Thang 10 (Hệ 4: ${course.diem_tk_so || '--'} - Điểm: ${course.diem_tk_chu || '--'})`
+    });
+  }
+
+  return list;
+}
+

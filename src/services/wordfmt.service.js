@@ -8,6 +8,10 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { AsyncQueue } from '../utils/async-queue.js';
+import {
+  normalizeFormattedDocx,
+  normalizeSourceLists
+} from '../utils/docx-postprocessor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,13 +71,30 @@ export const WordFmtService = {
 
     const id = Date.now() + '_' + Math.random().toString(36).substring(2, 8);
     const outputPath = path.join(TEMP_DIR, `formatted_${id}.docx`);
+    const preparedInputPath = path.join(TEMP_DIR, `prepared_${id}.docx`);
     const reportPath = path.join(TEMP_DIR, `report_${id}.json`);
     const profilePath = path.join(PROFILES_DIR, profile);
+
+    let sourceListNormalization;
+    try {
+      sourceListNormalization = normalizeSourceLists(inputPath, preparedInputPath);
+    } catch (listError) {
+      console.error('Source list normalization error:', listError);
+      throw new Error('Không thể chuẩn hóa danh sách trong DOCX đầu vào.');
+    }
+
+    const cleanupPreparedInput = () => {
+      try {
+        if (fs.existsSync(preparedInputPath)) fs.unlinkSync(preparedInputPath);
+      } catch (cleanupError) {
+        console.warn('Failed to clean prepared DOCX:', cleanupError);
+      }
+    };
 
     const args = [
       DLL_PATH,
       'format',
-      inputPath,
+      preparedInputPath,
       '--output', outputPath,
       '--instructor', instructor.trim(),
       '--student', student.trim(),
@@ -115,8 +136,25 @@ export const WordFmtService = {
 
           if (error && (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0)) {
             console.error('WordFmt error:', stderr || stdout || error.message);
+            cleanupPreparedInput();
             return reject(new Error(stderr || stdout || 'Lỗi khi định dạng văn bản DOCX.'));
           }
+
+          try {
+            const normalization = normalizeFormattedDocx(outputPath);
+            reportData = {
+              ...(reportData || {}),
+              input: inputPath,
+              sourceListNormalization,
+              outputNormalization: normalization
+            };
+          } catch (normalizationError) {
+            console.error('DOCX post-processing error:', normalizationError);
+            cleanupPreparedInput();
+            return reject(new Error('Không thể hoàn tất chuẩn hóa màu chữ, độ đậm và dấu gạch trong DOCX.'));
+          }
+
+          cleanupPreparedInput();
 
           resolve({
             success: true,

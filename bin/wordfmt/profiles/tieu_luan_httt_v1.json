@@ -4,14 +4,16 @@
   "locale": "vi-VN",
   "source_revision": "2026-08-17",
   "page": { "paper": "A4", "margins_cm": { "top": 2, "bottom": 2, "left": 3, "right": 2 } },
-  "body": { "font": "Times New Roman", "size_pt": 13, "alignment": "justify", "line_spacing": 1.2, "space_after_pt": 6 },
+  "body": { "font": "Times New Roman", "size_pt": 13, "alignment": "justify", "line_spacing": 1.2, "space_after_pt": 6, "bold": false },
   "heading_rules_file": "heading_marking_rules_vi_v1.json",
   "headings": {
-    "chapter": { "level": 1, "size_pt": 18, "bold": true, "uppercase": true, "alignment": "center" },
-    "level2": { "level": 2, "size_pt": 16, "bold": true },
-    "level3": { "level": 3, "size_pt": 14, "bold": true, "italic": true },
-    "level4": { "level": 4, "size_pt": 13, "italic": true }
+    "chapter": { "level": 1, "size_pt": 18, "bold": true, "uppercase": true, "alignment": "center", "color_hex": "000000" },
+    "level2": { "level": 2, "size_pt": 16, "bold": true, "color_hex": "000000" },
+    "level3": { "level": 3, "size_pt": 14, "bold": true, "italic": true, "color_hex": "000000" },
+    "level4": { "level": 4, "size_pt": 13, "bold": false, "italic": true, "color_hex": "000000" }
   },
+  "text_normalization": { "replace_en_dash_with_hyphen": true, "smart_double_quotes": true },
+  "lists": { "normalize_all": true, "ordered_marker": "{n})", "restart_each_group": true, "indent_cm": 0, "tabs": false },
   "front_matter": {
     "titles": ["NHẬN XÉT CỦA GIẢNG VIÊN", "MỤC LỤC", "DANH MỤC BẢNG", "DANH MỤC BẢNG BIỂU", "DANH MỤC HÌNH ẢNH", "LỜI CẢM ƠN", "LỜI MỞ ĐẦU", "KẾT LUẬN", "TÀI LIỆU THAM KHẢO", "PHỤ LỤC"],
     "cover_anchors": ["TRƯỜNG", "KHOA", "BỘ MÔN", "BÁO CÁO", "SINH VIÊN", "MSSV", "LỚP", "GIẢNG VIÊN"]
@@ -28,7 +30,7 @@
     "font": "Times New Roman",
     "size_pt": 10,
     "header_right": "TIỂU LUẬN MÔN HỌC",
-    "suppress_header_on_heading1_page": false,
+    "suppress_header_on_heading1_page": true,
     "footer_left": "GVHD: {instructor_name}",
     "footer_center": "{PAGE}",
     "footer_right": "SVTH: {student_display}",
