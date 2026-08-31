@@ -30,7 +30,7 @@
     "font": "Times New Roman",
     "size_pt": 10,
     "header_right": "TIỂU LUẬN MÔN HỌC",
-    "suppress_header_on_heading1_page": true,
+    "suppress_header_on_heading1_page": false,
     "footer_left": "GVHD: {instructor_name}",
     "footer_center": "{PAGE}",
     "footer_right": "SVTH: {student_display}",

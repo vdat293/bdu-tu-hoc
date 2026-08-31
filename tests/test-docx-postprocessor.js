@@ -77,12 +77,14 @@ assert.match(documentResult.xml, /<w:color w:val="000000"\/>/);
 assert.doesNotMatch(documentResult.xml, /w:themeColor=/);
 assert.match(documentResult.xml, /<w:b w:val="0"\/>/);
 assert.match(documentResult.xml, /<w:bCs w:val="0"\/>/);
+assert.match(documentResult.xml, /<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"\/>/);
 
 const stylesResult = processStylesXml(stylesXml);
 assert.equal(stylesResult.stats.headingStyles, 1);
 assert.equal(stylesResult.stats.bodyStyles, 1);
 assert.match(stylesResult.xml, /styleId="WFHeading2"[\s\S]*?<w:color w:val="000000"\/>/);
 assert.match(stylesResult.xml, /styleId="WFBody"[\s\S]*?<w:b w:val="0"\/>/);
+assert.match(stylesResult.xml, /styleId="WFBody"[\s\S]*?<w:rFonts w:ascii="Times New Roman"/);
 
 const listContext = buildListContext(numberingXml, stylesXml);
 const listResult = normalizeAcademicLists(listDocumentXml, listContext);
@@ -108,6 +110,7 @@ assert.match(referenceResult.xml, /<w:t>\[1\] Bảnh, T\. T\. \(2021\)\. Giáo t
 assert.match(referenceResult.xml, /<w:t>\[2\] MongoDB Documentation\. https:\/\/mongodb\.com<\/w:t>/);
 assert.match(referenceResult.xml, /<w:sz w:val="26"\/>/);
 assert.match(referenceResult.xml, /<w:b w:val="0"\/>/);
+assert.match(referenceResult.xml, /<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"\/>/);
 assert.match(referenceResult.xml, /<w:jc w:val="left"\/>/);
 assert.doesNotMatch(referenceResult.xml, /w:pos="720"|w:left="720"/);
 assert.match(referenceResult.xml, /<w:t>1\) Không phải tài liệu tham khảo<\/w:t>/);
@@ -116,5 +119,16 @@ const referenceHeaderResult = normalizeReferenceHeader(referenceHeaderXml);
 assert.equal(referenceHeaderResult.cleared, true);
 assert.match(referenceHeaderResult.xml, /<w:hdr[^>]*><w:p\/><\/w:hdr>/);
 assert.doesNotMatch(referenceHeaderResult.xml, /TÀI LIỆU THAM KHẢO|TIỂU LUẬN MÔN HỌC/);
+
+const formattingProfile = JSON.parse(
+  await import('node:fs').then(({ readFileSync }) => (
+    readFileSync(new URL('../profiles/tieu_luan_httt_v1.json', import.meta.url), 'utf8')
+  ))
+);
+assert.equal(formattingProfile.header_footer.suppress_header_on_heading1_page, false);
+assert.equal(
+  formattingProfile.header_footer.header_right,
+  formattingProfile.cover.document_type
+);
 
 console.log('✅ DOCX post-processor: heading, body, dấu câu và mọi danh sách được chuẩn hóa.');

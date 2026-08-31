@@ -39,11 +39,18 @@ function ensureRunProperties(containerXml, propertiesXml, closingTag) {
 function patchRun(runXml, {
   black = false,
   bold = false,
+  fontName = null,
   notBold = false,
   notItalic = false,
   sizeHalfPoints = null
 }) {
   const properties = [];
+  if (fontName) {
+    properties.push({
+      name: 'rFonts',
+      xml: `<w:rFonts w:ascii="${fontName}" w:hAnsi="${fontName}" w:eastAsia="${fontName}" w:cs="${fontName}"/>`
+    });
+  }
   if (black) properties.push({ name: 'color', xml: '<w:color w:val="000000"/>' });
   if (bold) {
     properties.push({ name: 'b', xml: '<w:b w:val="1"/>' });
@@ -272,6 +279,7 @@ export function normalizeReferenceSection(documentXml) {
       normalized = patchParagraphRuns(normalized, {
         black: true,
         bold: true,
+        fontName: 'Times New Roman',
         notItalic: true,
         sizeHalfPoints: 36
       });
@@ -308,6 +316,7 @@ export function normalizeReferenceSection(documentXml) {
 
     return patchParagraphRuns(normalized, {
       black: true,
+      fontName: 'Times New Roman',
       notBold: true,
       sizeHalfPoints: 26
     });
@@ -490,7 +499,11 @@ export function processDocumentXml(documentXml) {
     return paragraphXml.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, runXml => {
       if (isHeading) stats.headingRuns += 1;
       if (isBody) stats.bodyRunsNormalized += 1;
-      return patchRun(runXml, { black: isHeading, notBold: isBody });
+      return patchRun(runXml, {
+        black: isHeading,
+        fontName: 'Times New Roman',
+        notBold: isBody
+      });
     });
   });
 
@@ -519,6 +532,7 @@ export function processStylesXml(stylesXml) {
 
   for (const styleId of HEADING_STYLE_IDS) {
     const result = patchStyle(xml, styleId, [
+      { name: 'rFonts', xml: '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>' },
       { name: 'color', xml: '<w:color w:val="000000"/>' }
     ]);
     xml = result.xml;
@@ -527,6 +541,7 @@ export function processStylesXml(stylesXml) {
 
   for (const styleId of BODY_STYLE_IDS) {
     const result = patchStyle(xml, styleId, [
+      { name: 'rFonts', xml: '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>' },
       { name: 'b', xml: '<w:b w:val="0"/>' },
       { name: 'bCs', xml: '<w:bCs w:val="0"/>' }
     ]);
