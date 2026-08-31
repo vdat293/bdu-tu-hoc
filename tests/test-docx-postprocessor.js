@@ -122,7 +122,7 @@ assert.doesNotMatch(referenceHeaderResult.xml, /TÀI LIỆU THAM KHẢO|TIỂU L
 
 const formattingProfile = JSON.parse(
   await import('node:fs').then(({ readFileSync }) => (
-    readFileSync(new URL('../profiles/tieu_luan_httt_v1.json', import.meta.url), 'utf8')
+    readFileSync(new URL('../profiles/tieu_luan.json', import.meta.url), 'utf8')
   ))
 );
 assert.equal(formattingProfile.header_footer.suppress_header_on_heading1_page, false);

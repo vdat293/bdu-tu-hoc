@@ -1,6 +1,6 @@
 /**
  * WordFmt Integration Service
- * Formats DOCX files based on BDU / tieu_luan_httt_v1 profile using WordFmt C# binary
+ * Formats DOCX files based on BDU / tieu_luan profile using WordFmt C# binary
  */
 
 import { execFile } from 'child_process';
@@ -44,7 +44,7 @@ export const WordFmtService = {
    * @param {string} [params.className] - Class Name (Tên lớp)
    * @param {string} [params.documentTitle] - Document title (Tiểu luận môn học)
    * @param {string} [params.frontMatter] - Comma separated front matter: cover,comments,thanks
-   * @param {string} [params.profile] - Profile name (defaults to tieu_luan_httt_v1.json)
+   * @param {string} [params.profile] - Profile name (defaults to tieu_luan.json)
    */
   async formatDocx({
     inputPath,
@@ -55,7 +55,7 @@ export const WordFmtService = {
     className = '',
     documentTitle = 'TIỂU LUẬN MÔN HỌC',
     frontMatter = 'cover,comments,thanks',
-    profile = 'tieu_luan_httt_v1.json'
+    profile = 'tieu_luan.json'
   }) {
     if (!fs.existsSync(inputPath)) {
       throw new Error('Không tìm thấy file tải lên.');
@@ -172,7 +172,7 @@ export const WordFmtService = {
   /**
    * Quick check DOCX for style compliance
    */
-  async checkDocx(inputPath, profile = 'tieu_luan_httt_v1.json') {
+  async checkDocx(inputPath, profile = 'tieu_luan.json') {
     const profilePath = path.join(PROFILES_DIR, profile);
     const args = [DLL_PATH, 'check', inputPath, '--profile', profilePath];
 

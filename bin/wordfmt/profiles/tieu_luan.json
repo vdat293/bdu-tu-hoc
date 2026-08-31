@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "profile_id": "tieu_luan_httt_v1",
+  "profile_id": "tieu_luan",
   "locale": "vi-VN",
   "source_revision": "2026-08-17",
   "page": { "paper": "A4", "margins_cm": { "top": 2, "bottom": 2, "left": 3, "right": 2 } },
