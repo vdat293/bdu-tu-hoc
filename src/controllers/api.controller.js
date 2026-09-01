@@ -5,6 +5,7 @@
 import { BduService } from '../services/bdu.service.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
 import { SurveyService } from '../services/survey.service.js';
+import { EnglishExerciseService } from '../services/english-exercise.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -165,7 +166,81 @@ export const ApiController = {
     }
   },
 
-  // 8. Learning Hub: Catalog
+  // 8. Tools: Moodle English exercise automation
+  async loginEnglish(req, res) {
+    try {
+      return res.json({ result: true, data: await EnglishExerciseService.login(req.body || {}) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  async getEnglishActivities(req, res) {
+    try {
+      const data = await EnglishExerciseService.activities(req.params.sessionId, req.query.courseId);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  startEnglishExercise(req, res) {
+    try {
+      const data = EnglishExerciseService.start(req.params.sessionId, req.body || {});
+      return res.status(202).json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  stopEnglishExercise(req, res) {
+    try {
+      return res.json({ result: true, stopped: EnglishExerciseService.stop(req.params.sessionId) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  closeEnglishSession(req, res) {
+    return res.json({ result: true, closed: EnglishExerciseService.close(req.params.sessionId) });
+  },
+
+  streamEnglishExercise(req, res) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    try {
+      const unsubscribe = EnglishExerciseService.subscribe(req.params.sessionId, res);
+      const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 20_000);
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+      res.end();
+    }
+  },
+
+  getEnglishAnswers(req, res) {
+    return res.json({ result: true, data: EnglishExerciseService.listAnswers() });
+  },
+
+  addEnglishAnswer(req, res) {
+    try {
+      const data = EnglishExerciseService.addAnswer(req.body?.question, req.body?.correctAnswer);
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  deleteEnglishAnswer(req, res) {
+    return res.json({ result: true, deleted: EnglishExerciseService.deleteAnswer(req.params.id) });
+  },
+
+  // 9. Learning Hub: Catalog
   getLearningResources(req, res) {
     try {
       const data = BduService.getLearningResources();
@@ -175,7 +250,7 @@ export const ApiController = {
     }
   },
 
-  // 9. System: Queue Status & Metrics
+  // 10. System: Queue Status & Metrics
   getQueueStatus(req, res) {
     return res.json({
       result: true,

@@ -58,13 +58,18 @@ export const BduService = {
       throw err;
     }
 
+    // Keep this request aligned with the official student portal. In particular,
+    // `idpc` selects the portal context; omitting it can return an incomplete
+    // grade list even when the same student sees every course on sv.bdu.edu.vn.
     const response = await fetch(`${BDU_BASE_URL}/srm/w-locdsdiemsinhvien?hien_thi_mon_theo_hkdk=false`, {
       method: 'POST',
       headers: {
         'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Accept': 'application/json, text/plain, */*',
+        'idpc': '0',
+        'Content-Type': 'text/plain'
       },
-      body: JSON.stringify({})
+      body: ''
     });
 
     const data = await response.json();

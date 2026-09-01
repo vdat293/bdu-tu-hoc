@@ -347,7 +347,10 @@ kbd {
 @keyframes skeleton-scan { to { background-position-x: -220%; } }
 
 .semester-header { position: sticky; top: 0; z-index: 5; }
-.grade-table thead { position: sticky; top: 49px; z-index: 4; }
+/* `.table-responsive` is the nearest scroll container, so a positive sticky
+   offset pushes the header over the first course row. Keep it at its natural
+   top edge to ensure row 1 (for example ENG1644) remains visible. */
+.grade-table thead { position: sticky; top: 0; z-index: 4; }
 .grade-table tbody tr { transition: background .18s ease, box-shadow .18s ease; }
 .grade-table tbody tr:focus-visible { position: relative; z-index: 3; }
 .grade-table tbody tr:hover { box-shadow: inset 3px 0 #8c1515; }

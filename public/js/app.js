@@ -14,7 +14,10 @@ const AppState = {
   selectedFile: null,
   gpaChart: null,
   distChart: null,
-  eventSource: null
+  eventSource: null,
+  englishSessionId: null,
+  englishEventSource: null,
+  englishActivities: []
 };
 
 // ============================================================================
@@ -29,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initScheduleTab();
   initWordFmtTool();
   initSurveyBot();
+  initEnglishExerciseBot();
   initModals();
 });
 
@@ -71,7 +75,12 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span class="toast-mark" aria-hidden="true"></span><span>${message}</span>`;
+  const mark = document.createElement('span');
+  mark.className = 'toast-mark';
+  mark.setAttribute('aria-hidden', 'true');
+  const content = document.createElement('span');
+  content.textContent = message;
+  toast.append(mark, content);
   container.appendChild(toast);
 
   setTimeout(() => {
@@ -231,6 +240,11 @@ function initAuth() {
  */
 function handleLogout(options = {}) {
   const { reason = 'Đã đăng xuất tài khoản.', isExpired = false } = options;
+  if (AppState.englishSessionId) {
+    BduApi.closeEnglishSession(AppState.englishSessionId).catch(() => { });
+  }
+  AppState.englishEventSource?.close();
+  AppState.eventSource?.close();
   localStorage.removeItem('bdu_token');
   localStorage.removeItem('bdu_user');
   localStorage.removeItem('bdu_token_expires_at');
@@ -242,6 +256,10 @@ function handleLogout(options = {}) {
   AppState.token = null;
   AppState.semesters = [];
   AppState.rawGradeData = null;
+  AppState.englishSessionId = null;
+  AppState.englishEventSource = null;
+  AppState.englishActivities = [];
+  AppState.eventSource = null;
 
   const dashView = document.getElementById('dashboard-view');
   const loginView = document.getElementById('login-view');
@@ -353,6 +371,7 @@ function initNavigation() {
     'tab-schedule': 'Thời Khóa Biểu',
     'tab-wordfmt': 'Chuẩn Hóa Word BDU',
     'tab-survey': 'Auto Đánh Giá Khảo Sát',
+    'tab-english': 'Auto Bài Tập Tiếng Anh',
     'tab-enrollment': 'Auto Đăng Ký Môn Học',
     'tab-learning': 'Kho Tài Liệu & Video Tự Học'
   };
@@ -814,7 +833,14 @@ function renderProfile(profileRes) {
   const educationLevel = p.ten_bac_dao_tao || p.ten_he_dao_tao || p.he_dao_tao || 'Đại học chính quy';
   const cohortYears = p.nien_khoa || p.khoa_hoc || '2024-2028';
 
-  const advisorId = p.ma_co_van_hoc_tap || p.ma_cvht || p.tai_khoan_cvht || p.ma_giang_vien || '91044';
+  const advisorId = p.ma_co_van_hoc_tap || p.ma_cvht || p.tai_khoan_cvht || p.ma_giang_vien || '--';
+  const advisorName = p.ten_co_van_hoc_tap
+    || p.ho_ten_co_van_hoc_tap
+    || p.ten_cvht
+    || p.ho_ten_cvht
+    || p.ten_giang_vien
+    || p.ho_ten_giang_vien
+    || 'Chưa cập nhật';
   const photoUrl = profileRes.student_image || p.hinh_anh || p.url_hinh_anh || p.image || p.anh_the || p.avatar || '';
 
   // 1. Thông tin sinh viên
@@ -882,8 +908,14 @@ function renderProfile(profileRes) {
 
   const btnMailAdvisor = document.getElementById('btn-mail-advisor');
   if (btnMailAdvisor) {
-    const advEmail = p.email_cvht || (advisorId ? `${advisorId}@bdu.edu.vn` : '');
-    if (advEmail) btnMailAdvisor.href = `mailto:${advEmail}`;
+    const advEmail = p.email_co_van_hoc_tap || p.email_cvht || p.email_giang_vien || (advisorId !== '--' ? `${advisorId}@bdu.edu.vn` : '');
+    if (advEmail) {
+      btnMailAdvisor.href = `mailto:${advEmail}`;
+      btnMailAdvisor.removeAttribute('aria-disabled');
+    } else {
+      btnMailAdvisor.removeAttribute('href');
+      btnMailAdvisor.setAttribute('aria-disabled', 'true');
+    }
   }
 
   // Update default inputs for WordFmt tab
@@ -1334,7 +1366,287 @@ function addTerminalLog(message, type = 'info') {
 }
 
 // ============================================================================
-// TAB 7: LEARNING HUB RENDERING
+// TAB 6: AUTO ENGLISH EXERCISE BOT
+// ============================================================================
+function initEnglishExerciseBot() {
+  const connectBtn = document.getElementById('btn-english-connect');
+  const startBtn = document.getElementById('btn-english-start');
+  const stopBtn = document.getElementById('btn-english-stop');
+  const clearBtn = document.getElementById('btn-clear-english-terminal');
+  const activitySelect = document.getElementById('english-activity');
+  const answerForm = document.getElementById('english-answer-form');
+  const answerBody = document.getElementById('english-answer-body');
+
+  if (!connectBtn || !startBtn || !stopBtn || !activitySelect) return;
+
+  clearBtn?.addEventListener('click', () => {
+    const terminal = document.getElementById('english-terminal');
+    if (terminal) terminal.textContent = '';
+    appendEnglishLog('Console đã được xóa.', 'muted');
+  });
+
+  connectBtn.addEventListener('click', async () => {
+    const username = document.getElementById('english-username')?.value.trim();
+    const passwordInput = document.getElementById('english-password');
+    const password = passwordInput?.value || '';
+    const courseId = document.getElementById('english-course-id')?.value.trim() || '281';
+    if (!username || !password) {
+      showToast('Vui lòng nhập tài khoản và mật khẩu Moodle.', 'error');
+      return;
+    }
+
+    setButtonLoading(connectBtn, true);
+    setEnglishConnectionState('Đang kết nối…', false);
+    appendEnglishLog(`Đang đăng nhập Moodle và quét khóa học #${courseId}...`);
+    try {
+      if (AppState.englishSessionId) {
+        await BduApi.closeEnglishSession(AppState.englishSessionId).catch(() => { });
+      }
+      AppState.englishEventSource?.close();
+      const session = await BduApi.loginEnglish({ username, password, courseId });
+      AppState.englishSessionId = session.sessionId;
+      if (passwordInput) passwordInput.value = '';
+      connectEnglishLogStream(session.sessionId);
+
+      const activities = await BduApi.getEnglishActivities(session.sessionId, courseId);
+      AppState.englishActivities = activities;
+      renderEnglishActivities(activities);
+      setEnglishConnectionState(`Đã kết nối · ${activities.length} hoạt động`, true);
+      document.getElementById('english-run-settings')?.classList.remove('is-disabled');
+      document.getElementById('english-run-settings')?.setAttribute('aria-disabled', 'false');
+      showToast(`Đã quét ${activities.length} hoạt động Moodle.`, 'success');
+    } catch (error) {
+      AppState.englishSessionId = null;
+      renderEnglishActivities([]);
+      setEnglishConnectionState('Kết nối thất bại', false);
+      appendEnglishLog(error.message, 'error');
+      showToast(error.message, 'error');
+    } finally {
+      setButtonLoading(connectBtn, false);
+      updateEnglishStartAvailability();
+    }
+  });
+
+  activitySelect.addEventListener('change', updateEnglishStartAvailability);
+
+  startBtn.addEventListener('click', async () => {
+    if (!AppState.englishSessionId) {
+      showToast('Vui lòng đăng nhập Moodle trước.', 'error');
+      return;
+    }
+    const option = activitySelect.selectedOptions[0];
+    if (!option?.value || option.dataset.type !== 'quiz') {
+      showToast('Vui lòng chọn một quiz Moodle được hỗ trợ.', 'error');
+      return;
+    }
+    const autoSubmit = Boolean(document.getElementById('english-auto-submit')?.checked);
+    if (autoSubmit) {
+      const accepted = window.confirm(
+        'TỰ ĐỘNG NỘP BÀI có thể ảnh hưởng điểm và số lượt thi. Bạn xác nhận tạo/tiếp tục lượt làm, điền đáp án và nộp quiz này?'
+      );
+      if (!accepted) return;
+    }
+
+    const delaySeconds = Number(document.getElementById('english-delay')?.value || 0);
+    setEnglishRunning(true);
+    appendEnglishLog(`Yêu cầu chạy quiz #${option.value}${autoSubmit ? ' và tự động nộp' : ' ở chế độ kiểm tra'}...`);
+    try {
+      await BduApi.startEnglishExercise(AppState.englishSessionId, {
+        cmid: option.value,
+        type: option.dataset.type,
+        delaySeconds,
+        autoSubmit
+      });
+    } catch (error) {
+      setEnglishRunning(false);
+      appendEnglishLog(error.message, 'error');
+      showToast(error.message, 'error');
+    }
+  });
+
+  stopBtn.addEventListener('click', async () => {
+    if (!AppState.englishSessionId) return;
+    stopBtn.disabled = true;
+    try {
+      const result = await BduApi.stopEnglishExercise(AppState.englishSessionId);
+      appendEnglishLog(result.stopped ? 'Đã gửi lệnh dừng tiến trình.' : 'Không có tiến trình đang chạy.', 'warning');
+    } catch (error) {
+      appendEnglishLog(error.message, 'error');
+      showToast(error.message, 'error');
+      stopBtn.disabled = false;
+    }
+  });
+
+  answerForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const questionInput = document.getElementById('english-answer-question');
+    const answerInput = document.getElementById('english-answer-value');
+    const question = questionInput?.value.trim();
+    const answer = answerInput?.value.trim();
+    if (!question || !answer) return;
+    const submit = answerForm.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    try {
+      await BduApi.saveEnglishAnswer(question, answer);
+      answerForm.reset();
+      await loadEnglishAnswers();
+      showToast('Đã lưu đáp án.', 'success');
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  answerBody?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-delete-english-answer]');
+    if (!button || !window.confirm('Xóa đáp án này khỏi ngân hàng cục bộ?')) return;
+    button.disabled = true;
+    try {
+      await BduApi.deleteEnglishAnswer(button.dataset.deleteEnglishAnswer);
+      await loadEnglishAnswers();
+    } catch (error) {
+      showToast(error.message, 'error');
+      button.disabled = false;
+    }
+  });
+
+  loadEnglishAnswers().catch(error => appendEnglishLog(error.message, 'warning'));
+}
+
+function connectEnglishLogStream(sessionId) {
+  AppState.englishEventSource?.close();
+  const source = new EventSource(`/api/english/${encodeURIComponent(sessionId)}/stream`);
+  AppState.englishEventSource = source;
+  source.onmessage = event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'log') {
+        appendEnglishLog(data.message, data.type, data.timestamp);
+      } else if (data.type === 'done') {
+        setEnglishRunning(false);
+        const result = data.result || {};
+        showToast(result.submitted ? 'Đã hoàn thành và nộp quiz.' : 'Đã điền xong; hãy kiểm tra trên Moodle.', 'success');
+        loadEnglishAnswers().catch(() => { });
+      } else if (data.type === 'stopped') {
+        setEnglishRunning(false);
+        showToast('Đã dừng tiến trình.', 'info');
+      } else if (data.type === 'error') {
+        setEnglishRunning(false);
+        showToast(data.message || 'Tiến trình gặp lỗi.', 'error');
+      }
+    } catch (error) {
+      console.error('English SSE parse error:', error);
+    }
+  };
+  source.onerror = () => {
+    if (source.readyState === EventSource.CLOSED) {
+      appendEnglishLog('Kết nối live log đã đóng.', 'warning');
+      setEnglishRunning(false);
+    }
+  };
+}
+
+function renderEnglishActivities(activities) {
+  const select = document.getElementById('english-activity');
+  if (!select) return;
+  select.textContent = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = activities.length ? 'Chọn một quiz để chạy' : 'Không tìm thấy hoạt động';
+  select.appendChild(placeholder);
+  activities.forEach(activity => {
+    const option = document.createElement('option');
+    option.value = activity.cmid;
+    option.dataset.type = activity.type;
+    option.textContent = `[${activity.type.toUpperCase()}] ${activity.title}`;
+    if (activity.type !== 'quiz') {
+      option.disabled = true;
+      option.textContent += ' — chưa hỗ trợ tự động';
+    }
+    select.appendChild(option);
+  });
+  select.disabled = !activities.some(activity => activity.type === 'quiz');
+  updateEnglishStartAvailability();
+}
+
+function updateEnglishStartAvailability() {
+  const start = document.getElementById('btn-english-start');
+  const select = document.getElementById('english-activity');
+  const settings = document.getElementById('english-run-settings');
+  if (!start || !select) return;
+  const isRunning = settings?.dataset.running === 'true';
+  const selected = select.selectedOptions[0];
+  start.disabled = isRunning || !AppState.englishSessionId || !selected?.value || selected.dataset.type !== 'quiz';
+}
+
+function setEnglishRunning(running) {
+  const start = document.getElementById('btn-english-start');
+  const stop = document.getElementById('btn-english-stop');
+  const connect = document.getElementById('btn-english-connect');
+  const select = document.getElementById('english-activity');
+  const settings = document.getElementById('english-run-settings');
+  if (settings) settings.dataset.running = String(running);
+  if (start) setButtonLoading(start, running);
+  if (stop) stop.disabled = !running;
+  if (connect) connect.disabled = running;
+  if (select) select.disabled = running || !AppState.englishActivities.some(activity => activity.type === 'quiz');
+  updateEnglishStartAvailability();
+}
+
+function setEnglishConnectionState(label, connected) {
+  const status = document.getElementById('english-connection-status');
+  if (!status) return;
+  status.textContent = label;
+  status.classList.toggle('is-online', connected);
+  status.classList.toggle('is-offline', !connected);
+}
+
+function appendEnglishLog(message, type = 'info', timestamp = null) {
+  const terminal = document.getElementById('english-terminal');
+  if (!terminal) return;
+  const line = document.createElement('div');
+  line.className = `term-line term-${type}`;
+  const time = document.createElement('span');
+  time.className = 'term-time';
+  time.textContent = `[${timestamp || new Date().toLocaleTimeString('vi-VN')}]`;
+  line.append(time, document.createTextNode(` ${String(message)}`));
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+async function loadEnglishAnswers() {
+  const answers = await BduApi.getEnglishAnswers();
+  const count = document.getElementById('english-answer-count');
+  const body = document.getElementById('english-answer-body');
+  if (count) count.textContent = `${answers.length} đáp án`;
+  if (!body) return;
+  body.textContent = '';
+  if (!answers.length) {
+    const row = body.insertRow();
+    const cell = row.insertCell();
+    cell.colSpan = 4;
+    cell.className = 'english-empty';
+    cell.textContent = 'Chưa có đáp án. Hãy thêm thủ công để bắt đầu hoặc để bot học từ trang review.';
+    return;
+  }
+  answers.slice().reverse().forEach(answer => {
+    const row = body.insertRow();
+    row.insertCell().textContent = answer.question;
+    row.insertCell().textContent = answer.correctAnswer;
+    row.insertCell().textContent = answer.source === 'moodle-review' ? 'Review Moodle' : 'Thủ công';
+    const action = row.insertCell();
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'english-delete-answer';
+    button.dataset.deleteEnglishAnswer = answer.id;
+    button.textContent = 'Xóa';
+    action.appendChild(button);
+  });
+}
+
+// ============================================================================
+// TAB 8: LEARNING HUB RENDERING
 // ============================================================================
 function renderLearningHub(learning) {
   const docsContainer = document.getElementById('learning-docs-grid');
@@ -1561,4 +1873,3 @@ function extractComponentDetailList(course) {
 
   return list;
 }
-

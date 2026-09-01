@@ -21,7 +21,7 @@
 
   <!-- Main Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/showcase.css">
+  <link rel="stylesheet" href="css/showcase.css?v=20260901-2239">
 </head>
 
 <body class="theme-light">
@@ -186,7 +186,6 @@
           <button class="nav-item" data-tab="tab-schedule">
             <span class="nav-icon">03</span>
             <span class="nav-text">Thời Khóa Biểu</span>
-            <span class="badge-mini badge-pill-blue">Mock</span>
           </button>
         </div>
 
@@ -203,8 +202,13 @@
             <span class="nav-text">Auto Đánh Giá Khảo Sát</span>
             <span class="badge-mini badge-pill-purple">Bot</span>
           </button>
-          <button class="nav-item" data-tab="tab-enrollment">
+          <button class="nav-item" data-tab="tab-english">
             <span class="nav-icon">06</span>
+            <span class="nav-text">Auto Bài Tập Tiếng Anh</span>
+            <span class="badge-mini badge-pill-emerald">Moodle</span>
+          </button>
+          <button class="nav-item" data-tab="tab-enrollment">
+            <span class="nav-icon">07</span>
             <span class="nav-text">Auto Đăng Ký Môn</span>
             <span class="badge-mini badge-pill-amber">Soon</span>
           </button>
@@ -214,7 +218,7 @@
         <div class="nav-group">
           <div class="nav-group-title">GÓC TỰ HỌC SỐ</div>
           <button class="nav-item" data-tab="tab-learning">
-            <span class="nav-icon">07</span>
+            <span class="nav-icon">08</span>
             <span class="nav-text">Kho Tài Liệu & Video</span>
           </button>
         </div>
@@ -939,7 +943,150 @@
         </section>
 
         <!-- ================================================================= -->
-        <!-- TAB 6: AUTO ĐĂNG KÝ MÔN HỌC (COMING SOON PREVIEW)                 -->
+        <!-- TAB 6: AUTO BÀI TẬP TIẾNG ANH (MOODLE)                            -->
+        <!-- ================================================================= -->
+        <section id="tab-english" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <div class="header-split">
+              <div>
+                <h2 class="section-title">Tự Động Bài Tập Tiếng Anh Moodle</h2>
+                <p class="section-desc">Quét quiz, điền từ ngân hàng đáp án cục bộ và theo dõi tiến trình trực tiếp</p>
+              </div>
+              <span class="badge-mini badge-pill-emerald">bdu.vn247.org</span>
+            </div>
+          </div>
+
+          <div class="english-layout">
+            <div class="english-card glass-panel">
+              <div class="english-card-heading">
+                <div>
+                  <h3 class="card-subheading">Kết Nối Moodle</h3>
+                  <p class="english-help">Mật khẩu chỉ dùng để tạo phiên đăng nhập trong bộ nhớ và không được lưu xuống
+                    đĩa.</p>
+                </div>
+                <span id="english-connection-status" class="english-status is-offline">Chưa kết nối</span>
+              </div>
+
+              <div class="english-form-grid">
+                <div class="form-group">
+                  <label for="english-username" class="form-label">Tài khoản Moodle</label>
+                  <input id="english-username" class="form-input english-input" type="text" autocomplete="username"
+                    placeholder="MSSV / Username">
+                </div>
+                <div class="form-group">
+                  <label for="english-password" class="form-label">Mật khẩu Moodle</label>
+                  <input id="english-password" class="form-input english-input" type="password"
+                    autocomplete="current-password" placeholder="Mật khẩu">
+                </div>
+                <div class="form-group">
+                  <label for="english-course-id" class="form-label">Course ID</label>
+                  <input id="english-course-id" class="form-input english-input" type="number" min="1" value="281">
+                </div>
+              </div>
+
+              <button id="btn-english-connect" class="btn btn-secondary btn-block">
+                <span class="btn-text">Đăng nhập & quét khóa học</span>
+                <span class="btn-loader hidden"><svg class="spinner" viewBox="0 0 50 50">
+                    <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+                  </svg></span>
+              </button>
+
+              <div id="english-run-settings" class="english-run-settings is-disabled" aria-disabled="true">
+                <div class="form-group">
+                  <label for="english-activity" class="form-label">Bài tập / hoạt động</label>
+                  <select id="english-activity" class="custom-select english-select" disabled>
+                    <option value="">Đăng nhập để tải danh sách bài tập</option>
+                  </select>
+                </div>
+                <div class="english-options-row">
+                  <div class="form-group">
+                    <label for="english-delay" class="form-label">Độ trễ mỗi câu</label>
+                    <select id="english-delay" class="custom-select english-select">
+                      <option value="0">Không trễ</option>
+                      <option value="1">1 giây</option>
+                      <option value="2" selected>2 giây</option>
+                      <option value="3">3 giây</option>
+                    </select>
+                  </div>
+                  <label class="english-submit-option" for="english-auto-submit">
+                    <input id="english-auto-submit" type="checkbox">
+                    <span>
+                      <strong>Tự động nộp bài</strong>
+                      <small>Có thể ảnh hưởng điểm và số lượt thi</small>
+                    </span>
+                  </label>
+                </div>
+                <div class="english-warning" role="note">
+                  Câu chưa có trong ngân hàng đáp án sẽ được bỏ qua. Khi bật tự nộp, bạn phải xác nhận thêm một lần
+                  trước khi chạy.
+                </div>
+                <div class="english-actions">
+                  <button id="btn-english-start" class="btn btn-primary" disabled>
+                    <span class="btn-text">Bắt đầu tự động làm bài</span>
+                    <span class="btn-loader hidden"><svg class="spinner" viewBox="0 0 50 50">
+                        <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+                      </svg></span>
+                  </button>
+                  <button id="btn-english-stop" class="btn btn-secondary" disabled>Dừng tiến trình</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="terminal-card glass-panel english-terminal-card">
+              <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span
+                    class="dot dot-green"></span></div>
+                <span class="terminal-title">ENGLISH_BOT // LIVE LOG</span>
+                <button id="btn-clear-english-terminal" class="btn-terminal-clear">Xóa Log</button>
+              </div>
+              <div id="english-terminal" class="terminal-body" aria-live="polite">
+                <div class="term-line term-info"><span class="term-time">[00:00:00]</span> Sẵn sàng kết nối Moodle.
+                </div>
+                <div class="term-line term-muted"><span class="term-time">[00:00:00]</span> Chưa có dữ liệu nào được gửi
+                  ra dịch vụ AI.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="english-bank glass-panel">
+            <div class="english-bank-header">
+              <div>
+                <h3 class="card-subheading">Ngân Hàng Đáp Án Cục Bộ</h3>
+                <p class="english-help">Đáp án từ trang review sau khi nộp sẽ được tự động học và lưu tại máy chủ
+                  website.</p>
+              </div>
+              <span id="english-answer-count" class="english-answer-count">0 đáp án</span>
+            </div>
+            <form id="english-answer-form" class="english-answer-form">
+              <input id="english-answer-question" class="form-input english-input" type="text" required
+                placeholder="Nội dung câu hỏi">
+              <input id="english-answer-value" class="form-input english-input" type="text" required
+                placeholder="Đáp án đúng">
+              <button class="btn btn-secondary" type="submit">Thêm / cập nhật</button>
+            </form>
+            <div class="table-responsive english-answer-table-wrap">
+              <table class="modal-table english-answer-table">
+                <thead>
+                  <tr>
+                    <th>Câu hỏi</th>
+                    <th>Đáp án</th>
+                    <th>Nguồn</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="english-answer-body">
+                  <tr>
+                    <td colspan="4" class="english-empty">Chưa có đáp án.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 7: AUTO ĐĂNG KÝ MÔN HỌC (COMING SOON PREVIEW)                 -->
         <!-- ================================================================= -->
         <section id="tab-enrollment" class="tab-pane">
           <div class="section-header-box glass-panel">
@@ -1048,7 +1195,7 @@
 
   <!-- Scripts -->
   <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=20260901-2239"></script>
   <script src="js/interactions.js"></script>
 </body>
 

@@ -32,6 +32,7 @@ Lớp enhancement được tách riêng tại `public/css/showcase.css` và `pub
 2. **Bộ Công Cụ Tự Động Hóa (Integrated Tools):**
    * 📄 **Chuẩn Hóa Word BDU (`WordFmt`):** Kéo thả file `.docx` -> Tự động căn lề A4 chuẩn, phân cấp Heading H1–H4, tạo Mục Lục Tự Động, danh mục hình ảnh/bảng biểu, trang bìa và Header/Footer chứa tên GVHD & Sinh viên/Nhóm chỉ trong 1 giây (Tích hợp **Hàng đợi Concurrency Queue** chống nghẽn CPU/RAM).
    * 🤖 **Auto Đánh Giá Khảo Sát:** Tự động hoàn thành toàn bộ phiếu đánh giá giảng viên & môn học trên cổng BDU siêu tốc kèm cửa sổ Live Terminal Log trực tiếp trên web.
+   * 🇬🇧 **Auto Bài Tập Tiếng Anh Moodle:** Đăng nhập `bdu.vn247.org`, quét quiz theo Course ID, tự điền từ ngân hàng đáp án cục bộ, live log, dừng tiến trình, tùy chọn tự nộp có xác nhận và tự học đáp án từ trang review. Mật khẩu Moodle chỉ tồn tại trong bộ nhớ phiên; nội dung câu hỏi không được gửi sang dịch vụ AI bên ngoài.
    * 🎯 **Auto Đăng Ký Môn Học (Sắp ra mắt):** Hẹn giờ và tự động gửi request săn lớp học phần theo danh sách ưu tiên.
 
 3. **Kho Tự Học Số (E-Learning Hub):**

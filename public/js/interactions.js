@@ -8,7 +8,7 @@
 
   const SELECTORS = {
     reveal: '.glass-panel, .stat-card, .schedule-card, .doc-card, .video-card, .learning-section-block',
-    tilt: '.chart-card, .profile-hero-card, .sub-bento-card, .schedule-card, .doc-card, .video-card, .wordfmt-card, .survey-card',
+    tilt: '.chart-card, .profile-hero-card, .sub-bento-card, .schedule-card, .doc-card, .video-card, .wordfmt-card, .survey-card, .english-card, .english-bank',
     ripple: '.btn, .nav-item, .topbar-btn, .btn-icon, .btn-action-sm, .btn-advisor-action'
   };
 
@@ -127,6 +127,7 @@
         'tab-schedule': 'lịch học thời khóa biểu',
         'tab-wordfmt': 'word docx văn bản định dạng',
         'tab-survey': 'khảo sát đánh giá giảng viên',
+        'tab-english': 'tiếng anh english moodle quiz bài tập tự động',
         'tab-enrollment': 'đăng ký môn tín chỉ học phần',
         'tab-learning': 'tài liệu video học liệu bài giảng'
       };

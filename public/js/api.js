@@ -120,6 +120,64 @@ const BduApi = {
     return data;
   },
 
+  async loginEnglish(credentials) {
+    const response = await fetch('/api/english/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials)
+    });
+    const data = await this.handleResponse(response, 'Không thể đăng nhập Moodle.');
+    return data.data;
+  },
+
+  async getEnglishActivities(sessionId, courseId) {
+    const query = new URLSearchParams({ courseId });
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/activities?${query}`);
+    const data = await this.handleResponse(response, 'Không thể quét danh sách bài tập.');
+    return data.data;
+  },
+
+  async startEnglishExercise(sessionId, options) {
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options)
+    });
+    const data = await this.handleResponse(response, 'Không thể khởi chạy bài tập.');
+    return data.data;
+  },
+
+  async stopEnglishExercise(sessionId) {
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/stop`, { method: 'POST' });
+    return this.handleResponse(response, 'Không thể dừng tiến trình.');
+  },
+
+  async closeEnglishSession(sessionId) {
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+    return this.handleResponse(response, 'Không thể đóng phiên Moodle.');
+  },
+
+  async getEnglishAnswers() {
+    const response = await fetch('/api/english/answers');
+    const data = await this.handleResponse(response, 'Không thể tải ngân hàng đáp án.');
+    return data.data;
+  },
+
+  async saveEnglishAnswer(question, correctAnswer) {
+    const response = await fetch('/api/english/answers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, correctAnswer })
+    });
+    const data = await this.handleResponse(response, 'Không thể lưu đáp án.');
+    return data.data;
+  },
+
+  async deleteEnglishAnswer(id) {
+    const response = await fetch(`/api/english/answers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return this.handleResponse(response, 'Không thể xóa đáp án.');
+  },
+
   /**
    * Lấy danh mục tài liệu & video tự học
    */

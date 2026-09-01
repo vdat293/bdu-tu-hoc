@@ -46,7 +46,18 @@ router.get('/wordfmt/download/:filename', ApiController.downloadFormattedDocx);
 // 3. Survey Automation Tool (Server-Sent Events)
 router.get('/survey/stream', ApiController.streamSurvey);
 
-// 4. Learning Hub Resources
+// 4. Moodle English Exercise Automation
+router.get('/english/answers', ApiController.getEnglishAnswers);
+router.post('/english/answers', ApiController.addEnglishAnswer);
+router.delete('/english/answers/:id', ApiController.deleteEnglishAnswer);
+router.post('/english/login', ApiController.loginEnglish);
+router.get('/english/:sessionId/activities', ApiController.getEnglishActivities);
+router.post('/english/:sessionId/start', ApiController.startEnglishExercise);
+router.post('/english/:sessionId/stop', ApiController.stopEnglishExercise);
+router.delete('/english/:sessionId', ApiController.closeEnglishSession);
+router.get('/english/:sessionId/stream', ApiController.streamEnglishExercise);
+
+// 5. Learning Hub Resources
 router.get('/learning/resources', ApiController.getLearningResources);
 
 // Health & Metrics check
