@@ -105,7 +105,7 @@
                 <span class="label-text">Mã Số Sinh Viên (MSSV)</span>
               </label>
               <div class="input-wrapper">
-                <input type="text" id="username" name="username" class="form-input" placeholder="Ví dụ: 24050126"
+                <input type="text" id="username" name="username" class="form-input" placeholder="Nhập mã số sinh viên (MSSV)"
                   required autocomplete="username">
               </div>
             </div>
@@ -504,7 +504,7 @@
                 <div class="student-avatar-box">
                   <div class="avatar-ring">
                     <img id="profile-student-photo" src="" alt="Ảnh sinh viên" class="student-avatar-img hidden">
-                    <div id="card-avatar" class="student-avatar-fallback">NĐ</div>
+                    <div id="card-avatar" class="student-avatar-fallback">SV</div>
                   </div>
                   <div class="student-status-badge">
                     <span class="status-indicator"></span>
@@ -514,7 +514,7 @@
 
                 <div class="student-core-info">
                   <div class="name-row">
-                    <h2 id="p-fullname" class="student-main-name">Nguyễn Vũ Đạt</h2>
+                    <h2 id="p-fullname" class="student-main-name">Sinh viên BDU</h2>
                     <span class="verified-icon" title="Hồ sơ đã xác thực từ BDU">✓</span>
                   </div>
 
@@ -523,13 +523,13 @@
                       onclick="navigator.clipboard.writeText(document.getElementById('p-mssv').textContent); window.showToast('Đã sao chép MSSV: ' + document.getElementById('p-mssv').textContent, 'success');"
                       title="Bấm để sao chép MSSV">
                       <span class="mssv-label">MSSV:</span>
-                      <strong id="p-mssv" class="mssv-number">24050126</strong>
+                      <strong id="p-mssv" class="mssv-number">---</strong>
                     </div>
                     <span class="meta-tag">
-                      <span id="p-dob">02/09/2003</span>
+                      <span id="p-dob">--/--/----</span>
                     </span>
                     <span class="meta-tag">
-                      <span id="p-gender">Nam</span>
+                      <span id="p-gender">---</span>
                     </span>
                   </div>
 
@@ -537,21 +537,21 @@
                     <div class="info-chip">
                       <div class="chip-content">
                         <span class="chip-title">Khoa</span>
-                        <span id="p-faculty" class="chip-val">Công nghệ thông tin</span>
+                        <span id="p-faculty" class="chip-val">---</span>
                       </div>
                     </div>
 
                     <div class="info-chip">
                       <div class="chip-content">
                         <span class="chip-title">Ngành</span>
-                        <span id="p-major" class="chip-val">Công nghệ thông tin</span>
+                        <span id="p-major" class="chip-val">---</span>
                       </div>
                     </div>
 
                     <div class="info-chip">
                       <div class="chip-content">
                         <span class="chip-title">Lớp</span>
-                        <span id="p-class" class="chip-val chip-highlight">27TH03</span>
+                        <span id="p-class" class="chip-val chip-highlight">---</span>
                       </div>
                     </div>
                   </div>
@@ -616,17 +616,17 @@
                       <span>GV</span>
                     </div>
                     <div class="advisor-title-info">
-                      <h4 id="p-advisor-name" class="advisor-name">Nguyễn Thị Ngọc Mai</h4>
+                      <h4 id="p-advisor-name" class="advisor-name">Chưa cập nhật</h4>
                       <div class="advisor-sub">
-                        <span>Mã CB: <strong id="p-advisor-id">91044</strong></span>
+                        <span>Mã CB: <strong id="p-advisor-id">--</strong></span>
                         <span class="dot-separator">•</span>
-                        <span>Khoa CNTT</span>
+                        <span>BDU</span>
                       </div>
                     </div>
                   </div>
 
                   <div class="advisor-actions">
-                    <a id="btn-mail-advisor" href="mailto:91044@bdu.edu.vn" class="btn-advisor-action"
+                    <a id="btn-mail-advisor" href="#" class="btn-advisor-action"
                       title="Gửi email cho cố vấn">
                       <span>Gửi email trao đổi</span>
                     </a>
@@ -715,25 +715,25 @@
                   <div class="form-group">
                     <label for="wf-instructor" class="form-label">Giảng Viên Hướng Dẫn (GVHD): <span
                         class="required">*</span></label>
-                    <input type="text" id="wf-instructor" class="form-input" placeholder="Ví dụ: ThS. Nguyễn Hồ Hải"
-                      required value="ThS. Nguyễn Hồ Hải">
+                    <input type="text" id="wf-instructor" class="form-input" placeholder="Nhập họ và tên GVHD (Ví dụ: ThS. Nguyễn Văn A)"
+                      required>
                   </div>
                   <div class="form-group">
                     <label for="wf-student" class="form-label">Tên Sinh Viên / Nhóm: <span
                         class="required">*</span></label>
                     <input type="text" id="wf-student" class="form-input"
-                      placeholder="Ví dụ: Nhóm 03 hoặc Nguyễn Vũ Đạt" required>
+                      placeholder="Nhập họ tên sinh viên hoặc tên nhóm" required>
                   </div>
                 </div>
 
                 <div class="form-row-2">
                   <div class="form-group">
                     <label for="wf-student-id" class="form-label">Mã Số Sinh Viên (MSSV):</label>
-                    <input type="text" id="wf-student-id" class="form-input" placeholder="Ví dụ: 24050126">
+                    <input type="text" id="wf-student-id" class="form-input" placeholder="Nhập mã số sinh viên (Ví dụ: 2405xxxx)">
                   </div>
                   <div class="form-group">
                     <label for="wf-class-name" class="form-label">Lớp Sinh Hoạt:</label>
-                    <input type="text" id="wf-class-name" class="form-input" placeholder="Ví dụ: 27TH03" value="27TH03">
+                    <input type="text" id="wf-class-name" class="form-input" placeholder="Nhập mã lớp sinh hoạt (Ví dụ: 2405SE01)">
                   </div>
                 </div>
 

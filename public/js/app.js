@@ -342,10 +342,6 @@ function switchToDashboard() {
   if (heroMssv) heroMssv.textContent = mssv;
   if (heroEmail) heroEmail.textContent = AppState.user?.email || `${mssv}@student.bdu.edu.vn`;
 
-  const wfStudent = document.getElementById('wf-student');
-  const wfStudentId = document.getElementById('wf-student-id');
-  if (wfStudent && !wfStudent.value) wfStudent.value = name;
-  if (wfStudentId && !wfStudentId.value) wfStudentId.value = mssv;
 }
 
 function getInitials(name) {
@@ -821,17 +817,17 @@ function renderProfile(profileRes) {
 
   if (!p) return;
 
-  const name = p.ho_ten || p.ho_va_ten || p.ten_sinh_vien || p.name || AppState.user?.name || 'Nguyễn Vũ Đạt';
-  const mssv = p.ma_sinh_vien || p.ma_sv || p.userName || AppState.user?.mssv || '24050126';
-  const dob = p.ngay_sinh || p.ngay_thang_nam_sinh || '02/09/2003';
-  const gender = p.gioi_tinh || p.ten_gioi_tinh || 'Nam';
+  const name = p.ho_ten || p.ho_va_ten || p.ten_sinh_vien || p.name || AppState.user?.name || 'Sinh viên BDU';
+  const mssv = p.ma_sinh_vien || p.ma_sv || p.userName || AppState.user?.mssv || '---';
+  const dob = p.ngay_sinh || p.ngay_thang_nam_sinh || '--/--/----';
+  const gender = p.gioi_tinh || p.ten_gioi_tinh || '---';
   const status = p.ten_tinh_trang || p.tinh_trang_hoc || p.trang_thai || 'Đang học';
 
-  const className = p.ten_lop || p.ma_lop || '27TH03';
-  const major = p.ten_chuyen_nganh || p.ten_nganh || 'Công nghệ thông tin';
-  const faculty = p.ten_khoa || p.ten_khoa_quan_ly || 'Công nghệ thông tin';
-  const educationLevel = p.ten_bac_dao_tao || p.ten_he_dao_tao || p.he_dao_tao || 'Đại học chính quy';
-  const cohortYears = p.nien_khoa || p.khoa_hoc || '2024-2028';
+  const className = p.ten_lop || p.ma_lop || '---';
+  const major = p.ten_chuyen_nganh || p.ten_nganh || '---';
+  const faculty = p.ten_khoa || p.ten_khoa_quan_ly || '---';
+  const educationLevel = p.ten_bac_dao_tao || p.ten_he_dao_tao || p.he_dao_tao || '---';
+  const cohortYears = p.nien_khoa || p.khoa_hoc || '---';
 
   const advisorId = p.ma_co_van_hoc_tap || p.ma_cvht || p.tai_khoan_cvht || p.ma_giang_vien || '--';
   const advisorName = p.ten_co_van_hoc_tap
@@ -918,13 +914,6 @@ function renderProfile(profileRes) {
     }
   }
 
-  // Update default inputs for WordFmt tab
-  const wfStudent = document.getElementById('wf-student');
-  const wfStudentId = document.getElementById('wf-student-id');
-  const wfClass = document.getElementById('wf-class-name');
-  if (wfStudent && !wfStudent.value) wfStudent.value = name;
-  if (wfStudentId && !wfStudentId.value) wfStudentId.value = mssv;
-  if (wfClass && (!wfClass.value || wfClass.value === '2405SE01')) wfClass.value = className;
 }
 
 // ============================================================================
@@ -1311,7 +1300,7 @@ function initSurveyBot() {
       }
 
       const rating = document.querySelector('input[name="survey-rating"]:checked')?.value || '5';
-      const mssv = AppState.user?.mssv || '24050126';
+      const mssv = AppState.user?.mssv || '';
 
       setButtonLoading(btnStart, true);
       addTerminalLog('Khởi chạy tiến trình Auto Survey...', 'info');
