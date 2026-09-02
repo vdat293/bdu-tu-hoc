@@ -101,6 +101,9 @@ try {
   assert.equal(payload.data.mssv, '24050001');
   assert.equal(payload.data.xep_hang.tin_chi_tich_luy.lop.hang, 1);
   assert.equal(payload.data.xep_hang_noi_bat.gpa_tich_luy.scope, 'lop');
+  assert.equal(payload.data.xep_hang.tong_hop.lop.hang, 2);
+  assert.equal('gia_tri' in payload.data.xep_hang.tong_hop.lop, false);
+  assert.equal(payload.data.xep_hang_noi_bat.tong_hop.scope, 'truong');
 
   const classResponse = await fetch(
     `http://127.0.0.1:${process.env.PORT}/api/rankings/leaderboard?scope=class&metric=gpa`,
@@ -128,6 +131,17 @@ try {
   const schoolPayload = await schoolResponse.json();
   assert.equal(schoolPayload.data.students.length, 3);
   assert.match(schoolPayload.data.students[0].mssv, /•/);
+
+  const overallResponse = await fetch(
+    `http://127.0.0.1:${process.env.PORT}/api/rankings/leaderboard?scope=school&metric=overall`,
+    { headers: { Authorization: 'Bearer dev-ranking-token' } }
+  );
+  const overallPayload = await overallResponse.json();
+  assert.equal(overallResponse.status, 200);
+  assert.equal(overallPayload.data.metric, 'overall');
+  assert.equal(overallPayload.data.students[0].gpa_tich_luy, 3.9);
+  assert.equal(overallPayload.data.students[0].tin_chi_tich_luy, 80);
+  assert.equal('gia_tri' in overallPayload.data.students[0], false);
   console.log('✓ PostgreSQL migration, ranking lookup and authenticated API integration');
 } finally {
   await new Promise((resolve) => server.close(resolve));

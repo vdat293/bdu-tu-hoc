@@ -493,9 +493,31 @@ function renderAcademicRanking(data, unavailableMessage = '') {
 
   const gpaBestRank = data?.xep_hang_noi_bat?.gpa_tich_luy;
   const creditBestRank = data?.xep_hang_noi_bat?.tin_chi_tich_luy;
+  const overallBestRank = data?.xep_hang_noi_bat?.tong_hop;
   setHighlightedRank('stat-gpa-10-school-rank', gpaBestRank);
   setHighlightedRank('stat-gpa-school-rank', gpaBestRank);
   setHighlightedRank('stat-credit-school-rank', creditBestRank);
+
+  const overallBadge = document.getElementById('hero-overall-rank-badge');
+  if (overallBadge) {
+    overallBadge.classList.remove('rank-top-1', 'rank-top-2', 'rank-top-3', 'rank-top-10');
+    if (!overallBestRank?.hang) {
+      overallBadge.classList.add('hidden');
+      overallBadge.removeAttribute('title');
+      return;
+    }
+
+    const overallScopeLabel = String(overallBestRank.pham_vi || '')
+      .toLocaleUpperCase('vi-VN');
+    overallBadge.textContent = `#${overallBestRank.hang} · ${overallScopeLabel}`;
+    overallBadge.title = `Hạng tổng ${overallBestRank.hang}/${overallBestRank.tong_sinh_vien} sinh viên ${overallBestRank.pham_vi}`;
+    overallBadge.classList.remove('hidden');
+    if (overallBestRank.hang <= 3) {
+      overallBadge.classList.add(`rank-top-${overallBestRank.hang}`);
+    } else if (overallBestRank.hang <= 10) {
+      overallBadge.classList.add('rank-top-10');
+    }
+  }
 }
 
 function initLeaderboard() {
@@ -530,6 +552,14 @@ function formatLeaderboardValue(student, metric) {
     : Number(student.gia_tri).toFixed(2);
 }
 
+function formatOverallGpa(student) {
+  return Number(student.gpa_tich_luy).toFixed(2);
+}
+
+function formatOverallCredits(student) {
+  return `${Number(student.tin_chi_tich_luy).toLocaleString('vi-VN')} TC`;
+}
+
 function updateStickyCurrentRankDetails(student, metric, selectedScope) {
   const stickyRank = document.getElementById('leaderboard-current-rank');
   const stickyPosition = document.getElementById('leaderboard-current-position');
@@ -537,7 +567,9 @@ function updateStickyCurrentRankDetails(student, metric, selectedScope) {
   const stickyMssv = document.getElementById('leaderboard-current-mssv');
   const stickyGroup = document.getElementById('leaderboard-current-group');
   const stickyValue = document.getElementById('leaderboard-current-value');
+  const stickyCredit = document.getElementById('leaderboard-current-credit');
   if (!stickyRank || !student) return;
+  const isOverall = metric === 'overall';
 
   const scopeLabels = {
     class: 'lớp',
@@ -549,12 +581,23 @@ function updateStickyCurrentRankDetails(student, metric, selectedScope) {
   if (stickyName) stickyName.textContent = student.ho_ten || 'Sinh viên BDU';
   if (stickyMssv) stickyMssv.textContent = student.mssv || '--';
   if (stickyGroup) stickyGroup.textContent = student.ma_lop || '--';
-  if (stickyValue) stickyValue.textContent = formatLeaderboardValue(student, metric);
+  if (stickyValue) {
+    stickyValue.textContent = isOverall
+      ? formatOverallGpa(student)
+      : formatLeaderboardValue(student, metric);
+  }
+  if (stickyCredit) {
+    stickyCredit.textContent = isOverall ? formatOverallCredits(student) : '--';
+    stickyCredit.classList.toggle('hidden', !isOverall);
+  }
+  stickyRank.classList.toggle('is-overall', isOverall);
   stickyRank.classList.remove('is-top-1', 'is-top-2', 'is-top-3');
   if (student.hang <= 3) stickyRank.classList.add(`is-top-${student.hang}`);
   stickyRank.setAttribute(
     'aria-label',
-    `Bạn, hạng ${student.hang} ${scopeLabels[selectedScope] || ''}, ${metric === 'credits' ? 'tín chỉ' : 'GPA'} ${formatLeaderboardValue(student, metric)}`
+    isOverall
+      ? `Bạn, hạng tổng ${student.hang} ${scopeLabels[selectedScope] || ''}, GPA ${formatOverallGpa(student)}, tín chỉ ${formatOverallCredits(student)}`
+      : `Bạn, hạng ${student.hang} ${scopeLabels[selectedScope] || ''}, ${metric === 'credits' ? 'tín chỉ' : 'GPA'} ${formatLeaderboardValue(student, metric)}`
   );
 }
 
@@ -597,6 +640,7 @@ function renderAcademicLeaderboard(data) {
   const tableWrap = document.getElementById('leaderboard-table-wrap');
   const tableScroll = document.getElementById('leaderboard-table-scroll');
   const tableBody = document.getElementById('leaderboard-table-body');
+  const table = document.querySelector('.leaderboard-table');
   const eyebrow = document.getElementById('leaderboard-eyebrow');
   const title = document.getElementById('leaderboard-title');
   const count = document.getElementById('leaderboard-student-count');
@@ -604,6 +648,7 @@ function renderAcademicLeaderboard(data) {
   const contextDescription = document.getElementById('leaderboard-context-description');
   const groupHeading = document.getElementById('leaderboard-group-heading');
   const valueHeading = document.querySelector('.leaderboard-value-heading');
+  const creditHeading = document.getElementById('leaderboard-credit-heading');
   const stickyRank = document.getElementById('leaderboard-current-rank');
   if (!tableBody) return;
 
@@ -616,7 +661,13 @@ function renderAcademicLeaderboard(data) {
     institute: 'Trong viện',
     school: 'Toàn trường'
   };
-  const metricLabel = data.metric === 'credits' ? 'Tín chỉ tích lũy' : 'GPA tích lũy';
+  const isOverall = data.metric === 'overall';
+  const metricLabels = {
+    gpa: 'GPA tích lũy',
+    credits: 'Tín chỉ tích lũy',
+    overall: 'Xếp hạng tổng'
+  };
+  const metricLabel = metricLabels[data.metric] || metricLabels.gpa;
   const context = data.context || {};
   const contextLabels = {
     class: `Lớp ${context.class_code || '--'}`,
@@ -637,7 +688,9 @@ function renderAcademicLeaderboard(data) {
       : 'Dữ liệu mới nhất';
   }
   if (groupHeading) groupHeading.textContent = 'Lớp';
-  if (valueHeading) valueHeading.textContent = metricLabel;
+  if (valueHeading) valueHeading.textContent = isOverall ? 'GPA' : metricLabel;
+  if (creditHeading) creditHeading.classList.toggle('hidden', !isOverall);
+  table?.classList.toggle('is-overall', isOverall);
 
   tableBody.innerHTML = '';
   let currentStudent = null;
@@ -677,8 +730,16 @@ function renderAcademicLeaderboard(data) {
 
     const valueCell = document.createElement('td');
     valueCell.className = 'leaderboard-score-cell';
-    valueCell.textContent = formatLeaderboardValue(student, data.metric);
+    valueCell.textContent = isOverall
+      ? formatOverallGpa(student)
+      : formatLeaderboardValue(student, data.metric);
     row.append(rankCell, studentCell, groupCell, valueCell);
+    if (isOverall) {
+      const creditCell = document.createElement('td');
+      creditCell.className = 'leaderboard-score-cell';
+      creditCell.textContent = formatOverallCredits(student);
+      row.appendChild(creditCell);
+    }
     tableBody.appendChild(row);
   }
 

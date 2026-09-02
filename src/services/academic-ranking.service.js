@@ -251,7 +251,14 @@ function rollingCohortWindow(students, latestCohort, size = 5) {
   return Array.from({ length: size }, (_, index) => latestCohort - size + index + 1);
 }
 
-function rankPartition(students, metric, groupFields) {
+function overallRankingScore(row) {
+  const gpa = toNumber(row.gpa_tich_luy_he_4 ?? row.cumulative_gpa_4);
+  const credits = toNumber(row.tin_chi_dat_tich_luy ?? row.cumulative_earned_credits);
+  if (gpa === null || gpa <= 0 || credits === null || credits <= 0) return null;
+  return Number((gpa * credits).toFixed(4));
+}
+
+function rankPartition(students, metric, groupFields, { exposeValue = true } = {}) {
   const groups = new Map();
   for (const row of students) {
     const group = groupFields.map((field) => row[field]);
@@ -268,18 +275,22 @@ function rankPartition(students, metric, groupFields) {
     const ranks = new Map(values.map((value, index) => [value, index + 1]));
     for (const row of members) {
       const rank = ranks.get(row[metric]) ?? null;
-      result.set(row.mssv, {
+      const ranking = {
         hang: rank,
-        tong_sinh_vien: valid.length,
-        gia_tri: rank === null ? null : row[metric]
-      });
+        tong_sinh_vien: valid.length
+      };
+      if (exposeValue) ranking.gia_tri = rank === null ? null : row[metric];
+      result.set(row.mssv, ranking);
     }
   }
   return result;
 }
 
 function rankAllStudents(students) {
-  const rows = students.map((row) => ({ ...row }));
+  const rows = students.map((row) => ({
+    ...row,
+    diem_xep_hang_tong: overallRankingScore(row)
+  }));
   const scopes = {
     lop: ['khoa_hoc', 'ma_lop'],
     khoa: ['khoa_hoc', 'ma_khoa'],
@@ -287,14 +298,15 @@ function rankAllStudents(students) {
     truong: ['khoa_hoc']
   };
   const metrics = {
-    gpa_tich_luy: 'gpa_tich_luy_he_4',
-    tin_chi_tich_luy: 'tin_chi_dat_tich_luy'
+    gpa_tich_luy: { field: 'gpa_tich_luy_he_4', exposeValue: true },
+    tin_chi_tich_luy: { field: 'tin_chi_dat_tich_luy', exposeValue: true },
+    tong_hop: { field: 'diem_xep_hang_tong', exposeValue: false }
   };
   const maps = {};
   for (const [metricName, metric] of Object.entries(metrics)) {
     maps[metricName] = {};
     for (const [scope, fields] of Object.entries(scopes)) {
-      maps[metricName][scope] = rankPartition(rows, metric, fields);
+      maps[metricName][scope] = rankPartition(rows, metric.field, fields, metric);
     }
   }
   for (const row of rows) {
@@ -303,9 +315,14 @@ function rankAllStudents(students) {
       row.xep_hang[metricName] = {};
       for (const scope of Object.keys(scopes)) {
         row.xep_hang[metricName][scope] = maps[metricName][scope].get(row.mssv)
-          || { hang: null, tong_sinh_vien: 0, gia_tri: null };
+          || {
+            hang: null,
+            tong_sinh_vien: 0,
+            ...(metrics[metricName].exposeValue ? { gia_tri: null } : {})
+          };
       }
     }
+    delete row.diem_xep_hang_tong;
   }
   return rows;
 }
@@ -373,7 +390,8 @@ function normalizeLeaderboardMetric(value) {
   const aliases = {
     gpa: 'gpa', gpa_tich_luy: 'gpa',
     credits: 'credits', credit: 'credits',
-    tin_chi: 'credits', tin_chi_tich_luy: 'credits'
+    tin_chi: 'credits', tin_chi_tich_luy: 'credits',
+    overall: 'overall', total: 'overall', tong_hop: 'overall', tong: 'overall'
   };
   return aliases[String(value || '').toLowerCase()] || null;
 }
@@ -385,15 +403,21 @@ function maskMssv(mssv, isCurrentStudent) {
 }
 
 function buildLeaderboard(rows, { scope, metric, viewerMssv }) {
-  const metricField = metric === 'credits' ? 'cumulative_earned_credits' : 'cumulative_gpa_4';
   const members = rows
-    .map((row) => ({ row, value: numberOrNull(row[metricField]) }))
+    .map((row) => {
+      const gpa = numberOrNull(row.cumulative_gpa_4);
+      const credits = numberOrNull(row.cumulative_earned_credits);
+      const value = metric === 'overall'
+        ? overallRankingScore(row)
+        : (metric === 'credits' ? credits : gpa);
+      return { row, value, gpa, credits };
+    })
     .filter((member) => member.value !== null && member.value > 0);
   const values = [...new Set(members.map((member) => member.value))].sort((a, b) => b - a);
   const ranks = new Map(values.map((value, index) => [value, index + 1]));
   const entries = members.map((member) => {
     const isCurrentStudent = member.row.mssv === viewerMssv;
-    return {
+    const entry = {
       hang: ranks.get(member.value),
       tong_sinh_vien_trong_nhom: members.length,
       mssv: maskMssv(member.row.mssv, isCurrentStudent),
@@ -402,9 +426,15 @@ function buildLeaderboard(rows, { scope, metric, viewerMssv }) {
       ma_khoa: member.row.faculty_code,
       ma_vien: member.row.institute_code,
       khoa_hoc: member.row.cohort,
-      gia_tri: member.value,
       la_sinh_vien_hien_tai: isCurrentStudent
     };
+    if (metric === 'overall') {
+      entry.gpa_tich_luy = member.gpa;
+      entry.tin_chi_tich_luy = member.credits;
+    } else {
+      entry.gia_tri = member.value;
+    }
+    return entry;
   });
 
   entries.sort((left, right) => (
@@ -413,6 +443,30 @@ function buildLeaderboard(rows, { scope, metric, viewerMssv }) {
     || String(left.ho_ten || '').localeCompare(String(right.ho_ten || ''), 'vi')
   ));
   return entries;
+}
+
+function buildOverallRankingsForViewer(rows, viewer) {
+  const scopes = {
+    lop: 'class_code',
+    khoa: 'faculty_code',
+    vien: 'institute_code',
+    truong: null
+  };
+  return Object.fromEntries(Object.entries(scopes).map(([scope, field]) => {
+    const members = field
+      ? rows.filter((row) => row[field] && row[field] === viewer[field])
+      : rows;
+    const entries = buildLeaderboard(members, {
+      scope,
+      metric: 'overall',
+      viewerMssv: viewer.mssv
+    });
+    const current = entries.find((entry) => entry.la_sinh_vien_hien_tai);
+    return [scope, {
+      hang: current?.hang ?? null,
+      tong_sinh_vien: entries.length
+    }];
+  }));
 }
 
 function fetchRows(url, user, password) {
@@ -658,7 +712,16 @@ export const AcademicRankingService = {
     `, [normalized]);
     const row = result.rows[0];
     if (!row) return null;
-    const rankings = row.rankings || {};
+    const rankings = { ...(row.rankings || {}) };
+    if (!rankings.tong_hop) {
+      const cohortRows = await query(`
+        SELECT mssv, full_name, class_code, faculty_code, institute_code, cohort,
+               cumulative_gpa_4, cumulative_earned_credits
+        FROM academic_rankings
+        WHERE sync_run_id = $1 AND cohort = $2
+      `, [row.sync_run_id, row.cohort]);
+      rankings.tong_hop = buildOverallRankingsForViewer(cohortRows.rows, row);
+    }
     return {
       mssv: row.mssv,
       ho_ten: row.full_name,
@@ -678,7 +741,8 @@ export const AcademicRankingService = {
       xep_hang: rankings,
       xep_hang_noi_bat: {
         gpa_tich_luy: chooseHighlightedRanking(rankings.gpa_tich_luy),
-        tin_chi_tich_luy: chooseHighlightedRanking(rankings.tin_chi_tich_luy)
+        tin_chi_tich_luy: chooseHighlightedRanking(rankings.tin_chi_tich_luy),
+        tong_hop: chooseHighlightedRanking(rankings.tong_hop)
       },
       dong_bo_luc: row.synced_at,
       target_nkhk: row.target_nkhk,

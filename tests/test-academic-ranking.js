@@ -16,6 +16,11 @@ assert.equal(ranked[2].xep_hang.gpa_tich_luy.truong.hang, 2);
 assert.equal(ranked[1].xep_hang.tin_chi_tich_luy.lop.hang, 2);
 assert.equal(ranked[2].xep_hang.tin_chi_tich_luy.truong.tong_sinh_vien, 3);
 assert.equal(ranked[2].xep_hang.gpa_tich_luy.khoa.hang, 2);
+assert.equal(ranked[0].xep_hang.tong_hop.truong.hang, 1);
+assert.equal(ranked[1].xep_hang.tong_hop.truong.hang, 2);
+assert.equal(ranked[2].xep_hang.tong_hop.truong.hang, 3);
+assert.equal('gia_tri' in ranked[0].xep_hang.tong_hop.truong, false);
+assert.equal('diem_xep_hang_tong' in ranked[0], false);
 assert.equal(AcademicRankingInternals.cohortFromMssv('24050001'), 27);
 
 const bestInClass = AcademicRankingInternals.chooseHighlightedRanking({
@@ -42,6 +47,15 @@ assert.equal(leaderboard[0].hang, 1);
 assert.match(leaderboard[0].mssv, /•/);
 assert.equal(leaderboard[1].la_sinh_vien_hien_tai, true);
 assert.equal(leaderboard[1].mssv, '24050001');
+
+const overallLeaderboard = AcademicRankingInternals.buildLeaderboard([
+  { mssv: '24050001', full_name: 'Bạn', class_code: '27TH01', faculty_code: 'TH', institute_code: 'TH-DT', cohort: 27, cumulative_gpa_4: '3.42', cumulative_earned_credits: '82' },
+  { mssv: '24050002', full_name: 'Sinh viên khác', class_code: '27TH01', faculty_code: 'TH', institute_code: 'TH-DT', cohort: 27, cumulative_gpa_4: '3.80', cumulative_earned_credits: '78' }
+], { scope: 'school', metric: 'overall', viewerMssv: '24050001' });
+assert.equal(overallLeaderboard[0].hang, 1);
+assert.equal(overallLeaderboard[0].gpa_tich_luy, 3.8);
+assert.equal(overallLeaderboard[0].tin_chi_tich_luy, 78);
+assert.equal('gia_tri' in overallLeaderboard[0], false);
 
 assert.equal(
   BduIdentityInternals.findMssv({ data: { thong_tin_sinh_vien: { ma_sinh_vien: '24050001' } } }),

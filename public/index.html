@@ -319,7 +319,10 @@
                   <span id="hero-role" class="tag tag-role">Sinh Viên</span>
                   <span id="hero-status" class="tag tag-active">Đang Học</span>
                 </div>
-                <h1 id="hero-name" class="hero-name">Đang tải...</h1>
+                <div class="hero-name-line">
+                  <h1 id="hero-name" class="hero-name">Đang tải...</h1>
+                  <span id="hero-overall-rank-badge" class="hero-overall-rank-badge hidden">#-- · TOÀN TRƯỜNG</span>
+                </div>
                 <div class="hero-meta">
                   <span class="meta-item">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -708,6 +711,7 @@
               <div class="leaderboard-segments" id="leaderboard-metric-buttons">
                 <button type="button" data-metric="gpa" class="active">GPA tích lũy</button>
                 <button type="button" data-metric="credits">Tín chỉ tích lũy</button>
+                <button type="button" data-metric="overall">Xếp hạng tổng</button>
               </div>
             </div>
           </div>
@@ -740,6 +744,7 @@
                       <th>Sinh viên</th>
                       <th id="leaderboard-group-heading">Phạm vi</th>
                       <th class="leaderboard-value-heading">Thành tích</th>
+                      <th id="leaderboard-credit-heading" class="leaderboard-credit-heading hidden">Tín chỉ</th>
                     </tr>
                   </thead>
                   <tbody id="leaderboard-table-body"></tbody>
@@ -759,6 +764,7 @@
                   </div>
                   <div id="leaderboard-current-group" class="leaderboard-current-group-cell leaderboard-group-cell">--</div>
                   <div id="leaderboard-current-value" class="leaderboard-current-value-cell leaderboard-score-cell">--</div>
+                  <div id="leaderboard-current-credit" class="leaderboard-current-credit-cell leaderboard-score-cell hidden">--</div>
                 </div>
               </div>
             </div>
