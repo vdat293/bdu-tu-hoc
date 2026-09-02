@@ -22,17 +22,21 @@ services:
     container_name: bdu-tu-hoc-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
       - DATABASE_SSL=false
+      - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-10}
       - CDS_USER=${CDS_USER:-}
       - CDS_PASSWORD=${CDS_PASSWORD:-}
       - CDS_INSECURE_TLS=${CDS_INSECURE_TLS:-false}
       - RANKING_SYNC_ENABLED=${RANKING_SYNC_ENABLED:-true}
       - RANKING_SYNC_HOUR=${RANKING_SYNC_HOUR:-3}
+      - RANKING_SYNC_TIMEOUT_MS=${RANKING_SYNC_TIMEOUT_MS:-180000}
+      - RANKING_MIN_STUDENT_COUNT=${RANKING_MIN_STUDENT_COUNT:-100}
+      - RANKING_LATEST_COHORT=${RANKING_LATEST_COHORT:-}
     depends_on:
       postgres:
         condition: service_healthy
