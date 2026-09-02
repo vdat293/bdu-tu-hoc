@@ -6,6 +6,8 @@ import { BduService } from '../services/bdu.service.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
 import { SurveyService } from '../services/survey.service.js';
 import { EnglishExerciseService } from '../services/english-exercise.service.js';
+import { AcademicRankingService } from '../services/academic-ranking.service.js';
+import { BduIdentityService } from '../services/bdu-identity.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -15,6 +17,7 @@ export const ApiController = {
     try {
       const { username, password } = req.body;
       const data = await BduService.login(username, password);
+      BduIdentityService.register(data.token, data.mssv);
       return res.json(data);
     } catch (err) {
       console.error('Login error:', err.message);
@@ -37,6 +40,79 @@ export const ApiController = {
         result: false,
         message: err.message || 'Không thể tải bảng điểm.'
       });
+    }
+  },
+
+  // 2b. Student: verified personal academic ranking
+  async getMyAcademicRanking(req, res) {
+    try {
+      res.setHeader('Cache-Control', 'private, no-store');
+      if (!AcademicRankingService.hasDatabase()) {
+        return res.status(503).json({
+          result: false,
+          code: 'RANKING_DATABASE_NOT_CONFIGURED',
+          message: 'Bảng xếp hạng đang được chuẩn bị. Vui lòng quay lại sau.'
+        });
+      }
+      const authHeader = req.headers.authorization;
+      const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
+      const ranking = await AcademicRankingService.getLatestByMssv(mssv);
+      if (!ranking) {
+        return res.status(404).json({
+          result: false,
+          code: 'RANKING_NOT_FOUND',
+          message: 'Chưa có dữ liệu xếp hạng cho MSSV này trong snapshot gần nhất.'
+        });
+      }
+      return res.json({ result: true, data: ranking });
+    } catch (err) {
+      const databaseMissing = err.code === 'DATABASE_NOT_CONFIGURED';
+      console.error('Academic ranking error:', err.message);
+      return res.status(databaseMissing ? 503 : (err.status || 500)).json({
+        result: false,
+        code: databaseMissing ? 'RANKING_DATABASE_NOT_CONFIGURED' : 'RANKING_LOOKUP_FAILED',
+        message: databaseMissing
+          ? 'Bảng xếp hạng đang được chuẩn bị. Vui lòng quay lại sau.'
+          : (err.status === 401
+            ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+            : 'Chưa thể tải thành tích lúc này. Vui lòng thử lại sau.')
+      });
+    }
+  },
+
+  async getAcademicLeaderboard(req, res) {
+    try {
+      res.setHeader('Cache-Control', 'private, no-store');
+      if (!AcademicRankingService.hasDatabase()) {
+        return res.status(503).json({
+          result: false,
+          code: 'LEADERBOARD_UNAVAILABLE',
+          message: 'Bảng xếp hạng đang được chuẩn bị. Vui lòng quay lại sau.'
+        });
+      }
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const leaderboard = await AcademicRankingService.getLeaderboard({
+        scope: req.query.scope,
+        metric: req.query.metric,
+        viewerMssv: mssv
+      });
+      if (!leaderboard) {
+        return res.status(404).json({
+          result: false,
+          code: 'LEADERBOARD_NOT_READY',
+          message: 'Chưa có dữ liệu xếp hạng. Vui lòng quay lại sau lần cập nhật tiếp theo.'
+        });
+      }
+      return res.json({ result: true, data: leaderboard });
+    } catch (err) {
+      console.error('Academic leaderboard error:', err.message);
+      const status = err.status === 400 || err.status === 401 ? err.status : 500;
+      const message = status === 400
+        ? err.message
+        : status === 401
+          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+          : 'Chưa thể tải bảng xếp hạng lúc này. Vui lòng thử lại sau.';
+      return res.status(status).json({ result: false, code: 'LEADERBOARD_LOAD_FAILED', message });
     }
   },
 

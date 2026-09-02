@@ -35,6 +35,8 @@ const upload = multer({
 // 1. Auth & Portal
 router.post('/login', ApiController.login);
 router.post('/grades', ApiController.getGrades);
+router.get('/rankings/me', ApiController.getMyAcademicRanking);
+router.get('/rankings/leaderboard', ApiController.getAcademicLeaderboard);
 router.post('/profile', ApiController.getProfile);
 router.get('/schedule', ApiController.getSchedule);
 router.post('/schedule', ApiController.getSchedule);
