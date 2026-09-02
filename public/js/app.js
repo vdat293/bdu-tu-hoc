@@ -449,7 +449,8 @@ async function loadAllDashboardData() {
 
     // 2. Load Profile & Photo directly from BDU API
     const maSV = AppState.user?.mssv || '';
-    const profileRes = await BduApi.getProfile(AppState.token, '', maSV);
+    const idsv = AppState.user?.idsv || AppState.user?.id_sinh_vien || '';
+    const profileRes = await BduApi.getProfile(AppState.token, idsv, maSV);
     renderProfile(profileRes);
 
     // 3. Load Schedule (Real BDU API)
@@ -627,7 +628,7 @@ function renderAcademicLeaderboard(data) {
   if (eyebrow) eyebrow.textContent = `${scopeLabels[data.scope]} · ${metricLabel}`.toUpperCase();
   if (title) title.textContent = `Xếp hạng ${contextLabels[data.scope]}`;
   if (contextDescription) {
-    contextDescription.textContent = `Tự động theo Khóa ${data.cohort} · Lớp ${context.class_code || '--'} · Khoa ${context.faculty_code || '--'} · Viện ${context.institute_code || '--'}`;
+    contextDescription.textContent = 'So sánh thành tích học tập theo phạm vi bạn chọn';
   }
   if (count) count.textContent = `${data.student_count} sinh viên`;
   if (updatedAt) {
@@ -1059,21 +1060,27 @@ function renderProfile(profileRes) {
   if (!profileRes) return;
 
   const raw = profileRes.data || profileRes;
-  const p = Array.isArray(raw) ? raw[0] : (raw.ds_thong_tin_sinh_vien ? (Array.isArray(raw.ds_thong_tin_sinh_vien) ? raw.ds_thong_tin_sinh_vien[0] : raw.ds_thong_tin_sinh_vien) : raw);
+  const profileRecord = raw?.ds_thong_tin_sinh_vien
+    || raw?.thong_tin_sinh_vien
+    || raw?.student
+    || raw?.sinh_vien;
+  const p = Array.isArray(raw)
+    ? raw[0]
+    : (Array.isArray(profileRecord) ? profileRecord[0] : (profileRecord || raw));
 
   if (!p) return;
 
-  const name = p.ho_ten || p.ho_va_ten || p.ten_sinh_vien || p.name || AppState.user?.name || 'Sinh viên BDU';
+  const name = p.ho_ten || p.ho_va_ten || p.ten_day_du || p.ten_sinh_vien || p.name || AppState.user?.name || 'Sinh viên BDU';
   const mssv = p.ma_sinh_vien || p.ma_sv || p.userName || AppState.user?.mssv || '---';
   const dob = p.ngay_sinh || p.ngay_thang_nam_sinh || '--/--/----';
   const gender = p.gioi_tinh || p.ten_gioi_tinh || '---';
-  const status = p.ten_tinh_trang || p.tinh_trang_hoc || p.trang_thai || 'Đang học';
+  const status = p.ten_tinh_trang || p.tinh_trang_hoc || p.trang_thai_hoc || p.hien_dien_sv || p.trang_thai || 'Đang học';
 
-  const className = p.ten_lop || p.ma_lop || '---';
-  const major = p.ten_chuyen_nganh || p.ten_nganh || '---';
-  const faculty = p.ten_khoa || p.ten_khoa_quan_ly || '---';
-  const educationLevel = p.ten_bac_dao_tao || p.ten_he_dao_tao || p.he_dao_tao || '---';
-  const cohortYears = p.nien_khoa || p.khoa_hoc || '---';
+  const className = p.ten_lop || p.ten_lop_hanh_chinh || p.lop_hanh_chinh || p.lop || p.ma_lop || '---';
+  const major = p.ten_chuyen_nganh || p.ten_nganh || p.ten_nganh_dao_tao || p.nganh || '---';
+  const faculty = p.ten_khoa || p.ten_khoa_quan_ly || p.khoa || '---';
+  const educationLevel = p.ten_bac_dao_tao || p.ten_he_dao_tao || p.he_dao_tao || p.bac_he_dao_tao || p.bac_dao_tao || p.hinh_thuc_hoc || 'Chính quy';
+  const cohortYears = p.nien_khoa || p.ten_nien_khoa || p.khoa_hoc || p.nien_khoa_dao_tao || '---';
 
   const advisorId = p.ma_co_van_hoc_tap || p.ma_cvht || p.tai_khoan_cvht || p.ma_giang_vien || '--';
   const advisorName = p.ten_co_van_hoc_tap

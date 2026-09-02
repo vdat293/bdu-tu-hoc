@@ -40,6 +40,7 @@ export const BduService = {
     return {
       result: true,
       token: data.access_token,
+      idsv: data.id ?? data.id_sinh_vien ?? data.idsv ?? data.IDSV ?? '',
       name: data.name,
       mssv: data.userName,
       email: data.principal,
@@ -129,17 +130,24 @@ export const BduService = {
       throw err;
     }
 
-    const queryParam = idsv ? `?IDSV=${encodeURIComponent(idsv)}` : '';
+    const profileUrl = idsv
+      ? `${BDU_BASE_URL}/sms/w-locdsthongtinhhscanhan?IDSV=${encodeURIComponent(idsv)}`
+      : `${BDU_BASE_URL}/dkmh/w-locsinhvieninfo`;
+    const profileMethod = idsv ? 'GET' : 'POST';
 
-    // Fetch profile and photo in parallel
+    // Fetch profile and photo in parallel. Newer sessions provide IDSV and use
+    // the same endpoint as the official profile page; older sessions fall back
+    // to the current-user endpoint, which does not require IDSV.
     const [profileRes, imageBase64] = await Promise.all([
-      fetch(`${BDU_BASE_URL}/sms/w-locdsthongtinhhscanhan${queryParam}`, {
-        method: 'GET',
+      fetch(profileUrl, {
+        method: profileMethod,
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
           'Accept': 'application/json, text/plain, */*',
-          'idpc': '0'
-        }
+          'idpc': '0',
+          ...(profileMethod === 'POST' ? { 'Content-Type': 'text/plain' } : {})
+        },
+        ...(profileMethod === 'POST' ? { body: '' } : {})
       }).then(r => r.json()).catch(err => ({ result: false, message: err.message })),
       maSV ? this.getStudentImage(token, maSV) : Promise.resolve(null)
     ]);
