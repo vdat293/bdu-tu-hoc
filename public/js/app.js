@@ -523,6 +523,40 @@ function updateLeaderboardSegments() {
   });
 }
 
+function formatLeaderboardValue(student, metric) {
+  return metric === 'credits'
+    ? `${Number(student.gia_tri).toLocaleString('vi-VN')} TC`
+    : Number(student.gia_tri).toFixed(2);
+}
+
+function updateStickyCurrentRankDetails(student, metric, selectedScope) {
+  const stickyRank = document.getElementById('leaderboard-current-rank');
+  const stickyPosition = document.getElementById('leaderboard-current-position');
+  const stickyName = document.getElementById('leaderboard-current-name');
+  const stickyMssv = document.getElementById('leaderboard-current-mssv');
+  const stickyGroup = document.getElementById('leaderboard-current-group');
+  const stickyValue = document.getElementById('leaderboard-current-value');
+  if (!stickyRank || !student) return;
+
+  const scopeLabels = {
+    class: 'lớp',
+    faculty: 'khoa',
+    institute: 'viện',
+    school: 'toàn trường'
+  };
+  if (stickyPosition) stickyPosition.textContent = `#${student.hang}`;
+  if (stickyName) stickyName.textContent = student.ho_ten || 'Sinh viên BDU';
+  if (stickyMssv) stickyMssv.textContent = student.mssv || '--';
+  if (stickyGroup) stickyGroup.textContent = student.ma_lop || '--';
+  if (stickyValue) stickyValue.textContent = formatLeaderboardValue(student, metric);
+  stickyRank.classList.remove('is-top-1', 'is-top-2', 'is-top-3');
+  if (student.hang <= 3) stickyRank.classList.add(`is-top-${student.hang}`);
+  stickyRank.setAttribute(
+    'aria-label',
+    `Bạn, hạng ${student.hang} ${scopeLabels[selectedScope] || ''}, ${metric === 'credits' ? 'tín chỉ' : 'GPA'} ${formatLeaderboardValue(student, metric)}`
+  );
+}
+
 async function loadAcademicLeaderboard() {
   if (!AppState.token) return;
   if (AppState.leaderboard.loading) {
@@ -560,6 +594,7 @@ function renderAcademicLeaderboard(data) {
   const loading = document.getElementById('leaderboard-loading');
   const empty = document.getElementById('leaderboard-empty');
   const tableWrap = document.getElementById('leaderboard-table-wrap');
+  const tableScroll = document.getElementById('leaderboard-table-scroll');
   const tableBody = document.getElementById('leaderboard-table-body');
   const eyebrow = document.getElementById('leaderboard-eyebrow');
   const title = document.getElementById('leaderboard-title');
@@ -568,7 +603,11 @@ function renderAcademicLeaderboard(data) {
   const contextDescription = document.getElementById('leaderboard-context-description');
   const groupHeading = document.getElementById('leaderboard-group-heading');
   const valueHeading = document.querySelector('.leaderboard-value-heading');
+  const stickyRank = document.getElementById('leaderboard-current-rank');
   if (!tableBody) return;
+
+  stickyRank?.classList.add('hidden');
+  tableScroll?.classList.remove('has-sticky-current-rank');
 
   const scopeLabels = {
     class: 'Trong lớp',
@@ -600,9 +639,14 @@ function renderAcademicLeaderboard(data) {
   if (valueHeading) valueHeading.textContent = metricLabel;
 
   tableBody.innerHTML = '';
+  let currentStudent = null;
   for (const student of data.students || []) {
     const row = document.createElement('tr');
-    if (student.la_sinh_vien_hien_tai) row.classList.add('is-current-student');
+    if (student.la_sinh_vien_hien_tai) {
+      row.classList.add('is-current-student');
+      row.dataset.currentStudent = 'true';
+      currentStudent = student;
+    }
     if (student.hang <= 3) row.classList.add(`is-top-${student.hang}`);
 
     const rankCell = document.createElement('td');
@@ -632,9 +676,7 @@ function renderAcademicLeaderboard(data) {
 
     const valueCell = document.createElement('td');
     valueCell.className = 'leaderboard-score-cell';
-    valueCell.textContent = data.metric === 'credits'
-      ? `${Number(student.gia_tri).toLocaleString('vi-VN')} TC`
-      : Number(student.gia_tri).toFixed(2);
+    valueCell.textContent = formatLeaderboardValue(student, data.metric);
     row.append(rankCell, studentCell, groupCell, valueCell);
     tableBody.appendChild(row);
   }
@@ -643,6 +685,12 @@ function renderAcademicLeaderboard(data) {
   const hasStudents = Boolean(data.students?.length);
   empty?.classList.toggle('hidden', hasStudents);
   tableWrap?.classList.toggle('hidden', !hasStudents);
+
+  if (currentStudent && stickyRank) {
+    updateStickyCurrentRankDetails(currentStudent, data.metric, data.scope);
+    stickyRank.classList.remove('hidden');
+    tableScroll?.classList.add('has-sticky-current-rank');
+  }
 }
 
 // ============================================================================

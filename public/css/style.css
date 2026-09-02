@@ -1016,15 +1016,32 @@ textarea {
 }
 
 .leaderboard-table-wrap {
-  max-height: 640px;
+  max-height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.leaderboard-table-scroll {
+  max-height: 430px;
   overflow: auto;
+  position: relative;
+}
+
+.leaderboard-table-scroll.has-sticky-current-rank {
+  padding-bottom: 62px;
 }
 
 .leaderboard-table {
   border-collapse: collapse;
   min-width: 680px;
+  table-layout: fixed;
   width: 100%;
 }
+
+.leaderboard-table th:nth-child(1) { width: 15%; }
+.leaderboard-table th:nth-child(2) { width: 43%; }
+.leaderboard-table th:nth-child(3) { width: 22%; }
+.leaderboard-table th:nth-child(4) { width: 20%; }
 
 .leaderboard-table th {
   background: var(--surface-solid, #fff);
@@ -1061,8 +1078,12 @@ textarea {
 }
 
 .leaderboard-table tr.is-current-student {
-  background: rgba(154, 103, 0, .09);
+  background: #faf4e8;
   box-shadow: inset 3px 0 0 #b7791f;
+}
+
+body.theme-dark .leaderboard-table tr.is-current-student {
+  background: #362b1f;
 }
 
 .leaderboard-rank-badge {
@@ -1139,6 +1160,56 @@ textarea {
   text-align: right !important;
 }
 
+.leaderboard-current-rank {
+  background: #faf4e8;
+  border-top: 1px solid rgba(183, 121, 31, .38);
+  bottom: 0;
+  box-shadow: 0 -8px 24px rgba(64, 43, 12, .1), inset 3px 0 0 #b7791f;
+  color: var(--text-main);
+  left: 0;
+  overflow-x: auto;
+  position: absolute;
+  scrollbar-width: none;
+  width: 100%;
+  z-index: 4;
+}
+
+.leaderboard-current-rank::-webkit-scrollbar {
+  display: none;
+}
+
+body.theme-dark .leaderboard-current-rank {
+  background: #362b1f;
+  border-top-color: rgba(219, 166, 87, .45);
+}
+
+.leaderboard-current-rank-row {
+  align-items: stretch;
+  display: grid;
+  font-size: .8rem;
+  grid-template-columns: 15% 43% 22% 20%;
+  min-width: 680px;
+  width: 100%;
+}
+
+.leaderboard-current-rank-cell,
+.leaderboard-current-student-cell,
+.leaderboard-current-group-cell,
+.leaderboard-current-value-cell {
+  align-items: center;
+  display: flex;
+  min-height: 61px;
+  padding: 13px 18px;
+}
+
+.leaderboard-current-rank .leaderboard-student-identity {
+  width: 100%;
+}
+
+.leaderboard-current-value-cell {
+  justify-content: flex-end;
+}
+
 @media (max-width: 760px) {
   .leaderboard-toolbar,
   .leaderboard-switch-group {
@@ -1160,6 +1231,10 @@ textarea {
   .leaderboard-board-meta {
     align-items: start;
     text-align: left;
+  }
+
+  .leaderboard-current-rank {
+    max-width: 100%;
   }
 }
 

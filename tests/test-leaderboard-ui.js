@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
 
 assert.match(html, /data-tab="tab-leaderboard"/);
 assert.match(html, /<span class="nav-icon">04<\/span>[\s\S]*Bảng Xếp Hạng/);
@@ -14,6 +15,13 @@ assert.match(html, /data-scope="school"/);
 assert.match(html, /id="stat-gpa-school-rank"/);
 assert.match(html, /id="stat-gpa-10-school-rank"/);
 assert.match(html, /id="stat-credit-school-rank"/);
+assert.match(html, /id="leaderboard-current-rank"/);
+assert.match(html, /id="leaderboard-table-scroll"/);
+assert.match(html, /id="leaderboard-current-position"/);
+assert.match(html, /id="leaderboard-current-name"/);
+assert.match(html, /id="leaderboard-current-mssv"/);
+assert.match(html, /id="leaderboard-current-group"/);
+assert.match(html, /id="leaderboard-current-value"/);
 assert.doesNotMatch(html, /id="academic-ranking-panel"/);
 assert.doesNotMatch(html, /Dense rank/i);
 assert.match(app, /#\$\{rank\.hang\} \$\{rank\.pham_vi\}/);
@@ -21,6 +29,13 @@ assert.match(app, /xep_hang_noi_bat/);
 assert.match(app, /stat-gpa-10-school-rank/);
 assert.match(app, /stat-credit-school-rank/);
 assert.match(app, /Tự động theo Khóa/);
+assert.match(app, /updateStickyCurrentRankDetails/);
+assert.match(app, /student\.la_sinh_vien_hien_tai/);
+assert.match(app, /stickyRank\.classList\.remove\('hidden'\)/);
+assert.doesNotMatch(app, /currentRowIsVisible/);
+assert.match(css, /\.leaderboard-current-rank\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?position:\s*absolute;/);
+assert.match(css, /\.leaderboard-table-scroll\s*\{[\s\S]*?max-height:\s*430px;/);
+assert.match(css, /grid-template-columns:\s*15% 43% 22% 20%/);
 assert.doesNotMatch(app, /available_cohorts/);
 assert.match(app, /createTextNode|textContent/);
 

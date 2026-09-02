@@ -732,17 +732,35 @@
               Chưa có dữ liệu cho khóa này. Hãy quay lại sau lần cập nhật tiếp theo.
             </div>
             <div id="leaderboard-table-wrap" class="leaderboard-table-wrap hidden">
-              <table class="leaderboard-table">
-                <thead>
-                  <tr>
-                    <th>Hạng</th>
-                    <th>Sinh viên</th>
-                    <th id="leaderboard-group-heading">Phạm vi</th>
-                    <th class="leaderboard-value-heading">Thành tích</th>
-                  </tr>
-                </thead>
-                <tbody id="leaderboard-table-body"></tbody>
-              </table>
+              <div id="leaderboard-table-scroll" class="leaderboard-table-scroll">
+                <table class="leaderboard-table">
+                  <thead>
+                    <tr>
+                      <th>Hạng</th>
+                      <th>Sinh viên</th>
+                      <th id="leaderboard-group-heading">Phạm vi</th>
+                      <th class="leaderboard-value-heading">Thành tích</th>
+                    </tr>
+                  </thead>
+                  <tbody id="leaderboard-table-body"></tbody>
+                </table>
+              </div>
+              <div id="leaderboard-current-rank" class="leaderboard-current-rank hidden" role="status">
+                <div class="leaderboard-current-rank-row">
+                  <div class="leaderboard-current-rank-cell">
+                    <span id="leaderboard-current-position" class="leaderboard-rank-badge">#--</span>
+                  </div>
+                  <div class="leaderboard-current-student-cell">
+                    <div class="leaderboard-student-identity">
+                      <strong id="leaderboard-current-name">Sinh viên BDU</strong>
+                      <span id="leaderboard-current-mssv">--</span>
+                      <em>Bạn</em>
+                    </div>
+                  </div>
+                  <div id="leaderboard-current-group" class="leaderboard-current-group-cell leaderboard-group-cell">--</div>
+                  <div id="leaderboard-current-value" class="leaderboard-current-value-cell leaderboard-score-cell">--</div>
+                </div>
+              </div>
             </div>
           </section>
         </section>
