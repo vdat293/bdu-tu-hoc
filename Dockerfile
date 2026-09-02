@@ -1,22 +1,18 @@
 # ==============================================================================
 # BDU TỰ HỌC - PRODUCTION DOCKERFILE
-# Multi-stage build: .NET 10 LTS Core Engine + Node.js 20/22 Production Runtime
+# Runtime image: Node.js 22 + .NET 10 for the prebuilt WordFmt binary.
 # ==============================================================================
 
-# Stage 1: Build WordFmt .NET CLI
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS dotnet-builder
-WORKDIR /build
+# Keep both runtimes in explicit stages so the build context stays inside this
+# repository. The WordFmt binary is already tracked at bin/wordfmt.
+FROM node:22-bookworm-slim AS node-runtime
 
-# Copy WordFmt project files from source
-COPY ["../dinh dang word/src/", "./src/"]
-RUN dotnet publish "./src/WordFmt.Cli/WordFmt.Cli.csproj" -c Release -o /app/bin/wordfmt
-
-# Stage 2: Production Node.js Runtime
-FROM node:22-alpine AS runner
+# .NET runtime base provides all native libraries required by WordFmt.
+FROM mcr.microsoft.com/dotnet/runtime:10.0-bookworm-slim AS runner
 WORKDIR /app
 
-# Install .NET runtime dependencies if needed on Alpine / Debian
-RUN apk add --no-cache bash icu-libs krb5-libs libgcc libintl libssl3 libstdc++ zlib dotnet10-runtime || true
+# Copy the Node.js runtime and npm from the official Node image.
+COPY --from=node-runtime /usr/local /usr/local
 
 # Set environment
 ENV NODE_ENV=production
@@ -24,11 +20,13 @@ ENV PORT=3000
 
 # Install Node dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
-# Copy application files
+# Copy application files, including the prebuilt bin/wordfmt binary.
 COPY . .
-COPY --from=dotnet-builder /app/bin/wordfmt ./bin/wordfmt
+
+# Fail during image build if either runtime is unavailable.
+RUN node --version && dotnet --version
 
 # Expose Web Port
 EXPOSE 3000

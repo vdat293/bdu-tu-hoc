@@ -7,7 +7,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/test-queue.js && node tests/test-docx-postprocessor.js && node tests/test-english-exercise.js && node tests/test-bdu-grades.js && node tests/test-profile-render.js && node tests/test-grade-table-layout.js",
+    "db:setup:dev": "node scripts/setup-dev-database.js",
+    "db:migrate": "node scripts/migrate.js",
+    "rankings:sync": "node scripts/sync-rankings.js",
+    "test": "node tests/test-queue.js && node tests/test-docx-postprocessor.js && node tests/test-english-exercise.js && node tests/test-bdu-grades.js && node tests/test-academic-ranking.js && node tests/test-leaderboard-ui.js && node tests/test-session-toast.js && node tests/test-profile-render.js && node tests/test-grade-table-layout.js",
+    "test:ranking-integration": "node tests/test-ranking-integration.js",
     "test:load": "node tests/test-server-load.js"
   },
   "dependencies": {
@@ -16,6 +20,7 @@
     "cheerio": "1.0.0",
     "express": "^4.19.2",
     "multer": "^2.2.0",
+    "pg": "^8.23.0",
     "tough-cookie": "^5.0.0"
   }
 }

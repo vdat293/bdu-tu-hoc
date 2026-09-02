@@ -125,6 +125,7 @@
         'tab-grades': 'điểm gpa kết quả học tập',
         'tab-profile': 'hồ sơ sinh viên thông tin cá nhân lý lịch',
         'tab-schedule': 'lịch học thời khóa biểu',
+        'tab-leaderboard': 'bảng xếp hạng thứ hạng top lớp khoa viện trường khóa',
         'tab-wordfmt': 'word docx văn bản định dạng',
         'tab-survey': 'khảo sát đánh giá giảng viên',
         'tab-english': 'tiếng anh english moodle quiz bài tập tự động',

@@ -65,6 +65,35 @@ const BduApi = {
   },
 
   /**
+   * Lấy snapshot xếp hạng của chính sinh viên đã được phiên BDU xác minh
+   */
+  async getMyAcademicRanking(token) {
+    const response = await fetch('/api/rankings/me', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải dữ liệu xếp hạng.');
+    return data.data;
+  },
+
+  async getAcademicLeaderboard(token, options = {}) {
+    const query = new URLSearchParams();
+    query.set('scope', options.scope || 'school');
+    query.set('metric', options.metric || 'gpa');
+    const response = await fetch(`/api/rankings/leaderboard?${query.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+    const data = await this.handleResponse(response, 'Chưa thể tải bảng xếp hạng.');
+    return data.data;
+  },
+
+  /**
    * Lấy lý lịch / thông tin sinh viên & ảnh thẻ
    */
   async getProfile(token, idsv = '', maSV = '') {

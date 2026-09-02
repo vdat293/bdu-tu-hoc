@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bdu-tu-hoc-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - bdu-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?Set POSTGRES_USER in .env} -d ${POSTGRES_DB:?Set POSTGRES_DB in .env}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   bdu-hub:
     build:
       context: .
@@ -12,5 +28,19 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      - DATABASE_SSL=false
+      - CDS_USER=${CDS_USER:-}
+      - CDS_PASSWORD=${CDS_PASSWORD:-}
+      - CDS_INSECURE_TLS=${CDS_INSECURE_TLS:-false}
+      - RANKING_SYNC_ENABLED=${RANKING_SYNC_ENABLED:-true}
+      - RANKING_SYNC_HOUR=${RANKING_SYNC_HOUR:-3}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run db:migrate && npm start"]
     volumes:
       - ./temp:/app/temp
+
+volumes:
+  bdu-postgres-data:

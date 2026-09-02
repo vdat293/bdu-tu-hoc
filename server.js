@@ -9,6 +9,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import apiRoutes from './src/routes/api.routes.js';
 import { WordFmtService } from './src/services/wordfmt.service.js';
+import { RankingSchedulerService } from './src/services/ranking-scheduler.service.js';
+import { closeDatabase } from './src/db/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,9 +41,10 @@ app.get('*', (req, res) => {
 });
 
 // Periodic temp file cleanup every 15 minutes
-setInterval(() => {
+const tempCleanupTimer = setInterval(() => {
   WordFmtService.cleanOldTempFiles();
 }, 15 * 60 * 1000);
+tempCleanupTimer.unref?.();
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -52,10 +55,25 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🎓 BDU Tự Học - Cổng Tiện Ích & Tự Động Hóa Sinh Viên`);
   console.log(`🌐 Server đang chạy tại: http://localhost:${PORT}`);
   console.log(`⚙️  Môi trường: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
+  RankingSchedulerService.start();
 });
+
+async function shutdown(signal) {
+  console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
+  RankingSchedulerService.stop();
+  server.close(async () => {
+    await closeDatabase().catch(() => {});
+    process.exit(0);
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+export default server;

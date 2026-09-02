@@ -187,28 +187,32 @@
             <span class="nav-icon">03</span>
             <span class="nav-text">Thời Khóa Biểu</span>
           </button>
+          <button class="nav-item" data-tab="tab-leaderboard">
+            <span class="nav-icon">04</span>
+            <span class="nav-text">Bảng Xếp Hạng</span>
+          </button>
         </div>
 
         <!-- Group 2: Tools -->
         <div class="nav-group">
           <div class="nav-group-title">BỘ CÔNG CỤ TỰ ĐỘNG</div>
           <button class="nav-item" data-tab="tab-wordfmt">
-            <span class="nav-icon">04</span>
+            <span class="nav-icon">05</span>
             <span class="nav-text">Chuẩn Hóa Word BDU</span>
             <span class="badge-mini badge-pill-emerald">Pro</span>
           </button>
           <button class="nav-item" data-tab="tab-survey">
-            <span class="nav-icon">05</span>
+            <span class="nav-icon">06</span>
             <span class="nav-text">Auto Đánh Giá Khảo Sát</span>
             <span class="badge-mini badge-pill-purple">Bot</span>
           </button>
           <button class="nav-item" data-tab="tab-english">
-            <span class="nav-icon">06</span>
+            <span class="nav-icon">07</span>
             <span class="nav-text">Auto Bài Tập Tiếng Anh</span>
             <span class="badge-mini badge-pill-emerald">Moodle</span>
           </button>
           <button class="nav-item" data-tab="tab-enrollment">
-            <span class="nav-icon">07</span>
+            <span class="nav-icon">08</span>
             <span class="nav-text">Auto Đăng Ký Môn</span>
             <span class="badge-mini badge-pill-amber">Soon</span>
           </button>
@@ -218,7 +222,7 @@
         <div class="nav-group">
           <div class="nav-group-title">GÓC TỰ HỌC SỐ</div>
           <button class="nav-item" data-tab="tab-learning">
-            <span class="nav-icon">08</span>
+            <span class="nav-icon">09</span>
             <span class="nav-text">Kho Tài Liệu & Video</span>
           </button>
         </div>
@@ -344,6 +348,7 @@
                 <div class="stat-info">
                   <span class="stat-title">GPA Tích Lũy (10)</span>
                   <h3 id="stat-gpa-10" class="stat-value text-gradient-amber">--</h3>
+                  <span id="stat-gpa-10-school-rank" class="stat-rank-caption">Đang cập nhật hạng...</span>
                 </div>
               </div>
 
@@ -352,6 +357,7 @@
                 <div class="stat-info">
                   <span class="stat-title">GPA Tích Lũy (4.0)</span>
                   <h3 id="stat-gpa-4" class="stat-value text-gradient-emerald">--</h3>
+                  <span id="stat-gpa-school-rank" class="stat-rank-caption">Đang cập nhật hạng...</span>
                 </div>
               </div>
 
@@ -360,6 +366,7 @@
                 <div class="stat-info">
                   <span class="stat-title">Tín Chỉ Đạt</span>
                   <h3 id="stat-credits" class="stat-value text-gradient-blue">--</h3>
+                  <span id="stat-credit-school-rank" class="stat-rank-caption">Đang cập nhật hạng...</span>
                 </div>
               </div>
 
@@ -673,7 +680,75 @@
         </section>
 
         <!-- ================================================================= -->
-        <!-- TAB 4: CHUẨN HÓA WORD BDU (INTEGRATED WORDFMT ENGINE)              -->
+        <!-- TAB 4: BẢNG XẾP HẠNG                                               -->
+        <!-- ================================================================= -->
+        <section id="tab-leaderboard" class="tab-pane">
+          <div class="section-header-box glass-panel leaderboard-header-box">
+            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <div class="header-split">
+              <div>
+                <h2 class="section-title">Bảng Xếp Hạng Học Tập</h2>
+                <p id="leaderboard-context-description" class="section-desc">Tự động hiển thị đúng lớp, khoa, viện và khóa của bạn</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="leaderboard-toolbar glass-panel">
+            <div class="leaderboard-switch-group" aria-label="Phạm vi xếp hạng">
+              <span class="leaderboard-switch-label">Phạm vi</span>
+              <div class="leaderboard-segments" id="leaderboard-scope-buttons">
+                <button type="button" data-scope="class">Lớp</button>
+                <button type="button" data-scope="faculty">Khoa</button>
+                <button type="button" data-scope="institute">Viện</button>
+                <button type="button" data-scope="school" class="active">Toàn trường</button>
+              </div>
+            </div>
+            <div class="leaderboard-switch-group" aria-label="Chỉ số xếp hạng">
+              <span class="leaderboard-switch-label">Thành tích</span>
+              <div class="leaderboard-segments" id="leaderboard-metric-buttons">
+                <button type="button" data-metric="gpa" class="active">GPA tích lũy</button>
+                <button type="button" data-metric="credits">Tín chỉ tích lũy</button>
+              </div>
+            </div>
+          </div>
+
+          <section class="leaderboard-board glass-panel" aria-live="polite">
+            <div class="leaderboard-board-head">
+              <div>
+                <span id="leaderboard-eyebrow" class="leaderboard-eyebrow">TOÀN TRƯỜNG · GPA TÍCH LŨY</span>
+                <h3 id="leaderboard-title">Bảng xếp hạng khóa</h3>
+              </div>
+              <div class="leaderboard-board-meta">
+                <strong id="leaderboard-student-count">--</strong>
+                <span id="leaderboard-updated-at">Đang cập nhật</span>
+              </div>
+            </div>
+
+            <div id="leaderboard-loading" class="leaderboard-message">
+              <span class="leaderboard-loading-dot"></span>
+              Đang tải bảng xếp hạng...
+            </div>
+            <div id="leaderboard-empty" class="leaderboard-message hidden">
+              Chưa có dữ liệu cho khóa này. Hãy quay lại sau lần cập nhật tiếp theo.
+            </div>
+            <div id="leaderboard-table-wrap" class="leaderboard-table-wrap hidden">
+              <table class="leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>Hạng</th>
+                    <th>Sinh viên</th>
+                    <th id="leaderboard-group-heading">Phạm vi</th>
+                    <th class="leaderboard-value-heading">Thành tích</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboard-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 5: CHUẨN HÓA WORD BDU (INTEGRATED WORDFMT ENGINE)              -->
         <!-- ================================================================= -->
         <section id="tab-wordfmt" class="tab-pane">
           <div class="section-header-box glass-panel">

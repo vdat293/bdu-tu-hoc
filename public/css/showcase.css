@@ -367,6 +367,9 @@ kbd {
   transform-origin: left;
   animation: toast-life 4s linear forwards;
 }
+.toast-warning::after {
+  background: linear-gradient(90deg, #8c1515, #b7791f);
+}
 @keyframes toast-life { to { transform: scaleX(0); } }
 
 .sidebar-backdrop {

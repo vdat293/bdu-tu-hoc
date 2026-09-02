@@ -7,6 +7,14 @@ const AppState = {
   user: null,
   token: null,
   rawGradeData: null,
+  academicRanking: null,
+  leaderboard: {
+    scope: 'school',
+    metric: 'gpa',
+    loaded: false,
+    loading: false,
+    reloadRequested: false
+  },
   semesters: [],
   selectedSemester: 'ALL',
   filterStatus: 'ALL',
@@ -30,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initGradeFilters();
   initScheduleTab();
+  initLeaderboard();
   initWordFmtTool();
   initSurveyBot();
   initEnglishExerciseBot();
@@ -256,6 +265,8 @@ function handleLogout(options = {}) {
   AppState.token = null;
   AppState.semesters = [];
   AppState.rawGradeData = null;
+  AppState.academicRanking = null;
+  AppState.leaderboard.loaded = false;
   AppState.englishSessionId = null;
   AppState.englishEventSource = null;
   AppState.englishActivities = [];
@@ -365,6 +376,7 @@ function initNavigation() {
     'tab-grades': 'Bảng Điểm & GPA',
     'tab-profile': 'Lý Lịch Sinh Viên',
     'tab-schedule': 'Thời Khóa Biểu',
+    'tab-leaderboard': 'Bảng Xếp Hạng',
     'tab-wordfmt': 'Chuẩn Hóa Word BDU',
     'tab-survey': 'Auto Đánh Giá Khảo Sát',
     'tab-english': 'Auto Bài Tập Tiếng Anh',
@@ -391,6 +403,10 @@ function initNavigation() {
 
         if (sidebar && window.innerWidth <= 992) {
           sidebar.classList.remove('open');
+        }
+
+        if (tabId === 'tab-leaderboard' && !AppState.leaderboard.loaded) {
+          loadAcademicLeaderboard();
         }
       };
 
@@ -428,6 +444,9 @@ async function loadAllDashboardData() {
     renderCharts(AppState.semesters);
     renderGradeTable();
 
+    // Ranking failures must not block grades, profile, schedule or other tools.
+    await loadAcademicRanking();
+
     // 2. Load Profile & Photo directly from BDU API
     const maSV = AppState.user?.mssv || '';
     const profileRes = await BduApi.getProfile(AppState.token, '', maSV);
@@ -445,6 +464,185 @@ async function loadAllDashboardData() {
     console.error('Failed to load dashboard data:', err);
     showToast(err.message, 'error');
   }
+}
+
+async function loadAcademicRanking() {
+  try {
+    AppState.academicRanking = await BduApi.getMyAcademicRanking(AppState.token);
+    renderAcademicRanking(AppState.academicRanking);
+  } catch (error) {
+    AppState.academicRanking = null;
+    renderAcademicRanking(null, error.message);
+    console.info('Academic ranking is unavailable:', error.message);
+  }
+}
+
+function renderAcademicRanking(data, unavailableMessage = '') {
+  const setHighlightedRank = (elementId, rank) => {
+    const caption = document.getElementById(elementId);
+    if (!caption) return;
+    if (!rank?.hang) {
+      caption.textContent = unavailableMessage ? 'Chưa có hạng' : 'Đang cập nhật hạng...';
+      caption.removeAttribute('title');
+      return;
+    }
+    caption.textContent = `#${rank.hang} ${rank.pham_vi}`;
+    caption.title = `Hạng ${rank.hang}/${rank.tong_sinh_vien} sinh viên ${rank.pham_vi}`;
+  };
+
+  const gpaBestRank = data?.xep_hang_noi_bat?.gpa_tich_luy;
+  const creditBestRank = data?.xep_hang_noi_bat?.tin_chi_tich_luy;
+  setHighlightedRank('stat-gpa-10-school-rank', gpaBestRank);
+  setHighlightedRank('stat-gpa-school-rank', gpaBestRank);
+  setHighlightedRank('stat-credit-school-rank', creditBestRank);
+}
+
+function initLeaderboard() {
+  document.querySelectorAll('#leaderboard-scope-buttons button').forEach((button) => {
+    button.addEventListener('click', () => {
+      AppState.leaderboard.scope = button.dataset.scope;
+      updateLeaderboardSegments();
+      loadAcademicLeaderboard();
+    });
+  });
+  document.querySelectorAll('#leaderboard-metric-buttons button').forEach((button) => {
+    button.addEventListener('click', () => {
+      AppState.leaderboard.metric = button.dataset.metric;
+      updateLeaderboardSegments();
+      loadAcademicLeaderboard();
+    });
+  });
+}
+
+function updateLeaderboardSegments() {
+  document.querySelectorAll('#leaderboard-scope-buttons button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.scope === AppState.leaderboard.scope);
+  });
+  document.querySelectorAll('#leaderboard-metric-buttons button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.metric === AppState.leaderboard.metric);
+  });
+}
+
+async function loadAcademicLeaderboard() {
+  if (!AppState.token) return;
+  if (AppState.leaderboard.loading) {
+    AppState.leaderboard.reloadRequested = true;
+    return;
+  }
+  const loading = document.getElementById('leaderboard-loading');
+  const empty = document.getElementById('leaderboard-empty');
+  const tableWrap = document.getElementById('leaderboard-table-wrap');
+  AppState.leaderboard.loading = true;
+  loading?.classList.remove('hidden');
+  empty?.classList.add('hidden');
+  tableWrap?.classList.add('hidden');
+
+  try {
+    const data = await BduApi.getAcademicLeaderboard(AppState.token, AppState.leaderboard);
+    AppState.leaderboard.loaded = true;
+    renderAcademicLeaderboard(data);
+  } catch (error) {
+    if (loading) loading.classList.add('hidden');
+    if (empty) {
+      empty.textContent = error.message || 'Chưa thể tải bảng xếp hạng lúc này. Vui lòng thử lại sau.';
+      empty.classList.remove('hidden');
+    }
+  } finally {
+    AppState.leaderboard.loading = false;
+    if (AppState.leaderboard.reloadRequested) {
+      AppState.leaderboard.reloadRequested = false;
+      loadAcademicLeaderboard();
+    }
+  }
+}
+
+function renderAcademicLeaderboard(data) {
+  const loading = document.getElementById('leaderboard-loading');
+  const empty = document.getElementById('leaderboard-empty');
+  const tableWrap = document.getElementById('leaderboard-table-wrap');
+  const tableBody = document.getElementById('leaderboard-table-body');
+  const eyebrow = document.getElementById('leaderboard-eyebrow');
+  const title = document.getElementById('leaderboard-title');
+  const count = document.getElementById('leaderboard-student-count');
+  const updatedAt = document.getElementById('leaderboard-updated-at');
+  const contextDescription = document.getElementById('leaderboard-context-description');
+  const groupHeading = document.getElementById('leaderboard-group-heading');
+  const valueHeading = document.querySelector('.leaderboard-value-heading');
+  if (!tableBody) return;
+
+  const scopeLabels = {
+    class: 'Trong lớp',
+    faculty: 'Trong khoa',
+    institute: 'Trong viện',
+    school: 'Toàn trường'
+  };
+  const metricLabel = data.metric === 'credits' ? 'Tín chỉ tích lũy' : 'GPA tích lũy';
+  const context = data.context || {};
+  const contextLabels = {
+    class: `Lớp ${context.class_code || '--'}`,
+    faculty: `Khoa ${context.faculty_code || '--'}`,
+    institute: `Viện ${context.institute_code || '--'}`,
+    school: `Toàn trường · Khóa ${data.cohort}`
+  };
+
+  if (eyebrow) eyebrow.textContent = `${scopeLabels[data.scope]} · ${metricLabel}`.toUpperCase();
+  if (title) title.textContent = `Xếp hạng ${contextLabels[data.scope]}`;
+  if (contextDescription) {
+    contextDescription.textContent = `Tự động theo Khóa ${data.cohort} · Lớp ${context.class_code || '--'} · Khoa ${context.faculty_code || '--'} · Viện ${context.institute_code || '--'}`;
+  }
+  if (count) count.textContent = `${data.student_count} sinh viên`;
+  if (updatedAt) {
+    updatedAt.textContent = data.synced_at
+      ? `Cập nhật ${new Date(data.synced_at).toLocaleString('vi-VN')}`
+      : 'Dữ liệu mới nhất';
+  }
+  if (groupHeading) groupHeading.textContent = 'Lớp';
+  if (valueHeading) valueHeading.textContent = metricLabel;
+
+  tableBody.innerHTML = '';
+  for (const student of data.students || []) {
+    const row = document.createElement('tr');
+    if (student.la_sinh_vien_hien_tai) row.classList.add('is-current-student');
+    if (student.hang <= 3) row.classList.add(`is-top-${student.hang}`);
+
+    const rankCell = document.createElement('td');
+    const rankBadge = document.createElement('span');
+    rankBadge.className = 'leaderboard-rank-badge';
+    rankBadge.textContent = `#${student.hang}`;
+    rankCell.appendChild(rankBadge);
+
+    const studentCell = document.createElement('td');
+    const identity = document.createElement('div');
+    identity.className = 'leaderboard-student-identity';
+    const name = document.createElement('strong');
+    name.textContent = student.ho_ten || 'Sinh viên BDU';
+    const meta = document.createElement('span');
+    meta.textContent = student.mssv;
+    identity.append(name, meta);
+    if (student.la_sinh_vien_hien_tai) {
+      const you = document.createElement('em');
+      you.textContent = 'Bạn';
+      identity.appendChild(you);
+    }
+    studentCell.appendChild(identity);
+
+    const groupCell = document.createElement('td');
+    groupCell.className = 'leaderboard-group-cell';
+    groupCell.textContent = student.ma_lop || '--';
+
+    const valueCell = document.createElement('td');
+    valueCell.className = 'leaderboard-score-cell';
+    valueCell.textContent = data.metric === 'credits'
+      ? `${Number(student.gia_tri).toLocaleString('vi-VN')} TC`
+      : Number(student.gia_tri).toFixed(2);
+    row.append(rankCell, studentCell, groupCell, valueCell);
+    tableBody.appendChild(row);
+  }
+
+  loading?.classList.add('hidden');
+  const hasStudents = Boolean(data.students?.length);
+  empty?.classList.toggle('hidden', hasStudents);
+  tableWrap?.classList.toggle('hidden', !hasStudents);
 }
 
 // ============================================================================
