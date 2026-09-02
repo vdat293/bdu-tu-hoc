@@ -8,7 +8,7 @@
 FROM node:22-bookworm-slim AS node-runtime
 
 # .NET runtime base provides all native libraries required by WordFmt.
-FROM mcr.microsoft.com/dotnet/runtime:10.0-bookworm-slim AS runner
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runner
 WORKDIR /app
 
 # Copy the Node.js runtime and npm from the official Node image.
