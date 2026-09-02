@@ -25,8 +25,9 @@ RUN npm ci --omit=dev
 # Copy application files, including the prebuilt bin/wordfmt binary.
 COPY . .
 
-# Fail during image build if either runtime is unavailable.
-RUN node --version && dotnet --version
+# Fail during image build if either runtime is unavailable. The runtime image
+# intentionally has no SDK, so use --list-runtimes instead of --version.
+RUN node --version && dotnet --list-runtimes
 
 # Expose Web Port
 EXPOSE 3000
