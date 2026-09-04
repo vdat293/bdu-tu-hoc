@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <title>Khoa TH Top 2 — Dual-Core Synapse</title>
+  <defs>
+    <linearGradient id="th2-metal" x1="26" y1="38" x2="211" y2="203" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/><stop offset=".28" stop-color="#9FB6C8"/><stop offset=".52" stop-color="#2E4862"/><stop offset=".78" stop-color="#C7D6E2"/><stop offset="1" stop-color="#081A33"/>
+    </linearGradient>
+    <linearGradient id="th2-signal" x1="50" y1="70" x2="190" y2="174" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6EEF7"/><stop offset=".36" stop-color="#64D8FF"/><stop offset="1" stop-color="#315EF5"/>
+    </linearGradient>
+    <filter id="th2-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Two independent processing cores. -->
+  <g stroke-linejoin="bevel" filter="url(#th2-glow)">
+    <path d="M18 72 L47 49 L70 60 L62 83 L48 93 L48 147 L62 157 L70 180 L47 191 L18 168 L28 145 L28 95 Z" fill="#081A33" stroke="#64D8FF" stroke-width="2"/>
+    <path d="M222 72 L193 49 L170 60 L178 83 L192 93 L192 147 L178 157 L170 180 L193 191 L222 168 L212 145 L212 95 Z" fill="#081A33" stroke="#315EF5" stroke-width="2"/>
+    <path d="M31 78 L49 63 L60 67 L53 80 L39 90 L39 150 L53 160 L60 173 L49 177 L31 162 Z" fill="url(#th2-metal)"/>
+    <path d="M209 78 L191 63 L180 67 L187 80 L201 90 L201 150 L187 160 L180 173 L191 177 L209 162 Z" fill="url(#th2-metal)"/>
+  </g>
+
+  <!-- Side shells morph between narrow rails and stepped compute brackets. -->
+  <path fill="url(#th2-signal)" opacity=".72" d="M45 97 L58 86 L66 91 L62 110 L54 120 L62 130 L66 149 L58 154 L45 143 Z">
+    <animate attributeName="d" values="M45 97 L58 86 L66 91 L62 110 L54 120 L62 130 L66 149 L58 154 L45 143 Z;M42 94 L60 82 L69 90 L64 109 L55 120 L64 131 L69 150 L60 158 L42 146 Z;M45 97 L58 86 L66 91 L62 110 L54 120 L62 130 L66 149 L58 154 L45 143 Z" dur="4.4s" repeatCount="indefinite"/>
+  </path>
+  <path fill="url(#th2-signal)" opacity=".72" d="M195 97 L182 86 L174 91 L178 110 L186 120 L178 130 L174 149 L182 154 L195 143 Z">
+    <animate attributeName="d" values="M195 97 L182 86 L174 91 L178 110 L186 120 L178 130 L174 149 L182 154 L195 143 Z;M198 94 L180 82 L171 90 L176 109 L185 120 L176 131 L171 150 L180 158 L198 146 Z;M195 97 L182 86 L174 91 L178 110 L186 120 L178 130 L174 149 L182 154 L195 143 Z" dur="4.4s" begin=".18s" repeatCount="indefinite"/>
+  </path>
+
+  <!-- Straight synapse bridges, deliberately non-orbital. -->
+  <g stroke="url(#th2-signal)" stroke-linecap="square" filter="url(#th2-glow)">
+    <path d="M62 70 L82 48 H158 L178 70" stroke-width="5"/>
+    <path d="M69 77 L86 58 H154 L171 77" stroke="#081A33" stroke-width="2"/>
+    <path d="M62 170 L82 192 H158 L178 170" stroke-width="5"/>
+    <path d="M69 163 L86 182 H154 L171 163" stroke="#081A33" stroke-width="2"/>
+  </g>
+  <g stroke="#E6EEF7" stroke-width="1.5" stroke-linecap="round">
+    <path d="M80 52 H160" stroke-dasharray="80" stroke-dashoffset="80">
+      <animate attributeName="stroke-dashoffset" values="80;0;0;80" keyTimes="0;.25;.78;1" dur="4.2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M160 188 H80" stroke-dasharray="80" stroke-dashoffset="80">
+      <animate attributeName="stroke-dashoffset" values="80;0;0;80" keyTimes="0;.25;.78;1" dur="4.2s" begin=".35s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- Clock nodes and alternating load meters. -->
+  <g filter="url(#th2-glow)">
+    <path d="M120 37 L130 48 L120 59 L110 48 Z" fill="url(#th2-signal)" stroke="#fff"/>
+    <path d="M120 181 L130 192 L120 203 L110 192 Z" fill="url(#th2-signal)" stroke="#fff"/>
+    <circle cx="120" cy="48" r="3" fill="#fff"><animate attributeName="r" values="2;4;2" dur="2.4s" repeatCount="indefinite"/></circle>
+    <circle cx="120" cy="192" r="3" fill="#fff"><animate attributeName="r" values="2;4;2" dur="2.4s" begin=".3s" repeatCount="indefinite"/></circle>
+  </g>
+  <g fill="#64D8FF">
+    <rect x="17" y="103" width="22" height="4" rx="1"><animate attributeName="width" values="8;22;14;8" dur="3.2s" repeatCount="indefinite"/></rect>
+    <rect x="17" y="114" width="14" height="4" rx="1"><animate attributeName="width" values="18;7;22;18" dur="3.2s" repeatCount="indefinite"/></rect>
+    <rect x="201" y="133" width="22" height="4" rx="1"><animate attributeName="x" values="215;201;209;215" dur="3.2s" repeatCount="indefinite"/><animate attributeName="width" values="8;22;14;8" dur="3.2s" repeatCount="indefinite"/></rect>
+    <rect x="209" y="144" width="14" height="4" rx="1"><animate attributeName="x" values="205;216;201;205" dur="3.2s" repeatCount="indefinite"/><animate attributeName="width" values="18;7;22;18" dur="3.2s" repeatCount="indefinite"/></rect>
+  </g>
+  <g fill="#fff" filter="url(#th2-glow)">
+    <rect x="57" y="49" width="8" height="5" rx="2"><animate attributeName="x" values="57;116" dur="2.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;0" dur="2.6s" repeatCount="indefinite"/></rect>
+    <rect x="175" y="49" width="8" height="5" rx="2"><animate attributeName="x" values="175;116" dur="2.6s" begin=".2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;0" dur="2.6s" begin=".2s" repeatCount="indefinite"/></rect>
+  </g>
+  <g fill="#E6EEF7"><circle cx="29" cy="120" r="3"/><circle cx="211" cy="120" r="3"/></g>
+</svg>

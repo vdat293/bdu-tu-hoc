@@ -647,7 +647,7 @@ body.theme-light {
 .parallax-layer { position: absolute; will-change: transform; }
 .parallax-grid {
   inset: -80px;
-  opacity: .38;
+  opacity: .24;
   background-image: linear-gradient(rgba(67,49,45,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(67,49,45,.07) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(circle at center, #000, transparent 78%);
@@ -667,7 +667,7 @@ body.theme-light {
   right: -3%;
   bottom: -5%;
   width: clamp(34rem, 58vw, 68rem);
-  opacity: .045;
+  opacity: .022;
   filter: saturate(1.4) contrast(1.08) blur(.7px);
 }
 .parallax-type img {
@@ -962,18 +962,6 @@ body.theme-dark .diag-info {
   color: #9cc8f5;
   background: rgba(50,108,168,.2);
   border-color: rgba(96,165,250,.28);
-}
-
-@supports (animation-timeline: view()) {
-  .tab-pane.active > :not(.section-header-box) {
-    animation: panel-depth linear both;
-    animation-timeline: view(block);
-    animation-range: entry 0% cover 24%;
-  }
-  @keyframes panel-depth {
-    from { opacity: .3; transform: translateY(36px) scale(.985); filter: blur(4px); }
-    to { opacity: 1; transform: none; filter: none; }
-  }
 }
 
 @media (max-width: 992px) {

@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <!-- Amethyst Arcane Gradients -->
+    <linearGradient id="purp-shimmer" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#faf5ff"/>
+      <stop offset="25%" stop-color="#e9d5ff"/>
+      <stop offset="50%" stop-color="#c084fc"/>
+      <stop offset="75%" stop-color="#a855f7"/>
+      <stop offset="90%" stop-color="#7e22ce"/>
+      <stop offset="100%" stop-color="#3b0764"/>
+    </linearGradient>
+
+    <linearGradient id="purp-mystic" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2e1065"/>
+      <stop offset="35%" stop-color="#9333ea"/>
+      <stop offset="65%" stop-color="#d8b4fe"/>
+      <stop offset="85%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#581c87"/>
+    </linearGradient>
+
+    <radialGradient id="amethyst-core" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#f3e8ff"/>
+      <stop offset="30%" stop-color="#c084fc"/>
+      <stop offset="70%" stop-color="#7e22ce"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </radialGradient>
+
+    <radialGradient id="arcane-halo" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#a855f7" stop-opacity="0.32"/>
+      <stop offset="85%" stop-color="#7e22ce" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="purp-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <mask id="avatar-hole-mask-5">
+      <rect x="0" y="0" width="240" height="240" fill="#ffffff"/>
+      <circle cx="120" cy="120" r="49" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <!-- 1. ROTATING ARCANE MAGIC CIRCLE -->
+  <g mask="url(#avatar-hole-mask-5)">
+    <circle cx="120" cy="120" r="74" fill="url(#arcane-halo)"/>
+
+    <g transform="translate(120, 120)">
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="22s" repeatCount="indefinite"/>
+      <circle cx="0" cy="0" r="71" stroke="#c084fc" stroke-width="1.3" stroke-dasharray="14 18 5 18" opacity="0.65"/>
+      <polygon points="0,-71 61.5,35.5 -61.5,35.5" stroke="#d8b4fe" stroke-width="0.8" fill="none" opacity="0.4"/>
+      <polygon points="0,71 61.5,-35.5 -61.5,-35.5" stroke="#d8b4fe" stroke-width="0.8" fill="none" opacity="0.4"/>
+    </g>
+
+    <g transform="translate(120, 120)">
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="15s" repeatCount="indefinite"/>
+      <circle cx="0" cy="0" r="63" stroke="#f3e8ff" stroke-width="1" stroke-dasharray="4 8 10 8" opacity="0.45"/>
+    </g>
+  </g>
+
+  <!-- 2. ANIMATED CRYSTAL SHARD WINGS -->
+  <g filter="url(#purp-glow)">
+    <!-- Left Wing -->
+    <g>
+      <animateTransform attributeName="transform" type="rotate" values="0 120 120; -2.3 120 120; 0 120 120" dur="3.5s" repeatCount="indefinite" ease="ease-in-out"/>
+      <path d="M68 116 C46 98 22 72 14 36 C32 44 48 64 58 82 C34 54 24 34 22 14 C42 30 58 56 68 84 C48 44 44 26 46 6 C62 26 78 54 84 88 Z" fill="url(#purp-shimmer)"/>
+      <path d="M60 128 C40 118 24 100 18 82 C34 88 50 100 60 114 Z" fill="url(#purp-mystic)"/>
+      <path d="M64 140 C46 134 34 122 28 106 C44 112 56 124 64 134 Z" fill="url(#purp-shimmer)"/>
+      <path d="M18 36 C28 46 42 62 54 78" stroke="#d8b4fe" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+      <path d="M26 14 C38 30 50 48 62 68" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+    </g>
+
+    <!-- Right Wing -->
+    <g>
+      <animateTransform attributeName="transform" type="rotate" values="0 120 120; 2.3 120 120; 0 120 120" dur="3.5s" repeatCount="indefinite" ease="ease-in-out"/>
+      <path d="M172 116 C194 98 218 72 226 36 C208 44 192 64 182 82 C206 54 216 34 218 14 C198 30 182 56 172 84 C192 44 196 26 194 6 C178 26 162 54 156 88 Z" fill="url(#purp-shimmer)"/>
+      <path d="M180 128 C200 118 216 100 222 82 C206 88 190 100 180 114 Z" fill="url(#purp-mystic)"/>
+      <path d="M176 140 C194 134 206 122 212 106 C196 112 184 124 176 134 Z" fill="url(#purp-shimmer)"/>
+      <path d="M222 36 C212 46 198 62 186 78" stroke="#d8b4fe" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+      <path d="M214 14 C202 30 190 48 178 68" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+    </g>
+  </g>
+
+  <!-- 3. ROYAL AMETHYST AVATAR RIM -->
+  <g filter="url(#purp-glow)">
+    <circle cx="120" cy="120" r="56" stroke="url(#purp-shimmer)" stroke-width="6"/>
+    <circle cx="120" cy="120" r="51.5" stroke="url(#purp-mystic)" stroke-width="2"/>
+    <circle cx="120" cy="120" r="59.5" stroke="#c084fc" stroke-width="1.2" stroke-dasharray="4 6" opacity="0.85">
+      <animateTransform attributeName="transform" type="rotate" from="0 120 120" to="360 120 120" dur="15s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 4. BOTTOM DOCKING PEDESTAL (Frames badge seamlessly) -->
+  <g filter="url(#purp-glow)">
+    <path d="M82 184 L72 196 L86 202 L94 190 Z" fill="url(#purp-mystic)"/>
+    <path d="M158 184 L168 196 L154 202 L146 190 Z" fill="url(#purp-mystic)"/>
+    <path d="M92 194 Q120 203 148 194 Q120 211 92 194 Z" fill="url(#purp-shimmer)"/>
+    <circle cx="120" cy="203" r="3.5" fill="url(#amethyst-core)" stroke="#e9d5ff" stroke-width="0.8"/>
+  </g>
+
+  <!-- 5. 8-POINTED AMETHYST ASTRAL STAR CREST AT APEX -->
+  <g filter="url(#purp-glow)">
+    <path d="M94 58 Q120 52 146 58 L150 64 Q120 58 90 64 Z" fill="url(#purp-mystic)"/>
+    <polygon points="120,18 126,34 142,38 128,48 132,64 120,54 108,64 112,48 98,38 114,34" fill="url(#purp-shimmer)" stroke="#2e1065" stroke-width="1.2"/>
+
+    <circle cx="120" cy="42" r="6" fill="url(#amethyst-core)" stroke="#ffffff" stroke-width="1.5">
+      <animate attributeName="r" values="5.5; 6.8; 5.5" dur="2.1s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="118" cy="40" r="1.8" fill="#ffffff" opacity="0.95"/>
+  </g>
+
+  <!-- 6. FLOATING ETHEREAL PARTICLES -->
+  <g transform="translate(64, 46)">
+    <polygon points="0,-6 2,-2 6,0 2,2 0,6 -2,2 -6,0 -2,-2" fill="#c084fc">
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3; 1; 0.3" dur="2s" repeatCount="indefinite"/>
+    </polygon>
+  </g>
+  <g transform="translate(176, 46)">
+    <polygon points="0,-6 2,-2 6,0 2,2 0,6 -2,2 -6,0 -2,-2" fill="#c084fc">
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3; 1; 0.3" dur="2.2s" repeatCount="indefinite"/>
+    </polygon>
+  </g>
+</svg>

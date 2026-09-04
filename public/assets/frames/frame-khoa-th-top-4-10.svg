@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <title>Khoa TH Top 4–10 — Protocol Bracket</title>
+  <defs>
+    <linearGradient id="thp-metal" x1="25" y1="45" x2="211" y2="194" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CBD5E1"/><stop offset=".34" stop-color="#64748B"/><stop offset=".62" stop-color="#1E293B"/><stop offset="1" stop-color="#071820"/>
+    </linearGradient>
+    <linearGradient id="thp-signal" x1="34" y1="62" x2="199" y2="177" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6FCFF"/><stop offset=".45" stop-color="#22D3EE"/><stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+    <filter id="thp-glow" x="-55%" y="-55%" width="210%" height="210%">
+      <feGaussianBlur stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Shared stepped brackets for ranks 4 through 10. -->
+  <g stroke-linejoin="bevel" filter="url(#thp-glow)">
+    <path d="M74 51 L50 62 L31 84 L23 111 L31 119 L23 129 L31 156 L50 178 L74 189 L84 177 L65 165 L52 147 L47 120 L52 93 L65 75 L84 63 Z" fill="#071820" stroke="url(#thp-signal)" stroke-width="2"/>
+    <path d="M166 51 L190 62 L209 84 L217 111 L209 119 L217 129 L209 156 L190 178 L166 189 L156 177 L175 165 L188 147 L193 120 L188 93 L175 75 L156 63 Z" fill="#071820" stroke="url(#thp-signal)" stroke-width="2"/>
+    <path d="M73 60 L56 69 L42 89 L36 108 L43 115 L36 124 L42 151 L56 171 L73 180 L67 164 L57 146 L53 120 L57 94 L67 76 Z" fill="url(#thp-metal)"/>
+    <path d="M167 60 L184 69 L198 89 L204 108 L197 115 L204 124 L198 151 L184 171 L167 180 L173 164 L183 146 L187 120 L183 94 L173 76 Z" fill="url(#thp-metal)"/>
+  </g>
+
+  <!-- Short linear protocol traces. -->
+  <g stroke="#22D3EE" stroke-linecap="square" filter="url(#thp-glow)">
+    <path d="M77 64 L94 51 H116" stroke-width="2" stroke-dasharray="46" stroke-dashoffset="46"><animate attributeName="stroke-dashoffset" values="46;0;0;46" keyTimes="0;.22;.75;1" dur="4.8s" repeatCount="indefinite"/></path>
+    <path d="M163 64 L146 51 H124" stroke-width="2" stroke-dasharray="46" stroke-dashoffset="46"><animate attributeName="stroke-dashoffset" values="46;0;0;46" keyTimes="0;.22;.75;1" dur="4.8s" begin=".2s" repeatCount="indefinite"/></path>
+    <path d="M77 176 L94 189 H111" stroke-width="2" stroke-dasharray="42" stroke-dashoffset="42"><animate attributeName="stroke-dashoffset" values="42;0;0;42" keyTimes="0;.22;.75;1" dur="4.8s" begin=".4s" repeatCount="indefinite"/></path>
+    <path d="M163 176 L146 189 H129" stroke-width="2" stroke-dasharray="42" stroke-dashoffset="42"><animate attributeName="stroke-dashoffset" values="42;0;0;42" keyTimes="0;.22;.75;1" dur="4.8s" begin=".6s" repeatCount="indefinite"/></path>
+  </g>
+
+  <!-- Four binary status nodes. -->
+  <g filter="url(#thp-glow)">
+    <rect x="27" y="69" width="11" height="11" rx="2" fill="#22D3EE"><animate attributeName="opacity" values=".25;1;.25;.25;.25" keyTimes="0;.14;.28;.7;1" dur="3.6s" repeatCount="indefinite"/></rect>
+    <rect x="27" y="160" width="11" height="11" rx="2" fill="#CBD5E1"><animate attributeName="opacity" values=".25;.25;1;.25;.25" keyTimes="0;.18;.36;.72;1" dur="3.6s" repeatCount="indefinite"/></rect>
+    <rect x="202" y="69" width="11" height="11" rx="2" fill="#CBD5E1"><animate attributeName="opacity" values=".25;.25;.25;1;.25" keyTimes="0;.3;.48;.62;1" dur="3.6s" repeatCount="indefinite"/></rect>
+    <rect x="202" y="160" width="11" height="11" rx="2" fill="#22D3EE"><animate attributeName="opacity" values=".25;.25;.25;.25;1;.25" keyTimes="0;.28;.5;.66;.82;1" dur="3.6s" repeatCount="indefinite"/></rect>
+  </g>
+
+  <!-- Header and rank dock. -->
+  <g filter="url(#thp-glow)">
+    <path d="M91 46 L101 35 H139 L149 46 L140 58 H100 Z" fill="url(#thp-metal)" stroke="#22D3EE"/>
+    <rect x="106" y="40" width="28" height="4" rx="1" fill="#E6FCFF"><animate attributeName="width" values="8;28;16;8" dur="4.2s" repeatCount="indefinite"/></rect>
+    <path d="M86 184 L99 196 H141 L154 184 L148 209 H92 Z" fill="#071820" stroke="url(#thp-signal)" stroke-width="1.8"/>
+    <path d="M99 193 H141 L136 202 H104 Z" fill="url(#thp-metal)"/>
+    <rect x="108" y="196" width="24" height="3" rx="1" fill="#22D3EE"><animate attributeName="opacity" values=".35;1;.35" dur="5.4s" repeatCount="indefinite"/></rect>
+  </g>
+
+  <!-- A short horizontal diagnostic sweep; it never becomes an orbit. -->
+  <rect x="53" y="61" width="28" height="2" rx="1" fill="#E6FCFF" filter="url(#thp-glow)">
+    <animate attributeName="x" values="53;159" dur="3.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.16;.8;1" dur="3.8s" repeatCount="indefinite"/>
+  </rect>
+</svg>

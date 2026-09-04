@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="meridian-metal" x1="42" y1="34" x2="200" y2="204" gradientUnits="userSpaceOnUse"><stop stop-color="#F8FAFC"/><stop offset=".25" stop-color="#7DD3FC"/><stop offset=".55" stop-color="#6366F1"/><stop offset=".82" stop-color="#312E81"/><stop offset="1" stop-color="#C4B5FD"/></linearGradient>
+    <linearGradient id="meridian-line" x1="42" y1="120" x2="198" y2="120" gradientUnits="userSpaceOnUse"><stop stop-color="#22D3EE" stop-opacity="0"/><stop offset=".25" stop-color="#67E8F9"/><stop offset=".52" stop-color="#FFFFFF"/><stop offset=".78" stop-color="#A78BFA"/><stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/></linearGradient>
+    <radialGradient id="meridian-node"><stop stop-color="#FFFFFF"/><stop offset=".38" stop-color="#A5F3FC"/><stop offset="1" stop-color="#6366F1"/></radialGradient>
+    <filter id="meridian-glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g transform="translate(120 120)">
+    <path d="M0-72 51-51 72 0 51 51 0 72-51 51-72 0-51-51Z" stroke="#111827" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M0-72 51-51 72 0 51 51 0 72-51 51-72 0-51-51Z" stroke="url(#meridian-metal)" stroke-width="4.5" stroke-linejoin="round" filter="url(#meridian-glow)"/>
+    <path d="M0-64 45-45 64 0 45 45 0 64-45 45-64 0-45-45Z" stroke="#BAE6FD" stroke-width="1" stroke-dasharray="16 6" opacity=".9"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="38s" repeatCount="indefinite"/></path>
+    <ellipse rx="94" ry="30" transform="rotate(-14)" stroke="url(#meridian-line)" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="86 25 7 25" filter="url(#meridian-glow)"><animateTransform attributeName="transform" type="rotate" values="-14;-9;-14" dur="5.5s" repeatCount="indefinite"/></ellipse>
+    <ellipse rx="79" ry="24" transform="rotate(72)" stroke="#818CF8" stroke-width="1.5" stroke-dasharray="45 22" opacity=".78"><animateTransform attributeName="transform" type="rotate" values="72;66;72" dur="6.8s" repeatCount="indefinite"/></ellipse>
+    <g fill="#0F172A" stroke="url(#meridian-metal)" stroke-width="2"><path d="M0-84 8-72 0-60-8-72Z"/><path d="M84 0 72 8 60 0 72-8Z"/><path d="M0 84-8 72 0 60 8 72Z"/><path d="M-84 0-72-8-60 0-72 8Z"/></g>
+    <g fill="url(#meridian-node)" filter="url(#meridian-glow)"><circle cy="-72" r="3.2"/><circle cx="72" r="3.2"/><circle cy="72" r="3.2"/><circle cx="-72" r="3.2"/></g>
+    <g transform="translate(0 -89)" filter="url(#meridian-glow)"><path d="M0-11 3-3 11 0 3 3 0 11-3 3-11 0-3-3Z" fill="#E0F2FE"/><circle r="3" fill="#4F46E5"/></g>
+    <g transform="translate(63 58) rotate(18)"><rect x="-15" y="-6" width="30" height="12" rx="6" fill="#0F172A" stroke="#7DD3FC"/><text x="0" y="2.8" text-anchor="middle" fill="#E0F2FE" font-size="7" font-family="Arial, sans-serif" font-weight="800" letter-spacing=".8">BDU</text></g>
+    <circle r="3.6" fill="#FFFFFF" filter="url(#meridian-glow)"><animateMotion dur="6.4s" repeatCount="indefinite" path="M-91,-24 C-28,-58 53,-49 93,17 C53,57 -35,66 -91,25 C-105,9 -105,-9 -91,-24Z"/></circle>
+  </g>
+</svg>

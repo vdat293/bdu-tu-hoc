@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <!-- Celestial Platinum & Ice Blue -->
+    <linearGradient id="vk-ice-plat" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="20%" stop-color="#e0f2fe"/>
+      <stop offset="45%" stop-color="#7dd3fc"/>
+      <stop offset="70%" stop-color="#0284c7"/>
+      <stop offset="90%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <linearGradient id="vk-crystal-shard" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0369a1"/>
+      <stop offset="40%" stop-color="#38bdf8"/>
+      <stop offset="75%" stop-color="#bae6fd"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <radialGradient id="vk-sapphire-gem" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#7dd3fc"/>
+      <stop offset="65%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </radialGradient>
+
+    <radialGradient id="vk-aurora-halo" cx="50%" cy="50%" r="50%">
+      <stop offset="55%" stop-color="#38bdf8" stop-opacity="0.38"/>
+      <stop offset="85%" stop-color="#1d4ed8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="vk-valkyrie-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <mask id="avatar-hole-vk-valk">
+      <rect x="0" y="0" width="240" height="240" fill="#ffffff"/>
+      <circle cx="120" cy="120" r="45" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <!-- MASTER CONTAINER: Centered with 20px padding from all edges to avoid any square clipping -->
+  <g transform="translate(120, 120) scale(0.85) translate(-120, -114)">
+    <!-- 1. DUAL COUNTER-ROTATING CELESTIAL FROST RUNES -->
+    <g mask="url(#avatar-hole-vk-valk)">
+      <g transform="translate(120, 120)">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="18s" repeatCount="indefinite"/>
+        <circle cx="0" cy="0" r="72" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="12 16 4 16" opacity="0.65"/>
+        <circle cx="0" cy="-72" r="3" fill="#ffffff"/>
+        <circle cx="72" cy="0" r="3" fill="#ffffff"/>
+        <circle cx="0" cy="72" r="3" fill="#ffffff"/>
+        <circle cx="-72" cy="0" r="3" fill="#ffffff"/>
+      </g>
+      <g transform="translate(120, 120)">
+        <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="12s" repeatCount="indefinite"/>
+        <circle cx="0" cy="0" r="62" stroke="#bae6fd" stroke-width="1.2" stroke-dasharray="4 8 16 8" opacity="0.55"/>
+      </g>
+    </g>
+
+    <!-- 2. QUAD LAYERED VALKYRIE CELESTIAL BLADE WINGS (4 WINGS, NOT 2!) -->
+    <g filter="url(#vk-valkyrie-glow)">
+      <!-- Left Wings (Upper Primary Blade + Lower Secondary Blade) -->
+      <g>
+        <animateTransform attributeName="transform" type="rotate" values="0 120 120; -2 120 120; 0 120 120" dur="3.5s" repeatCount="indefinite" ease="ease-in-out"/>
+        <!-- Upper Celestial Blade Wing -->
+        <path d="M72 108 C54 84 32 54 18 18 C36 32 54 54 66 74 C44 48 32 26 26 6 C48 24 66 52 76 80 Z" fill="url(#vk-ice-plat)"/>
+        <path d="M26 6 L36 28 L50 48 L64 68" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <!-- Lower Secondary Feather Wing (Spreads wide horizontally) -->
+        <path d="M66 124 C44 116 22 104 6 86 C24 94 44 104 58 116 Z" fill="url(#vk-crystal-shard)"/>
+        <path d="M68 136 C48 132 30 122 16 108 C34 114 50 124 62 134 Z" fill="url(#vk-ice-plat)"/>
+        <!-- Floating Crystal Shards on left side -->
+        <polygon points="12,50 16,42 20,48 16,56" fill="#7dd3fc"/>
+        <polygon points="4,92 8,84 12,90 8,98" fill="#ffffff"/>
+      </g>
+
+      <!-- Right Wings (Upper Primary Blade + Lower Secondary Blade) -->
+      <g>
+        <animateTransform attributeName="transform" type="rotate" values="0 120 120; 2 120 120; 0 120 120" dur="3.5s" repeatCount="indefinite" ease="ease-in-out"/>
+        <!-- Upper Celestial Blade Wing -->
+        <path d="M168 108 C186 84 208 54 222 18 C204 32 186 54 174 74 C196 48 208 26 214 6 C192 24 174 52 164 80 Z" fill="url(#vk-ice-plat)"/>
+        <path d="M214 6 L204 28 L190 48 L176 68" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <!-- Lower Secondary Feather Wing (Spreads wide horizontally) -->
+        <path d="M174 124 C196 116 218 104 234 86 C216 94 196 104 182 116 Z" fill="url(#vk-crystal-shard)"/>
+        <path d="M172 136 C192 132 210 122 224 108 C206 114 190 124 178 134 Z" fill="url(#vk-ice-plat)"/>
+        <!-- Floating Crystal Shards on right side -->
+        <polygon points="228,50 224,42 220,48 224,56" fill="#7dd3fc"/>
+        <polygon points="236,92 232,84 228,90 232,98" fill="#ffffff"/>
+      </g>
+    </g>
+
+    <!-- 3. PLATINUM SAPPHIRE METALLIC RIM WITH STAR PRISMS -->
+    <g filter="url(#vk-valkyrie-glow)">
+      <circle cx="120" cy="120" r="56" stroke="url(#vk-ice-plat)" stroke-width="6"/>
+      <circle cx="120" cy="120" r="51.5" stroke="url(#vk-crystal-shard)" stroke-width="2"/>
+      <circle cx="120" cy="120" r="59.5" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4 6" opacity="0.9">
+        <animateTransform attributeName="transform" type="rotate" from="360 120 120" to="0 120 120" dur="14s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- 4. CELESTIAL CRYSTAL BASE ARCH (CLEAN AND COMPACT) -->
+    <g filter="url(#vk-valkyrie-glow)">
+      <path d="M96 176 Q120 184 144 176 Q120 181 96 176 Z" fill="url(#vk-ice-plat)"/>
+      <polygon points="120,176 123,181 120,185 117,181" fill="url(#vk-sapphire-gem)" stroke="#ffffff" stroke-width="0.6"/>
+    </g>
+
+    <!-- 5. TOP APEX: SACRED VALKYRIE HALO & 3-PRISM SAPPHIRE TIARA -->
+    <g filter="url(#vk-valkyrie-glow)">
+      <!-- Sacred Crescent Moon Halo at top -->
+      <path d="M90 46 C98 22 114 8 120 4 C126 8 142 22 150 46 C140 28 128 18 120 16 C112 18 100 28 90 46 Z" fill="url(#vk-ice-plat)" opacity="0.85"/>
+
+      <!-- 3-Prism Crystal Tiara -->
+      <polygon points="120,12 128,42 120,58 112,42" fill="url(#vk-crystal-shard)" stroke="#0369a1" stroke-width="1.2"/>
+      <polygon points="98,28 106,48 96,56 90,44" fill="url(#vk-ice-plat)"/>
+      <polygon points="142,28 134,48 144,56 150,44" fill="url(#vk-ice-plat)"/>
+
+      <!-- Pulsing Sapphire Heart Diamond -->
+      <polygon points="120,34 130,46 120,58 110,46" fill="url(#vk-sapphire-gem)" stroke="#ffffff" stroke-width="1.6">
+        <animate attributeName="points" values="120,34 130,46 120,58 110,46; 120,32 132,46 120,60 108,46; 120,34 130,46 120,58 110,46" dur="2s" repeatCount="indefinite"/>
+      </polygon>
+      <circle cx="118" cy="44" r="2.2" fill="#ffffff" opacity="0.95"/>
+
+      <!-- Apex North Star (8-point star) -->
+      <g transform="translate(120, 10)">
+        <polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#ffffff">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="8s" repeatCount="indefinite"/>
+        </polygon>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <title>Khoa TH Top 1 — Quantum Compiler Crown</title>
+  <defs>
+    <linearGradient id="th1-chassis" x1="34" y1="28" x2="205" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4FAFC"/>
+      <stop offset=".2" stop-color="#89A9B8"/>
+      <stop offset=".48" stop-color="#263847"/>
+      <stop offset=".72" stop-color="#A8C0CA"/>
+      <stop offset="1" stop-color="#07111F"/>
+    </linearGradient>
+    <linearGradient id="th1-quantum" x1="72" y1="50" x2="174" y2="190" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F3DF"/>
+      <stop offset=".24" stop-color="#FFD166"/>
+      <stop offset=".55" stop-color="#00E5FF"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <radialGradient id="th1-core" cx="50%" cy="50%" r="50%">
+      <stop stop-color="#fff"/>
+      <stop offset=".3" stop-color="#FFD166"/>
+      <stop offset=".7" stop-color="#00E5FF"/>
+      <stop offset="1" stop-color="#07111F"/>
+    </radialGradient>
+    <filter id="th1-soft-glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="th1-tight-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ten-sided compiler bus: split segments keep the portrait aperture open. -->
+  <g stroke-linecap="square" stroke-linejoin="bevel">
+    <path d="M83 55 L101 45 L139 45 L157 55" stroke="#07111F" stroke-width="10"/>
+    <path d="M83 55 L101 45 L139 45 L157 55" stroke="url(#th1-chassis)" stroke-width="6"/>
+    <path d="M164 61 L181 78 L187 105" stroke="#07111F" stroke-width="11"/>
+    <path d="M164 61 L181 78 L187 105" stroke="url(#th1-chassis)" stroke-width="6"/>
+    <path d="M187 135 L181 162 L164 179" stroke="#07111F" stroke-width="11"/>
+    <path d="M187 135 L181 162 L164 179" stroke="url(#th1-chassis)" stroke-width="6"/>
+    <path d="M76 179 L59 162 L53 135" stroke="#07111F" stroke-width="11"/>
+    <path d="M76 179 L59 162 L53 135" stroke="url(#th1-chassis)" stroke-width="6"/>
+    <path d="M53 105 L59 78 L76 61" stroke="#07111F" stroke-width="11"/>
+    <path d="M53 105 L59 78 L76 61" stroke="url(#th1-chassis)" stroke-width="6"/>
+  </g>
+
+  <!-- Inner photonic rails write themselves instead of rotating. -->
+  <g stroke="url(#th1-quantum)" stroke-width="2" stroke-linecap="round" filter="url(#th1-tight-glow)">
+    <path d="M82 60 L68 78 L62 104" stroke-dasharray="62" stroke-dashoffset="62">
+      <animate attributeName="stroke-dashoffset" values="62;0;0;62" keyTimes="0;.18;.78;1" dur="5.4s" repeatCount="indefinite"/>
+    </path>
+    <path d="M158 60 L172 78 L178 104" stroke-dasharray="62" stroke-dashoffset="62">
+      <animate attributeName="stroke-dashoffset" values="62;0;0;62" keyTimes="0;.18;.78;1" dur="5.4s" begin=".2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M62 136 L68 162 L88 182 L108 187" stroke-dasharray="78" stroke-dashoffset="78">
+      <animate attributeName="stroke-dashoffset" values="78;0;0;78" keyTimes="0;.24;.82;1" dur="5.4s" begin=".35s" repeatCount="indefinite"/>
+    </path>
+    <path d="M178 136 L172 162 L152 182 L132 187" stroke-dasharray="78" stroke-dashoffset="78">
+      <animate attributeName="stroke-dashoffset" values="78;0;0;78" keyTimes="0;.24;.82;1" dur="5.4s" begin=".55s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- Reconfigurable memory banks. -->
+  <g filter="url(#th1-soft-glow)">
+    <path d="M18 77 L44 60 L55 67 L48 91 L27 100 L15 92 Z" fill="#0A1828" stroke="#00E5FF" stroke-width="1.4"/>
+    <path d="M15 108 L45 96 L50 108 L47 131 L18 137 L10 127 Z" fill="url(#th1-chassis)" stroke="#8B5CF6" stroke-width="1.3"/>
+    <path d="M18 145 L48 137 L55 157 L41 178 L16 167 Z" fill="#0A1828" stroke="#00E5FF" stroke-width="1.4"/>
+    <path d="M222 77 L196 60 L185 67 L192 91 L213 100 L225 92 Z" fill="#0A1828" stroke="#00E5FF" stroke-width="1.4"/>
+    <path d="M225 108 L195 96 L190 108 L193 131 L222 137 L230 127 Z" fill="url(#th1-chassis)" stroke="#8B5CF6" stroke-width="1.3"/>
+    <path d="M222 145 L192 137 L185 157 L199 178 L224 167 Z" fill="#0A1828" stroke="#00E5FF" stroke-width="1.4"/>
+    <g fill="#FFD166">
+      <rect x="23" y="72" width="17" height="3" rx="1"/><rect x="20" y="82" width="22" height="2" rx="1" opacity=".6"/>
+      <rect x="200" y="72" width="17" height="3" rx="1"/><rect x="198" y="82" width="22" height="2" rx="1" opacity=".6"/>
+    </g>
+    <g fill="#00E5FF">
+      <rect x="19" y="113" width="20" height="3" rx="1"/><rect x="19" y="122" width="14" height="3" rx="1"/>
+      <rect x="201" y="113" width="20" height="3" rx="1"/><rect x="207" y="122" width="14" height="3" rx="1"/>
+    </g>
+  </g>
+
+  <!-- Computing crown: compatible path commands create a genuine idle morph. -->
+  <g filter="url(#th1-soft-glow)" stroke-linejoin="bevel">
+    <path fill="url(#th1-chassis)" stroke="#00E5FF" stroke-width="1.4"
+      d="M82 49 L88 20 L105 31 L109 47 L98 54 Z">
+      <animate attributeName="d" values="M82 49 L88 20 L105 31 L109 47 L98 54 Z;M82 49 L84 14 L105 28 L109 47 L98 54 Z;M82 49 L88 20 L105 31 L109 47 L98 54 Z" dur="5.2s" repeatCount="indefinite"/>
+    </path>
+    <path fill="url(#th1-quantum)" stroke="#F7F3DF" stroke-width="1.4"
+      d="M106 45 L110 10 L120 2 L130 10 L134 45 L126 52 L114 52 Z">
+      <animate attributeName="d" values="M106 45 L110 10 L120 2 L130 10 L134 45 L126 52 L114 52 Z;M106 45 L108 7 L120 0 L132 7 L134 45 L126 52 L114 52 Z;M106 45 L110 10 L120 2 L130 10 L134 45 L126 52 L114 52 Z" dur="5.2s" begin=".15s" repeatCount="indefinite"/>
+    </path>
+    <path fill="url(#th1-chassis)" stroke="#8B5CF6" stroke-width="1.4"
+      d="M131 47 L135 31 L152 20 L158 49 L142 54 Z">
+      <animate attributeName="d" values="M131 47 L135 31 L152 20 L158 49 L142 54 Z;M131 47 L135 28 L156 14 L158 49 L142 54 Z;M131 47 L135 31 L152 20 L158 49 L142 54 Z" dur="5.2s" begin=".3s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- Lower compiler dock and upward-only data packets. -->
+  <g filter="url(#th1-soft-glow)">
+    <path d="M78 181 L99 190 L105 207 L120 218 L135 207 L141 190 L162 181 L150 204 L132 219 L120 232 L108 219 L90 204 Z" fill="#07111F" stroke="url(#th1-quantum)" stroke-width="2"/>
+    <path d="M101 194 H139 L132 211 L120 221 L108 211 Z" fill="url(#th1-chassis)" stroke="#00E5FF"/>
+    <path d="M120 219 V187" stroke="#FFD166" stroke-width="2"/>
+    <circle cx="120" cy="202" r="8" fill="url(#th1-core)" stroke="#F7F3DF" stroke-width="1.2">
+      <animate attributeName="r" values="7;9;7" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g fill="#fff" filter="url(#th1-tight-glow)">
+    <rect x="59.5" y="152" width="5" height="8" rx="2">
+      <animate attributeName="y" values="158;138;82" keyTimes="0;.28;1" dur="2.9s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" keyTimes="0;.15;1" dur="2.9s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="34" y="111" width="7" height="3" rx="1">
+      <animate attributeName="x" values="22;34;63" dur="3.6s" begin=".8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3.6s" begin=".8s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="199" y="126" width="7" height="3" rx="1">
+      <animate attributeName="x" values="218;199;170" dur="3.6s" begin="1.7s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3.6s" begin="1.7s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <g fill="#F7F3DF" filter="url(#th1-tight-glow)">
+    <circle cx="59" cy="119" r="2.4"/><circle cx="181" cy="119" r="2.4"/>
+    <circle cx="81" cy="57" r="2"/><circle cx="159" cy="57" r="2"/>
+  </g>
+</svg>

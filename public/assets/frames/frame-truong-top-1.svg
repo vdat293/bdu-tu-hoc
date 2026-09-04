@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="astral-metal" x1="35" y1="28" x2="202" y2="215" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/><stop offset=".18" stop-color="#67E8F9"/><stop offset=".45" stop-color="#8B5CF6"/><stop offset=".72" stop-color="#312E81"/><stop offset="1" stop-color="#C4B5FD"/>
+    </linearGradient>
+    <linearGradient id="astral-bright" x1="58" y1="55" x2="186" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/><stop offset=".28" stop-color="#A5F3FC"/><stop offset=".66" stop-color="#A78BFA"/><stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+    <radialGradient id="star-core"><stop stop-color="#FFFFFF"/><stop offset=".22" stop-color="#CFFAFE"/><stop offset=".55" stop-color="#8B5CF6"/><stop offset="1" stop-color="#312E81"/></radialGradient>
+    <filter id="astral-glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="soft-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+  <!-- Tinh Đồ BDU: một đài thiên văn đa giác với ngôn ngữ hình học độc lập. -->
+  <g transform="translate(120 120)">
+    <circle r="73" stroke="#22D3EE" stroke-width="1" stroke-dasharray="1 12" opacity=".8"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="28s" repeatCount="indefinite"/></circle>
+    <circle r="67" stroke="#8B5CF6" stroke-width="1.2" stroke-dasharray="18 8 2 8" opacity=".65"><animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="18s" repeatCount="indefinite"/></circle>
+    <path d="M0-111 7-88 0-76-7-88ZM79-79 66-57 52-53 57-66ZM111 0 88 7 76 0 88-7ZM79 79 57 66 53 52 66 57ZM0 111-7 88 0 76 7 88ZM-79 79-66 57-52 53-57 66ZM-111 0-88-7-76 0-88 7ZM-79-79-57-66-53-52-66-57Z" fill="url(#astral-bright)" opacity=".92" filter="url(#astral-glow)">
+      <animate attributeName="opacity" values=".55;1;.55" dur="2.6s" repeatCount="indefinite"/>
+    </path>
+    <ellipse rx="99" ry="37" transform="rotate(-18)" stroke="url(#astral-bright)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="112 26 10 32" filter="url(#astral-glow)"><animateTransform attributeName="transform" type="rotate" values="-18;-14;-18" dur="4.8s" repeatCount="indefinite"/></ellipse>
+    <ellipse rx="91" ry="29" transform="rotate(66)" stroke="url(#astral-metal)" stroke-width="2" stroke-linecap="round" stroke-dasharray="70 22 5 18" opacity=".95"><animateTransform attributeName="transform" type="rotate" values="66;72;66" dur="6.2s" repeatCount="indefinite"/></ellipse>
+    <ellipse rx="104" ry="23" transform="rotate(23)" stroke="#FDE68A" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="34 18 3 18" opacity=".78"><animateTransform attributeName="transform" type="rotate" values="23;17;23" dur="7.4s" repeatCount="indefinite"/></ellipse>
+    <path d="M0-69 49-49 69 0 49 49 0 69-49 49-69 0-49-49Z" stroke="#0F172A" stroke-width="11" stroke-linejoin="round" opacity=".92"/>
+    <path d="M0-69 49-49 69 0 49 49 0 69-49 49-69 0-49-49Z" stroke="url(#astral-metal)" stroke-width="6" stroke-linejoin="round" filter="url(#astral-glow)"/>
+    <path d="M0-61 43-43 61 0 43 43 0 61-43 43-61 0-43-43Z" stroke="#E0F2FE" stroke-width="1.2" opacity=".9"/>
+    <g fill="#0F172A" stroke="url(#astral-bright)" stroke-width="2.4"><path d="M0-89 8-77 4-61-4-61-8-77Z"/><path d="M89 0 77 8 61 4 61-4 77-8Z"/><path d="M0 89-8 77-4 61 4 61 8 77Z"/><path d="M-89 0-77-8-61-4-61 4-77 8Z"/></g>
+    <g fill="url(#star-core)" filter="url(#astral-glow)"><circle cy="-78" r="4.4"><animate attributeName="r" values="3.5;5;3.5" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="78" r="3.5"/><circle cy="78" r="3.5"/><circle cx="-78" r="3.5"/></g>
+    <g transform="translate(0 -91)" filter="url(#astral-glow)"><path d="M0-15 4-5 15 0 4 5 0 15-4 5-15 0-4-5Z" fill="url(#astral-bright)"/><circle r="4.5" fill="#312E81" stroke="#FFF" stroke-width="1"/></g>
+    <g transform="translate(69 55) rotate(18)"><rect x="-17" y="-7" width="34" height="14" rx="7" fill="#0F172A" stroke="#67E8F9" stroke-width="1.5"/><text x="0" y="3.2" text-anchor="middle" fill="#FFFFFF" font-size="8" font-family="Arial, sans-serif" font-weight="800" letter-spacing="1">BDU</text></g>
+    <g transform="translate(0 94)" filter="url(#astral-glow)"><path d="M-43 0-30-11H30L43 0 30 11H-30Z" fill="#0F172A" stroke="url(#astral-bright)" stroke-width="1.8"/><path d="M-31-5H31" stroke="#67E8F9" stroke-width="1" opacity=".7"/><text x="0" y="5" text-anchor="middle" fill="#FFFFFF" font-size="9" font-family="Arial, sans-serif" font-weight="900" letter-spacing="1.8">BDU #1</text></g>
+    <g filter="url(#astral-glow)"><circle r="4" fill="#FFFFFF"><animateMotion dur="5.8s" repeatCount="indefinite" path="M-91,-32 C-42,-66 56,-58 94,16 C66,58 -30,76 -91,32 C-108,11 -108,-12 -91,-32Z"/></circle><circle r="3" fill="#FDE68A"><animateMotion dur="7.2s" begin="-2.4s" repeatCount="indefinite" path="M5,-96 C62,-63 77,33 18,91 C-57,73 -83,13 -58,-50 C-38,-83 -18,-96 5,-96Z"/></circle></g>
+    <circle r="84" fill="none" stroke="#8B5CF6" stroke-width="8" opacity=".12" filter="url(#soft-glow)"><animate attributeName="r" values="78;91;78" dur="3.4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".08;.22;.08" dur="3.4s" repeatCount="indefinite"/></circle>
+  </g>
+</svg>

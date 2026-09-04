@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="eclipse-silver" x1="28" y1="36" x2="205" y2="206" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".2" stop-color="#BAE6FD"/><stop offset=".46" stop-color="#60A5FA"/><stop offset=".72" stop-color="#6366F1"/><stop offset="1" stop-color="#E9D5FF"/></linearGradient>
+    <linearGradient id="eclipse-night" x1="42" y1="198" x2="192" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#172554"/><stop offset=".48" stop-color="#312E81"/><stop offset="1" stop-color="#0F172A"/></linearGradient>
+    <radialGradient id="eclipse-gem"><stop stop-color="#FFFFFF"/><stop offset=".25" stop-color="#CFFAFE"/><stop offset=".58" stop-color="#818CF8"/><stop offset="1" stop-color="#312E81"/></radialGradient>
+    <filter id="eclipse-glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.8" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g transform="translate(120 120)">
+    <!-- Hai nguyệt cung đối xứng là dấu hiệu riêng của Top 2. -->
+    <path d="M-62-67C-112-45-119 34-70 72C-89 35-84-28-47-55C-50-62-55-66-62-67Z" fill="url(#eclipse-night)" stroke="url(#eclipse-silver)" stroke-width="4" filter="url(#eclipse-glow)"/>
+    <path d="M62-67C112-45 119 34 70 72C89 35 84-28 47-55C50-62 55-66 62-67Z" fill="url(#eclipse-night)" stroke="url(#eclipse-silver)" stroke-width="4" filter="url(#eclipse-glow)"/>
+    <path d="M-74-49C-94-18-92 25-68 53" stroke="#E0F2FE" stroke-width="1.3" stroke-dasharray="10 7" opacity=".9"/>
+    <path d="M74-49C94-18 92 25 68 53" stroke="#C4B5FD" stroke-width="1.3" stroke-dasharray="10 7" opacity=".9"/>
+
+    <ellipse rx="94" ry="34" transform="rotate(-12)" stroke="url(#eclipse-silver)" stroke-width="3" stroke-linecap="round" stroke-dasharray="91 18 7 26" filter="url(#eclipse-glow)"><animateTransform attributeName="transform" type="rotate" values="-12;-7;-12" dur="5s" repeatCount="indefinite"/></ellipse>
+    <ellipse rx="90" ry="28" transform="rotate(72)" stroke="#818CF8" stroke-width="1.8" stroke-dasharray="58 20" opacity=".84"><animateTransform attributeName="transform" type="rotate" values="72;66;72" dur="6.2s" repeatCount="indefinite"/></ellipse>
+
+    <circle r="61" stroke="#0F172A" stroke-width="10"/>
+    <circle r="61" stroke="url(#eclipse-silver)" stroke-width="5" filter="url(#eclipse-glow)"/>
+    <circle r="55" stroke="#DBEAFE" stroke-width="1.1" stroke-dasharray="22 6 2 6" opacity=".95">
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="20s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Huy hiệu II bằng hai trụ thiên thạch. -->
+    <g transform="translate(0 -77)" filter="url(#eclipse-glow)">
+      <path d="M-17-15-7-19-4 15-13 20Z" fill="url(#eclipse-silver)" stroke="#FFFFFF"/>
+      <path d="M7-19 17-15 13 20 4 15Z" fill="url(#eclipse-silver)" stroke="#FFFFFF"/>
+      <path d="M-23 20H23L17 28H-17Z" fill="url(#eclipse-night)" stroke="#7DD3FC" stroke-width="1.5"/>
+    </g>
+
+    <g filter="url(#eclipse-glow)">
+      <circle cx="-91" cy="-20" r="6" fill="url(#eclipse-gem)"><animate attributeName="r" values="5;7;5" dur="2.2s" repeatCount="indefinite"/></circle>
+      <circle cx="91" cy="20" r="6" fill="url(#eclipse-gem)"><animate attributeName="r" values="7;5;7" dur="2.2s" repeatCount="indefinite"/></circle>
+      <circle r="3.5" fill="#FFFFFF"><animateMotion dur="5.4s" repeatCount="indefinite" path="M-93,-25 C-42,-66 47,-59 94,12 C53,59 -42,63 -93,25 C-105,8 -105,-8 -93,-25Z"/></circle>
+      <circle r="3" fill="#C4B5FD"><animateMotion dur="6.1s" begin="-2s" repeatCount="indefinite" path="M9,-91 C58,-50 64,34 8,92 C-54,60 -67,-25 -22,-78 C-10,-88 0,-92 9,-91Z"/></circle>
+    </g>
+    <g transform="translate(0 77)"><path d="M-35 0-25-8H25L35 0 25 9H-25Z" fill="#0F172A" stroke="url(#eclipse-silver)" stroke-width="1.6"/><text x="0" y="3" text-anchor="middle" fill="#E0F2FE" font-size="8" font-family="Arial, sans-serif" font-weight="800" letter-spacing="1.5">BDU #2</text></g>
+  </g>
+</svg>

@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <!-- Molten Bronze & Blazing Flame Gradients -->
+    <linearGradient id="bb-blade-metal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="25%" stop-color="#fed7aa"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="75%" stop-color="#c2410c"/>
+      <stop offset="100%" stop-color="#431407"/>
+    </linearGradient>
+
+    <linearGradient id="bb-iron-dark" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="40%" stop-color="#3f3f46"/>
+      <stop offset="70%" stop-color="#71717a"/>
+      <stop offset="100%" stop-color="#d4d4d8"/>
+    </linearGradient>
+
+    <radialGradient id="bb-fire-core" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="35%" stop-color="#f97316"/>
+      <stop offset="75%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </radialGradient>
+
+    <radialGradient id="bb-magma-halo" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#ea580c" stop-opacity="0.4"/>
+      <stop offset="85%" stop-color="#7c2d12" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="bb-berserk-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <mask id="avatar-hole-bb-berserk">
+      <rect x="0" y="0" width="240" height="240" fill="#ffffff"/>
+      <circle cx="120" cy="120" r="45" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <!-- MASTER CONTAINER: Centered with 20px padding from all edges to avoid any square clipping -->
+  <g transform="translate(120, 120) scale(0.85) translate(-120, -114)">
+    <!-- 1. ROTATING MAGMA ROCK RING & FLAME AURA -->
+    <g mask="url(#avatar-hole-bb-berserk)">
+      <g transform="translate(120, 120)">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="12s" repeatCount="indefinite"/>
+        <!-- Jagged Lava Ring -->
+        <circle cx="0" cy="0" r="70" stroke="#f97316" stroke-width="1.8" stroke-dasharray="14 18 6 18" opacity="0.7"/>
+        <circle cx="0" cy="-70" r="3.2" fill="#fde047"/>
+        <circle cx="70" cy="0" r="3.2" fill="#fde047"/>
+        <circle cx="0" cy="70" r="3.2" fill="#fde047"/>
+        <circle cx="-70" cy="0" r="3.2" fill="#fde047"/>
+      </g>
+    </g>
+
+    <!-- 2. MASSIVE CROSSED CURVED WAR BLADES (X-SHAPED BERSERKER SCYTHES) -->
+    <g filter="url(#bb-berserk-glow)">
+      <!-- Left Blade (Curves from bottom-right up to top-left) -->
+      <g>
+        <animateTransform attributeName="transform" type="rotate" values="0 120 120; -2 120 120; 0 120 120" dur="2.8s" repeatCount="indefinite" ease="ease-in-out"/>
+        <!-- Curved Serrated Blade -->
+        <path d="M72 108 C50 78 26 44 14 10 C32 18 52 38 70 66 C42 46 28 32 20 16 C38 34 60 66 76 96 Z" fill="url(#bb-blade-metal)"/>
+        <path d="M14 10 L28 30 L48 54 L68 84" stroke="#fde047" stroke-width="1.8" stroke-linecap="round"/>
+        <!-- Blade Jagged Serrations (Răng cưa lưỡi đao) -->
+        <polygon points="14,10 24,18 18,22" fill="#ffffff"/>
+        <polygon points="26,30 36,38 30,42" fill="#ffffff"/>
+        <polygon points="44,52 54,60 48,64" fill="#ffffff"/>
+        <!-- Blade Hilt at Bottom Left -->
+        <polygon points="68,136 34,166 42,174 76,144" fill="url(#bb-iron-dark)" stroke="#71717a" stroke-width="1"/>
+        <circle cx="38" cy="170" r="4.5" fill="url(#bb-fire-core)"/>
+      </g>
+
+      <!-- Right Blade (Curves from bottom-left up to top-right) -->
+      <g>
+        <animateTransform attributeName="transform" type="rotate" values="0 120 120; 2 120 120; 0 120 120" dur="2.8s" repeatCount="indefinite" ease="ease-in-out"/>
+        <!-- Curved Serrated Blade -->
+        <path d="M168 108 C190 78 214 44 226 10 C208 18 188 38 170 66 C198 46 212 32 220 16 C202 34 180 66 164 96 Z" fill="url(#bb-blade-metal)"/>
+        <path d="M226 10 L212 30 L192 54 L172 84" stroke="#fde047" stroke-width="1.8" stroke-linecap="round"/>
+        <!-- Blade Jagged Serrations -->
+        <polygon points="226,10 216,18 222,22" fill="#ffffff"/>
+        <polygon points="214,30 204,38 210,42" fill="#ffffff"/>
+        <polygon points="196,52 186,60 192,64" fill="#ffffff"/>
+        <!-- Blade Hilt at Bottom Right -->
+        <polygon points="172,136 206,166 198,174 164,144" fill="url(#bb-iron-dark)" stroke="#71717a" stroke-width="1"/>
+        <circle cx="202" cy="170" r="4.5" fill="url(#bb-fire-core)"/>
+      </g>
+    </g>
+
+    <!-- 3. HEAVY IRON CHAINS WRAPPING AROUND AVATAR -->
+    <g filter="url(#bb-berserk-glow)">
+      <!-- Iron Chain Links along left rim -->
+      <ellipse cx="64" cy="94" rx="4" ry="7" transform="rotate(-30 64 94)" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+      <ellipse cx="60" cy="120" rx="4" ry="7" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+      <ellipse cx="66" cy="146" rx="4" ry="7" transform="rotate(30 66 146)" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+
+      <!-- Iron Chain Links along right rim -->
+      <ellipse cx="176" cy="94" rx="4" ry="7" transform="rotate(30 176 94)" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+      <ellipse cx="180" cy="120" rx="4" ry="7" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+      <ellipse cx="174" cy="146" rx="4" ry="7" transform="rotate(-30 174 146)" stroke="#d4d4d8" stroke-width="2" fill="none"/>
+    </g>
+
+    <!-- 4. CRACKED LAVA ROCK BEZEL -->
+    <g filter="url(#bb-berserk-glow)">
+      <circle cx="120" cy="120" r="56.5" stroke="url(#bb-blade-metal)" stroke-width="6.5"/>
+      <circle cx="120" cy="120" r="51.5" stroke="url(#bb-iron-dark)" stroke-width="2"/>
+      <!-- Molten Fire Ring -->
+      <circle cx="120" cy="120" r="60.5" stroke="#ea580c" stroke-width="1.4" stroke-dasharray="5 7" opacity="0.9">
+        <animateTransform attributeName="transform" type="rotate" from="0 120 120" to="360 120 120" dur="10s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- 5. CRACKED MAGMA ROCK BASE (COMPACT & SLEEK) -->
+    <g filter="url(#bb-berserk-glow)">
+      <path d="M96 177 Q120 186 144 177 Q120 181 96 177 Z" fill="url(#bb-blade-metal)"/>
+      <circle cx="120" cy="181" r="3" fill="url(#bb-fire-core)" stroke="#fde047" stroke-width="0.8"/>
+    </g>
+
+    <!-- 6. TOP APEX: GLADIATOR WAR HELM / BEAST SKULL CREST -->
+    <g filter="url(#bb-berserk-glow)">
+      <!-- Curved Barbarian Horns on Helm -->
+      <path d="M106 48 C94 32 82 22 74 18 C80 28 92 42 102 52 Z" fill="url(#bb-blade-metal)" stroke="#431407" stroke-width="1"/>
+      <path d="M134 48 C146 32 158 22 166 18 C160 28 148 42 138 52 Z" fill="url(#bb-blade-metal)" stroke="#431407" stroke-width="1"/>
+
+      <!-- Spiked Iron War Mask -->
+      <polygon points="120,16 138,38 132,56 108,56 102,38" fill="url(#bb-iron-dark)" stroke="#ea580c" stroke-width="1.4"/>
+      <polygon points="120,19 134,36 120,52 106,36" fill="url(#bb-blade-metal)"/>
+
+      <!-- Glowing Berserker Fire Eyes -->
+      <circle cx="113" cy="38" r="3" fill="#ffffff" filter="url(#bb-berserk-glow)"/>
+      <circle cx="113" cy="38" r="2.2" fill="#ef4444"/>
+      <circle cx="127" cy="38" r="3" fill="#ffffff" filter="url(#bb-berserk-glow)"/>
+      <circle cx="127" cy="38" r="2.2" fill="#ef4444"/>
+
+      <!-- Apex Central Spiked Horn -->
+      <polygon points="120,6 125,24 120,28 115,24" fill="#ffffff"/>
+    </g>
+
+    <!-- 7. FLOATING BURNING EMBERS -->
+    <g transform="translate(60, 36)">
+      <circle cx="0" cy="0" r="2.2" fill="#fde047">
+        <animate attributeName="cy" values="0; -16; -32" dur="1.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1; 0.5; 0" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g transform="translate(180, 36)">
+      <circle cx="0" cy="0" r="2.2" fill="#fde047">
+        <animate attributeName="cy" values="0; -16; -32" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1; 0.5; 0" dur="2s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+</svg>

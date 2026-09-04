@@ -179,20 +179,21 @@ export const BduService = {
 
   /**
    * Fetch available schedule semesters list from BDU API
-   * POST /public/api/sch/w-locdsdoituongthoikhoabieu
+   * POST /public/api/sch/w-locdshockytkbuser
    */
   async getScheduleSemesters(token) {
     if (!token) return { result: false, message: 'Thiếu mã xác thực (Token).' };
 
     try {
-      const response = await fetch(`${BDU_BASE_URL}/sch/w-locdsdoituongthoikhoabieu`, {
+      const response = await fetch(`${BDU_BASE_URL}/sch/w-locdshockytkbuser`, {
         method: 'POST',
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
           'Accept': 'application/json, text/plain, */*',
           'idpc': '0',
           'Content-Type': 'text/plain'
-        }
+        },
+        body: ''
       });
 
       const data = await response.json();
@@ -241,76 +242,30 @@ export const BduService = {
   },
 
   /**
-   * Get unified schedule (fetches real BDU schedule if token provided, otherwise returns mock structure)
+   * Get unified schedule (fetches real BDU schedule if token provided, otherwise returns empty structure)
    */
   async getSchedule(token = '', hocKy = null) {
-    const defaultSemesters = [
-      { hoc_ky: 20261, ten_hoc_ky: 'Học kỳ 1 - Năm học 2026-2027' },
-      { hoc_ky: 20252, ten_hoc_ky: 'Học kỳ 2 - Năm học 2025-2026' },
-      { hoc_ky: 20251, ten_hoc_ky: 'Học kỳ 1 - Năm học 2025-2026' }
-    ];
-
-    const defaultItems = [
-      {
-        id: 1,
-        day: 'Thứ 2',
-        dayOfWeek: 2,
-        courseCode: 'INT1340',
-        courseName: 'Lập Trình Web Nâng Cao & Node.js',
-        credits: 3,
-        periods: 'Tiết 1 - 3 (07:00 - 09:30)',
-        room: 'Phòng Lab 302 - Khu A',
-        lecturer: 'TS. Trần Hoàng Nam',
-        status: 'upcoming'
-      },
-      {
-        id: 2,
-        day: 'Thứ 3',
-        dayOfWeek: 3,
-        courseCode: 'INT1352',
-        courseName: 'Kiến Trúc & Thiết Kế Phần Mềm',
-        credits: 3,
-        periods: 'Tiết 4 - 6 (09:45 - 12:15)',
-        room: 'Phòng Lý Thuyết A2.10',
-        lecturer: 'ThS. Nguyễn Hồ Hải',
-        status: 'upcoming'
-      },
-      {
-        id: 3,
-        day: 'Thứ 5',
-        dayOfWeek: 5,
-        courseCode: 'INT1360',
-        courseName: 'Cơ Sở Dữ Liệu Phân Tán & NoSQL',
-        credits: 3,
-        periods: 'Tiết 1 - 3 (07:00 - 09:30)',
-        room: 'Phòng Lab 401 - Khu B',
-        lecturer: 'TS. Lê Thị Mai',
-        status: 'upcoming'
-      },
-      {
-        id: 4,
-        day: 'Thứ 6',
-        dayOfWeek: 6,
-        courseCode: 'INT1388',
-        courseName: 'Thực Tập Chuyên Ngành & Đồ Án',
-        credits: 4,
-        periods: 'Tiết 7 - 9 (13:00 - 15:30)',
-        room: 'Phòng Hội Thảo B1.05',
-        lecturer: 'ThS. Nguyễn Hồ Hải',
-        status: 'upcoming'
-      }
-    ];
-
     if (token) {
       try {
-        // Step 1: Fetch list of semesters
+        // Step 1: Fetch list of semesters from w-locdshockytkbuser
         const semRes = await this.getScheduleSemesters(token);
+
+        if (semRes && (semRes.code === 401 || semRes.code === 402 || semRes.message === 'loggedoff')) {
+          return {
+            isRealData: false,
+            isSessionExpired: true,
+            selectedHocKy: hocKy ? parseInt(hocKy, 10) : null,
+            semesters: [],
+            items: []
+          };
+        }
+
         let semestersList = [];
 
         if (semRes && semRes.code !== 402 && semRes.code !== 401 && semRes.result !== false) {
-          if (semRes?.data?.ds_hoc_ky) {
+          if (Array.isArray(semRes?.data?.ds_hoc_ky)) {
             semestersList = semRes.data.ds_hoc_ky;
-          } else if (semRes?.data?.ds_doituong_tkb) {
+          } else if (Array.isArray(semRes?.data?.ds_doituong_tkb)) {
             semestersList = semRes.data.ds_doituong_tkb;
           } else if (Array.isArray(semRes?.data)) {
             semestersList = semRes.data;
@@ -319,55 +274,65 @@ export const BduService = {
           }
         }
 
-        if (semestersList.length === 0) {
-          semestersList = defaultSemesters;
-        }
-
         // Determine target semester
         let targetHocKy = hocKy;
-        if (!targetHocKy) {
-          targetHocKy = semestersList[0]?.hoc_ky || 20261;
+        if (!targetHocKy && semestersList.length > 0) {
+          targetHocKy = semestersList[0]?.hoc_ky || semestersList[0]?.ma_hoc_ky;
         }
 
-        // Step 2: Fetch detailed weekly schedule
-        const detailRes = await this.getScheduleBySemester(token, targetHocKy);
+        if (targetHocKy) {
+          // Step 2: Fetch detailed weekly schedule
+          const detailRes = await this.getScheduleBySemester(token, targetHocKy);
 
-        if (detailRes && detailRes.code !== 402 && detailRes.code !== 401 && detailRes.result !== false) {
-          const rawData = detailRes.data || detailRes;
-          let extractedItems = [];
-
-          if (Array.isArray(rawData)) {
-            extractedItems = rawData;
-          } else if (Array.isArray(rawData.ds_thoi_khoa_bieu)) {
-            extractedItems = rawData.ds_thoi_khoa_bieu;
-          } else if (Array.isArray(rawData.ds_lop_hoc_phan)) {
-            extractedItems = rawData.ds_lop_hoc_phan;
-          } else if (Array.isArray(rawData.ds_tuan_tkb)) {
-            // Flatten schedule across weeks
-            for (const week of rawData.ds_tuan_tkb) {
-              const weekSchedule = week.ds_thoi_khoa_bieu || week.ds_chi_tiet_tkb || [];
-              if (Array.isArray(weekSchedule) && weekSchedule.length > 0) {
-                extractedItems.push(...weekSchedule);
-              }
-            }
+          if (detailRes && (detailRes.code === 401 || detailRes.code === 402 || detailRes.message === 'loggedoff')) {
+            return {
+              isRealData: false,
+              isSessionExpired: true,
+              selectedHocKy: parseInt(targetHocKy, 10),
+              semesters: semestersList,
+              items: []
+            };
           }
 
-          // Format & Deduplicate items by subject + period + day
-          if (extractedItems.length > 0) {
+          if (detailRes && detailRes.code !== 402 && detailRes.code !== 401 && detailRes.result !== false) {
+            const rawData = detailRes.data || detailRes;
+            let extractedItems = [];
+
+            if (Array.isArray(rawData)) {
+              extractedItems = rawData;
+            } else if (Array.isArray(rawData.ds_thoi_khoa_bieu)) {
+              extractedItems = rawData.ds_thoi_khoa_bieu;
+            } else if (Array.isArray(rawData.ds_lop_hoc_phan)) {
+              extractedItems = rawData.ds_lop_hoc_phan;
+            } else if (Array.isArray(rawData.ds_tuan_tkb)) {
+              // Flatten schedule across weeks
+              for (const week of rawData.ds_tuan_tkb) {
+                const weekSchedule = week.ds_thoi_khoa_bieu || week.ds_chi_tiet_tkb || [];
+                if (Array.isArray(weekSchedule) && weekSchedule.length > 0) {
+                  extractedItems.push(...weekSchedule);
+                }
+              }
+            }
+
+            // Format & Deduplicate items by subject + day + period
             const formattedItems = [];
             const seenKeys = new Set();
 
             for (const it of extractedItems) {
-              const code = it.ma_mon_hoc || it.ma_mon || it.ma_hp || it.ma_lop_hoc_phan || '--';
-              const name = it.ten_mon_hoc || it.ten_mon || it.ten_hp || 'Môn học';
-              const day = it.thu || (it.thu_kieu_so ? `Thứ ${it.thu_kieu_so}` : 'Thứ 2');
+              const code = it.ma_mon || it.ma_mon_hoc || it.ma_hp || it.ma_lop_hoc_phan || '--';
+              const name = it.ten_mon || it.ten_mon_hoc || it.ten_hp || 'Môn học';
+              const dayNum = it.thu_kieu_so;
+              const day = dayNum === 8 ? 'Chủ Nhật' : (dayNum ? `Thứ ${dayNum}` : (it.thu || 'Thứ 2'));
               const startPeriod = it.tiet_bat_dau || it.tiet_bd || '1';
               const count = it.so_tiet || '3';
-              const endPeriod = parseInt(startPeriod) + parseInt(count) - 1;
-              const periods = it.tiet_hoc || `Tiết ${startPeriod} - ${endPeriod} (${count} tiết)`;
-              const room = it.phong_hoc || it.ten_phong || it.ten_phong_hoc || 'Phòng học';
-              const lecturer = it.ten_giang_vien || it.giang_vien || it.cb_giang_day || 'Bộ môn BDU';
-              const credits = it.so_tin_chi || 3;
+              const endPeriod = parseInt(startPeriod, 10) + parseInt(count, 10) - 1;
+              const timeStr = parseInt(startPeriod, 10) <= 5 ? '07:00 - 11:30' : '13:00 - 17:30';
+              const periods = it.tiet_hoc || `Tiết ${startPeriod} - ${endPeriod} (${timeStr})`;
+              const room = it.ma_phong || it.phong_hoc || it.ten_phong || it.ten_phong_hoc || 'Chưa xếp phòng';
+              const lecturer = it.ten_giang_vien || (it.ma_giang_vien ? `GV: ${it.ma_giang_vien}` : (it.giang_vien || it.cb_giang_day || 'Bộ môn BDU'));
+              const credits = it.so_tin_chi ? parseInt(it.so_tin_chi, 10) : (it.credits || 3);
+              const group = it.ma_nhom || '';
+              const className = it.ma_lop || '';
 
               const uniqueKey = `${code}-${day}-${startPeriod}`;
               if (!seenKeys.has(uniqueKey)) {
@@ -375,117 +340,53 @@ export const BduService = {
                 formattedItems.push({
                   courseCode: code,
                   courseName: name,
+                  ma_mon_hoc: code,
+                  ten_mon_hoc: name,
                   day,
+                  dayOfWeek: dayNum === 8 ? 1 : (dayNum || 2),
                   periods,
                   room,
+                  phong_hoc: room,
                   lecturer,
+                  ten_giang_vien: lecturer,
                   credits,
+                  so_tin_chi: credits,
+                  group,
+                  className,
                   status: 'active'
                 });
               }
             }
 
+            // Sort by day of week
+            formattedItems.sort((a, b) => (a.dayOfWeek || 0) - (b.dayOfWeek || 0));
+
             return {
               isRealData: true,
               semesters: semestersList,
-              selectedHocKy: targetHocKy,
+              selectedHocKy: parseInt(targetHocKy, 10),
               items: formattedItems
             };
           }
         }
+
+        return {
+          isRealData: semestersList.length > 0,
+          semesters: semestersList,
+          selectedHocKy: targetHocKy ? parseInt(targetHocKy, 10) : null,
+          items: []
+        };
       } catch (e) {
-        console.error('Failed to fetch real schedule from BDU, falling back to local dataset:', e);
+        console.error('Failed to fetch real schedule from BDU:', e);
       }
     }
 
-    // Fallback Structure
+    // Không có token hoặc không có dữ liệu thực: trả về cấu trúc rỗng, không dùng dữ liệu giả
     return {
       isRealData: false,
-      selectedHocKy: hocKy ? parseInt(hocKy, 10) : 20261,
-      semesters: defaultSemesters,
-      semester: 'Học kỳ 1 (2026 - 2027)',
-      currentWeek: 1,
-      totalWeeks: 15,
-      items: defaultItems
-    };
-  },
-
-  /**
-   * Get learning hub catalog (courses, documents, and videos)
-   */
-  getLearningResources() {
-    return {
-      categories: ['Tất cả', 'Công Nghệ Thông Tin', 'Kỹ Năng Mềm', 'Đại Cương'],
-      documents: [
-        {
-          id: 'doc-1',
-          title: 'Giáo trình Cấu Trúc Dữ Liệu & Giải Thuật (Chuẩn BDU)',
-          course: 'Cấu Trúc Dữ Liệu & Giải Thuật',
-          category: 'Công Nghệ Thông Tin',
-          format: 'PDF',
-          size: '12.4 MB',
-          downloads: 1420,
-          downloadUrl: '#',
-          updatedAt: '2026-02-15'
-        },
-        {
-          id: 'doc-2',
-          title: 'Mẫu Báo Cáo Tiểu Luận & Khóa Luận Tốt Nghiệp BDU (Word chuẩn)',
-          course: 'Đồ Án & Tiểu Luận',
-          category: 'Công Nghệ Thông Tin',
-          format: 'DOCX',
-          size: '2.1 MB',
-          downloads: 3890,
-          downloadUrl: '#',
-          updatedAt: '2026-03-01'
-        },
-        {
-          id: 'doc-3',
-          title: 'Tổng Hợp Đề Thi & Bài Tập Cơ Sở Dữ Liệu (Có lời giải)',
-          course: 'Hệ Quản Trị CSDL',
-          category: 'Công Nghệ Thông Tin',
-          format: 'PDF',
-          size: '8.7 MB',
-          downloads: 2150,
-          downloadUrl: '#',
-          updatedAt: '2026-01-20'
-        },
-        {
-          id: 'doc-4',
-          title: 'Slide Bài Giảng Lập Trình Web Toàn Diện (Express + Vue/React)',
-          course: 'Lập Trình Web',
-          category: 'Công Nghệ Thông Tin',
-          format: 'PPTX',
-          size: '24.5 MB',
-          downloads: 1980,
-          downloadUrl: '#',
-          updatedAt: '2026-02-28'
-        }
-      ],
-      videos: [
-        {
-          id: 'vid-1',
-          title: 'Học Lập Trình Web Fullstack: Xây Dựng REST API với Node.js & Express',
-          lecturer: 'ThS. Nguyễn Hồ Hải',
-          course: 'Lập Trình Web',
-          duration: '45:30',
-          source: 'Google Drive Embed',
-          driveId: '1AbCdEfGhIjKlMnOpQrStUvWxYz12345',
-          thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
-          description: 'Bài giảng chuyên sâu về cách thiết kế REST API chuẩn kiến trúc MVC, xử lý JWT Auth và middleware.'
-        },
-        {
-          id: 'vid-2',
-          title: 'Hướng Dẫn Chuẩn Hóa Văn Bản Tiểu Luận & Báo Cáo Theo Quy Chuẩn BDU',
-          lecturer: 'Bộ Môn Hệ Thống Thông Tin',
-          course: 'Kỹ Năng Học Thuật',
-          duration: '32:15',
-          source: 'Google Drive Embed',
-          driveId: '2BcDeFgHiJkLmNoPqRsTuVwXyZ56789',
-          thumbnail: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80',
-          description: 'Quy chuẩn lề A4, hệ thống heading H1-H4, danh mục hình ảnh, bảng biểu tự động và trang bìa theo chuẩn khoa.'
-        }
-      ]
+      selectedHocKy: hocKy ? parseInt(hocKy, 10) : null,
+      semesters: [],
+      items: []
     };
   }
 };

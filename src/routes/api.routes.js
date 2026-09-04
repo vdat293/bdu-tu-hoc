@@ -61,6 +61,38 @@ router.get('/english/:sessionId/stream', ApiController.streamEnglishExercise);
 
 // 5. Learning Hub Resources
 router.get('/learning/resources', ApiController.getLearningResources);
+router.get('/learning/courses/:courseCode/posts', ApiController.getCourseLearningPosts);
+router.post('/learning/courses/:courseCode/posts', ApiController.createCourseLearningPost);
+router.delete('/learning/courses/:courseCode/posts/:postId', ApiController.deleteCourseLearningPost);
+router.post('/learning/courses/:courseCode/posts/:postId/like', ApiController.toggleCourseLearningPostLike);
+router.get('/learning/courses/:courseCode/posts/:postId/comments', ApiController.getCourseLearningPostComments);
+router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiController.addCourseLearningPostComment);
+
+router.get('/students/me/presentation', ApiController.getMyIdentityPresentation);
+router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
+
+// 6. Góc Tự Học Số (Community Study Hub & Clans)
+router.get('/community/posts', ApiController.getCommunityPosts);
+router.post('/community/posts', ApiController.createCommunityPost);
+router.get('/community/posts/:id', ApiController.getCommunityPost);
+router.delete('/community/posts/:id', ApiController.deleteCommunityPost);
+router.post('/community/posts/:id/pin', ApiController.toggleClanPostPin);
+router.post('/community/posts/:id/like', ApiController.toggleCommunityPostLike);
+router.get('/community/posts/:id/comments', ApiController.getCommunityPostComments);
+router.post('/community/posts/:id/comments', ApiController.addCommunityPostComment);
+
+// 7. CLB & Nhóm Học Tập (Clans/Guilds)
+router.get('/community/clans', ApiController.getClans);
+router.post('/community/clans', ApiController.createClan);
+router.patch('/community/clans/:id', ApiController.updateClan);
+router.delete('/community/clans/:id', ApiController.disbandClan);
+router.post('/community/clans/:id/join', ApiController.joinClan);
+router.post('/community/clans/:id/leave', ApiController.leaveClan);
+router.get('/community/clans/:id/members', ApiController.getClanMembers);
+router.patch('/community/clans/:id/members/:mssv/role', ApiController.updateClanMemberRole);
+router.delete('/community/clans/:id/members/:mssv', ApiController.kickClanMember);
+router.get('/community/clans/:id/documents', ApiController.getClanDocuments);
+router.post('/community/polls/:pollId/vote', ApiController.voteClanPoll);
 
 // Health & Metrics check
 router.get('/health', (req, res) => {

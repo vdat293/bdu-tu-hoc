@@ -20,8 +20,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/showcase.css?v=20260901-2239">
+  <link rel="stylesheet" href="css/style.css?v=20260904-resource-platforms-v9">
+  <link rel="stylesheet" href="css/showcase.css?v=20260903-school-podium-frames">
 </head>
 
 <body class="theme-light">
@@ -223,7 +223,17 @@
           <div class="nav-group-title">GÓC TỰ HỌC SỐ</div>
           <button class="nav-item" data-tab="tab-learning">
             <span class="nav-icon">09</span>
-            <span class="nav-text">Kho Tài Liệu & Video</span>
+            <span class="nav-text">Kho Tài Liệu</span>
+          </button>
+          <button class="nav-item" data-tab="tab-clans">
+            <span class="nav-icon">10</span>
+            <span class="nav-text">CLB / Nhóm Học Tập</span>
+            <span class="badge-mini badge-pill-emerald">Guild</span>
+          </button>
+          <button class="nav-item" data-tab="tab-confession">
+            <span class="nav-icon">11</span>
+            <span class="nav-text">BDU Confession</span>
+            <span class="badge-mini badge-pill-purple">CFS</span>
           </button>
         </div>
       </nav>
@@ -592,7 +602,7 @@
                     <div class="item-left">
                       <span class="item-label">Niên khóa đào tạo</span>
                     </div>
-                    <strong id="p-cohort-years" class="item-value text-blue">2024 - 2028</strong>
+                    <strong id="p-cohort-years" class="item-value text-blue">---</strong>
                   </div>
 
                   <div class="bento-item">
@@ -663,9 +673,7 @@
                 <div class="schedule-select-wrapper">
                   <select id="schedule-semester-select" class="form-select schedule-dropdown"
                     title="Chọn học kỳ tra cứu thời khóa biểu">
-                    <option value="20261">Học kỳ 1 (2026 - 2027)</option>
-                    <option value="20252">Học kỳ 2 (2025 - 2026)</option>
-                    <option value="20251">Học kỳ 1 (2025 - 2026)</option>
+                    <option value="">-- Chưa có dữ liệu học kỳ --</option>
                   </select>
                 </div>
                 <div id="schedule-badge-status" class="schedule-badge">
@@ -1214,24 +1222,529 @@
         <section id="tab-learning" class="tab-pane">
           <div class="section-header-box glass-panel">
             <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
-            <h2 class="section-title">Kho Tài Liệu & Video Bài Giảng BDU</h2>
-            <p class="section-desc">Tài liệu tham khảo, slide môn học, đề thi có giải và video bài giảng nhúng Google
-              Drive</p>
+            <h2 class="section-title">Kho Tài Liệu</h2>
+            <p class="section-desc">Tìm lại môn đã học theo từng học kỳ, xem tài liệu và trao đổi của sinh viên cùng mã môn.</p>
           </div>
 
-          <!-- Document Materials -->
-          <div class="learning-section-block">
-            <h3 class="learning-block-title">Tài Liệu & Đề Thi Mẫu</h3>
-            <div id="learning-docs-grid" class="docs-grid">
-              <!-- Dynamically populated -->
+          <div id="learning-course-directory">
+            <div class="learning-toolbar glass-panel">
+              <div>
+                <span class="learning-toolbar-label">HỌC KỲ CỦA TÔI</span>
+                <strong id="learning-course-summary">Đang đồng bộ từ BDU...</strong>
+              </div>
+              <div class="learning-toolbar-controls">
+                <select id="learning-status-filter" class="custom-select" aria-label="Lọc trạng thái môn học">
+                  <option value="all">Tất cả môn</option>
+                  <option value="studying">Đang học / chưa có điểm</option>
+                  <option value="graded">Đã có điểm</option>
+                </select>
+                <input id="learning-course-search" class="search-input" type="search" placeholder="Tìm tên hoặc mã môn..." aria-label="Tìm môn học">
+              </div>
+            </div>
+
+            <div id="learning-courses-grid" class="learning-semester-list" aria-live="polite"></div>
+          </div>
+
+          <div id="learning-course-space" class="learning-course-space hidden">
+            <button id="btn-learning-back" class="btn btn-secondary learning-back-btn" type="button">Quay lại danh sách môn</button>
+
+            <div class="learning-course-hero glass-panel">
+              <div>
+                <span id="learning-active-code" class="learning-course-code"></span>
+                <h3 id="learning-active-name"></h3>
+                <p>Không gian chung của các sinh viên đã hoặc đang học đúng mã môn này.</p>
+              </div>
+              <div class="learning-course-actions">
+                <button id="btn-learning-request" class="btn btn-secondary" type="button" aria-haspopup="dialog">Luận bàn</button>
+                <button id="btn-learning-share" class="btn btn-primary" type="button" aria-haspopup="dialog">Chia sẻ tài liệu</button>
+              </div>
+            </div>
+
+            <div class="learning-feed-heading">
+              <h3>Tài liệu và luận bàn của sinh viên</h3>
+              <span id="learning-post-count">0 nội dung</span>
+            </div>
+            <div id="learning-course-feed" class="learning-course-feed" aria-live="polite"></div>
+          </div>
+
+          <div id="learning-composer-modal" class="modal-backdrop hidden" aria-hidden="true">
+            <div class="learning-composer-dialog glass-panel" role="dialog" aria-modal="true" aria-labelledby="learning-composer-title" aria-describedby="learning-composer-context">
+              <form id="learning-post-form" class="learning-composer">
+                <div class="learning-composer-heading">
+                  <div>
+                    <h4 id="learning-composer-title">Đăng vào môn học</h4>
+                    <p id="learning-composer-context">Chia sẻ cùng sinh viên học chung mã môn.</p>
+                  </div>
+                  <button id="btn-learning-close-composer" class="learning-composer-close" type="button" aria-label="Đóng cửa sổ">×</button>
+                </div>
+                <div class="learning-composer-grid">
+                  <select id="learning-post-kind" class="custom-select" aria-label="Loại nội dung">
+                    <option value="request">Luận bàn / Hỏi đáp</option>
+                    <option value="document">Tài liệu / Slide / Đề thi</option>
+                    <option value="video">Video học tập</option>
+                    <option value="link">Liên kết tham khảo</option>
+                  </select>
+                  <input id="learning-post-title" class="form-input" type="text" maxlength="180" required placeholder="Tiêu đề...">
+                </div>
+                <label id="learning-anonymous-option" class="learning-anonymous-option">
+                  <input id="learning-post-anonymous" type="checkbox">
+                  <span class="learning-anonymous-switch" aria-hidden="true"></span>
+                  <span class="learning-anonymous-copy">
+                    <strong>Đăng luận bàn ẩn danh</strong>
+                    <small>Tên, ảnh và danh hiệu của bạn sẽ không xuất hiện trên bài.</small>
+                  </span>
+                </label>
+                <textarea id="learning-post-content" class="form-input" rows="4" maxlength="5000" placeholder="Nêu câu hỏi hoặc chủ đề bạn muốn cùng thảo luận..."></textarea>
+                <input id="learning-post-url" class="form-input" type="url" maxlength="2048" placeholder="Link YouTube, Google Drive hoặc GitHub">
+                <div class="learning-composer-footer">
+                  <span>Hệ thống chỉ lưu liên kết, không tải file lên máy chủ.</span>
+                  <button id="btn-learning-submit" class="btn btn-primary" type="submit">Đăng bài</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 8: CLB / NHÓM HỌC TẬP (CLAN & GUILD)                          -->
+        <!-- ================================================================= -->
+        <section id="tab-clans" class="tab-pane">
+          <div class="section-header-box glass-panel">
+            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <div class="clan-header-flex">
+              <div>
+                <h2 class="section-title">CLB & Nhóm Học Tập BDU</h2>
+                <p class="section-desc">Cơ chế Clan/Guild: Không gian sinh hoạt câu lạc bộ, chia sẻ tài liệu ôn thi, slide bài giảng và video Google Drive nội bộ.</p>
+              </div>
+              <button id="btn-open-create-clan" class="btn btn-primary btn-create-clan">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Tạo CLB / Nhóm Mới
+              </button>
             </div>
           </div>
 
-          <!-- Video Lectures -->
-          <div class="learning-section-block">
-            <h3 class="learning-block-title">Video Bài Giảng Trực Tuyến</h3>
-            <div id="learning-videos-grid" class="videos-grid">
-              <!-- Dynamically populated -->
+          <!-- Main Clans Directory View -->
+          <div id="clan-main-view">
+            <!-- Filter & Search Controls -->
+            <div class="clan-toolbar glass-panel">
+              <div class="clan-filter-tabs">
+                <button id="filter-clans-all" class="clan-tab-btn active">Tất Cả CLB / Nhóm</button>
+                <button id="filter-clans-mine" class="clan-tab-btn">CLB Của Tôi</button>
+              </div>
+              <div class="clan-search-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="clan-search-input" placeholder="Tìm kiếm CLB theo tên hoặc mã [TAG]...">
+              </div>
+            </div>
+
+            <!-- Clans Grid -->
+            <div id="clans-list-grid" class="clans-cards-grid">
+              <div class="loading-spinner-box">
+                <div class="spinner"></div>
+                <p>Đang tải danh sách CLB / Nhóm...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Specific Clan Channel View (Shown when viewing a clan) -->
+          <div id="clan-channel-view" class="clan-channel-view hidden">
+            <div class="channel-hero-card glass-panel">
+              <div class="channel-hero-top">
+                <button id="btn-back-to-clans" class="btn btn-secondary btn-sm">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                  Quay lại danh sách
+                </button>
+                <div id="channel-action-box">
+                  <!-- Join/Leave/Role button dynamically injected -->
+                </div>
+              </div>
+              <div class="channel-hero-content">
+                <div class="channel-badge-box">
+                  <span id="channel-clan-tag" class="clan-tag-badge">[TAG]</span>
+                  <span id="channel-clan-level" class="clan-level-badge">Cấp 1</span>
+                </div>
+                <h3 id="channel-clan-name" class="channel-title">Tên CLB</h3>
+                <p id="channel-clan-desc" class="channel-desc">Mô tả CLB...</p>
+                <div class="channel-meta-row">
+                  <span id="channel-clan-members" class="meta-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    0 Thành viên
+                  </span>
+                  <span id="channel-clan-role" class="meta-item role-item">
+                    <!-- Member role badge -->
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Channel Navigation Subtabs -->
+            <!-- Channel Navigation Subtabs -->
+            <div class="channel-subtabs-nav">
+              <button id="tab-btn-clan-feed" class="channel-subtab-btn active">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                📰 Bản Tin CLB
+              </button>
+              <button id="tab-btn-clan-docs" class="channel-subtab-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                📚 Kho Tài Liệu (<span id="channel-subtab-doc-count">0</span>)
+              </button>
+              <button id="tab-btn-clan-members" class="channel-subtab-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                👥 Thành Viên (<span id="channel-subtab-mem-count">0</span>)
+              </button>
+            </div>
+
+            <!-- Panel 1: Bản Tin & Thảo Luận (Facebook Group Style) -->
+            <div id="channel-panel-feed" class="channel-panel">
+              <!-- Quick Composer Trigger Bar (Click to Open Popup Modal) -->
+              <div class="clan-quick-composer glass-panel">
+                <div class="quick-composer-row" id="clan-quick-composer-trigger" title="Nhấn để mở popup tạo bài viết hoặc bình chọn">
+                  <div id="clan-quick-composer-avatar" class="quick-composer-avatar">SV</div>
+                  <div class="quick-composer-fake-input">
+                    <span id="clan-quick-composer-placeholder">Bạn ơi, bạn đang nghĩ gì thế?</span>
+                  </div>
+                </div>
+
+                <div class="quick-composer-tags">
+                  <button type="button" class="quick-tag-btn clan-tag-btn" id="btn-clan-open-post-modal">
+                    <span>📰 Bản tin</span>
+                  </button>
+                  <button type="button" class="quick-tag-btn clan-tag-btn" id="btn-clan-open-poll-modal">
+                    <span>📊 Bình chọn</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Filter Bar for Clan Feed (Facebook Style Matching Screenshot) -->
+              <div class="clan-feed-filter-bar glass-panel">
+                <div class="clan-feed-filter-tabs">
+                  <button class="clan-feed-pill active" data-filter="all">Tất cả bài đăng</button>
+                  <button class="clan-feed-pill" data-filter="discussion">Bản tin</button>
+                  <button class="clan-feed-pill" data-filter="poll">Bình chọn</button>
+                  <button class="clan-feed-pill" data-filter="mine">Bài của tôi</button>
+                </div>
+                <div class="clan-sort-box">
+                  <span class="clan-sort-label">Sắp xếp:</span>
+                  <span class="clan-sort-active">Mới nhất</span>
+                </div>
+              </div>
+
+              <!-- Feed of Posts in Clan -->
+              <div id="clan-posts-feed" class="clan-feed-stream">
+                <!-- Dynamically populated posts -->
+              </div>
+            </div>
+
+            <!-- Panel 2: Kho Tài Liệu CLB (Group Documents Hub) -->
+            <div id="channel-panel-docs" class="channel-panel hidden">
+              <!-- Docs Header & Stats Card -->
+              <div class="clan-docs-header-card glass-panel">
+                <div class="clan-docs-header-left">
+                  <div class="docs-icon-badge">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="docs-header-title">Kho Tài Liệu & Slide Bài Giảng</h3>
+                    <p class="docs-header-subtitle">Tổng hợp toàn bộ tài liệu Google Drive, slide, đề thi và video do các thành viên chia sẻ.</p>
+                  </div>
+                </div>
+                <div class="clan-docs-stats-badges" id="clan-docs-stats">
+                  <!-- Dynamically injected stats pills -->
+                </div>
+              </div>
+
+              <!-- Docs Toolbar & Search -->
+              <div class="clan-docs-toolbar glass-panel">
+                <div class="clan-docs-type-filters">
+                  <button class="clan-doc-pill active" data-type="all">Tất cả</button>
+                  <button class="clan-doc-pill" data-type="drive_folder">📁 Thư mục Drive</button>
+                  <button class="clan-doc-pill" data-type="drive_file">📄 File & Đề thi</button>
+                  <button class="clan-doc-pill" data-type="video">🎥 Video bài giảng</button>
+                  <button class="clan-doc-pill" data-type="link">🔗 Liên kết</button>
+                </div>
+                <div class="clan-docs-search-wrap">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input type="text" id="clan-docs-search-input" placeholder="Tìm tài liệu theo tên, môn học hoặc người chia sẻ...">
+                </div>
+              </div>
+
+              <!-- Docs Cards Grid -->
+              <div id="clan-docs-grid" class="clan-docs-grid">
+                <!-- Dynamically injected document cards -->
+              </div>
+            </div>
+
+            <!-- Panel 3: Thành Viên & Quản Trị CLB -->
+            <div id="channel-panel-members" class="channel-panel hidden">
+              <div class="clan-members-wrapper glass-panel">
+                <div class="clan-members-header">
+                  <div>
+                    <h3 class="clan-members-title">Danh Sách Thành Viên CLB</h3>
+                    <p class="clan-members-subtitle">Thông tin thành viên, mức độ hoạt động và phân cấp chức vụ.</p>
+                  </div>
+                  <div class="clan-members-stats" id="clan-members-stats">
+                    <!-- Member summary count & active count -->
+                  </div>
+                </div>
+
+                <div class="clan-members-table-container">
+                  <table class="clan-members-table">
+                    <thead>
+                      <tr>
+                        <th>Thành Viên</th>
+                        <th>MSSV</th>
+                        <th>Chức Vụ</th>
+                        <th>Kích Hoạt Web</th>
+                        <th>Ngày Tham Gia</th>
+                        <th id="th-member-actions">Quản Lý</th>
+                      </tr>
+                    </thead>
+                    <tbody id="clan-members-tbody">
+                      <!-- Dynamic members injected -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Clan Settings Section (Bang Chủ Quản Lý) -->
+              <div id="clan-settings-box" class="clan-settings-box glass-panel hidden">
+                <div class="clan-settings-header">
+                  <h3 class="clan-settings-title">⚙️ Quản Trị & Cài Đặt CLB (Dành Cho Bang Chủ)</h3>
+                  <span class="badge-leader">👑 Quyền Quản Trị Cao Nhất</span>
+                </div>
+                <div class="clan-settings-form">
+                  <div class="form-row-clan">
+                    <div class="form-group">
+                      <label class="form-label">Tên CLB / Nhóm</label>
+                      <input type="text" id="edit-clan-name" class="form-input" placeholder="Tên câu lạc bộ...">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Mã Tag (Ví dụ: [IT], [AI], [8386])</label>
+                      <input type="text" id="edit-clan-tag" class="form-input" placeholder="[TAG]">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Mô tả định hướng của CLB</label>
+                    <textarea id="edit-clan-desc" class="form-input" rows="2" placeholder="Mục tiêu hoạt động, nhóm học tập môn gì..."></textarea>
+                  </div>
+                  <div class="clan-settings-actions">
+                    <button id="btn-save-clan-settings" class="btn btn-primary btn-sm">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                      </svg>
+                      Lưu Thay Đổi
+                    </button>
+                    <button id="btn-disband-clan" class="btn btn-danger btn-sm">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                      Giải Tán CLB
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 11: BDU CONFESSION & DIỄN ĐÀN SINH VIÊN (FORUM STYLE)         -->
+        <!-- ================================================================= -->
+        <section id="tab-confession" class="tab-pane">
+          <!-- Hero full-width như thiết kế ban đầu -->
+          <div class="forum-hero-banner glass-panel">
+            <button type="button" class="btn-hero-frame-customizer" onclick="openFramePreviewModal()" title="Mở bộ sưu tập khung vinh danh">
+              Bộ Sưu Tập Khung
+            </button>
+            <img class="brand-watermark hero-brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <div class="forum-banner-bg"></div>
+            <div id="frame-cinematic-backdrop" class="frame-cinematic-backdrop" aria-hidden="true"></div>
+            <div class="forum-hero-content">
+              <div class="forum-hero-avatar-wrap" id="cfs-hero-avatar-wrap" onclick="openFramePreviewModal()" title="Nhấn để đổi thử các mẫu khung avatar vinh danh động">
+                <div class="frame-cinematic-layer" aria-hidden="true">
+                  <div class="frame-portal-glow"></div>
+                  <div class="frame-rune-ring frame-rune-ring-outer"></div>
+                  <div class="frame-rune-ring frame-rune-ring-inner"></div>
+                  <div class="frame-light-beams">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                  <div id="frame-particle-field" class="frame-particle-field"></div>
+                </div>
+                <div class="frame-signature-fx" aria-hidden="true">
+                  <i></i><i></i><i></i><i></i><i></i><i></i>
+                  <span class="frame-fx-sigil"></span>
+                  <span class="frame-fx-scanner"></span>
+                  <span class="frame-fx-slash frame-fx-slash-a"></span>
+                  <span class="frame-fx-slash frame-fx-slash-b"></span>
+                </div>
+                <div class="frame-intro-flash"></div>
+                <div class="frame-intro-shockwave"></div>
+                <div class="avatar-energy-ring"></div>
+                <div id="cfs-hero-avatar" class="forum-hero-avatar">BDU</div>
+                <div id="cfs-hero-frame-container" class="avatar-frame-container"></div>
+                <div class="avatar-frame-sheen"></div>
+                <span id="cfs-hero-badge" class="avatar-hero-rank-badge tier-member" style="display: none !important;">Sinh viên BDU</span>
+              </div>
+              <div id="frame-unlock-announcement" class="frame-unlock-announcement" aria-hidden="true">
+                <span class="frame-unlock-kicker">VINH DANH HỌC THUẬT</span>
+                <strong id="frame-unlock-title">KHUNG HUYỀN THOẠI</strong>
+                <span id="frame-unlock-rank">TOP 1 TOÀN TRƯỜNG</span>
+              </div>
+              <h3 id="cfs-hero-username" class="forum-hero-username">Sinh viên BDU</h3>
+              <div id="cfs-hero-titles" class="identity-title-badges identity-title-hero"></div>
+              <p id="cfs-hero-sub" class="forum-hero-sub">Thành viên Diễn Đàn & Tự Học Số</p>
+            </div>
+          </div>
+
+          <!-- Forum Two-Column Container -->
+          <div class="forum-two-column-layout">
+            
+            <!-- Left Column: Main Forum Feed -->
+            <div class="forum-main-column">
+
+              <!-- Quick Composer Trigger ("Bạn đang nghĩ gì? Chia sẻ ngay...") -->
+              <div class="forum-quick-composer glass-panel">
+                <div class="quick-composer-row" id="quick-composer-trigger" title="Nhấn để tạo bài viết / Confession mới">
+                  <div id="cfs-composer-avatar" class="quick-composer-avatar">SV</div>
+                  <div class="quick-composer-fake-input">
+                    <span id="cfs-composer-placeholder-text">Bạn đang nghĩ gì? Chia sẻ ngay...</span>
+                  </div>
+                </div>
+
+                <div class="quick-composer-tags">
+                  <button type="button" class="quick-tag-btn" id="btn-quick-attach-drive">
+                    <span>Google Drive / Video</span>
+                  </button>
+                  <button type="button" class="quick-tag-btn" id="btn-quick-anon-toggle">
+                    <span>Đăng ẩn danh</span>
+                  </button>
+                  <button type="button" class="quick-tag-btn" id="btn-quick-scope-toggle">
+                    <span>Toàn trường / Khoa</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Secondary Filter Bar -->
+              <div class="forum-filter-bar glass-panel">
+                <div class="forum-filter-tabs">
+                  <button class="forum-filter-pill active" data-filter="all">Tất cả bài đăng</button>
+                  <button class="forum-filter-pill" data-filter="mine">Bài của tôi</button>
+                  <button class="forum-filter-pill" data-filter="anon">Confession ẩn danh</button>
+                </div>
+                <div class="forum-sort-box">
+                  <span class="forum-sort-label">Sắp xếp:</span>
+                  <span class="forum-sort-active">Mới nhất</span>
+                </div>
+              </div>
+
+              <!-- Posts Feed Stream -->
+              <div id="confession-feed-stream" class="forum-posts-stream">
+                <!-- Posts injected dynamically -->
+              </div>
+            </div>
+
+            <!-- Right Column: Sidebar Widgets -->
+            <div class="forum-sidebar-column">
+              
+              <!-- Widget 1: Student Profile Card -->
+              <div class="forum-widget glass-panel">
+                <div class="forum-widget-header widget-header-primary">
+                  <h4>THÔNG TIN SINH VIÊN</h4>
+                </div>
+                <div class="forum-widget-body">
+                  <div class="widget-user-preview">
+                    <div id="widget-user-avatar" class="widget-user-avatar">SV</div>
+                    <div class="widget-user-meta">
+                      <h4 id="widget-user-name" class="widget-user-name">Đang tải...</h4>
+                      <p id="widget-user-mssv" class="widget-user-mssv">MSSV: --</p>
+                      <div id="widget-user-titles" class="identity-title-badges identity-title-widget">
+                        <span class="identity-title-badge tone-member">Sinh viên BDU</span>
+                      </div>
+                      <button id="btn-title-customizer" class="btn-title-customizer" type="button" aria-haspopup="dialog">Chọn danh hiệu</button>
+                    </div>
+                  </div>
+                  <div class="widget-user-actions">
+                    <button class="btn-widget-action btn-widget-view-grades" onclick="document.querySelector('[data-tab=tab-grades]')?.click()">
+                      Bảng Điểm & GPA
+                    </button>
+                    <button class="btn-widget-action btn-widget-my-clan" onclick="document.querySelector('[data-tab=tab-clans]')?.click()">
+                      CLB & Nhóm Học Tập
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Widget 2: Fast Utilities & Tools (Dragon Boy styled buttons) -->
+              <div class="forum-widget glass-panel">
+                <div class="forum-widget-header widget-header-emerald">
+                  <h4>TIỆN ÍCH HỌC TẬP BDU</h4>
+                </div>
+                <div class="forum-widget-body">
+                  <div class="widget-tool-buttons">
+                    <button class="btn-platform btn-tool-word" onclick="document.querySelector('[data-tab=tab-wordfmt]')?.click()">
+                      <div class="platform-text">
+                        <strong>Chuẩn Hóa Word BDU</strong>
+                        <small>Căn lề, heading, font chuẩn BDU</small>
+                      </div>
+                    </button>
+
+                    <button class="btn-platform btn-tool-survey" onclick="document.querySelector('[data-tab=tab-survey]')?.click()">
+                      <div class="platform-text">
+                        <strong>Auto Khảo Sát Môn Học</strong>
+                        <small>Hoàn thành đánh giá 1 chạm</small>
+                      </div>
+                    </button>
+
+                    <button class="btn-platform btn-tool-english" onclick="document.querySelector('[data-tab=tab-english]')?.click()">
+                      <div class="platform-text">
+                        <strong>Auto Tiếng Anh Empower</strong>
+                        <small>Học liệu Moodle LMS</small>
+                      </div>
+                    </button>
+
+                    <button class="btn-platform btn-tool-clans" onclick="document.querySelector('[data-tab=tab-clans]')?.click()">
+                      <div class="platform-text">
+                        <strong>CLB & Nhóm Học Tập</strong>
+                        <small>Kho tài liệu & slide nội bộ</small>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
@@ -1292,9 +1805,373 @@
     </div>
   </div>
 
+  <!-- ========================================================================= -->
+  <!-- MODAL: CREATE CLAN / GUILD                                                -->
+  <!-- ========================================================================= -->
+  <div id="modal-create-clan" class="modal-backdrop hidden">
+    <div class="modal-dialog glass-panel">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3 class="modal-title">Thành Lập CLB / Nhóm Học Tập Mới</h3>
+          <span class="modal-badge">GUILD</span>
+        </div>
+        <button id="btn-close-create-clan" class="modal-close-btn" title="Đóng">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="18" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="form-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Tên CLB / Nhóm Học Tập *</label>
+          <input type="text" id="new-clan-name" class="form-input" placeholder="Ví dụ: CLB Trí Tuệ Nhân Tạo BDU" required>
+        </div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <div style="flex: 1;">
+            <label class="form-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Mã Định Danh (Code) *</label>
+            <input type="text" id="new-clan-code" class="form-input" placeholder="Ví dụ: CLB_AI" required>
+          </div>
+          <div style="width: 140px;">
+            <label class="form-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Tag Viết Tắt</label>
+            <input type="text" id="new-clan-tag" class="form-input" placeholder="[AI]">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Mô Tả Mục Tiêu / Hoạt Động Của CLB</label>
+          <textarea id="new-clan-desc" class="form-input" rows="3" placeholder="Chia sẻ mục đích học tập, môn học trọng tâm hoặc tài liệu chuyên ngành..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-create-clan" class="btn btn-secondary">Hủy</button>
+        <button id="btn-confirm-create-clan" class="btn btn-primary">Tạo CLB Ngay</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tạo bài viết / BDU Confession (Facebook Modal Style) -->
+  <div id="modal-create-confession" class="modal-backdrop hidden">
+    <div class="modal-dialog fb-composer-dialog glass-panel">
+      <!-- Modal Header (Facebook style: centered title with round close button) -->
+      <div class="fb-modal-header">
+        <h3 class="fb-modal-title">Tạo bài viết</h3>
+        <button type="button" id="btn-close-cfs-modal" class="fb-modal-close-btn" title="Đóng">
+          Đóng
+        </button>
+      </div>
+
+      <div class="fb-modal-body">
+        <!-- Author Profile Row (Facebook Style) -->
+        <div class="fb-composer-author-row">
+          <div id="fb-modal-avatar" class="fb-author-avatar">SV</div>
+          <div class="fb-author-info">
+            <div id="fb-modal-author-name" class="fb-author-name">Sinh viên BDU</div>
+            <div class="fb-author-pills">
+              <!-- Privacy / Audience Selector Pill -->
+              <div class="fb-pill-selector">
+                <select id="cfs-post-scope" class="fb-pill-select">
+                  <option value="school">Toàn trường</option>
+                  <option value="faculty">Chủ đề Viện / Khoa (công khai)</option>
+                </select>
+              </div>
+
+              <!-- Anon Confession Pill Toggle -->
+              <button type="button" id="fb-btn-toggle-anon" class="fb-pill-btn active" title="Bật/Tắt chế độ Confession ẩn danh">
+                <span id="fb-anon-label">Ẩn danh: Bật</span>
+              </button>
+              <input type="checkbox" id="cfs-post-anon" checked style="display: none;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Post Inputs -->
+        <div class="fb-inputs-area">
+          <input type="text" id="cfs-post-title" class="fb-title-input" maxlength="180" placeholder="Tiêu đề bài viết (tùy chọn)...">
+          <textarea id="cfs-post-content" class="fb-content-textarea" rows="4" maxlength="10000" placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự..."></textarea>
+        </div>
+
+        <!-- Drive / Video Embed Attachment Area (Expandable) -->
+        <div id="fb-attachment-card" class="fb-attachment-card">
+          <div class="fb-attachment-input-row">
+            <input type="url" id="cfs-post-drive-url" class="fb-attachment-url-input" maxlength="2048" placeholder="Dán link Google Drive (File/Folder/Video) hoặc YouTube...">
+          </div>
+          <div class="fb-attachment-title-row">
+            <input type="text" id="cfs-post-drive-title" class="fb-attachment-title-input" maxlength="180" placeholder="Tên tài liệu / video hiển thị (tùy chọn)...">
+          </div>
+        </div>
+
+        <!-- Facebook Style "Thêm vào bài viết của bạn" Toolbar Box -->
+        <div class="fb-add-to-post-box">
+          <span class="fb-add-to-post-label">Thêm vào bài viết của bạn</span>
+          <div class="fb-add-actions">
+            <button type="button" class="fb-add-btn" id="fb-tool-drive" title="Nhúng Google Drive (File / Thư mục / Video)">
+              Drive
+            </button>
+            <button type="button" class="fb-add-btn" id="fb-tool-youtube" title="Nhúng Video YouTube">
+              YouTube
+            </button>
+            <button type="button" class="fb-add-btn" id="fb-tool-anon" title="Chuyển chế độ Ẩn danh (Confession)">
+              Ẩn danh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer (Full-width Facebook "Đăng" button) -->
+      <div class="fb-modal-footer">
+        <button type="button" id="btn-submit-cfs" class="btn btn-primary fb-submit-post-btn">
+          Đăng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tạo Bài Viết / Bình Chọn CLB (Facebook Style Modal Popup) -->
+  <div id="modal-clan-post-composer" class="modal-backdrop hidden">
+    <div class="modal-dialog fb-composer-dialog glass-panel">
+      <!-- Modal Header (Facebook style: centered title with round close button) -->
+      <div class="fb-modal-header">
+        <h3 class="fb-modal-title" id="clan-modal-header-title">Tạo bài viết trong nhóm</h3>
+        <button type="button" id="btn-close-clan-composer-modal" class="fb-modal-close-btn" title="Đóng">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="18" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="fb-modal-body">
+        <!-- Author Profile Row (Facebook Style) -->
+        <div class="fb-composer-author-row">
+          <div id="clan-modal-author-avatar" class="fb-author-avatar">SV</div>
+          <div class="fb-author-info">
+            <div id="clan-modal-author-name" class="fb-author-name">Sinh viên BDU</div>
+            <div class="fb-author-pills">
+              <span class="clan-modal-pill clan-pill" id="clan-modal-group-name">👥 Nhóm CLB</span>
+              <span class="clan-modal-pill role-pill" id="clan-modal-role-name">Thành viên</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode Switcher Tabs inside Modal (Bản tin vs Bình chọn) -->
+        <div class="clan-modal-tabs-row">
+          <button type="button" class="clan-modal-tab-btn active" id="modal-tab-mode-post">
+            <span>📰 Bản tin</span>
+          </button>
+          <button type="button" class="clan-modal-tab-btn" id="modal-tab-mode-poll">
+            <span>📊 Bình chọn</span>
+          </button>
+        </div>
+
+        <!-- Inputs Area -->
+        <div class="fb-inputs-area">
+          <input type="text" id="clan-post-title" class="fb-title-input" maxlength="180" placeholder="Tiêu đề bài viết...">
+          <textarea id="clan-post-content" class="fb-content-textarea" rows="4" maxlength="10000" placeholder="Bạn đang nghĩ gì thế? Chia sẻ thảo luận hoặc câu hỏi cho nhóm..."></textarea>
+        </div>
+
+        <!-- Poll Builder Section (Only visible when in poll mode) -->
+        <div id="clan-poll-builder-section" class="clan-poll-builder-section hidden">
+          <div class="poll-builder-header">
+            <span class="poll-builder-title">📊 Thiết lập các phương án bình chọn:</span>
+            <span class="poll-builder-sub">Thành viên trong nhóm sẽ bỏ phiếu trực tiếp cho các phương án này</span>
+          </div>
+          <div id="clan-poll-options-container" class="clan-poll-options-container">
+            <div class="poll-option-input-row">
+              <span class="poll-opt-num">1</span>
+              <input type="text" class="form-input poll-opt-val" maxlength="180" placeholder="Lựa chọn 1 (vd: Thứ 7 sinh hoạt)">
+            </div>
+            <div class="poll-option-input-row">
+              <span class="poll-opt-num">2</span>
+              <input type="text" class="form-input poll-opt-val" maxlength="180" placeholder="Lựa chọn 2 (vd: Chủ Nhật sinh hoạt)">
+            </div>
+          </div>
+          <button type="button" id="btn-add-poll-option" class="btn btn-secondary btn-sm btn-add-poll-opt">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Thêm phương án lựa chọn
+          </button>
+        </div>
+
+        <!-- Admin Pin Option (Only shown for Leader / Vice Leader) -->
+        <div class="clan-modal-pin-row hidden" id="clan-post-pin-wrapper">
+          <label class="fb-pin-toggle-label">
+            <input type="checkbox" id="clan-post-pin">
+            <span>📌 Ghim bài viết này lên đầu nhóm CLB</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Modal Footer (Full-width Facebook "Đăng" button) -->
+      <div class="fb-modal-footer">
+        <button type="button" id="btn-submit-clan-post" class="btn btn-primary fb-submit-post-btn">
+          <span id="btn-submit-clan-post-text">Đăng</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Chia sẻ tài liệu vào Kho Tài Liệu CLB -->
+  <div id="modal-clan-document-share" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-dialog clan-document-share-dialog glass-panel" role="dialog" aria-modal="true" aria-labelledby="clan-document-share-title">
+      <form id="clan-document-share-form">
+        <div class="fb-modal-header">
+          <div class="clan-document-share-heading">
+            <span class="clan-document-share-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+            </span>
+            <div>
+              <h3 class="fb-modal-title" id="clan-document-share-title">Chia sẻ tài liệu</h3>
+              <p>Đóng góp tài liệu hữu ích cho CLB / Nhóm học tập</p>
+            </div>
+          </div>
+          <button type="button" id="btn-close-clan-document-share" class="fb-modal-close-btn" title="Đóng" aria-label="Đóng cửa sổ chia sẻ tài liệu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="fb-modal-body clan-document-share-fields">
+          <div class="clan-document-field">
+            <label for="clan-document-name">Tên tài liệu <span class="required">*</span></label>
+            <input id="clan-document-name" name="name" type="text" maxlength="180" autocomplete="off" placeholder="Ví dụ: Slide bài giảng Lập trình Web" required>
+          </div>
+
+          <div class="clan-document-field">
+            <label for="clan-document-description">Mô tả <span class="required">*</span></label>
+            <textarea id="clan-document-description" name="description" rows="4" maxlength="10000" placeholder="Mô tả ngắn nội dung và môn học của tài liệu..." required></textarea>
+            <span class="clan-document-field-hint">Giúp các thành viên biết tài liệu này có nội dung gì.</span>
+          </div>
+
+          <div class="clan-document-field">
+            <label for="clan-document-url">Link dẫn tới tài liệu <span class="required">*</span></label>
+            <div class="clan-document-url-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+              <input id="clan-document-url" name="url" type="url" inputmode="url" autocomplete="url" placeholder="https://drive.google.com/..." required>
+            </div>
+            <span class="clan-document-field-hint">Chỉ hỗ trợ Google Drive, YouTube và GitHub.</span>
+          </div>
+        </div>
+
+        <div class="clan-document-share-footer">
+          <button type="button" id="btn-cancel-clan-document-share" class="btn btn-secondary">Hủy</button>
+          <button type="submit" id="btn-submit-clan-document-share" class="btn btn-primary">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span>Chia sẻ tài liệu</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Chọn danh hiệu hiển thị cạnh tên -->
+  <div id="modal-title-customizer" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="identity-title-dialog glass-panel" role="dialog" aria-modal="true" aria-labelledby="title-customizer-heading" aria-describedby="title-customizer-description">
+      <div class="identity-title-dialog-header">
+        <div>
+          <span class="identity-title-eyebrow">HỒ SƠ CỘNG ĐỒNG</span>
+          <h3 id="title-customizer-heading">Danh hiệu cạnh tên</h3>
+          <p id="title-customizer-description">Chọn tối đa 3 danh hiệu bạn muốn mọi người nhìn thấy.</p>
+        </div>
+        <button id="btn-close-title-customizer" class="learning-composer-close" type="button" aria-label="Đóng cửa sổ">×</button>
+      </div>
+      <div class="identity-title-selection-meta">
+        <span>Danh hiệu đang sở hữu</span>
+        <strong id="title-selection-count">0/3 đã chọn</strong>
+      </div>
+      <div id="title-customizer-list" class="identity-title-options"></div>
+      <div class="identity-title-dialog-footer">
+        <button id="btn-cancel-title-customizer" class="btn btn-secondary" type="button">Hủy</button>
+        <button id="btn-save-title-customizer" class="btn btn-primary" type="button">Lưu hiển thị</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Xác nhận xóa bài viết -->
+  <div id="modal-delete-post" class="modal-backdrop delete-post-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="delete-post-heading" aria-describedby="delete-post-description">
+    <div class="delete-post-dialog" tabindex="-1">
+      <div class="delete-post-accent" aria-hidden="true"></div>
+      <button type="button" id="btn-close-delete-post" class="delete-post-close" aria-label="Đóng hộp thoại">
+        <span aria-hidden="true">Đóng</span>
+      </button>
+
+      <div class="delete-post-content">
+        <span class="delete-post-eyebrow">QUẢN LÝ BÀI VIẾT</span>
+        <h3 id="delete-post-heading">Xóa bài viết này?</h3>
+        <p id="delete-post-description">Thao tác này sẽ xóa bài viết khỏi cộng đồng và không thể hoàn tác.</p>
+
+        <div class="delete-post-preview">
+          <span>Bài viết được chọn</span>
+          <strong id="delete-post-title">Bài viết của bạn</strong>
+        </div>
+
+        <div class="delete-post-note">
+          <span>Tất cả bình luận và lượt thích liên quan cũng sẽ bị xóa.</span>
+        </div>
+      </div>
+
+      <div class="delete-post-actions">
+        <button type="button" id="btn-cancel-delete-post" class="delete-post-cancel">Giữ lại bài viết</button>
+        <button type="button" id="btn-confirm-delete-post" class="delete-post-confirm">
+          <span>Xóa bài viết</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: BỘ SƯU TẬP KHUNG VINH DANH XẾP HẠNG ĐỘNG (TOP 1 - 10)       -->
+  <!-- ================================================================= -->
+  <div id="modal-frame-preview" class="modal-backdrop hidden" onclick="if(event.target === this) closeFramePreviewModal()">
+    <div class="glass-panel frame-picker-modal-window">
+      <div class="fb-modal-header" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.03);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 22px;">👑</span>
+          <div>
+            <h3 class="fb-modal-title" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #fff;">Bộ Sưu Tập Khung Avatar Vinh Danh</h3>
+            <p style="margin: 0; font-size: 12px; color: var(--text-muted);">Trang bị các khung học thuật mà bạn được phép xài</p>
+          </div>
+        </div>
+        <button type="button" class="fb-modal-close-btn" onclick="closeFramePreviewModal()" title="Đóng">✕</button>
+      </div>
+
+      <div class="frame-picker-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+          <p class="frame-picker-desc" style="margin: 0;">
+            Chỉ những khung bạn <strong>đạt đủ điều kiện xếp hạng</strong> mới được mở khóa để trang bị:
+          </p>
+          <div id="frame-picker-user-rank-summary" style="font-size: 12px; font-weight: 700; color: #38bdf8; background: rgba(56, 189, 248, 0.1); padding: 4px 12px; border-radius: 9999px; border: 1px solid rgba(56, 189, 248, 0.25);">
+            <!-- Thành tích nổi bật -->
+          </div>
+        </div>
+
+        <div id="frame-picker-grid" class="frame-picker-grid">
+          <!-- Sẽ được hàm renderFrameCollectionModal() khởi tạo động -->
+        </div>
+      </div>
+
+      <div class="fb-modal-footer" style="padding: 14px 22px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.15);">
+        <span style="font-size: 12px; color: var(--text-muted);">💡 Nâng cao GPA & Tín chỉ để mở khóa thêm các khung bậc cao</span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeFramePreviewModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="js/api.js"></script>
-  <script src="js/app.js?v=20260902-2202"></script>
+  <script src="js/app.js?v=20260904-resource-platforms-v9"></script>
   <script src="js/interactions.js"></script>
 </body>
 

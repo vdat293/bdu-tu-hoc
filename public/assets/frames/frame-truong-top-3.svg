@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="triad-metal" x1="41" y1="30" x2="202" y2="207" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF7ED"/><stop offset=".2" stop-color="#FB7185"/><stop offset=".48" stop-color="#C026D3"/><stop offset=".74" stop-color="#6D28D9"/><stop offset="1" stop-color="#FDA4AF"/></linearGradient>
+    <linearGradient id="triad-dark" x1="42" y1="200" x2="194" y2="35" gradientUnits="userSpaceOnUse"><stop stop-color="#3F0D2D"/><stop offset=".52" stop-color="#3B0764"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient>
+    <radialGradient id="triad-core"><stop stop-color="#FFFFFF"/><stop offset=".18" stop-color="#FFE4E6"/><stop offset=".5" stop-color="#FB7185"/><stop offset="1" stop-color="#7E22CE"/></radialGradient>
+    <filter id="triad-glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g transform="translate(120 120)">
+    <!-- Tam giác quyền lực và ba sao chủ tạo bản sắc Top 3. -->
+    <path d="M0-100 96 66-96 66Z" stroke="url(#triad-metal)" stroke-width="3.2" stroke-linejoin="round" stroke-dasharray="112 16 8 20" filter="url(#triad-glow)">
+      <animate attributeName="stroke-dashoffset" values="0;-156" dur="7s" repeatCount="indefinite"/>
+    </path>
+    <path d="M0-82 78 54-78 54Z" stroke="#F9A8D4" stroke-width="1" stroke-dasharray="4 9" opacity=".82">
+      <animate attributeName="stroke-dashoffset" values="0;52" dur="5s" repeatCount="indefinite"/>
+    </path>
+
+    <g fill="url(#triad-dark)" stroke="url(#triad-metal)" stroke-width="3" filter="url(#triad-glow)">
+      <path d="M0-107 12-91 6-72H-6L-12-91Z"/>
+      <path d="M104 67 85 72 70 59 76 48 96 49Z"/>
+      <path d="M-104 67-96 49-76 48-70 59-85 72Z"/>
+    </g>
+    <g fill="url(#triad-core)" filter="url(#triad-glow)">
+      <path d="M0-101 4-91 14-87 4-83 0-73-4-83-14-87-4-91Z"><animateTransform attributeName="transform" type="scale" values=".82;1.2;.82" dur="2s" repeatCount="indefinite"/></path>
+      <path d="M96 55 100 65 110 69 100 73 96 83 92 73 82 69 92 65Z"><animate attributeName="opacity" values=".65;1;.65" dur="1.7s" repeatCount="indefinite"/></path>
+      <path d="M-96 55-92 65-82 69-92 73-96 83-100 73-110 69-100 65Z"><animate attributeName="opacity" values="1;.65;1" dur="1.7s" repeatCount="indefinite"/></path>
+    </g>
+
+    <path d="M0-67 47-38 59 15 26 58-26 58-59 15-47-38Z" stroke="#0F172A" stroke-width="11" stroke-linejoin="round"/>
+    <path d="M0-67 47-38 59 15 26 58-26 58-59 15-47-38Z" stroke="url(#triad-metal)" stroke-width="5.5" stroke-linejoin="round" filter="url(#triad-glow)"/>
+    <path d="M0-60 42-34 52 13 23 51-23 51-52 13-42-34Z" stroke="#FFE4E6" stroke-width="1.1" opacity=".9"/>
+
+    <!-- Ba đuôi sao chổi luân phiên lao qua quỹ đạo. -->
+    <g fill="none" stroke-linecap="round" filter="url(#triad-glow)">
+      <path d="M-106-20Q-71-55-38-62" stroke="url(#triad-metal)" stroke-width="4" stroke-dasharray="2 7"><animate attributeName="stroke-dashoffset" values="30;0" dur="1.8s" repeatCount="indefinite"/></path>
+      <path d="M108-6Q82 31 69 62" stroke="url(#triad-metal)" stroke-width="4" stroke-dasharray="2 7"><animate attributeName="stroke-dashoffset" values="30;0" dur="1.8s" begin="-.6s" repeatCount="indefinite"/></path>
+      <path d="M-45 99Q-5 91 34 72" stroke="url(#triad-metal)" stroke-width="4" stroke-dasharray="2 7"><animate attributeName="stroke-dashoffset" values="30;0" dur="1.8s" begin="-1.2s" repeatCount="indefinite"/></path>
+    </g>
+
+    <g transform="translate(0 -78)" filter="url(#triad-glow)"><path d="M-22-7-11-16 0-7 11-16 22-7 14 10H-14Z" fill="url(#triad-dark)" stroke="url(#triad-metal)" stroke-width="1.8"/><circle cx="-10" cy="-5" r="3" fill="url(#triad-core)"/><circle cy="-1" r="4" fill="url(#triad-core)"/><circle cx="10" cy="-5" r="3" fill="url(#triad-core)"/></g>
+    <g transform="translate(0 73)"><path d="M-34 0-24-8H24L34 0 24 9H-24Z" fill="#1E1B4B" stroke="url(#triad-metal)" stroke-width="1.6"/><text x="0" y="3" text-anchor="middle" fill="#FFE4E6" font-size="8" font-family="Arial, sans-serif" font-weight="800" letter-spacing="1.5">BDU #3</text></g>
+  </g>
+</svg>

@@ -36,8 +36,8 @@ Lớp enhancement được tách riêng tại `public/css/showcase.css` và `pub
    * 🎯 **Auto Đăng Ký Môn Học (Sắp ra mắt):** Hẹn giờ và tự động gửi request săn lớp học phần theo danh sách ưu tiên.
 
 3. **Kho Tự Học Số (E-Learning Hub):**
-   * 📑 **Kho Tài Liệu:** Giáo trình, slide bài giảng (PDF, PPTX, DOCX), đề thi mẫu có đáp án.
-   * 🎥 **Video Bài Giảng:** Xem video bài giảng trực tuyến (nhúng Google Drive / YouTube) với hệ thống ghi chú học tập.
+   * 📚 **Không Gian Theo Môn:** Đồng bộ mã và tên học phần trực tiếp từ bảng điểm BDU; hiển thị cả môn đã có điểm lẫn môn chưa có điểm và map ổn định theo mã môn.
+   * 🤝 **Hỏi & Chia Sẻ:** Sinh viên từng học cùng mã môn có thể hỏi tài liệu hoặc chia sẻ link Google Drive, YouTube và website. Hệ thống không seed môn học hay tài liệu mẫu.
 
 ---
 
