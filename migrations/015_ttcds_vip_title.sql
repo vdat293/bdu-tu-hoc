@@ -42,10 +42,29 @@ INSERT INTO manual_achievement_grants (
   achievement_id, mssv, granted_by, note, is_active
 ) VALUES
   ('ttcds', '22050006', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
-  ('ttcds', '24050126', 'owner', 'Trung tâm Chuyển đổi số', TRUE)
+  ('ttcds', '24050126', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '21050008', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '21050011', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '21050044', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '22050068', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '22050090', 'owner', 'Trung tâm Chuyển đổi số', TRUE),
+  ('ttcds', '22050101', 'owner', 'Trung tâm Chuyển đổi số', TRUE)
 ON CONFLICT (achievement_id, mssv) DO UPDATE SET
   granted_by = EXCLUDED.granted_by,
   note = EXCLUDED.note,
+  is_active = TRUE,
+  updated_at = NOW();
+
+-- Đảm bảo các sinh viên nhận danh hiệu đã có bản ghi trong bảng students và được kích hoạt
+INSERT INTO students (mssv, full_name, is_active)
+VALUES
+  ('21050008', 'Sinh viên BDU', TRUE),
+  ('21050011', 'Sinh viên BDU', TRUE),
+  ('21050044', 'Sinh viên BDU', TRUE),
+  ('22050068', 'Trần Minh Huân', TRUE),
+  ('22050090', 'Lê Đức Tài', TRUE),
+  ('22050101', 'Nguyễn Hoàng Nhật Tân', TRUE)
+ON CONFLICT (mssv) DO UPDATE SET
   is_active = TRUE,
   updated_at = NOW();
 
@@ -69,4 +88,15 @@ JOIN students
 WHERE grants.achievement_id = 'ttcds'
   AND grants.is_active = TRUE
 ON CONFLICT (mssv, achievement_id) DO NOTHING;
+
+-- Tự động hiển thị danh hiệu #TTCDS cho các sinh viên được cấp quyền
+UPDATE students
+SET displayed_title_ids = CASE
+  WHEN displayed_title_ids IS NULL THEN '["achievement:ttcds"]'::jsonb
+  WHEN displayed_title_ids @> '["achievement:ttcds"]'::jsonb THEN displayed_title_ids
+  ELSE ('["achievement:ttcds"]'::jsonb || displayed_title_ids)
+END,
+updated_at = NOW()
+WHERE mssv IN ('21050008', '21050011', '21050044', '22050068', '22050090', '22050101', '22050006', '24050126');
+
 

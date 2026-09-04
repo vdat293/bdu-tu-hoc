@@ -78,10 +78,7 @@
       "DANH MỤC BẢNG BIỂU",
       "DANH MỤC HÌNH ẢNH",
       "LỜI CẢM ƠN",
-      "LỜI MỞ ĐẦU",
-      "KẾT LUẬN",
-      "TÀI LIỆU THAM KHẢO",
-      "PHỤ LỤC"
+      "LỜI MỞ ĐẦU"
     ],
     "ambiguity_action": "preserve_and_flag"
   },

@@ -1860,6 +1860,13 @@ function initWordFmtTool() {
       const className = document.getElementById('wf-class-name')?.value.trim() || '';
       const topic = document.getElementById('wf-topic')?.value.trim() || '';
       const docTitle = document.getElementById('wf-doc-title')?.value.trim() || 'TIỂU LUẬN MÔN HỌC';
+      const institution = document.getElementById('wf-institution')?.value.trim() || '';
+      const faculty = document.getElementById('wf-faculty')?.value.trim() || '';
+      const course = document.getElementById('wf-course')?.value.trim() || '';
+      const location = document.getElementById('wf-location')?.value.trim() || '';
+      const documentMode = document.getElementById('wf-document-mode')?.value || 'digital_document';
+      const month = document.getElementById('wf-month')?.value.trim() || '';
+      const year = document.getElementById('wf-year')?.value.trim() || '';
 
       const frontSections = [];
       if (document.getElementById('wf-include-cover')?.checked) frontSections.push('cover');
@@ -1875,7 +1882,14 @@ function initWordFmtTool() {
       if (className) formData.append('className', className);
       if (topic) formData.append('topic', topic);
       if (docTitle) formData.append('documentTitle', docTitle);
-      if (frontMatter) formData.append('frontMatter', frontMatter);
+      if (institution) formData.append('institution', institution);
+      if (faculty) formData.append('faculty', faculty);
+      if (course) formData.append('course', course);
+      if (location) formData.append('location', location);
+      formData.append('documentMode', documentMode);
+      if (month) formData.append('month', month);
+      if (year) formData.append('year', year);
+      formData.append('frontMatter', frontMatter);
 
       setButtonLoading(btnStart, true);
       const progressSession = createProgressSession();
@@ -1892,13 +1906,28 @@ function initWordFmtTool() {
         downloadBtn.href = res.downloadUrl;
 
         if (diagContainer) {
-          diagContainer.innerHTML = `
-            <div class="diag-line diag-pass">Engine: .NET 10 LTS WordFmt (BDU Profile v1)</div>
-            <div class="diag-line diag-pass">Canh lề A4: Top 2cm, Bottom 2cm, Left 3cm, Right 2cm</div>
-            <div class="diag-line diag-pass">Phân cấp Headings H1–H4 Times New Roman chuẩn viện</div>
-            <div class="diag-line diag-pass">Tự động xây dựng Mục Lục & Header/Footer</div>
-            <div class="diag-line diag-info">File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>
-          `;
+          const normalization = res.report?.outputNormalization || {};
+          const compliance = normalization.compliance || {};
+          const checks = [
+            ['Khổ giấy A4 hướng dọc', compliance.a4Portrait],
+            ['Lề trên 2cm, dưới 2cm, trái 3cm, phải 2cm', compliance.margins],
+            ['Body Before 6pt, After 0pt, line spacing 1.2', compliance.bodySpacing],
+            ['Bảo toàn cấu trúc danh sách', compliance.listsPreserved],
+            ['Đã gỡ hyperlink trong Tài liệu tham khảo', compliance.referenceHyperlinksRemoved],
+            ['Không tự đổi dấu ngoặc kép', compliance.smartQuotesPreserved],
+            ['Đã chuẩn hóa en dash/em dash thành dấu -', compliance.longDashesNormalized],
+            ['Bảng nằm trong chiều rộng trang A4 dọc', compliance.wideTablesFitPortrait]
+          ];
+          const checkLines = checks.map(([label, passed]) => (
+            `<div class="diag-line ${passed ? 'diag-pass' : 'diag-warn'}">${passed ? 'Đạt' : 'Cảnh báo'}: ${label}</div>`
+          )).join('');
+          const changeLines = [
+            normalization.enDashesReplaced ? `Đã sửa ${normalization.enDashesReplaced} dấu gạch dài` : '',
+            normalization.hyperlinksRemoved ? `Đã gỡ ${normalization.hyperlinksRemoved} hyperlink ở Tài liệu tham khảo` : '',
+            normalization.frontMatterReordered ? 'Đã sắp lại Lời cảm ơn trước Mục lục' : '',
+            normalization.headersNormalized ? `Đã chuẩn hóa ${normalization.headersNormalized} header theo section` : ''
+          ].filter(Boolean).map(text => `<div class="diag-line diag-info">Đã sửa: ${text}</div>`).join('');
+          diagContainer.innerHTML = `${checkLines}${changeLines}<div class="diag-line diag-info">File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>`;
         }
       } catch (err) {
         progressSession.fail(err.message);
@@ -5174,10 +5203,23 @@ function isThFaculty(source) {
 }
 
 const FULL_FRAME_PREVIEW_MSSV = new Set(['24050126']);
+const ANIME_FRAME_ACCESS_MSSV = new Set([
+  '21050008',
+  '21050011',
+  '21050044',
+  '22050068',
+  '22050090',
+  '22050101'
+]);
 
 function hasFullFramePreviewAccess(user = AppState.user) {
-  const mssv = String(user?.mssv || '').trim().toUpperCase();
+  const mssv = (typeof user === 'string' ? user : String(user?.mssv || '')).trim().toUpperCase();
   return FULL_FRAME_PREVIEW_MSSV.has(mssv);
+}
+
+function hasAnimeFrameAccess(user = AppState.user) {
+  const mssv = (typeof user === 'string' ? user : String(user?.mssv || '')).trim().toUpperCase();
+  return hasFullFramePreviewAccess(user) || ANIME_FRAME_ACCESS_MSSV.has(mssv);
 }
 
 function buildScopeFrameConfig(scope, rank, totalStudents, facultyCode = '') {
@@ -5325,7 +5367,7 @@ function buildAnimeSignatureFrameConfig(key) {
       rank: 0,
       scope: 'anime',
       scopeLabel: 'Anime Signature',
-      scopeUpper: 'VÔ HẠN • LỤC NHÃN',
+      scopeUpper: 'THIÊN THƯỢNG THIÊN HẠ',
       totalStudents: 0,
       tier: 'anime-gojo',
       frameSvg: 'assets/images/frame-gojo-limitless-art.png',
@@ -5339,9 +5381,9 @@ function buildAnimeSignatureFrameConfig(key) {
       themeKey: 'anime-gojo',
       frameFamily: 'anime-gojo',
       icon: '∞',
-      title: 'Vô Hạn Lục Nhãn',
+      title: 'Thiên Thượng Thiên Hạ',
       badgeText: '∞ GOJO SIGNATURE',
-      rankLabel: 'LIMITLESS • SIX EYES'
+      rankLabel: '#tochancauduockhong'
     },
     'anime-itachi': {
       rank: 0,
@@ -5379,7 +5421,7 @@ function getAcademicAvatarFrame(rankingData) {
   };
   if (previewTier && previewTier !== 'real') {
     if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi') {
-      if (hasFullFramePreviewAccess()) return buildAnimeSignatureFrameConfig(previewTier);
+      if (hasFullFramePreviewAccess() || hasAnimeFrameAccess()) return buildAnimeSignatureFrameConfig(previewTier);
     } else if (previewTier === 'truong-1' || previewTier === 'top-1') {
       return buildScopeFrameConfig('truong', 1, 1800);
     } else if (previewTier === 'truong-2') {
@@ -5603,7 +5645,7 @@ const ANIME_SIGNATURE_FRAME_COLLECTION = [
     characterSide: 'left',
     icon: '∞',
     tag: 'ĐỘC QUYỀN • GOJO',
-    title: 'Vô Hạn Lục Nhãn',
+    title: 'Thiên Thượng Thiên Hạ',
     desc: 'Không gian bị nén thành sáu lớp dữ liệu, bẻ cong thành khung vô hạn rồi khai mở Lục Nhãn lam quang.'
   },
   {
@@ -5679,6 +5721,13 @@ function getStudentAcademicUnlockedFrames() {
     'lop-top': { unlocked: lopRank <= 10, currentRank: lopRank, req: 'Top 2-10 Lớp' },
     'real': { unlocked: true, currentRank: 1, req: 'Mặc định học thuật' }
   };
+
+  if (hasAnimeFrameAccess()) {
+    unlockedFrames['anime-gojo'].unlocked = true;
+    unlockedFrames['anime-gojo'].req = 'Độc quyền Signature';
+    unlockedFrames['anime-itachi'].unlocked = true;
+    unlockedFrames['anime-itachi'].req = 'Độc quyền Signature';
+  }
 
   if (hasFullFramePreviewAccess()) {
     Object.values(unlockedFrames).forEach(frame => {
@@ -5833,7 +5882,7 @@ window.selectAvatarFramePreview = function(tier) {
   triggerFrameIntroAnimation();
 
   const labels = {
-    'anime-gojo': '∞ Anime Signature - Vô Hạn Lục Nhãn',
+    'anime-gojo': '∞ Anime Signature - Thiên Thượng Thiên Hạ',
     'anime-itachi': '● Anime Signature - Ảo Nguyệt Hắc Viêm',
     'truong-1': '✦ Top 1 Toàn Trường - Thiên Cực Đế Tinh BDU',
     'truong-2': '☾ Top 2 Toàn Trường - Song Nguyệt Tinh Vân BDU',

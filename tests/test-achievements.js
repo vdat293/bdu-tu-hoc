@@ -109,6 +109,9 @@ assert.match(ttcdsMigration, /'#TTCDS'/);
 assert.match(ttcdsMigration, /'Trung tâm Chuyển đổi số'/);
 assert.match(ttcdsMigration, /'22050006'/);
 assert.match(ttcdsMigration, /'24050126'/);
+['21050008', '21050011', '21050044', '22050068', '22050090', '22050101'].forEach((mssv) => {
+  assert.match(ttcdsMigration, new RegExp(`'${mssv}'`));
+});
 assert.match(ttcdsMigration, /'manual_assignment'/);
 assert.match(ttcdsMigration, /'vip'/);
 assert.match(appJs, /'legendary', 'vip'/);

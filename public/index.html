@@ -833,6 +833,48 @@
                   </div>
                 </div>
 
+                <details class="form-group wordfmt-cover-options">
+                  <summary class="form-label">Thông tin bìa và chế độ xuất</summary>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="wf-institution" class="form-label">Trường:</label>
+                      <input type="text" id="wf-institution" class="form-input" value="TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG">
+                    </div>
+                    <div class="form-group">
+                      <label for="wf-faculty" class="form-label">Khoa / Viện:</label>
+                      <input type="text" id="wf-faculty" class="form-input" value="KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO">
+                    </div>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="wf-course" class="form-label">Tên môn học (nếu cần trên bìa):</label>
+                      <input type="text" id="wf-course" class="form-input" placeholder="Để trống nếu bìa không yêu cầu">
+                    </div>
+                    <div class="form-group">
+                      <label for="wf-location" class="form-label">Địa điểm:</label>
+                      <input type="text" id="wf-location" class="form-input" value="Thành phố Hồ Chí Minh">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="wf-document-mode" class="form-label">Chế độ tài liệu:</label>
+                    <select id="wf-document-mode" class="form-input">
+                      <option value="digital_document" selected>Tài liệu số</option>
+                      <option value="binding_package">Bản phục vụ đóng quyển (thêm trang trắng và bản sao bìa)</option>
+                    </select>
+                    <p class="dropzone-hint">Khi chọn bản đóng quyển: in một mặt trên A4, dùng bìa cứng xanh dương và tờ bìa sau cùng màu.</p>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="wf-month" class="form-label">Tháng trên bìa:</label>
+                      <input type="text" id="wf-month" class="form-input" inputmode="numeric" placeholder="Ví dụ: 9">
+                    </div>
+                    <div class="form-group">
+                      <label for="wf-year" class="form-label">Năm trên bìa:</label>
+                      <input type="text" id="wf-year" class="form-input" inputmode="numeric" placeholder="Ví dụ: 2026">
+                    </div>
+                  </div>
+                </details>
+
                 <div class="form-row-2">
                   <div class="form-group">
                     <label for="wf-student-id" class="form-label">Mã Số Sinh Viên (MSSV):</label>
@@ -867,11 +909,11 @@
                     </label>
                     <label class="feature-item">
                       <input type="checkbox" id="wf-include-comments" checked>
-                      <span><strong>Nhận xét giảng viên:</strong> Trang 27 dòng kẻ chấm chuẩn khoa</span>
+                      <span><strong>Nhận xét giảng viên:</strong> Trang có vùng trống để giảng viên ghi nhận xét</span>
                     </label>
                     <label class="feature-item">
                       <input type="checkbox" id="wf-include-thanks" checked>
-                      <span><strong>Lời cảm ơn:</strong> Khung viền góc gấp bao quanh trang</span>
+                      <span><strong>Lời cảm ơn:</strong> Trang trình bày học thuật, không thêm khung trang trí</span>
                     </label>
                     <label class="feature-item">
                       <input type="checkbox" checked disabled>

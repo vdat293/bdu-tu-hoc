@@ -947,6 +947,12 @@ body.theme-light {
   border-color: #c3d5e9;
   border-left: 3px solid #326ca8;
 }
+
+.diag-warn {
+  color: #9a5b00;
+  background: rgba(245, 158, 11, .1);
+  border-color: rgba(245, 158, 11, .28);
+}
 body.theme-dark .diagnostics-box {
   background: #211e1c;
   border-color: #4a403b;
@@ -962,6 +968,12 @@ body.theme-dark .diag-info {
   color: #9cc8f5;
   background: rgba(50,108,168,.2);
   border-color: rgba(96,165,250,.28);
+}
+
+body.theme-dark .diag-warn {
+  color: #f8c56b;
+  background: rgba(245, 158, 11, .12);
+  border-color: rgba(245, 158, 11, .3);
 }
 
 @media (max-width: 992px) {

@@ -43,6 +43,13 @@ export const WordFmtService = {
    * @param {string} [params.topic] - Topic Title (Tên đề tài)
    * @param {string} [params.className] - Class Name (Tên lớp)
    * @param {string} [params.documentTitle] - Document title (Tiểu luận môn học)
+   * @param {string} [params.institution] - Institution displayed on the cover
+   * @param {string} [params.faculty] - Faculty displayed on the cover
+   * @param {string} [params.course] - Optional course name displayed on the cover
+   * @param {string} [params.location] - Location displayed on the cover
+   * @param {string} [params.month] - Month displayed on the cover
+   * @param {string} [params.year] - Year displayed on the cover
+   * @param {'digital_document'|'binding_package'} [params.documentMode]
    * @param {string} [params.frontMatter] - Comma separated front matter: cover,comments,thanks
    * @param {string} [params.profile] - Profile name (defaults to tieu_luan.json)
    */
@@ -54,6 +61,13 @@ export const WordFmtService = {
     topic = '',
     className = '',
     documentTitle = 'TIỂU LUẬN MÔN HỌC',
+    institution = '',
+    faculty = '',
+    course = '',
+    location = '',
+    month = '',
+    year = '',
+    documentMode = 'digital_document',
     frontMatter = 'cover,comments,thanks',
     profile = 'tieu_luan.json'
   }) {
@@ -73,21 +87,51 @@ export const WordFmtService = {
     const outputPath = path.join(TEMP_DIR, `formatted_${id}.docx`);
     const preparedInputPath = path.join(TEMP_DIR, `prepared_${id}.docx`);
     const reportPath = path.join(TEMP_DIR, `report_${id}.json`);
-    const profilePath = path.join(PROFILES_DIR, profile);
+    const baseProfilePath = path.join(PROFILES_DIR, path.basename(profile));
+    const runtimeProfilePath = path.join(TEMP_DIR, `profile_${id}.json`);
+
+    if (!fs.existsSync(baseProfilePath)) {
+      throw new Error('Không tìm thấy profile định dạng được yêu cầu.');
+    }
+
+    const runtimeProfile = JSON.parse(fs.readFileSync(baseProfilePath, 'utf8'));
+    if (runtimeProfile.heading_rules_file) {
+      runtimeProfile.heading_rules_file = path.join(
+        PROFILES_DIR,
+        path.basename(runtimeProfile.heading_rules_file)
+      );
+    }
+    runtimeProfile.cover = { ...(runtimeProfile.cover || {}) };
+    if (institution.trim()) runtimeProfile.cover.institution = institution.trim();
+    if (faculty.trim()) runtimeProfile.cover.faculty = faculty.trim();
+    if (course.trim()) runtimeProfile.cover.course = course.trim();
+    if (location.trim()) runtimeProfile.cover.location = location.trim();
+    runtimeProfile.document_modes = {
+      ...(runtimeProfile.document_modes || {}),
+      default: documentMode === 'binding_package' ? 'binding_package' : 'digital_document'
+    };
+    fs.writeFileSync(runtimeProfilePath, JSON.stringify(runtimeProfile, null, 2));
 
     let sourceListNormalization;
     try {
       sourceListNormalization = normalizeSourceLists(inputPath, preparedInputPath);
     } catch (listError) {
       console.error('Source list normalization error:', listError);
+      try {
+        if (fs.existsSync(runtimeProfilePath)) fs.unlinkSync(runtimeProfilePath);
+      } catch (cleanupError) {
+        console.warn('Failed to clean runtime profile:', cleanupError);
+      }
       throw new Error('Không thể chuẩn hóa danh sách trong DOCX đầu vào.');
     }
 
-    const cleanupPreparedInput = () => {
+    const cleanupWorkingFiles = () => {
       try {
         if (fs.existsSync(preparedInputPath)) fs.unlinkSync(preparedInputPath);
+        if (fs.existsSync(runtimeProfilePath)) fs.unlinkSync(runtimeProfilePath);
+        if (fs.existsSync(reportPath)) fs.unlinkSync(reportPath);
       } catch (cleanupError) {
-        console.warn('Failed to clean prepared DOCX:', cleanupError);
+        console.warn('Failed to clean WordFmt working files:', cleanupError);
       }
     };
 
@@ -98,7 +142,7 @@ export const WordFmtService = {
       '--output', outputPath,
       '--instructor', instructor.trim(),
       '--student', student.trim(),
-      '--profile', profilePath,
+      '--profile', runtimeProfilePath,
       '--report', reportPath
     ];
 
@@ -136,25 +180,38 @@ export const WordFmtService = {
 
           if (error && (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0)) {
             console.error('WordFmt error:', stderr || stdout || error.message);
-            cleanupPreparedInput();
+            cleanupWorkingFiles();
             return reject(new Error(stderr || stdout || 'Lỗi khi định dạng văn bản DOCX.'));
           }
 
           try {
-            const normalization = normalizeFormattedDocx(outputPath);
+            const normalization = normalizeFormattedDocx(outputPath, {
+              documentTitle: documentTitle.trim() || runtimeProfile.cover.document_type,
+              documentMode: runtimeProfile.document_modes.default,
+              removeCoverCourse: !course.trim(),
+              sourcePath: preparedInputPath,
+              location: runtimeProfile.cover.location,
+              month,
+              year
+            });
             reportData = {
               ...(reportData || {}),
               input: inputPath,
+              appliedProfile: {
+                profileId: runtimeProfile.profile_id,
+                sourceRevision: runtimeProfile.source_revision,
+                documentMode: runtimeProfile.document_modes.default
+              },
               sourceListNormalization,
               outputNormalization: normalization
             };
           } catch (normalizationError) {
             console.error('DOCX post-processing error:', normalizationError);
-            cleanupPreparedInput();
+            cleanupWorkingFiles();
             return reject(new Error('Không thể hoàn tất chuẩn hóa màu chữ, độ đậm và dấu gạch trong DOCX.'));
           }
 
-          cleanupPreparedInput();
+          cleanupWorkingFiles();
 
           resolve({
             success: true,

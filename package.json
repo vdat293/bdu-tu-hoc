@@ -14,6 +14,7 @@
     "rankings:sync": "node scripts/sync-rankings.js",
     "test": "node tests/test-queue.js && node tests/test-docx-postprocessor.js && node tests/test-english-exercise.js && node tests/test-bdu-grades.js && node tests/test-bdu-schedule.js && node tests/test-learning-hub.js && node tests/test-achievements.js && node tests/test-identity-presentation.js && node tests/test-profile-service.js && node tests/test-academic-ranking.js && node tests/test-leaderboard-ui.js && node tests/test-session-toast.js && node tests/test-profile-render.js && node tests/test-grade-table-layout.js && node tests/test-no-mock-data.js && node tests/test-confession-ui.js && node tests/test-clan-document-share-ui.js && node tests/test-ranking-frames.js",
     "test:ranking-integration": "node tests/test-ranking-integration.js",
+    "test:wordfmt-e2e": "node tests/test-wordfmt-e2e.js",
     "test:achievement-integration": "node tests/test-achievement-integration.js",
     "test:student-clan": "node tests/test-student-clan.js",
     "test:clan-management": "node tests/test-clan-management.js",

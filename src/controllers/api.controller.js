@@ -183,7 +183,23 @@ export const ApiController = {
         return res.status(400).json({ result: false, message: 'Vui lòng chọn file Word (.docx) để tải lên.' });
       }
 
-      const { instructor, student, studentId, topic, className, documentTitle, frontMatter, profile } = req.body;
+      const {
+        instructor,
+        student,
+        studentId,
+        topic,
+        className,
+        documentTitle,
+        institution,
+        faculty,
+        course,
+        location,
+        month,
+        year,
+        documentMode,
+        frontMatter,
+        profile
+      } = req.body;
       const inputPath = req.file.path;
 
       const result = await WordFmtService.formatDocx({
@@ -194,6 +210,13 @@ export const ApiController = {
         topic,
         className,
         documentTitle,
+        institution,
+        faculty,
+        course,
+        location,
+        month,
+        year,
+        documentMode,
         frontMatter,
         profile
       });

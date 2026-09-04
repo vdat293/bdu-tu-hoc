@@ -2,35 +2,49 @@
   "schema_version": 1,
   "profile_id": "tieu_luan",
   "locale": "vi-VN",
-  "source_revision": "2026-08-17",
+  "source_revision": "2026-09-04",
+  "source_guide": "Huong dan thuc hien tieu luan mon hoc.pdf",
   "page": { "paper": "A4", "margins_cm": { "top": 2, "bottom": 2, "left": 3, "right": 2 } },
-  "body": { "font": "Times New Roman", "size_pt": 13, "alignment": "justify", "line_spacing": 1.2, "space_after_pt": 6, "bold": false },
+  "body": { "font": "Times New Roman", "size_pt": 13, "alignment": "justify", "line_spacing": 1.2, "line_spacing_rule": "multiple", "space_before_pt": 6, "space_after_pt": 0, "first_line_indent_cm": 0, "bold": false, "preserve_inline_emphasis": true },
   "heading_rules_file": "heading_marking_rules_vi_v1.json",
   "headings": {
-    "chapter": { "level": 1, "size_pt": 18, "bold": true, "uppercase": true, "alignment": "center", "color_hex": "000000" },
-    "level2": { "level": 2, "size_pt": 16, "bold": true, "color_hex": "000000" },
-    "level3": { "level": 3, "size_pt": 14, "bold": true, "italic": true, "color_hex": "000000" },
-    "level4": { "level": 4, "size_pt": 13, "bold": false, "italic": true, "color_hex": "000000" }
+    "chapter": { "level": 1, "size_pt": 18, "bold": true, "italic": false, "uppercase": true, "alignment": "center", "space_before_pt": 12, "space_after_pt": 24, "color_hex": "000000" },
+    "level2": { "level": 2, "size_pt": 16, "bold": true, "italic": false, "alignment": "left", "space_before_pt": 6, "space_after_pt": 6, "color_hex": "000000" },
+    "level3": { "level": 3, "size_pt": 14, "bold": true, "italic": true, "alignment": "left", "space_before_pt": 8, "space_after_pt": 4, "color_hex": "000000" },
+    "level4": { "level": 4, "size_pt": 13, "bold": false, "italic": true, "alignment": "left", "space_before_pt": 4, "space_after_pt": 2, "color_hex": "000000" }
   },
-  "text_normalization": { "replace_en_dash_with_hyphen": true, "smart_double_quotes": true },
-  "lists": { "normalize_all": true, "ordered_marker": "{n})", "restart_each_group": true, "indent_cm": 0, "tabs": false },
+  "text_normalization": { "replace_en_dash_with_hyphen": true, "replace_em_dash_with_hyphen": true, "smart_double_quotes": false },
+  "lists": { "normalize_all": false, "preserve_numbering": true, "below_level4_markers": ["-", "+"] },
   "front_matter": {
-    "titles": ["NHẬN XÉT CỦA GIẢNG VIÊN", "MỤC LỤC", "DANH MỤC BẢNG", "DANH MỤC BẢNG BIỂU", "DANH MỤC HÌNH ẢNH", "LỜI CẢM ƠN", "LỜI MỞ ĐẦU", "KẾT LUẬN", "TÀI LIỆU THAM KHẢO", "PHỤ LỤC"],
+    "titles": ["NHẬN XÉT CỦA GIẢNG VIÊN", "MỤC LỤC", "DANH MỤC BẢNG", "DANH MỤC BẢNG BIỂU", "DANH MỤC HÌNH ẢNH", "LỜI CẢM ƠN", "LỜI MỞ ĐẦU"],
     "cover_anchors": ["TRƯỜNG", "KHOA", "BỘ MÔN", "BÁO CÁO", "SINH VIÊN", "MSSV", "LỚP", "GIẢNG VIÊN"]
   },
   "cover": {
     "institution": "TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG",
     "faculty": "KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO",
     "document_type": "TIỂU LUẬN MÔN HỌC",
-    "course": "XÂY DỰNG HỆ THỐNG THÔNG TIN TRÊN CÁC FRAMEWORK",
-    "location": "TP. Hồ Chí Minh"
+    "course": "TÊN MÔN HỌC",
+    "location": "Thành phố Hồ Chí Minh",
+    "page_border": { "style": "single", "color_hex": "000000", "size_eighth_points": 8, "space_pt": 18 },
+    "styles": {
+      "institution_size_pt": 15,
+      "document_type_size_pt": 24,
+      "label_size_pt": 16,
+      "topic_size_pt": 20,
+      "metadata_size_pt": 14,
+      "date_size_pt": 14,
+      "metadata_space_before_pt": 110,
+      "date_space_before_pt": 130
+    }
   },
   "header_footer": {
     "enabled": true,
     "font": "Times New Roman",
     "size_pt": 10,
-    "header_right": "TIỂU LUẬN MÔN HỌC",
+    "header_left": "TIỂU LUẬN MÔN HỌC",
+    "header_right": "{section_title}",
     "suppress_header_on_heading1_page": false,
+    "separator_line": { "style": "single", "color_hex": "808080", "size_eighth_points": 4 },
     "footer_left": "GVHD: {instructor_name}",
     "footer_center": "{PAGE}",
     "footer_right": "SVTH: {student_display}",
@@ -38,7 +52,22 @@
     "body_page_format": "decimal",
     "restart_body_at": 1
   },
-  "captions": { "figure_pattern": "^Hình\\s+", "table_pattern": "^Bảng\\s+", "number_scope": "chapter" },
-  "policies": { "ambiguous_heading": "warn_and_preserve", "missing_caption": "require_marker", "wide_table": "landscape_section", "toc_mode": "field", "preserve_unknown_parts": true },
+  "captions": {
+    "figure_pattern": "^Hình\\s+",
+    "table_pattern": "^Bảng\\s+",
+    "number_scope": "chapter",
+    "number_separator": "-",
+    "alignment": "center",
+    "bold": true,
+    "italic": true,
+    "size_pt": 13,
+    "figure_position": "below",
+    "table_position": "above",
+    "image_wrap": "topAndBottom"
+  },
+  "references": { "renumber": false, "remove_hyperlinks": true, "preserve_visible_link_text": true, "preserve_inline_formatting": true },
+  "document_modes": { "default": "digital_document", "allowed": ["digital_document", "binding_package"] },
+  "front_matter_order": ["cover", "blank_sheet", "cover_copy", "comments", "thanks", "toc", "figures", "tables", "abbreviations"],
+  "policies": { "ambiguous_heading": "warn_and_preserve", "missing_caption": "require_marker", "wide_table": "warn", "toc_mode": "field", "preserve_unknown_parts": true },
   "locked_rules": ["A4", "body Times New Roman 13pt", "heading levels 1-4", "never overwrite input by default"]
 }
