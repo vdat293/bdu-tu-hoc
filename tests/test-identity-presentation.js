@@ -35,7 +35,7 @@ assert.equal(catalog.find((title) => title.id === 'achievement:scholar').evidenc
 assert.equal(catalog.find((title) => title.id === 'achievement:scholar').rarity, 'legendary');
 assert.ok(catalog.some((title) => title.label === 'Học lực Xuất sắc'));
 assert.equal(catalog.some((title) => title.id === 'rank:tong_hop:truong'), false, 'Hạng ngoài Top 10 không phải danh hiệu');
-assert.equal(IdentityPresentationInternals.MAX_DISPLAYED_TITLES, 3);
+assert.equal(IdentityPresentationInternals.MAX_DISPLAYED_TITLES, 4);
 
 assert.equal(
   IdentityPresentationInternals.normalizeAvatarUrl('/images/student.jpg'),
@@ -48,4 +48,4 @@ const migration = fs.readFileSync('migrations/006_student_identity_presentation.
 assert.match(migration, /avatar_url/);
 assert.match(migration, /displayed_title_ids/);
 
-console.log('✓ Danh hiệu hiển thị chỉ lấy từ quyền sở hữu thật và giới hạn tối đa 3.');
+console.log('✓ Danh hiệu hiển thị chỉ lấy từ quyền sở hữu thật và giới hạn tối đa 4.');

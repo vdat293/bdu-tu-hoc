@@ -1,4 +1,5 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
+import { PermissionService } from './permission.service.js';
 
 function normalizeMssv(mssv) {
   return String(mssv || '').trim().toUpperCase();
@@ -72,9 +73,16 @@ export const StudentService = {
   },
 
   /**
+   * Kiểm tra sinh viên có quyền tạo CLB hay không (sở hữu nametag #TTCDS hoặc là Owner)
+   */
+  async canCreateClan(mssv) {
+    return PermissionService.can(mssv, 'clan:create');
+  },
+
+  /**
    * Tạo một Clan/CLB mới và gán người tạo làm Leader
    */
-  async createClan({ code, name, tag = null, description = null, avatarUrl = null, leaderMssv = null }) {
+  async createClan({ code, name, tag = null, description = null, avatarUrl = null, leaderMssv = null, enforcePermission = false }) {
     if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
     const cleanCode = String(code || '').trim().toUpperCase();
     const cleanName = String(name || '').trim();
@@ -82,6 +90,17 @@ export const StudentService = {
 
     if (!cleanCode || !cleanName) {
       throw new Error('Mã clan và tên clan là bắt buộc.');
+    }
+
+    if (enforcePermission) {
+      if (!cleanLeaderMssv) {
+        throw new Error('Yêu cầu thông tin MSSV người tạo CLB.');
+      }
+      await PermissionService.require(
+        cleanLeaderMssv,
+        'clan:create',
+        'Chỉ những thành viên có danh hiệu #TTCDS mới được phép tạo CLB / Nhóm.'
+      );
     }
 
     return transaction(async (client) => {
@@ -122,7 +141,7 @@ export const StudentService = {
   },
 
   /**
-   * Tham gia Clan/CLB
+   * Tham gia Clan/CLB trực tiếp (hàm nội bộ hoặc dùng khi leader duyệt)
    */
   async joinClan(mssv, clanId, role = 'member') {
     const cleanMssv = normalizeMssv(mssv);
@@ -143,6 +162,184 @@ export const StudentService = {
     `;
     const result = await query(sql, [cleanMssv, clanId, role]);
     return result.rows[0];
+  },
+
+  /**
+   * Gửi yêu cầu xin tham gia Clan/CLB (trạng thái pending chờ Trưởng CLB duyệt)
+   */
+  async requestJoinClan(mssv, clanId, message = null) {
+    const cleanMssv = normalizeMssv(mssv);
+    if (!cleanMssv || !clanId || !isDatabaseConfigured()) {
+      throw new Error('Dữ liệu yêu cầu không hợp lệ.');
+    }
+
+    // Đảm bảo sinh viên tồn tại trong bảng students
+    await query(`
+      INSERT INTO students (mssv, full_name, is_active)
+      VALUES ($1, '', FALSE)
+      ON CONFLICT (mssv) DO NOTHING;
+    `, [cleanMssv]);
+
+    // Kiểm tra CLB có tồn tại không
+    const clanRes = await query('SELECT id, name, leader_mssv FROM clans WHERE id = $1', [clanId]);
+    if (clanRes.rows.length === 0) {
+      const err = new Error('Không tìm thấy CLB.');
+      err.status = 404;
+      throw err;
+    }
+
+    // Kiểm tra xem đã là thành viên hay chưa
+    const memberRes = await query('SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2', [clanId, cleanMssv]);
+    if (memberRes.rows.length > 0) {
+      const err = new Error('Bạn đã là thành viên của CLB này rồi.');
+      err.status = 400;
+      throw err;
+    }
+
+    // Kiểm tra xem đã có yêu cầu pending hay chưa
+    const pendingRes = await query(
+      'SELECT id FROM clan_join_requests WHERE clan_id = $1 AND mssv = $2 AND status = $3',
+      [clanId, cleanMssv, 'pending']
+    );
+    if (pendingRes.rows.length > 0) {
+      const err = new Error('Bạn đã gửi yêu cầu tham gia CLB này và đang chờ Trưởng CLB phê duyệt.');
+      err.status = 400;
+      throw err;
+    }
+
+    const cleanMessage = message ? String(message).trim().slice(0, 500) : null;
+    const insertSql = `
+      INSERT INTO clan_join_requests (clan_id, mssv, status, message, created_at, updated_at)
+      VALUES ($1, $2, 'pending', $3, NOW(), NOW())
+      RETURNING *;
+    `;
+    const result = await query(insertSql, [clanId, cleanMssv, cleanMessage]);
+    return result.rows[0];
+  },
+
+  /**
+   * Hủy yêu cầu xin tham gia CLB của chính mình
+   */
+  async cancelJoinRequest(mssv, clanId) {
+    const cleanMssv = normalizeMssv(mssv);
+    if (!cleanMssv || !clanId || !isDatabaseConfigured()) return false;
+
+    const sql = `
+      UPDATE clan_join_requests
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE clan_id = $1 AND mssv = $2 AND status = 'pending'
+      RETURNING id;
+    `;
+    const res = await query(sql, [clanId, cleanMssv]);
+    return (res.rowCount ?? 0) > 0;
+  },
+
+  /**
+   * Lấy danh sách yêu cầu gia nhập đang chờ duyệt (Dành cho Trưởng CLB)
+   */
+  async getPendingJoinRequests(clanId, requesterMssv) {
+    const cleanRequester = normalizeMssv(requesterMssv);
+    if (!clanId || !cleanRequester || !isDatabaseConfigured()) return [];
+
+    const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
+    if (clanRes.rows.length === 0) {
+      const err = new Error('Không tìm thấy CLB.');
+      err.status = 404;
+      throw err;
+    }
+
+    await PermissionService.requireInClan(
+      cleanRequester,
+      clanId,
+      'clan:review_join',
+      'Chỉ Trưởng CLB (Bang Chủ) mới có quyền xem danh sách yêu cầu gia nhập.'
+    );
+
+    const sql = `
+      SELECT 
+        cjr.id,
+        cjr.clan_id,
+        cjr.mssv,
+        cjr.status,
+        cjr.message,
+        cjr.created_at,
+        s.full_name,
+        COALESCE(sao.url_img, s.avatar_url) AS avatar_url
+      FROM clan_join_requests cjr
+      JOIN students s ON cjr.mssv = s.mssv
+      LEFT JOIN student_avatar_overrides sao 
+        ON sao.mssv = s.mssv AND sao.deleted_at IS NULL AND NULLIF(sao.url_img, '') IS NOT NULL
+      WHERE cjr.clan_id = $1 AND cjr.status = 'pending'
+      ORDER BY cjr.created_at ASC;
+    `;
+    const result = await query(sql, [clanId]);
+    return result.rows;
+  },
+
+  /**
+   * Phê duyệt hoặc Từ chối yêu cầu xin gia nhập (Chỉ Trưởng CLB)
+   */
+  async reviewJoinRequest(clanId, reviewerMssv, requestId, action) {
+    const cleanReviewer = normalizeMssv(reviewerMssv);
+    const cleanAction = String(action || '').trim().toLowerCase();
+    if (!clanId || !cleanReviewer || !requestId || !['approve', 'reject'].includes(cleanAction) || !isDatabaseConfigured()) {
+      throw new Error('Dữ liệu yêu cầu phê duyệt không hợp lệ.');
+    }
+
+    const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
+    if (clanRes.rows.length === 0) {
+      const err = new Error('Không tìm thấy CLB.');
+      err.status = 404;
+      throw err;
+    }
+
+    await PermissionService.requireInClan(
+      cleanReviewer,
+      clanId,
+      'clan:review_join',
+      'Chỉ Trưởng CLB mới có quyền phê duyệt hoặc từ chối yêu cầu gia nhập.'
+    );
+
+    const reqRes = await query(
+      'SELECT id, clan_id, mssv, status FROM clan_join_requests WHERE id = $1 AND clan_id = $2',
+      [requestId, clanId]
+    );
+    if (reqRes.rows.length === 0) {
+      const err = new Error('Không tìm thấy yêu cầu gia nhập.');
+      err.status = 404;
+      throw err;
+    }
+    const joinReq = reqRes.rows[0];
+    if (joinReq.status !== 'pending') {
+      const err = new Error(`Yêu cầu này đã được xử lý trước đó (trạng thái: ${joinReq.status}).`);
+      err.status = 400;
+      throw err;
+    }
+
+    return transaction(async (client) => {
+      const newStatus = cleanAction === 'approve' ? 'approved' : 'rejected';
+      await client.query(`
+        UPDATE clan_join_requests
+        SET status = $1, reviewed_by_mssv = $2, reviewed_at = NOW(), updated_at = NOW()
+        WHERE id = $3;
+      `, [newStatus, cleanReviewer, requestId]);
+
+      if (cleanAction === 'approve') {
+        await client.query(`
+          INSERT INTO student_clans (mssv, clan_id, role, joined_at)
+          VALUES ($1, $2, 'member', NOW())
+          ON CONFLICT (mssv, clan_id) DO UPDATE SET role = EXCLUDED.role;
+        `, [joinReq.mssv, clanId]);
+      }
+
+      return {
+        success: true,
+        requestId,
+        status: newStatus,
+        mssv: joinReq.mssv,
+        message: cleanAction === 'approve' ? 'Đã duyệt thành viên vào CLB thành công.' : 'Đã từ chối yêu cầu gia nhập.'
+      };
+    });
   },
 
   /**
@@ -192,7 +389,8 @@ export const StudentService = {
   },
 
   /**
-   * Lấy danh sách tất cả các CLB / Nhóm kèm số lượng thành viên và vai trò của người xem
+   * Lấy danh sách tất cả các CLB / Nhóm kèm số lượng thành viên, vai trò của người xem,
+   * trạng thái yêu cầu chờ duyệt và số yêu cầu pending (dành cho Leader)
    */
   async listClans(viewerMssv = null) {
     if (!isDatabaseConfigured()) return [];
@@ -200,6 +398,22 @@ export const StudentService = {
     const cleanViewerMssv = viewerMssv ? normalizeMssv(viewerMssv) : null;
 
     const sql = `
+      WITH clan_members_agg AS (
+        SELECT 
+          clan_id,
+          COUNT(mssv)::int AS member_count,
+          MAX(CASE WHEN mssv = $1::text THEN role ELSE NULL END) AS my_role,
+          COALESCE(BOOL_OR(mssv = $1::text), false) AS is_joined
+        FROM student_clans
+        GROUP BY clan_id
+      ), clan_requests_agg AS (
+        SELECT 
+          clan_id,
+          COALESCE(BOOL_OR(mssv = $1::text AND status = 'pending'), false) AS has_pending_request,
+          COUNT(CASE WHEN status = 'pending' THEN 1 ELSE NULL END)::int AS pending_request_count
+        FROM clan_join_requests
+        GROUP BY clan_id
+      )
       SELECT 
         c.id,
         c.code,
@@ -211,12 +425,14 @@ export const StudentService = {
         c.level,
         c.xp,
         c.created_at,
-        COUNT(sc.mssv)::int AS member_count,
-        MAX(CASE WHEN sc.mssv = $1::text THEN sc.role ELSE NULL END) AS my_role,
-        COALESCE(BOOL_OR(sc.mssv = $1::text), false) AS is_joined
+        COALESCE(cma.member_count, 0) AS member_count,
+        cma.my_role,
+        COALESCE(cma.is_joined, false) AS is_joined,
+        COALESCE(cra.has_pending_request, false) AS has_pending_request,
+        COALESCE(cra.pending_request_count, 0) AS pending_request_count
       FROM clans c
-      LEFT JOIN student_clans sc ON c.id = sc.clan_id
-      GROUP BY c.id
+      LEFT JOIN clan_members_agg cma ON c.id = cma.clan_id
+      LEFT JOIN clan_requests_agg cra ON c.id = cra.clan_id
       ORDER BY member_count DESC, c.level DESC, c.name ASC;
     `;
     const result = await query(sql, [cleanViewerMssv]);
@@ -235,9 +451,12 @@ export const StudentService = {
 
     const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
     if (clanRes.rows.length === 0) throw new Error('Không tìm thấy CLB.');
-    if (clanRes.rows[0].leader_mssv !== cleanRequester) {
-      throw new Error('Chỉ Bang Chủ mới có quyền phân quyền thành viên.');
-    }
+    await PermissionService.requireInClan(
+      cleanRequester,
+      clanId,
+      'clan:role_assign',
+      'Chỉ Bang Chủ mới có quyền phân quyền thành viên.'
+    );
 
     const validRoles = ['leader', 'vice_leader', 'elder', 'member'];
     if (!validRoles.includes(newRole)) throw new Error('Vai trò không hợp lệ.');
@@ -270,11 +489,12 @@ export const StudentService = {
     const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
     if (clanRes.rows.length === 0) throw new Error('Không tìm thấy CLB.');
 
-    const reqMember = await query('SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2', [clanId, cleanRequester]);
-    const requesterRole = reqMember.rows[0]?.role;
-    if (requesterRole !== 'leader' && requesterRole !== 'vice_leader') {
-      throw new Error('Bạn không có quyền quản lý thành viên trong CLB này.');
-    }
+    await PermissionService.requireInClan(
+      cleanRequester,
+      clanId,
+      'clan:kick',
+      'Bạn không có quyền quản lý thành viên trong CLB này.'
+    );
 
     if (cleanTarget === clanRes.rows[0].leader_mssv) {
       throw new Error('Không thể khai trừ Bang Chủ.');
@@ -296,9 +516,12 @@ export const StudentService = {
 
     const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
     if (clanRes.rows.length === 0) throw new Error('Không tìm thấy CLB.');
-    if (clanRes.rows[0].leader_mssv !== cleanRequester) {
-      throw new Error('Chỉ Bang Chủ mới có quyền thay đổi thông tin CLB.');
-    }
+    await PermissionService.requireInClan(
+      cleanRequester,
+      clanId,
+      'clan:edit',
+      'Chỉ Bang Chủ mới có quyền thay đổi thông tin CLB.'
+    );
 
     const updates = [];
     const values = [];
@@ -338,9 +561,12 @@ export const StudentService = {
 
     const clanRes = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clanId]);
     if (clanRes.rows.length === 0) throw new Error('Không tìm thấy CLB.');
-    if (clanRes.rows[0].leader_mssv !== cleanRequester) {
-      throw new Error('Chỉ Bang Chủ mới có quyền giải tán CLB.');
-    }
+    await PermissionService.requireInClan(
+      cleanRequester,
+      clanId,
+      'clan:disband',
+      'Chỉ Bang Chủ mới có quyền giải tán CLB.'
+    );
 
     await query('DELETE FROM clans WHERE id = $1', [clanId]);
     return { success: true, message: 'Đã giải tán CLB thành công.' };

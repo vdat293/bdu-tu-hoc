@@ -1458,6 +1458,15 @@
                 </svg>
                 👥 Thành Viên (<span id="channel-subtab-mem-count">0</span>)
               </button>
+              <button id="tab-btn-clan-requests" class="channel-subtab-btn hidden">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <line x1="19" y1="8" x2="19" y2="14"></line>
+                  <line x1="22" y1="11" x2="16" y2="11"></line>
+                </svg>
+                📥 Yêu Cầu Gia Nhập (<span id="channel-subtab-req-count">0</span>)
+              </button>
             </div>
 
             <!-- Panel 1: Bản Tin & Thảo Luận (Facebook Group Style) -->
@@ -1615,6 +1624,27 @@
                       </svg>
                       Giải Tán CLB
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 4: Yêu Cầu Gia Nhập (Dành Cho Bang Chủ) -->
+            <div id="channel-panel-requests" class="channel-panel hidden">
+              <div class="clan-members-wrapper glass-panel">
+                <div class="clan-members-header">
+                  <div>
+                    <h3 class="clan-members-title">Danh Sách Yêu Cầu Gia Nhập CLB</h3>
+                    <p class="clan-members-subtitle">Chỉ những sinh viên được Trưởng CLB phê duyệt mới có thể tham gia vào nhóm.</p>
+                  </div>
+                  <div class="clan-members-stats">
+                    <span class="badge-pending" id="clan-requests-count-badge">0 yêu cầu chờ duyệt</span>
+                  </div>
+                </div>
+
+                <div class="clan-requests-container" style="margin-top: 16px;">
+                  <div id="clan-requests-list" class="clan-requests-list">
+                    <!-- Dynamic requests injected -->
                   </div>
                 </div>
               </div>
@@ -1790,25 +1820,6 @@
             </div>
           </div>
 
-          <div id="identity-admin-panel" class="identity-admin-panel hidden" aria-live="polite">
-            <div class="identity-admin-panel-header">
-              <div>
-                <span class="forum-widget-eyebrow">QUẢN TRỊ HIỂN THỊ</span>
-                <h3>Cấp khung & name tag</h3>
-              </div>
-              <div class="identity-admin-header-actions">
-                <span id="identity-admin-status" class="identity-admin-status"></span>
-                <a id="identity-admin-open-link" class="identity-admin-open-link" href="/admin-tool">Mở Admin Tool →</a>
-              </div>
-            </div>
-            <div class="identity-admin-form">
-              <input id="identity-admin-mssv" class="form-input" inputmode="text" maxlength="32" placeholder="MSSV người nhận">
-              <select id="identity-admin-item" class="form-input"><option value="">Đang tải item...</option></select>
-              <input id="identity-admin-reason" class="form-input" maxlength="500" placeholder="Lý do cấp quyền">
-              <button id="identity-admin-grant" class="btn btn-primary" type="button">Cấp quyền</button>
-            </div>
-            <div id="identity-admin-grants" class="identity-admin-grants"></div>
-          </div>
         </section>
 
       </main>
@@ -1885,6 +1896,10 @@
         </button>
       </div>
       <div class="modal-body">
+        <div class="clan-vip-creation-notice" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; margin-bottom: 16px;">
+          <span style="font-weight: 700; color: #c084fc; font-size: 13px; background: rgba(168, 85, 247, 0.2); padding: 2px 8px; border-radius: 4px;">#TTCDS</span>
+          <span style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Quyền thành lập CLB mới hiện tại chỉ dành riêng cho các thành viên sở hữu danh hiệu <strong>#TTCDS</strong>.</span>
+        </div>
         <div class="form-group" style="margin-bottom: 16px;">
           <label class="form-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Tên CLB / Nhóm Học Tập *</label>
           <input type="text" id="new-clan-name" class="form-input" placeholder="Ví dụ: CLB Trí Tuệ Nhân Tạo BDU" required>
@@ -2145,13 +2160,13 @@
         <div>
           <span class="identity-title-eyebrow">HỒ SƠ CỘNG ĐỒNG</span>
           <h3 id="title-customizer-heading">Danh hiệu cạnh tên</h3>
-          <p id="title-customizer-description">Chọn tối đa 3 danh hiệu bạn muốn mọi người nhìn thấy.</p>
+          <p id="title-customizer-description">Chọn tối đa 4 danh hiệu bạn muốn mọi người nhìn thấy.</p>
         </div>
         <button id="btn-close-title-customizer" class="learning-composer-close" type="button" aria-label="Đóng cửa sổ">×</button>
       </div>
       <div class="identity-title-selection-meta">
         <span>Danh hiệu đang sở hữu</span>
-        <strong id="title-selection-count">0/3 đã chọn</strong>
+        <strong id="title-selection-count">0/4 đã chọn</strong>
       </div>
       <div id="title-customizer-list" class="identity-title-options"></div>
       <div class="identity-title-dialog-footer">

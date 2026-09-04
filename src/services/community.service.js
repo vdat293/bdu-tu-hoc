@@ -1,5 +1,6 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
+import { PermissionService } from './permission.service.js';
 
 function normalizeMssv(mssv) {
   return String(mssv || '').trim().toUpperCase();
@@ -366,21 +367,21 @@ export const CommunityService = {
       // Nếu là bài viết trong CLB: Kiểm tra quyền thành viên
       if (cleanScope === 'clan') {
         if (!/^\d+$/.test(cleanScopeId)) throw httpError('ID CLB không hợp lệ.');
-        const memberRes = await client.query(
-          'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
-          [cleanScopeId, cleanMssv]
-        );
-        if (memberRes.rowCount === 0) {
+        const canPost = await PermissionService.canInClan(cleanMssv, cleanScopeId, 'clan:post_create');
+        if (!canPost) {
           throw httpError('Bạn cần tham gia CLB này trước khi đăng bài.', 403);
         }
-        const memberRole = memberRes.rows[0].role;
-        const isLeaderOrVice = memberRole === 'leader' || memberRole === 'vice_leader';
+
+        const [canAnnounce, canPin] = await Promise.all([
+          PermissionService.canInClan(cleanMssv, cleanScopeId, 'clan:announcement_create'),
+          PermissionService.canInClan(cleanMssv, cleanScopeId, 'clan:post_pin')
+        ]);
 
         // Chỉ Bang Chủ hoặc Phó Bang mới được gán nhãn thông báo chính thức hoặc ghim bài
-        if (cleanCategory === 'announcement' && !isLeaderOrVice) {
+        if (cleanCategory === 'announcement' && !canAnnounce) {
           throw httpError('Chỉ Bang Chủ hoặc Phó Bang mới có quyền đăng bài Thông Báo của CLB.', 403);
         }
-        if (finalPinned && !isLeaderOrVice) {
+        if (finalPinned && !canPin) {
           finalPinned = false;
         }
       } else {
@@ -685,14 +686,7 @@ export const CommunityService = {
 
       let canDelete = postRow.author_mssv === cleanRequester;
       if (!canDelete && postRow.scope === 'clan' && postRow.scope_id && /^\d+$/.test(postRow.scope_id)) {
-        const clanRoleRes = await client.query(
-          'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
-          [postRow.scope_id, cleanRequester]
-        );
-        const role = clanRoleRes.rows[0]?.role;
-        if (role === 'leader' || role === 'vice_leader') {
-          canDelete = true;
-        }
+        canDelete = await PermissionService.canInClan(cleanRequester, postRow.scope_id, 'clan:post_delete_any');
       }
 
       if (!canDelete) {
@@ -735,12 +729,8 @@ export const CommunityService = {
         throw httpError('Chỉ có thể ghim bài viết trong CLB / Nhóm.', 400);
       }
 
-      const roleRes = await client.query(
-        'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
-        [post.scope_id, cleanRequester]
-      );
-      const role = roleRes.rows[0]?.role;
-      if (role !== 'leader' && role !== 'vice_leader') {
+      const canPin = await PermissionService.canInClan(cleanRequester, post.scope_id, 'clan:post_pin');
+      if (!canPin) {
         throw httpError('Chỉ Bang Chủ hoặc Phó Bang mới có quyền ghim bài viết trong CLB.', 403);
       }
 
@@ -1138,11 +1128,7 @@ export const CommunityService = {
 
       let canDelete = row.author_mssv === cleanRequester || row.post_author_mssv === cleanRequester;
       if (!canDelete && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
-        const role = await client.query(
-          `SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2`,
-          [row.scope_id, cleanRequester]
-        );
-        canDelete = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+        canDelete = await PermissionService.canInClan(cleanRequester, row.scope_id, 'clan:comment_delete_any');
       }
       if (!canDelete) throw httpError('Bạn không có quyền xóa bình luận này.', 403);
 
@@ -1187,11 +1173,7 @@ export const CommunityService = {
     if (!(await canAccessPost(row, cleanViewer))) return null;
     let canModerate = cleanViewer && row.post_author_mssv === cleanViewer;
     if (!canModerate && cleanViewer && row.scope === 'clan') {
-      const role = await query(
-        'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
-        [row.scope_id, cleanViewer]
-      );
-      canModerate = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+      canModerate = await PermissionService.canInClan(cleanViewer, row.scope_id, 'clan:comment_delete_any');
     }
     return mapCommentRow(row, cleanViewer, { canModerate });
   },
@@ -1232,11 +1214,7 @@ export const CommunityService = {
     if (!(await canAccessPost(result.rows[0], cleanViewerMssv))) return [];
     let canModerate = Boolean(cleanViewerMssv && result.rows[0].post_author_mssv === cleanViewerMssv);
     if (!canModerate && cleanViewerMssv && result.rows[0].scope === 'clan') {
-      const role = await query(
-        'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
-        [result.rows[0].scope_id, cleanViewerMssv]
-      );
-      canModerate = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+      canModerate = await PermissionService.canInClan(cleanViewerMssv, result.rows[0].scope_id, 'clan:comment_delete_any');
     }
     const comments = result.rows.map((row) => mapCommentRow(row, cleanViewerMssv, { canModerate }));
     return enrichCommunityIdentities(comments);

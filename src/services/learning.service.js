@@ -50,6 +50,31 @@ function getGradeSemesters(payload) {
   return { detected: false, semesters: [] };
 }
 
+export function isCourseFailed(subject) {
+  const result = String(subject?.dat_hp ?? subject?.ket_qua ?? '').trim().toLowerCase();
+  if (result) {
+    if (new Set(['0', 'false', 'không đạt', 'khong dat', 'rot', 'rớt', 'fail', 'failed']).has(result)) {
+      return true;
+    }
+    if (new Set(['1', 'true', 'đạt', 'dat', 'pass', 'passed']).has(result)) {
+      return false;
+    }
+  }
+  const letter = String(subject?.diem_tk_chu ?? subject?.diem_chu_hp_4 ?? subject?.diem_chu ?? '').trim().toUpperCase();
+  if (['F', 'F+', 'I', 'X'].includes(letter)) {
+    return true;
+  }
+  const grade4 = Number(String(subject?.diem_tk_so ?? subject?.diem_hp_4 ?? '').replace(',', '.'));
+  if (Number.isFinite(grade4) && grade4 >= 0 && grade4 < 1.0) {
+    return true;
+  }
+  const grade10 = Number(String(subject?.diem_tk ?? subject?.diem_hp ?? '').replace(',', '.'));
+  if (Number.isFinite(grade10) && grade10 >= 0 && grade10 < 4.0) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Chỉ trích xuất mã/tên môn và trạng thái có điểm từ payload thật của BDU.
  * Không thêm danh mục mặc định và không đoán mã môn từ tên.
@@ -62,6 +87,7 @@ export function extractCoursesFromBduGrades(payload) {
 
   const courseCatalog = new Map();
   const enrollments = [];
+  let hasFailedCourse = false;
 
   semesters.forEach((semester) => {
     const semesterCode = cleanText(
@@ -81,6 +107,9 @@ export function extractCoursesFromBduGrades(payload) {
     if (!semesterCode) return;
 
     subjects.forEach((subject) => {
+      if (isCourseFailed(subject)) {
+        hasFailedCourse = true;
+      }
       const displayCode = cleanText(
         subject?.ma_mon ?? subject?.ma_mon_hoc ?? subject?.ma_hp,
         64
@@ -114,7 +143,8 @@ export function extractCoursesFromBduGrades(payload) {
 
   return {
     courses: [...courseCatalog.values()],
-    enrollments
+    enrollments,
+    hasFailedCourse
   };
 }
 
@@ -280,9 +310,11 @@ export const LearningService = {
 
       await client.query(`
         UPDATE students
-        SET course_synced_at = $2, updated_at = NOW()
+        SET course_synced_at = $2,
+            has_failed_course = CASE WHEN $3 = TRUE THEN TRUE ELSE has_failed_course END,
+            updated_at = NOW()
         WHERE mssv = $1;
-      `, [cleanMssv, syncTime]);
+      `, [cleanMssv, syncTime, Boolean(extracted.hasFailedCourse)]);
     });
 
     return {

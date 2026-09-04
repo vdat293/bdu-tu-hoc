@@ -1,5 +1,36 @@
 [
   {
+    "id": "title:khong-doi-thu",
+    "item_type": "title",
+    "label": "#Không đối thủ",
+    "description": "Top 1 toàn trường BDU",
+    "rarity": "legendary",
+    "asset_key": "khong-doi-thu",
+    "display_policy": "optional",
+    "sort_order": 3,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "gold",
+      "auto_rule": "rank_1_truong"
+    }
+  },
+  {
+    "id": "title:nam-vuong",
+    "item_type": "title",
+    "label": "#Nam vương",
+    "description": "đẹp trai có gì sai",
+    "rarity": "charm",
+    "asset_key": "nam-vuong",
+    "display_policy": "optional",
+    "sort_order": 4,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "charm"
+    }
+  },
+  {
     "id": "title:ttcds",
     "item_type": "title",
     "label": "#TTCDS",
@@ -10,7 +41,214 @@
     "sort_order": 5,
     "metadata": {
       "manual_grantable": true,
-      "source": "config"
+      "source": "config",
+      "capabilities": ["clan:create"]
+    }
+  },
+  {
+    "id": "title:chatgpt",
+    "item_type": "title",
+    "label": "#ChatGPT",
+    "description": "không biết thì hỏi AI",
+    "rarity": "ai",
+    "asset_key": "chatgpt",
+    "display_policy": "optional",
+    "sort_order": 6,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "chatgpt"
+    }
+  },
+  {
+    "id": "title:pho-bi-thu-doan",
+    "item_type": "title",
+    "label": "#Phó bí thư đoàn",
+    "description": "Phó bí thư đoàn trường",
+    "rarity": "youth",
+    "asset_key": "pho-bi-thu-doan",
+    "display_policy": "optional",
+    "sort_order": 7,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "youth"
+    }
+  },
+  {
+    "id": "title:dai-ca",
+    "item_type": "title",
+    "label": "#Đại ca",
+    "description": "Dành cho sinh viên năm 4 BDU",
+    "rarity": "epic",
+    "asset_key": "dai-ca",
+    "display_policy": "optional",
+    "sort_order": 8,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "gold",
+      "auto_rule": "year_4"
+    }
+  },
+  {
+    "id": "title:tien-boi",
+    "item_type": "title",
+    "label": "#Tiền bối",
+    "description": "Dành cho sinh viên từ năm 2 trở đi",
+    "rarity": "rare",
+    "asset_key": "tien-boi",
+    "display_policy": "optional",
+    "sort_order": 9,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "blue",
+      "auto_rule": "year_2_plus"
+    }
+  },
+  {
+    "id": "title:dev",
+    "item_type": "title",
+    "label": "#Dev",
+    "description": "Dành cho sinh viên Khoa Tin học (TH)",
+    "rarity": "epic",
+    "asset_key": "dev",
+    "display_policy": "optional",
+    "sort_order": 10,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "emerald",
+      "auto_rule": "faculty_th"
+    }
+  },
+  {
+    "id": "title:hoc-tai-thi-phan",
+    "item_type": "title",
+    "label": "#Học tài thi phận",
+    "description": "Dành cho sinh viên có môn học bị rớt",
+    "rarity": "rare",
+    "asset_key": "hoc-tai-thi-phan",
+    "display_policy": "optional",
+    "sort_order": 11,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "bronze",
+      "auto_rule": "has_failed_course"
+    }
+  },
+  {
+    "id": "title:hoc-than",
+    "item_type": "title",
+    "label": "#Học thần",
+    "description": "GPA tích lũy từ 3.60 trở lên (Xuất sắc)",
+    "rarity": "legendary",
+    "asset_key": "hoc-than",
+    "display_policy": "optional",
+    "sort_order": 12,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "gold",
+      "auto_rule": "cumulative_gpa_3_6"
+    }
+  },
+  {
+    "id": "title:tinh-hoa-bdu",
+    "item_type": "title",
+    "label": "#Tinh hoa BDU",
+    "description": "GPA tích lũy từ 3.20 trở lên (Giỏi)",
+    "rarity": "epic",
+    "asset_key": "tinh-hoa-bdu",
+    "display_policy": "optional",
+    "sort_order": 13,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "emerald",
+      "auto_rule": "cumulative_gpa_3_2"
+    }
+  },
+  {
+    "id": "title:bat-bai-mon-phai",
+    "item_type": "title",
+    "label": "#Bất bại môn phái",
+    "description": "Tích lũy từ 50 tín chỉ trở lên và chưa từng rớt môn",
+    "rarity": "epic",
+    "asset_key": "bat-bai-mon-phai",
+    "display_policy": "optional",
+    "sort_order": 14,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "gold",
+      "auto_rule": "credits_50_no_fail"
+    }
+  },
+  {
+    "id": "title:con-nha-nguoi-ta",
+    "item_type": "title",
+    "label": "#Con nhà người ta",
+    "description": "Đạt GPA tuyệt đối 4.00 trong một học kỳ",
+    "rarity": "legendary",
+    "asset_key": "con-nha-nguoi-ta",
+    "display_policy": "optional",
+    "sort_order": 15,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "violet",
+      "auto_rule": "perfect_semester"
+    }
+  },
+  {
+    "id": "title:tho-san-tin-chi",
+    "item_type": "title",
+    "label": "#Thợ săn tín chỉ",
+    "description": "Tích lũy từ 80 tín chỉ trở lên toàn khóa",
+    "rarity": "epic",
+    "asset_key": "tho-san-tin-chi",
+    "display_policy": "optional",
+    "sort_order": 16,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "blue",
+      "auto_rule": "cumulative_credits_80"
+    }
+  },
+  {
+    "id": "title:cu-dem-luyen-thi",
+    "item_type": "title",
+    "label": "#Cú đêm luyện thi",
+    "description": "Hoàn thành từ 18 tín chỉ một kỳ với GPA từ 3.00",
+    "rarity": "rare",
+    "asset_key": "cu-dem-luyen-thi",
+    "display_policy": "optional",
+    "sort_order": 17,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "violet",
+      "auto_rule": "heavy_semester"
+    }
+  },
+  {
+    "id": "title:tay-to-ganh-team",
+    "item_type": "title",
+    "label": "#Tay to gánh team",
+    "description": "Thành viên tích cực gánh team và chia sẻ tài liệu",
+    "rarity": "rare",
+    "asset_key": "tay-to-ganh-team",
+    "display_policy": "optional",
+    "sort_order": 18,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "blue",
+      "auto_rule": "community_contributor"
     }
   },
   {

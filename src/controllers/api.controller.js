@@ -1033,8 +1033,11 @@ export const ApiController = {
           viewerMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
         } catch {}
       }
-      const clans = await StudentService.listClans(viewerMssv);
-      return res.json({ result: true, data: clans });
+      const [clans, canCreate] = await Promise.all([
+        StudentService.listClans(viewerMssv),
+        viewerMssv ? StudentService.canCreateClan(viewerMssv) : Promise.resolve(false)
+      ]);
+      return res.json({ result: true, data: clans, can_create_clan: canCreate });
     } catch (err) {
       console.error('Get clans error:', err.message);
       return res.status(err.status || 500).json({
@@ -1048,6 +1051,14 @@ export const ApiController = {
     try {
       const authHeader = req.headers.authorization;
       const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
+      const canCreate = await StudentService.canCreateClan(mssv);
+      if (!canCreate) {
+        return res.status(403).json({
+          result: false,
+          message: 'Chỉ những thành viên có danh hiệu #TTCDS mới được phép tạo CLB / Nhóm.'
+        });
+      }
+
       const { code, name, tag, description, avatarUrl } = req.body || {};
       const clan = await StudentService.createClan({
         code,
@@ -1055,7 +1066,8 @@ export const ApiController = {
         tag,
         description,
         avatarUrl,
-        leaderMssv: mssv
+        leaderMssv: mssv,
+        enforcePermission: true
       });
       return res.status(201).json({ result: true, data: clan });
     } catch (err) {
@@ -1071,13 +1083,64 @@ export const ApiController = {
     try {
       const authHeader = req.headers.authorization;
       const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
-      const member = await StudentService.joinClan(mssv, req.params.id);
-      return res.json({ result: true, data: member });
+      const request = await StudentService.requestJoinClan(mssv, req.params.id, req.body?.message);
+      return res.json({
+        result: true,
+        data: request,
+        status: 'pending',
+        message: 'Yêu cầu tham gia đã được gửi tới Trưởng CLB và đang chờ phê duyệt.'
+      });
     } catch (err) {
       console.error('Join clan error:', err.message);
-      return res.status(err.status || 500).json({
+      return res.status(err.status || 400).json({
         result: false,
-        message: err.message || 'Không thể tham gia CLB / Nhóm.'
+        message: err.message || 'Không thể gửi yêu cầu tham gia CLB / Nhóm.'
+      });
+    }
+  },
+
+  async getClanJoinRequests(req, res) {
+    try {
+      const authHeader = req.headers.authorization;
+      const requesterMssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
+      const requests = await StudentService.getPendingJoinRequests(req.params.id, requesterMssv);
+      return res.json({ result: true, data: requests });
+    } catch (err) {
+      console.error('Get clan join requests error:', err.message);
+      return res.status(err.status || 400).json({
+        result: false,
+        message: err.message || 'Không thể tải danh sách yêu cầu gia nhập.'
+      });
+    }
+  },
+
+  async reviewClanJoinRequest(req, res) {
+    try {
+      const authHeader = req.headers.authorization;
+      const reviewerMssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
+      const { action } = req.body || {};
+      const result = await StudentService.reviewJoinRequest(req.params.id, reviewerMssv, req.params.requestId, action);
+      return res.json({ result: true, data: result });
+    } catch (err) {
+      console.error('Review clan join request error:', err.message);
+      return res.status(err.status || 400).json({
+        result: false,
+        message: err.message || 'Không thể xử lý yêu cầu gia nhập.'
+      });
+    }
+  },
+
+  async cancelClanJoinRequest(req, res) {
+    try {
+      const authHeader = req.headers.authorization;
+      const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
+      const success = await StudentService.cancelJoinRequest(mssv, req.params.id);
+      return res.json({ result: true, cancelled: success });
+    } catch (err) {
+      console.error('Cancel clan join request error:', err.message);
+      return res.status(err.status || 400).json({
+        result: false,
+        message: err.message || 'Không thể hủy yêu cầu gia nhập.'
       });
     }
   },

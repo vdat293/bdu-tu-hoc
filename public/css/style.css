@@ -3494,6 +3494,520 @@ body.theme-dark .identity-title-badge.tone-violet { color: #a78bfa; }
   animation: none;
 }
 
+/* --- Special Identity Title: #ChatGPT (Lõi Trí Tuệ Nhân Tạo / Quantum Cyber AI) --- */
+.identity-title-badge.title-chatgpt,
+.identity-title-badge.rarity-ai {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 2px 10px 2px 10px;
+  border: 1px solid rgba(45, 212, 191, .85);
+  background:
+    linear-gradient(125deg, #021814 0%, #063d33 50%, #03201a 100%) padding-box,
+    linear-gradient(90deg, #10a37f, #34d399, #38bdf8, #2dd4bf, #10a37f) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #d1fae5;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  box-shadow: 0 0 14px rgba(16, 185, 129, .55),
+    0 0 26px rgba(45, 212, 191, .3),
+    inset 0 0 8px rgba(45, 212, 191, .2);
+  text-shadow: 0 0 6px #10a37f, 0 0 12px #2dd4bf;
+  animation: chatgpt-border-neural 2.6s linear infinite, chatgpt-core-glow 2s ease-in-out infinite alternate;
+  overflow: hidden;
+}
+
+.identity-title-badge.title-chatgpt::before,
+.identity-title-badge.rarity-ai::before {
+  content: none !important;
+}
+
+.identity-title-badge.title-chatgpt .identity-title-icon-chatgpt,
+.identity-title-badge.rarity-ai .identity-title-icon-chatgpt {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: -1px;
+  color: #2dd4bf;
+  filter: drop-shadow(0 0 4px #2dd4bf) drop-shadow(0 0 8px #10a37f);
+  animation: chatgpt-hologram-pulse 2.4s ease-in-out infinite;
+}
+
+.identity-title-badge.title-chatgpt::after,
+.identity-title-badge.rarity-ai::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  content: '';
+  background: linear-gradient(90deg, transparent, #2dd4bf 25%, #a7f3d0 50%, #2dd4bf 75%, transparent);
+  box-shadow: 0 0 8px #2dd4bf, 0 0 14px #10a37f;
+  animation: chatgpt-laser-sweep 1.6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+/* --- Special Identity Title: #Phó bí thư đoàn (Huy Hiệu Đoàn Thanh Niên Tiên Phong) --- */
+.identity-title-badge.title-pho-bi-thu-doan,
+.identity-title-badge.rarity-youth {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(115deg, #002244 0%, #004b87 35%, #7a0c0c 70%, #b91c1c 100%) padding-box,
+    linear-gradient(90deg, #facc15, #ef4444, #0284c7, #fde047, #ef4444, #facc15) border-box;
+  background-size: 100% 100%, 280% 100%;
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  box-shadow: 0 0 16px rgba(239, 68, 68, .55),
+    0 0 28px rgba(2, 132, 199, .38),
+    0 0 8px rgba(250, 204, 21, .45);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8), 0 0 8px rgba(250, 204, 21, .85), 0 0 14px rgba(239, 68, 68, .75);
+  animation: youth-border-shine 2.8s linear infinite, youth-flag-breathe 2.4s ease-in-out infinite alternate;
+  overflow: hidden;
+}
+
+.identity-title-badge.title-pho-bi-thu-doan::before,
+.identity-title-badge.rarity-youth::before {
+  content: none !important;
+}
+
+.identity-title-badge.title-pho-bi-thu-doan .identity-title-icon-youth,
+.identity-title-badge.rarity-youth .identity-title-icon-youth {
+  display: inline-block;
+  flex-shrink: 0;
+  color: #fef08a;
+  font-size: .85rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px #eab308) drop-shadow(0 0 10px #ef4444) drop-shadow(0 0 16px #dc2626);
+  animation: youth-star-blaze 1.6s ease-in-out infinite alternate;
+}
+
+.identity-title-badge.title-pho-bi-thu-doan::after,
+.identity-title-badge.rarity-youth::after {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: -100%;
+  width: 60%;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(254, 240, 138, .3) 25%, rgba(255, 255, 255, .8) 50%, rgba(254, 240, 138, .3) 75%, transparent);
+  transform: skewX(-25deg);
+  animation: youth-sunlight-sweep 2.4s cubic-bezier(.4, 0, .2, 1) infinite;
+  pointer-events: none;
+}
+
+/* --- Special Identity Title: #Đại ca --- */
+.identity-title-badge.title-dai-ca {
+  border-color: rgba(245, 158, 11, .6);
+  background: linear-gradient(110deg, rgba(69, 26, 3, .97), rgba(120, 53, 15, .93), rgba(69, 26, 3, .97));
+  color: #fef08a;
+  font-weight: 900;
+  letter-spacing: .04em;
+  box-shadow: 0 3px 14px rgba(217, 119, 6, .45), inset 0 0 8px rgba(245, 158, 11, .22);
+  text-shadow: 0 0 8px rgba(245, 158, 11, .75);
+}
+
+/* --- Special Identity Title: #Tiền bối --- */
+.identity-title-badge.title-tien-boi {
+  border-color: rgba(59, 130, 246, .48);
+  background: linear-gradient(110deg, rgba(15, 23, 42, .97), rgba(30, 58, 138, .92), rgba(15, 23, 42, .97));
+  color: #93c5fd;
+  font-weight: 800;
+  letter-spacing: .03em;
+  box-shadow: 0 3px 12px rgba(59, 130, 246, .35), inset 0 0 6px rgba(59, 130, 246, .18);
+  text-shadow: 0 0 6px rgba(96, 165, 250, .55);
+}
+
+/* --- Special Identity Title: #Dev --- */
+.identity-title-badge.title-dev {
+  border-color: rgba(16, 185, 129, .55);
+  background: linear-gradient(110deg, rgba(4, 28, 18, .97), rgba(6, 46, 30, .93), rgba(4, 28, 18, .97));
+  color: #34d399;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-weight: 800;
+  letter-spacing: .05em;
+  box-shadow: 0 0 10px rgba(52, 211, 153, .35), inset 0 0 7px rgba(16, 185, 129, .22);
+  text-shadow: 0 0 6px rgba(52, 211, 153, .65);
+}
+
+/* --- Special Identity Title: #Không đối thủ (Top 1 toàn trường) --- */
+.identity-title-badge.title-khong-doi-thu {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(251, 191, 36, .85);
+  background:
+    linear-gradient(115deg, rgba(30, 15, 2, .98), rgba(88, 44, 5, .95), rgba(30, 15, 2, .98)) padding-box,
+    linear-gradient(90deg, #f59e0b, #fef08a, #ef4444, #fbbf24, #f59e0b) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #fef08a;
+  font-weight: 900;
+  letter-spacing: .04em;
+  box-shadow: 0 0 16px rgba(245, 158, 11, .55), inset 0 0 10px rgba(251, 191, 36, .35);
+  text-shadow: 0 0 10px rgba(245, 158, 11, .85);
+  animation: champion-border-flow 3s linear infinite;
+}
+
+.identity-title-badge.title-khong-doi-thu .identity-title-icon-top1 {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px #f59e0b);
+  animation: champion-sword-pulse 2s ease-in-out infinite;
+}
+
+/* --- Special Identity Title: #Nam vương (Vương Giả Hào Hoa / Luxury Imperial Charm) --- */
+.identity-title-badge.title-nam-vuong,
+.identity-title-badge.rarity-charm {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px 3px 9px;
+  border-radius: 4px 14px 4px 14px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(135deg, #20042b 0%, #4a0d5c 40%, #701149 70%, #20042b 100%) padding-box,
+    linear-gradient(90deg, #f43f5e, #ec4899, #a855f7, #fbbf24, #f43f5e) border-box;
+  background-size: 100% 100%, 260% 100%;
+  color: #fff0f5;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  box-shadow: 0 0 14px rgba(244, 63, 94, .55),
+    0 0 28px rgba(168, 85, 247, .38),
+    inset 0 1px 2px rgba(255, 255, 255, .35);
+  text-shadow: 0 0 8px rgba(244, 63, 94, .85), 0 0 16px rgba(168, 85, 247, .65);
+  animation: namvuong-border-flow 2.8s linear infinite, namvuong-aura-breathe 2.4s ease-in-out infinite alternate;
+  overflow: hidden;
+}
+
+.identity-title-badge.title-nam-vuong::before,
+.identity-title-badge.rarity-charm::before {
+  content: none !important;
+}
+
+.identity-title-badge.title-nam-vuong .identity-title-icon-namvuong,
+.identity-title-badge.rarity-charm .identity-title-icon-namvuong {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .85rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px #fbbf24) drop-shadow(0 0 10px #f43f5e);
+  animation: namvuong-crown-float 2s ease-in-out infinite alternate;
+}
+
+.identity-title-badge.title-nam-vuong::after,
+.identity-title-badge.rarity-charm::after {
+  position: absolute;
+  z-index: 1;
+  top: -60%;
+  left: -70%;
+  width: 50%;
+  height: 220%;
+  content: '';
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, .15) 30%, rgba(255, 255, 255, .85) 50%, rgba(255, 220, 240, .9) 65%, transparent 100%);
+  transform: rotate(25deg);
+  animation: namvuong-diamond-beam 2.8s cubic-bezier(.4, 0, .2, 1) infinite;
+  pointer-events: none;
+}
+
+/* --- Special Identity Title: #Học tài thi phận --- */
+.identity-title-badge.title-hoc-tai-thi-phan {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(217, 119, 6, .65);
+  background: linear-gradient(115deg, rgba(41, 24, 16, .97), rgba(87, 43, 22, .92), rgba(41, 24, 16, .97));
+  color: #fed7aa;
+  font-weight: 800;
+  letter-spacing: .02em;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, .35), inset 0 0 8px rgba(245, 158, 11, .15);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .7);
+}
+
+.identity-title-badge.title-hoc-tai-thi-phan .identity-title-icon-hoctai {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .75rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .5));
+}
+
+/* --- Special Identity Title: #Học thần (GPA >= 3.60 Xuất sắc) --- */
+.identity-title-badge.title-hoc-than {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(251, 191, 36, .85);
+  background:
+    linear-gradient(125deg, #241600 0%, #4a2c04 45%, #241600 100%) padding-box,
+    linear-gradient(90deg, #f59e0b, #fef08a, #fcd34d, #f59e0b) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #fef9c3;
+  font-weight: 900;
+  letter-spacing: .03em;
+  box-shadow: 0 0 14px rgba(245, 158, 11, .55), inset 0 0 8px rgba(253, 224, 71, .3);
+  text-shadow: 0 0 8px rgba(245, 158, 11, .75);
+  animation: champion-border-flow 3.2s linear infinite;
+}
+
+.identity-title-badge.title-hoc-than .identity-title-icon-hocthan {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px #fcd34d);
+  animation: hocthan-thunder-pulse 1.8s ease-in-out infinite alternate;
+}
+
+/* --- Special Identity Title: #Tinh hoa BDU (GPA >= 3.20 Giỏi) --- */
+.identity-title-badge.title-tinh-hoa-bdu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(16, 185, 129, .8);
+  background: linear-gradient(125deg, #022416 0%, #064e3b 50%, #022416 100%);
+  color: #a7f3d0;
+  font-weight: 800;
+  letter-spacing: .02em;
+  box-shadow: 0 0 12px rgba(16, 185, 129, .45), inset 0 0 6px rgba(52, 211, 153, .25);
+  text-shadow: 0 0 6px rgba(16, 185, 129, .6);
+}
+
+.identity-title-badge.title-tinh-hoa-bdu .identity-title-icon-tinhhoa {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px #34d399);
+}
+
+/* --- Special Identity Title: #Bất bại môn phái (>= 50 tín chỉ không rớt) --- */
+.identity-title-badge.title-bat-bai-mon-phai {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(234, 179, 8, .85);
+  background:
+    linear-gradient(125deg, #1c1404 0%, #452a06 50%, #1c1404 100%) padding-box,
+    linear-gradient(90deg, #eab308, #ca8a04, #fef08a, #eab308) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #fef08a;
+  font-weight: 900;
+  box-shadow: 0 0 13px rgba(234, 179, 8, .5), inset 0 0 8px rgba(250, 204, 21, .3);
+  text-shadow: 0 0 6px rgba(234, 179, 8, .7);
+  animation: champion-border-flow 3.5s linear infinite;
+}
+
+.identity-title-badge.title-bat-bai-mon-phai .identity-title-icon-batbai {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px #eab308);
+}
+
+/* --- Special Identity Title: #Con nhà người ta (GPA 4.00 một kỳ) --- */
+.identity-title-badge.title-con-nha-nguoi-ta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(125deg, #1a082b 0%, #4c1d95 50%, #2e1065 100%) padding-box,
+    linear-gradient(90deg, #c084fc, #e879f9, #818cf8, #c084fc) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #f5d0fe;
+  font-weight: 900;
+  letter-spacing: .03em;
+  box-shadow: 0 0 15px rgba(192, 132, 252, .55), 0 0 25px rgba(232, 121, 249, .35), inset 0 0 8px rgba(245, 208, 254, .25);
+  text-shadow: 0 0 8px rgba(192, 132, 252, .85);
+  animation: namvuong-border-flow 3s linear infinite;
+}
+
+.identity-title-badge.title-con-nha-nguoi-ta .identity-title-icon-connha {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px #e879f9);
+  animation: connha-twinkle 1.6s ease-in-out infinite alternate;
+}
+
+/* --- Special Identity Title: #Thợ săn tín chỉ (>= 80 tín chỉ) --- */
+.identity-title-badge.title-tho-san-tin-chi {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(56, 189, 248, .8);
+  background:
+    linear-gradient(125deg, #041a33 0%, #1e40af 50%, #041a33 100%) padding-box,
+    linear-gradient(90deg, #38bdf8, #60a5fa, #0284c7, #38bdf8) border-box;
+  background-size: 100% 100%, 250% 100%;
+  color: #bae6fd;
+  font-weight: 800;
+  box-shadow: 0 0 14px rgba(56, 189, 248, .5), inset 0 0 7px rgba(96, 165, 250, .3);
+  text-shadow: 0 0 6px rgba(56, 189, 248, .7);
+  animation: champion-border-flow 3.4s linear infinite;
+}
+
+.identity-title-badge.title-tho-san-tin-chi .identity-title-icon-thosan {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px #38bdf8);
+}
+
+/* --- Special Identity Title: #Cú đêm luyện thi (>= 18 tín chỉ một kỳ GPA >= 3.0) --- */
+.identity-title-badge.title-cu-dem-luyen-thi {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(167, 139, 250, .65);
+  background: linear-gradient(125deg, #0d0b21 0%, #29235c 50%, #17133a 100%);
+  color: #ddd6fe;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(167, 139, 250, .35), inset 0 0 6px rgba(139, 92, 246, .2);
+  text-shadow: 0 0 6px rgba(167, 139, 250, .5);
+}
+
+.identity-title-badge.title-cu-dem-luyen-thi .identity-title-icon-cudem {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px #a78bfa);
+}
+
+/* --- Special Identity Title: #Tay to gánh team (Clan / Tài liệu) --- */
+.identity-title-badge.title-tay-to-ganh-team {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(56, 189, 248, .7);
+  background: linear-gradient(125deg, #031b2e 0%, #0284c7 50%, #031b2e 100%);
+  color: #e0f2fe;
+  font-weight: 800;
+  box-shadow: 0 0 12px rgba(14, 165, 233, .45), inset 0 0 6px rgba(56, 189, 248, .25);
+  text-shadow: 0 0 6px rgba(14, 165, 233, .6);
+}
+
+.identity-title-badge.title-tay-to-ganh-team .identity-title-icon-tayto {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .8rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px #0ea5e9);
+}
+
+@keyframes hocthan-thunder-pulse {
+  0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 4px #fcd34d); }
+  100% { transform: scale(1.25) rotate(-10deg); filter: drop-shadow(0 0 9px #fbbf24) drop-shadow(0 0 14px #f59e0b); }
+}
+
+@keyframes connha-twinkle {
+  0% { transform: scale(0.95) rotate(0deg); opacity: .8; }
+  100% { transform: scale(1.25) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 8px #e879f9); }
+}
+
+@keyframes champion-border-flow {
+  to { background-position: 0 0, 250% 0; }
+}
+
+@keyframes champion-sword-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(-8deg); filter: drop-shadow(0 0 9px #fbbf24); }
+}
+
+@keyframes namvuong-border-flow {
+  to { background-position: 0 0, 260% 0; }
+}
+
+@keyframes namvuong-crown-float {
+  0% { transform: translateY(0) rotate(-6deg) scale(1); }
+  100% { transform: translateY(-3px) rotate(6deg) scale(1.18); filter: drop-shadow(0 0 8px #fbbf24) drop-shadow(0 0 14px #f43f5e); }
+}
+
+@keyframes namvuong-diamond-beam {
+  0%, 20% { left: -70%; opacity: 0; }
+  35% { opacity: 1; }
+  65%, 100% { left: 140%; opacity: 0; }
+}
+
+@keyframes namvuong-aura-breathe {
+  0% { box-shadow: 0 0 10px rgba(244, 63, 94, .45), 0 0 20px rgba(168, 85, 247, .3); }
+  100% { box-shadow: 0 0 18px rgba(244, 63, 94, .75), 0 0 35px rgba(236, 72, 153, .55), inset 0 0 8px rgba(244, 63, 94, .3); }
+}
+
+@keyframes chatgpt-border-neural {
+  to { background-position: 0 0, 250% 0; }
+}
+
+@keyframes chatgpt-core-glow {
+  0% { box-shadow: 0 0 10px rgba(16, 185, 129, .4), 0 0 20px rgba(45, 212, 191, .2); }
+  100% { box-shadow: 0 0 18px rgba(16, 185, 129, .75), 0 0 32px rgba(45, 212, 191, .45), inset 0 0 10px rgba(45, 212, 191, .35); }
+}
+
+@keyframes chatgpt-hologram-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: .85; }
+  50% { transform: scale(1.22) rotate(18deg); opacity: 1; filter: drop-shadow(0 0 8px #2dd4bf) drop-shadow(0 0 14px #10a37f); }
+}
+
+@keyframes chatgpt-laser-sweep {
+  0% { top: 0; opacity: 0; }
+  20% { opacity: .9; }
+  80% { opacity: .9; }
+  100% { top: calc(100% - 2px); opacity: 0; }
+}
+
+@keyframes youth-border-shine {
+  to { background-position: 0 0, 280% 0; }
+}
+
+@keyframes youth-flag-breathe {
+  0% { box-shadow: 0 0 12px rgba(239, 68, 68, .45), 0 0 20px rgba(2, 132, 199, .3); }
+  100% { box-shadow: 0 0 22px rgba(239, 68, 68, .75), 0 0 36px rgba(2, 132, 199, .5), 0 0 12px rgba(250, 204, 21, .6); }
+}
+
+@keyframes youth-star-blaze {
+  0% { transform: scale(.85) rotate(-12deg); filter: drop-shadow(0 0 4px #eab308); }
+  100% { transform: scale(1.28) rotate(18deg); filter: drop-shadow(0 0 8px #fef08a) drop-shadow(0 0 14px #ef4444) drop-shadow(0 0 20px #dc2626); }
+}
+
+@keyframes youth-sunlight-sweep {
+  0%, 15% { left: -100%; opacity: 0; }
+  35% { opacity: .85; }
+  65%, 100% { left: 150%; opacity: 0; }
+}
+
 @keyframes achievement-border-flow {
   to { background-position: 0 0, 220% 0; }
 }
@@ -3546,7 +4060,21 @@ body.theme-dark .identity-title-badge.tone-violet { color: #a78bfa; }
   .identity-title-badge.rarity-legendary::before,
   .identity-title-badge.rarity-legendary::after,
   .identity-title-badge.rarity-vip::before,
-  .identity-title-badge.rarity-vip::after {
+  .identity-title-badge.rarity-vip::after,
+  .identity-title-badge.title-chatgpt,
+  .identity-title-badge.rarity-ai,
+  .identity-title-badge.title-chatgpt .identity-title-icon-chatgpt,
+  .identity-title-badge.title-chatgpt::after,
+  .identity-title-badge.title-pho-bi-thu-doan,
+  .identity-title-badge.rarity-youth,
+  .identity-title-badge.title-pho-bi-thu-doan .identity-title-icon-youth,
+  .identity-title-badge.title-pho-bi-thu-doan::after,
+  .identity-title-badge.title-khong-doi-thu,
+  .identity-title-badge.title-khong-doi-thu .identity-title-icon-top1,
+  .identity-title-badge.title-nam-vuong,
+  .identity-title-badge.rarity-charm,
+  .identity-title-badge.title-nam-vuong .identity-title-icon-namvuong,
+  .identity-title-badge.title-nam-vuong::after {
     animation: none;
   }
 }
@@ -12777,8 +13305,8 @@ body.theme-dark #tab-confession {
 @media (min-width: 993px) {
   #tab-confession .forum-sidebar-column {
     position: sticky;
-    /* Cho sidebar tiếp tục đi lên thêm 32px rồi mới bắt đầu ghim. */
-    top: -20px;
+    /* Tự căn chỉnh vừa vặn với khung hình: giữ trọn header và thấy toàn bộ tiện ích học tập */
+    top: 14px;
     margin-top: 0;
     align-self: start;
     z-index: 5;
@@ -12791,13 +13319,62 @@ body.theme-dark #tab-confession {
   }
 }
 
-#tab-confession .comment-card-item {
-  background: var(--forum-surface-strong);
+/* Tự động căn chỉnh tinh gọn cho sidebar Confession để vừa vặn trong màn hình */
+#tab-confession .forum-sidebar-column {
+  gap: 12px;
 }
 
-#tab-confession .classroom-attachment-card {
-  background: var(--forum-surface-strong);
-  box-shadow: 0 3px 12px rgba(31, 24, 20, 0.055);
+#tab-confession .forum-widget-header {
+  padding: 8px 14px;
+}
+
+#tab-confession .forum-widget-header h4 {
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+}
+
+#tab-confession .forum-widget-body {
+  padding: 10px 13px;
+}
+
+#tab-confession .widget-user-preview {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+#tab-confession .widget-user-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+}
+
+#tab-confession .widget-user-name {
+  font-size: 13.5px;
+  margin-bottom: 1px;
+}
+
+#tab-confession .widget-user-mssv {
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+#tab-confession .btn-title-customizer {
+  margin-top: 3px;
+  font-size: 10.5px;
+}
+
+#tab-confession .widget-user-actions {
+  gap: 6px;
+}
+
+#tab-confession .btn-widget-action {
+  padding: 6px 8px;
+  font-size: 11.5px;
+  border-radius: 8px;
+}
+
+#tab-confession .widget-tool-buttons {
+  gap: 6px;
 }
 
 #tab-confession .btn-platform {
@@ -12805,6 +13382,31 @@ body.theme-dark #tab-confession {
   background: transparent;
   border: 1px solid var(--border-color);
   box-shadow: none;
+  padding: 7px 11px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+#tab-confession .platform-text strong {
+  font-size: 12.5px;
+  display: block;
+  line-height: 1.25;
+}
+
+#tab-confession .platform-text small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+#tab-confession .comment-card-item {
+  background: var(--forum-surface-strong);
+}
+
+#tab-confession .classroom-attachment-card {
+  background: var(--forum-surface-strong);
+  box-shadow: 0 3px 12px rgba(31, 24, 20, 0.055);
 }
 
 #tab-confession .btn-platform:hover {
@@ -14068,7 +14670,6 @@ body.modal-lock {
 }
 
 #tab-confession .forum-main-column { min-width: 0; }
-#tab-confession .forum-sidebar-column { top: 16px; }
 #tab-confession .forum-post-card {
   padding: 20px 22px;
   border-radius: 16px;
@@ -14102,7 +14703,7 @@ body.modal-lock {
 #tab-confession .comment-card-item.is-reply { margin-left: 28px; }
 #tab-confession .comment-composer-inline { margin-bottom: 12px; }
 
-@media (max-width: 900px) {
+@media (max-width: 992px) {
   #tab-confession .forum-two-column-layout { grid-template-columns: 1fr; }
   #tab-confession .forum-sidebar-column { position: static; }
 }
@@ -14111,4 +14712,151 @@ body.modal-lock {
   #tab-confession .forum-post-card { padding: 16px; }
   #tab-confession .forum-comments-wrapper { padding: 10px; }
   #tab-confession .comment-card-item.is-reply { margin-left: 12px; }
+}
+
+/* ==========================================================================
+   CLAN JOIN REQUESTS & PENDING STATUS STYLING
+   ========================================================================== */
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: #facc15;
+}
+
+.clan-status-badge.pending {
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  color: #facc15;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.clan-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clan-request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.clan-request-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.clan-request-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clan-request-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.clan-request-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.clan-request-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clan-request-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.clan-request-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clan-request-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-approve-request {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-approve-request:hover {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: #10b981;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.btn-reject-request {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-reject-request:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fff;
+  transform: translateY(-1px);
 }

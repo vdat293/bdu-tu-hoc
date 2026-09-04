@@ -1,4 +1,5 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
+import { isCourseFailed } from './learning.service.js';
 
 function cleanText(value, maxLength = 500) {
   return String(value ?? '').trim().slice(0, maxLength);
@@ -230,6 +231,16 @@ export const AchievementService = {
           semester.classification || null,
           semester.earnedCredits
         ]);
+      }
+
+      const rootPayload = gradePayload?.data ?? gradePayload ?? {};
+      const semestersList = Array.isArray(rootPayload?.ds_diem_hocky) ? rootPayload.ds_diem_hocky : (Array.isArray(rootPayload) ? rootPayload : []);
+      const hasFailed = semestersList.some((s) => Array.isArray(s?.ds_diem_mon_hoc) && s.ds_diem_mon_hoc.some(isCourseFailed));
+      if (hasFailed) {
+        await client.query(
+          'UPDATE students SET has_failed_course = TRUE, updated_at = NOW() WHERE mssv = $1',
+          [cleanMssv]
+        );
       }
 
       const [definitionsResult, semestersResult] = await Promise.all([

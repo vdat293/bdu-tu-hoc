@@ -9,6 +9,7 @@ const AppState = {
   rawGradeData: null,
   academicRanking: null,
   identityPresentation: null,
+  bduSchoolPhoto: null,
   titleSelectionDraft: [],
   leaderboard: {
     scope: 'school',
@@ -128,14 +129,54 @@ function escapeHtml(str) {
 
 function renderIdentityTitleBadges(titles, extraClass = '') {
   if (!Array.isArray(titles) || !titles.length) return '';
-  const allowedTones = new Set(['member', 'gold', 'silver', 'bronze', 'blue', 'emerald', 'violet']);
-  const allowedRarities = new Set(['rare', 'epic', 'legendary', 'vip']);
+  const allowedTones = new Set(['member', 'gold', 'silver', 'bronze', 'blue', 'emerald', 'violet', 'youth', 'chatgpt', 'charm', 'ai']);
+  const allowedRarities = new Set(['rare', 'epic', 'legendary', 'vip', 'youth', 'ai', 'charm']);
   return `
     <span class="identity-title-badges ${escapeHtml(extraClass)}">
-      ${titles.slice(0, 3).map((title) => {
+      ${titles.slice(0, 4).map((title) => {
         const tone = allowedTones.has(title?.tone) ? title.tone : 'member';
         const rarity = allowedRarities.has(title?.rarity) ? ` rarity-${title.rarity}` : '';
-        return `<span class="identity-title-badge tone-${tone}${rarity}" title="${escapeHtml(title?.detail || title?.label || '')}">${escapeHtml(title?.label || '')}</span>`;
+        const rawKey = String(title?.asset_key || title?.id || '').replace(/^(title|achievement):/, '').trim().toLowerCase();
+        const safeKey = rawKey.replace(/[^a-z0-9_-]/g, '-');
+        const customClass = safeKey ? ` title-${safeKey}` : '';
+        const isChatgpt = safeKey === 'chatgpt' || String(title?.label || '').toUpperCase().includes('CHATGPT');
+        const isYouth = safeKey === 'pho-bi-thu-doan' || String(title?.label || '').includes('Phó bí thư đoàn');
+        const isTop1 = safeKey === 'khong-doi-thu' || String(title?.label || '').includes('Không đối thủ');
+        const isNamVuong = safeKey === 'nam-vuong' || String(title?.label || '').includes('Nam vương');
+        const isHocTai = safeKey === 'hoc-tai-thi-phan' || String(title?.label || '').includes('Học tài thi phận');
+        const isHocThan = safeKey === 'hoc-than' || String(title?.label || '').includes('Học thần');
+        const isTinhHoa = safeKey === 'tinh-hoa-bdu' || String(title?.label || '').includes('Tinh hoa BDU');
+        const isBatBai = safeKey === 'bat-bai-mon-phai' || String(title?.label || '').includes('Bất bại môn phái');
+        const isConNhaNguoiTa = safeKey === 'con-nha-nguoi-ta' || String(title?.label || '').includes('Con nhà người ta');
+        const isThoSan = safeKey === 'tho-san-tin-chi' || String(title?.label || '').includes('Thợ săn tín chỉ');
+        const isCuDem = safeKey === 'cu-dem-luyen-thi' || String(title?.label || '').includes('Cú đêm luyện thi');
+        const isTayTo = safeKey === 'tay-to-ganh-team' || String(title?.label || '').includes('Tay to gánh team');
+        const iconPrefix = isChatgpt
+          ? `<svg class="identity-title-icon-chatgpt" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1683a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4947zm-9.66-4.1354a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1402-1.6564zm-1.6712-9.4042a4.485 4.485 0 0 1 2.3418-1.9729v.1656l.0047 5.5164a.7806.7806 0 0 0 .388.686l5.8144 3.3543-2.02 1.1683a.0757.0757 0 0 1-.071 0l-4.8303-2.7866a4.4992 4.4992 0 0 1-1.6276-6.131zm16.5708 3.0657l-5.8144-3.3543 2.02-1.1683a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4304-.7007zm2.0152-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L8.6888 8.9882V6.6558a.0852.0852 0 0 1 .0332-.0615L13.7196 3.799a4.504 4.504 0 0 1 6.1876 2.4045v.0047zm-10.2312 4.1638l2.3994-1.3867 2.3994 1.3867v2.7735l-2.3994 1.3867-2.3994-1.3867z"/></svg>`
+          : isYouth
+            ? `<span class="identity-title-icon-youth" aria-hidden="true">★</span>`
+            : isTop1
+              ? `<span class="identity-title-icon-top1" aria-hidden="true">⚔️</span>`
+              : isNamVuong
+                ? `<span class="identity-title-icon-namvuong" aria-hidden="true">👑</span>`
+                : isHocTai
+                  ? `<span class="identity-title-icon-hoctai" aria-hidden="true">🍂</span>`
+                  : isHocThan
+                    ? `<span class="identity-title-icon-hocthan" aria-hidden="true">⚡</span>`
+                    : isTinhHoa
+                      ? `<span class="identity-title-icon-tinhhoa" aria-hidden="true">🎓</span>`
+                      : isBatBai
+                        ? `<span class="identity-title-icon-batbai" aria-hidden="true">🛡️</span>`
+                        : isConNhaNguoiTa
+                          ? `<span class="identity-title-icon-connha" aria-hidden="true">✨</span>`
+                          : isThoSan
+                            ? `<span class="identity-title-icon-thosan" aria-hidden="true">🎯</span>`
+                            : isCuDem
+                              ? `<span class="identity-title-icon-cudem" aria-hidden="true">🦉</span>`
+                              : isTayTo
+                                ? `<span class="identity-title-icon-tayto" aria-hidden="true">💪</span>`
+                                : '';
+        return `<span class="identity-title-badge tone-${tone}${rarity}${customClass}" data-title-id="${escapeHtml(title?.id || '')}" title="${escapeHtml(title?.detail || title?.label || '')}">${iconPrefix}${escapeHtml(title?.label || '')}</span>`;
       }).join('')}
     </span>
   `;
@@ -264,7 +305,7 @@ function handleTitleSelectionChange(event) {
   const checkbox = event.target.closest('input[type="checkbox"]');
   if (!checkbox) return;
   const checked = [...document.querySelectorAll('#title-customizer-list input[type="checkbox"]:checked')];
-  const maxTitles = Number(AppState.identityPresentation?.max_titles || 3);
+  const maxTitles = Number(AppState.identityPresentation?.max_titles || 4);
   if (checked.length > maxTitles) {
     checkbox.checked = false;
     showToast(`Bạn chỉ có thể chọn tối đa ${maxTitles} danh hiệu.`, 'warning');
@@ -280,7 +321,7 @@ function handleTitleSelectionChange(event) {
 function updateTitleSelectionCount() {
   const count = document.getElementById('title-selection-count');
   if (!count) return;
-  const maxTitles = Number(AppState.identityPresentation?.max_titles || 3);
+  const maxTitles = Number(AppState.identityPresentation?.max_titles || 4);
   count.textContent = `${AppState.titleSelectionDraft.length}/${maxTitles} đã chọn`;
 }
 
@@ -383,21 +424,68 @@ function updateIdentityPresentationUI() {
   if (widgetTitles) widgetTitles.innerHTML = badges || '<span class="identity-title-empty">Chưa hiển thị danh hiệu</span>';
 }
 
-function applyResolvedAvatarToCurrentUser(presentation) {
-  const currentPhoto = AppState.user?.photoUrl || localStorage.getItem('bdu_user_photo') || '';
+function getResolvedAvatarUrl(presentation = AppState.identityPresentation) {
   const isOverride = presentation?.avatar_source === 'override' && Boolean(presentation?.avatar_url);
-  const url = isOverride
-    ? presentation.avatar_url
-    : (presentation?.avatar_url || currentPhoto);
-  const name = presentation?.name || AppState.user?.name || 'Sinh viên BDU';
+  if (isOverride) {
+    return {
+      url: presentation.avatar_url,
+      source: 'override'
+    };
+  }
 
-  if (AppState.user) {
-    if (url) {
-      AppState.user.photoUrl = url;
-      AppState.user.avatarSource = isOverride
-        ? 'override'
-        : (presentation?.avatar_url ? (presentation?.avatar_source || 'bdu') : 'bdu-api-live');
-    }
+  // Priority 2: presentation BDU avatar URL if present
+  if (presentation?.avatar_url) {
+    return {
+      url: presentation.avatar_url,
+      source: presentation.avatar_source || 'bdu'
+    };
+  }
+
+  // Priority 3: BDU school photo from live API
+  if (AppState.bduSchoolPhoto) {
+    return {
+      url: AppState.bduSchoolPhoto,
+      source: 'bdu-api-live'
+    };
+  }
+
+  // Priority 4: existing profile photo on student card
+  const existingCardPhoto = document.getElementById('profile-student-photo')?.src;
+  if (existingCardPhoto && !existingCardPhoto.endsWith('/') && !existingCardPhoto.includes('undefined')) {
+    return {
+      url: existingCardPhoto,
+      source: 'bdu-api-live'
+    };
+  }
+
+  // Priority 5: User state photo or localStorage
+  const currentPhoto = AppState.user?.photoUrl || localStorage.getItem('bdu_user_photo') || '';
+  if (currentPhoto) {
+    return {
+      url: currentPhoto,
+      source: AppState.user?.avatarSource || 'bdu'
+    };
+  }
+
+  return {
+    url: '',
+    source: 'initials'
+  };
+}
+
+function syncAllCurrentUserAvatars(presentation = AppState.identityPresentation) {
+  if (presentation) {
+    AppState.identityPresentation = presentation;
+  }
+  const resolved = getResolvedAvatarUrl(presentation);
+  const url = resolved.url;
+  const isOverride = resolved.source === 'override';
+  const name = presentation?.name || AppState.user?.name || AppState.user?.fullName || 'Sinh viên BDU';
+  const initials = getInitials(name);
+
+  if (AppState.user && url) {
+    AppState.user.photoUrl = url;
+    AppState.user.avatarSource = isOverride ? 'override' : (resolved.source || 'bdu');
   }
 
   try {
@@ -406,12 +494,36 @@ function applyResolvedAvatarToCurrentUser(presentation) {
 
   const markup = url
     ? `<img src="${escapeHtml(url)}" alt="Ảnh của ${escapeHtml(name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
-    : escapeHtml(getInitials(name));
-  ['user-avatar', 'hero-avatar', 'cfs-hero-avatar', 'cfs-composer-avatar', 'widget-user-avatar'].forEach((id) => {
-    const element = document.getElementById(id);
-    if (element) element.innerHTML = markup;
+    : escapeHtml(initials);
+
+  // Sync all circle avatar containers across all tabs:
+  // 1. Sidebar bottom left user avatar
+  // 2. Tab 01 (Bảng Điểm & GPA) hero avatar
+  // 3. Tab 10 (CLB) quick composer avatar & modal author avatar
+  // 4. Tab 11 (Confession) hero avatar, composer avatar, right widget avatar
+  const avatarIds = [
+    'user-avatar',
+    'hero-avatar',
+    'cfs-hero-avatar',
+    'cfs-composer-avatar',
+    'widget-user-avatar',
+    'clan-quick-composer-avatar',
+    'clan-modal-author-avatar'
+  ];
+  avatarIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = markup;
   });
 
+  // Confession modal avatar (if non-anon)
+  const cfsModalAvatar = document.getElementById('fb-modal-avatar');
+  const anonCheckbox = document.getElementById('cfs-post-anon');
+  const isAnon = anonCheckbox ? Boolean(anonCheckbox.checked) : true;
+  if (cfsModalAvatar && !isAnon) {
+    cfsModalAvatar.innerHTML = markup;
+  }
+
+  // Tab 02: Lý Lịch Sinh Viên (student ID card photo & initials fallback)
   const profilePhoto = document.getElementById('profile-student-photo');
   const profileFallback = document.getElementById('card-avatar');
   if (profilePhoto) {
@@ -425,10 +537,19 @@ function applyResolvedAvatarToCurrentUser(presentation) {
       profilePhoto.classList.add('hidden');
       if (profileFallback) {
         profileFallback.classList.remove('hidden');
-        profileFallback.textContent = getInitials(name);
+        profileFallback.textContent = initials;
       }
     }
   }
+
+  // Sync author avatar in active feeds (Confession, CLB, Learning Hub)
+  if (typeof applyCurrentUserPresentationToFeeds === 'function') {
+    applyCurrentUserPresentationToFeeds();
+  }
+}
+
+function applyResolvedAvatarToCurrentUser(presentation) {
+  syncAllCurrentUserAvatars(presentation);
 }
 
 function applyCurrentUserPresentationToFeeds() {
@@ -851,6 +972,7 @@ function switchToDashboard() {
   if (heroMssv) heroMssv.textContent = mssv;
   if (heroEmail) heroEmail.textContent = AppState.user?.email || `${mssv}@student.bdu.edu.vn`;
 
+  syncAllCurrentUserAvatars();
 }
 
 function getInitials(name) {
@@ -921,6 +1043,10 @@ function initNavigation() {
             }
           }, 150);
         }
+
+        if (['tab-grades', 'tab-profile', 'tab-clans', 'tab-confession'].includes(tabId)) {
+          syncAllCurrentUserAvatars();
+        }
       };
 
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -960,24 +1086,33 @@ async function loadAllDashboardData() {
     // Ranking failures must not block grades, profile, schedule or other tools.
     await loadAcademicRanking();
 
-    // 2. Load Profile & Photo directly from BDU API
+    // 2. Load Profile & Identity Presentation in parallel directly from API
     const maSV = AppState.user?.mssv || '';
     const idsv = AppState.user?.idsv || AppState.user?.id_sinh_vien || '';
-    const profileRes = await BduApi.getProfile(AppState.token, idsv, maSV);
-    renderProfile(profileRes);
-    try {
-      AppState.identityPresentation = await BduApi.getMyIdentityPresentation(AppState.token);
+    const [profileSettled, presentationSettled] = await Promise.allSettled([
+      BduApi.getProfile(AppState.token, idsv, maSV),
+      BduApi.getMyIdentityPresentation(AppState.token)
+    ]);
+
+    if (presentationSettled.status === 'fulfilled' && presentationSettled.value) {
+      AppState.identityPresentation = presentationSettled.value;
       AppState.confession.framePreview = AppState.identityPresentation.equipped_frame_id
         ? String(AppState.identityPresentation.equipped_frame_id).replace(/^frame:/, '')
         : 'real';
       if (!AppState.identityPresentation.equipped_frame_id) {
         try { localStorage.removeItem('bdu_custom_frame_preview'); } catch (e) {}
       }
-      updateIdentityPresentationUI();
-    } catch (presentationError) {
+    } else {
       AppState.identityPresentation = null;
-      console.info('Chưa tải được danh hiệu hiển thị:', presentationError.message);
+      if (presentationSettled.status === 'rejected') {
+        console.info('Chưa tải được danh hiệu hiển thị:', presentationSettled.reason?.message);
+      }
     }
+
+    if (profileSettled.status === 'fulfilled' && profileSettled.value) {
+      renderProfile(profileSettled.value);
+    }
+    updateIdentityPresentationUI();
 
     // 3. Load Schedule (Real BDU API)
     const schedule = await BduApi.getSchedule(AppState.token);
@@ -1743,6 +1878,8 @@ function renderProfile(profileRes) {
         fullPhotoUrl = (fullPhotoUrl.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + fullPhotoUrl;
       }
     }
+    AppState.bduSchoolPhoto = fullPhotoUrl;
+
     if (!isOverrideActive && AppState.user) {
       AppState.user.photoUrl = fullPhotoUrl;
       AppState.user.avatarSource = 'bdu-api-live';
@@ -1758,10 +1895,7 @@ function renderProfile(profileRes) {
     imgEl.onload = () => {
       imgEl.classList.remove('hidden');
       if (avatarPlaceholder) avatarPlaceholder.classList.add('hidden');
-      const navAvatar = document.getElementById('user-avatar');
-      const heroAvatar = document.getElementById('hero-avatar');
-      if (navAvatar) navAvatar.innerHTML = `<img src="${escapeHtml(displayUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-      if (heroAvatar) heroAvatar.innerHTML = `<img src="${escapeHtml(displayUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      syncAllCurrentUserAvatars();
     };
     imgEl.onerror = () => {
       if (isOverrideActive) return;
@@ -1783,6 +1917,7 @@ function renderProfile(profileRes) {
       avatarPlaceholder.textContent = getInitials(name);
     }
   }
+  syncAllCurrentUserAvatars();
 
   // 2. Thông tin khóa học
   const elClass = document.getElementById('p-class');
@@ -3337,6 +3472,7 @@ function formatLearningPostTime(value) {
 // ============================================================================
 AppState.clans = {
   list: [],
+  canCreate: false,
   activeFilter: 'all',
   currentClan: null,
   posts: [],
@@ -3346,6 +3482,21 @@ AppState.clans = {
   docFilter: 'all',
   docSearch: ''
 };
+
+function checkHasTtcds(presentation = AppState.identityPresentation) {
+  if (AppState.clans?.canCreate) return true;
+  if (!presentation) return false;
+  if (presentation.can_create_clan) return true;
+  const titles = [
+    ...(presentation.available_titles || []),
+    ...(presentation.selected_titles || [])
+  ];
+  return titles.some((t) => 
+    t.id === 'title:ttcds' || 
+    t.id === 'achievement:ttcds' || 
+    String(t.label || '').toUpperCase().includes('TTCDS')
+  );
+}
 
 function initClansModule() {
   const filterAllBtn = document.getElementById('filter-clans-all');
@@ -3393,7 +3544,20 @@ function initClansModule() {
   const openModal = () => modalCreate && modalCreate.classList.remove('hidden');
   const closeModal = () => modalCreate && modalCreate.classList.add('hidden');
 
-  if (openCreateBtn) openCreateBtn.addEventListener('click', openModal);
+  if (openCreateBtn) {
+    openCreateBtn.addEventListener('click', () => {
+      if (!AppState.token) {
+        showToast('Vui lòng đăng nhập để tạo CLB / Nhóm.', 'warning');
+        return;
+      }
+      const canCreate = AppState.clans?.canCreate || checkHasTtcds(AppState.identityPresentation);
+      if (!canCreate) {
+        showToast('Chỉ những thành viên sở hữu danh hiệu #TTCDS mới có quyền thành lập CLB / Nhóm mới.', 'warning');
+        return;
+      }
+      openModal();
+    });
+  }
   if (closeCreateBtn) closeCreateBtn.addEventListener('click', closeModal);
   if (cancelCreateBtn) cancelCreateBtn.addEventListener('click', closeModal);
 
@@ -3550,14 +3714,16 @@ function initClansModule() {
     submitClanPostBtn.addEventListener('click', handleSubmitClanPost);
   }
 
-  // Channel Subtabs Navigation (Bản Tin vs Kho Tài Liệu vs Thành Viên)
+  // Channel Subtabs Navigation (Bản Tin vs Kho Tài Liệu vs Thành Viên vs Yêu Cầu Gia Nhập)
   const tabFeedBtn = document.getElementById('tab-btn-clan-feed');
   const tabDocsBtn = document.getElementById('tab-btn-clan-docs');
   const tabMembersBtn = document.getElementById('tab-btn-clan-members');
+  const tabRequestsBtn = document.getElementById('tab-btn-clan-requests');
 
   if (tabFeedBtn) tabFeedBtn.addEventListener('click', () => switchClanSubtab('feed'));
   if (tabDocsBtn) tabDocsBtn.addEventListener('click', () => switchClanSubtab('docs'));
   if (tabMembersBtn) tabMembersBtn.addEventListener('click', () => switchClanSubtab('members'));
+  if (tabRequestsBtn) tabRequestsBtn.addEventListener('click', () => switchClanSubtab('requests'));
 
   // Clan Feed Filter Pills (Tất cả bài đăng, Bản tin, Bình chọn, Bài của tôi)
   document.querySelectorAll('.clan-feed-pill').forEach(pill => {
@@ -3632,6 +3798,7 @@ async function loadClansDirectory() {
   try {
     const clans = await BduApi.getClans(AppState.token);
     AppState.clans.list = Array.isArray(clans) ? clans : [];
+    AppState.clans.canCreate = clans.can_create_clan ?? checkHasTtcds(AppState.identityPresentation);
     renderClansGrid();
   } catch (err) {
     console.error('Lỗi tải danh sách CLB:', err);
@@ -3680,7 +3847,12 @@ function renderClansGrid() {
 
   grid.innerHTML = filtered.map(clan => {
     const isJoined = Boolean(clan.is_joined);
-    const roleText = clan.my_role === 'leader' ? '👑 Bang Chủ' : (clan.my_role === 'vice_leader' ? '⭐ Phó Bang' : (isJoined ? '🛡️ Thành Viên' : ''));
+    const hasPending = Boolean(clan.has_pending_request);
+    let roleText = '';
+    if (clan.my_role === 'leader') roleText = '👑 Bang Chủ';
+    else if (clan.my_role === 'vice_leader') roleText = '⭐ Phó Bang';
+    else if (isJoined) roleText = '🛡️ Thành Viên';
+    else if (hasPending) roleText = '⏳ Đang Chờ Duyệt';
 
     return `
       <div class="clan-card glass-panel clickable-card" data-clan-id="${clan.id}">
@@ -3702,12 +3874,12 @@ function renderClansGrid() {
               </svg>
               ${clan.member_count || 0} thành viên
             </span>
-            ${roleText ? `<span class="clan-my-role-badge">${roleText}</span>` : ''}
+            ${roleText ? `<span class="clan-my-role-badge ${hasPending ? 'pending' : ''}">${roleText}</span>` : ''}
           </div>
 
           <div class="clan-card-hint-row">
-            <span>${isJoined ? 'Đã tham gia' : 'Chưa tham gia'}</span>
-            <span class="hint-action">${isJoined ? 'Xem bài viết & tài liệu →' : 'Xem thành viên & chức vụ →'}</span>
+            <span>${isJoined ? 'Đã tham gia' : (hasPending ? 'Đang chờ duyệt' : 'Chưa tham gia')}</span>
+            <span class="hint-action">${isJoined ? 'Xem bài viết & tài liệu →' : (hasPending ? 'Xem trạng thái →' : 'Xem thành viên & xin gia nhập →')}</span>
           </div>
         </div>
       </div>
@@ -3729,11 +3901,39 @@ async function handleJoinClan(clanId) {
     return;
   }
   try {
-    await BduApi.joinClan(AppState.token, clanId);
-    showToast('Tham gia CLB thành công!', 'success');
+    const res = await BduApi.joinClan(AppState.token, clanId);
+    showToast(res.message || 'Đã gửi yêu cầu tham gia tới Trưởng CLB. Vui lòng chờ phê duyệt!', 'success');
+    const clan = (AppState.clans.list || []).find(c => String(c.id) === String(clanId));
+    if (clan) {
+      clan.has_pending_request = true;
+    }
     await loadClansDirectory();
+    if (AppState.clans.currentClan && String(AppState.clans.currentClan.id) === String(clanId)) {
+      AppState.clans.currentClan.has_pending_request = true;
+      openClanChannel(clanId);
+    }
   } catch (err) {
-    showToast(err.message || 'Không thể tham gia CLB.', 'error');
+    showToast(err.message || 'Không thể gửi yêu cầu tham gia CLB.', 'error');
+  }
+}
+
+async function handleCancelJoinRequest(clanId) {
+  if (!AppState.token) return;
+  if (!confirm('Bạn có chắc muốn hủy yêu cầu tham gia CLB này?')) return;
+  try {
+    await BduApi.cancelClanJoinRequest(AppState.token, clanId);
+    showToast('Đã hủy yêu cầu tham gia.', 'info');
+    const clan = (AppState.clans.list || []).find(c => String(c.id) === String(clanId));
+    if (clan) {
+      clan.has_pending_request = false;
+    }
+    await loadClansDirectory();
+    if (AppState.clans.currentClan && String(AppState.clans.currentClan.id) === String(clanId)) {
+      AppState.clans.currentClan.has_pending_request = false;
+      openClanChannel(clanId);
+    }
+  } catch (err) {
+    showToast(err.message || 'Không thể hủy yêu cầu tham gia.', 'error');
   }
 }
 
@@ -3752,6 +3952,12 @@ async function handleLeaveClan(clanId) {
 async function handleCreateNewClan() {
   if (!AppState.token) {
     showToast('Vui lòng đăng nhập để tạo CLB.', 'warning');
+    return;
+  }
+
+  const canCreate = AppState.clans?.canCreate || checkHasTtcds(AppState.identityPresentation);
+  if (!canCreate) {
+    showToast('Chỉ những thành viên sở hữu danh hiệu #TTCDS mới có quyền thành lập CLB / Nhóm mới.', 'warning');
     return;
   }
 
@@ -3809,7 +4015,7 @@ async function openClanChannel(clanId) {
 
   const roleEl = document.getElementById('channel-clan-role');
   if (roleEl) {
-    roleEl.textContent = clan.my_role === 'leader' ? '👑 Bang Chủ' : (clan.is_joined ? '🛡️ Thành Viên' : 'Chưa tham gia');
+    roleEl.textContent = clan.my_role === 'leader' ? '👑 Bang Chủ' : (clan.my_role === 'vice_leader' ? '⭐ Phó Bang' : (clan.is_joined ? '🛡️ Thành Viên' : (clan.has_pending_request ? '⏳ Đang chờ duyệt' : 'Chưa tham gia')));
   }
 
   const actionBox = document.getElementById('channel-action-box');
@@ -3825,12 +4031,20 @@ async function openClanChannel(clanId) {
           document.getElementById('clan-main-view')?.classList.remove('hidden');
         });
       }
+    } else if (clan.has_pending_request) {
+      actionBox.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="badge-pending">⏳ Đang chờ duyệt</span>
+          <button class="btn btn-secondary btn-sm" id="btn-channel-cancel-request">Hủy yêu cầu</button>
+        </div>
+      `;
+      document.getElementById('btn-channel-cancel-request')?.addEventListener('click', async () => {
+        await handleCancelJoinRequest(clan.id);
+      });
     } else {
-      actionBox.innerHTML = `<button class="btn btn-primary btn-sm" id="btn-channel-join">Tham Gia CLB</button>`;
+      actionBox.innerHTML = `<button class="btn btn-primary btn-sm" id="btn-channel-join">Xin Tham Gia CLB</button>`;
       document.getElementById('btn-channel-join')?.addEventListener('click', async () => {
         await handleJoinClan(clan.id);
-        clan.is_joined = true;
-        openClanChannel(clan.id);
       });
     }
   }
@@ -3862,6 +4076,20 @@ async function openClanChannel(clanId) {
 
   const subtabCount = document.getElementById('channel-subtab-mem-count');
   if (subtabCount) subtabCount.textContent = clan.member_count || 0;
+
+  // Clan Requests Subtab (Chỉ dành cho Trưởng CLB)
+  const isLeader = clan.my_role === 'leader';
+  const tabReqBtn = document.getElementById('tab-btn-clan-requests');
+  if (tabReqBtn) {
+    tabReqBtn.classList.toggle('hidden', !isLeader);
+    if (isLeader) {
+      BduApi.getClanJoinRequests(AppState.token, clan.id).then(reqs => {
+        const count = Array.isArray(reqs) ? reqs.length : 0;
+        const countBadge = document.getElementById('channel-subtab-req-count');
+        if (countBadge) countBadge.textContent = count;
+      }).catch(() => {});
+    }
+  }
 
   // Clan Settings (Chỉ Bang Chủ)
   const settingsBox = document.getElementById('clan-settings-box');
@@ -3897,15 +4125,17 @@ function switchClanSubtab(targetTab) {
   const tabFeedBtn = document.getElementById('tab-btn-clan-feed');
   const tabDocsBtn = document.getElementById('tab-btn-clan-docs');
   const tabMembersBtn = document.getElementById('tab-btn-clan-members');
+  const tabRequestsBtn = document.getElementById('tab-btn-clan-requests');
 
   const panelFeed = document.getElementById('channel-panel-feed');
   const panelDocs = document.getElementById('channel-panel-docs');
   const panelMembers = document.getElementById('channel-panel-members');
+  const panelRequests = document.getElementById('channel-panel-requests');
 
   const currentClan = AppState.clans.currentClan;
 
-  [tabFeedBtn, tabDocsBtn, tabMembersBtn].forEach(btn => btn?.classList.remove('active'));
-  [panelFeed, panelDocs, panelMembers].forEach(panel => panel?.classList.add('hidden'));
+  [tabFeedBtn, tabDocsBtn, tabMembersBtn, tabRequestsBtn].forEach(btn => btn?.classList.remove('active'));
+  [panelFeed, panelDocs, panelMembers, panelRequests].forEach(panel => panel?.classList.add('hidden'));
 
   if (targetTab === 'feed') {
     tabFeedBtn?.classList.add('active');
@@ -3935,6 +4165,132 @@ function switchClanSubtab(targetTab) {
     if (currentClan) {
       loadClanMembers(currentClan.id);
     }
+  } else if (targetTab === 'requests') {
+    tabRequestsBtn?.classList.add('active');
+    panelRequests?.classList.remove('hidden');
+    if (currentClan) {
+      loadClanRequests(currentClan.id);
+    }
+  }
+}
+
+async function loadClanRequests(clanId) {
+  const container = document.getElementById('clan-requests-list');
+  const countBadge = document.getElementById('clan-requests-count-badge');
+  const subtabBadge = document.getElementById('channel-subtab-req-count');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+      <span>Đang tải danh sách yêu cầu gia nhập...</span>
+    </div>
+  `;
+
+  try {
+    const requests = await BduApi.getClanJoinRequests(AppState.token, clanId);
+    const list = Array.isArray(requests) ? requests : [];
+    if (countBadge) countBadge.textContent = `${list.length} yêu cầu chờ duyệt`;
+    if (subtabBadge) subtabBadge.textContent = list.length;
+
+    if (list.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-box" style="text-align: center; padding: 40px;">
+          <div style="font-size: 32px; margin-bottom: 8px;">🎉</div>
+          <h4 style="font-weight: 700; margin-bottom: 4px;">Không có yêu cầu chờ duyệt</h4>
+          <p style="font-size: 13px; color: var(--text-muted);">Hiện tại chưa có sinh viên nào đang gửi yêu cầu xin gia nhập CLB.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = list.map(req => {
+      const name = req.full_name || req.mssv;
+      const initial = (name.charAt(0) || 'S').toUpperCase();
+      const avatarHtml = req.avatar_url
+        ? `<img src="${escapeHtml(req.avatar_url)}" alt="${escapeHtml(name)}">`
+        : initial;
+      const dateStr = req.created_at ? new Date(req.created_at).toLocaleString('vi-VN') : '';
+
+      return `
+        <div class="clan-request-card" data-req-id="${req.id}">
+          <div class="clan-request-user">
+            <div class="clan-request-avatar">${avatarHtml}</div>
+            <div class="clan-request-info">
+              <span class="clan-request-name">${escapeHtml(name)}</span>
+              <div class="clan-request-meta">
+                <span>MSSV: <strong>${escapeHtml(req.mssv)}</strong></span>
+                <span>•</span>
+                <span>${dateStr}</span>
+                ${req.message ? `<span>• Lời nhắn: "${escapeHtml(req.message)}"</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="clan-request-actions">
+            <button class="btn-approve-request" data-req-id="${req.id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Duyệt
+            </button>
+            <button class="btn-reject-request" data-req-id="${req.id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="18" x2="18" y2="18"></line>
+              </svg>
+              Từ chối
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Gắn sự kiện duyệt / từ chối
+    container.querySelectorAll('.btn-approve-request').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const requestId = btn.getAttribute('data-req-id');
+        btn.disabled = true;
+        try {
+          await BduApi.reviewClanJoinRequest(AppState.token, clanId, requestId, 'approve');
+          showToast('Đã phê duyệt thành viên vào CLB thành công!', 'success');
+          const current = AppState.clans.currentClan;
+          if (current) current.member_count = (current.member_count || 0) + 1;
+          const memCountEl = document.getElementById('channel-clan-members');
+          if (memCountEl && current) {
+            memCountEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> ${current.member_count} Thành viên`;
+          }
+          const subtabMemCount = document.getElementById('channel-subtab-mem-count');
+          if (subtabMemCount && current) subtabMemCount.textContent = current.member_count;
+          await loadClanRequests(clanId);
+        } catch (err) {
+          showToast(err.message || 'Không thể phê duyệt yêu cầu.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-reject-request').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const requestId = btn.getAttribute('data-req-id');
+        btn.disabled = true;
+        try {
+          await BduApi.reviewClanJoinRequest(AppState.token, clanId, requestId, 'reject');
+          showToast('Đã từ chối yêu cầu gia nhập.', 'info');
+          await loadClanRequests(clanId);
+        } catch (err) {
+          showToast(err.message || 'Không thể từ chối yêu cầu.', 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error('Lỗi tải danh sách yêu cầu gia nhập:', err);
+    container.innerHTML = `
+      <div class="empty-state-box" style="text-align: center; padding: 24px; color: var(--text-muted);">
+        <p>${escapeHtml(err.message || 'Không thể tải danh sách yêu cầu gia nhập.')}</p>
+        <button class="btn btn-secondary btn-sm" onclick="loadClanRequests('${clanId}')" style="margin-top: 8px;">Thử lại</button>
+      </div>
+    `;
   }
 }
 
@@ -3944,6 +4300,7 @@ function renderLockedClanFeed(clan) {
   if (composer) composer.style.display = 'none';
 
   if (container) {
+    const hasPending = Boolean(clan.has_pending_request);
     container.innerHTML = `
       <div class="clan-feed-locked-card glass-panel">
         <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3952,16 +4309,24 @@ function renderLockedClanFeed(clan) {
         </svg>
         <h4 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">Bản Tin Nội Bộ CLB</h4>
         <p style="font-size: 13px; color: var(--text-muted); max-width: 460px; margin: 0 auto 16px;">
-          Bạn chưa tham gia CLB này. Hãy tham gia để xem bài viết thảo luận, thông báo và các tài liệu ôn thi được chia sẻ trong nhóm!
+          ${hasPending ? 'Yêu cầu tham gia của bạn đang chờ Trưởng CLB phê duyệt. Sau khi được duyệt, bạn sẽ xem được toàn bộ bài viết thảo luận và tài liệu trong nhóm!' : 'Bạn chưa tham gia CLB này. Hãy gửi yêu cầu xin gia nhập để xem bài viết thảo luận, thông báo và các tài liệu ôn thi được chia sẻ trong nhóm!'}
         </p>
-        <button class="btn btn-primary btn-sm" id="btn-lock-join-clan">Tham Gia CLB Ngay</button>
+        ${hasPending ? `
+          <div style="display:inline-flex;gap:10px;align-items:center;">
+            <span class="badge-pending">⏳ Đang Chờ Phê Duyệt</span>
+            <button class="btn btn-secondary btn-sm" id="btn-lock-cancel-request">Hủy yêu cầu</button>
+          </div>
+        ` : `
+          <button class="btn btn-primary btn-sm" id="btn-lock-join-clan">Xin Tham Gia CLB Ngay</button>
+        `}
       </div>
     `;
 
     document.getElementById('btn-lock-join-clan')?.addEventListener('click', async () => {
       await handleJoinClan(clan.id);
-      clan.is_joined = true;
-      openClanChannel(clan.id);
+    });
+    document.getElementById('btn-lock-cancel-request')?.addEventListener('click', async () => {
+      await handleCancelJoinRequest(clan.id);
     });
   }
 }

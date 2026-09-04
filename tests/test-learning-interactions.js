@@ -41,8 +41,8 @@ try {
   assert.equal(identity.avatar_url, 'https://sv.bdu.edu.vn/images/test-author.jpg');
   assert.equal(identity.selected_titles[0].label, 'Sinh viên BDU');
   await assert.rejects(
-    IdentityPresentationService.updateSelectedTitles(AUTHOR, ['a', 'b', 'c', 'd']),
-    /tối đa 3/
+    IdentityPresentationService.updateSelectedTitles(AUTHOR, ['a', 'b', 'c', 'd', 'e']),
+    /tối đa 4/
   );
 
   const post = await LearningService.createCoursePost(AUTHOR, COURSE_CODE, {

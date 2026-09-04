@@ -185,8 +185,8 @@ export const IdentityAdminService = {
       throw httpError('Loại item phải là frame, title hoặc capability.');
     }
     if (!cleanLabel) throw httpError('Tên hiển thị không được để trống.');
-    if (!['common', 'rare', 'epic', 'legendary', 'vip'].includes(cleanRarity)) {
-      throw httpError('Độ hiếm không hợp lệ (phải là common, rare, epic, legendary hoặc vip).');
+    if (!['common', 'rare', 'epic', 'legendary', 'vip', 'youth', 'ai', 'charm'].includes(cleanRarity)) {
+      throw httpError('Độ hiếm không hợp lệ (phải là common, rare, epic, legendary, vip, youth, ai hoặc charm).');
     }
     if (!['optional', 'auto_equip', 'mandatory'].includes(cleanPolicy)) {
       throw httpError('Chính sách hiển thị không hợp lệ.');
@@ -373,7 +373,7 @@ export const IdentityAdminService = {
             UPDATE students
             SET displayed_title_ids = $2::jsonb, updated_at = NOW()
             WHERE mssv = $1;
-          `, [cleanMssv, JSON.stringify([cleanItemId, ...current].slice(0, 3))]);
+          `, [cleanMssv, JSON.stringify([cleanItemId, ...current].slice(0, 4))]);
         }
       }
       await client.query(`

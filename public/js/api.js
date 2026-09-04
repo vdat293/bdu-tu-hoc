@@ -488,8 +488,10 @@ const BduApi = {
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch('/api/community/clans', { headers });
-    const data = await this.handleResponse(response, 'Không thể tải danh sách CLB / Nhóm.');
-    return data.data || [];
+    const res = await this.handleResponse(response, 'Không thể tải danh sách CLB / Nhóm.');
+    const list = res.data || [];
+    list.can_create_clan = Boolean(res.can_create_clan);
+    return list;
   },
 
   async createClan(token, clanData) {
@@ -505,12 +507,46 @@ const BduApi = {
     return data.data;
   },
 
-  async joinClan(token, clanId) {
+  async joinClan(token, clanId, message = null) {
     const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/join`, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message })
+    });
+    const data = await this.handleResponse(response, 'Không thể gửi yêu cầu tham gia CLB.');
+    return data;
+  },
+
+  async cancelClanJoinRequest(token, clanId) {
+    const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/join-requests`, {
+      method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    const data = await this.handleResponse(response, 'Không thể tham gia CLB / Nhóm.');
+    const data = await this.handleResponse(response, 'Không thể hủy yêu cầu gia nhập.');
+    return data;
+  },
+
+  async getClanJoinRequests(token, clanId) {
+    const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/join-requests`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải danh sách yêu cầu gia nhập.');
+    return data.data || [];
+  },
+
+  async reviewClanJoinRequest(token, clanId, requestId, action) {
+    const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/join-requests/${encodeURIComponent(requestId)}/review`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action })
+    });
+    const data = await this.handleResponse(response, 'Không thể xử lý yêu cầu gia nhập.');
     return data.data;
   },
 

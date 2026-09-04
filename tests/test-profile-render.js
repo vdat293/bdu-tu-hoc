@@ -26,7 +26,8 @@ const createElement = id => {
   'p-education-level', 'p-cohort-years', 'p-advisor-id', 'p-advisor-name',
   'btn-mail-advisor', 'profile-student-photo', 'card-avatar', 'user-avatar',
   'hero-avatar', 'cfs-hero-avatar', 'cfs-composer-avatar', 'widget-user-avatar',
-  'widget-user-name', 'widget-user-mssv', 'cfs-hero-username', 'cfs-hero-sub'
+  'widget-user-name', 'widget-user-mssv', 'cfs-hero-username', 'cfs-hero-sub',
+  'clan-quick-composer-avatar', 'clan-modal-author-avatar'
 ].forEach(createElement);
 
 const sandbox = {
@@ -117,5 +118,12 @@ vm.runInContext(`applyResolvedAvatarToCurrentUser({
   avatar_source: 'override'
 })`, sandbox);
 assert.equal(elements.get('profile-student-photo').src, '/media/avatars/24050126-custom.webp', 'Override photo takes precedence');
+assert.ok(elements.get('hero-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'hero-avatar must be synced with override');
+assert.ok(elements.get('user-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'user-avatar must be synced with override');
+assert.ok(elements.get('cfs-hero-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'cfs-hero-avatar must be synced with override');
+assert.ok(elements.get('cfs-composer-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'cfs-composer-avatar must be synced with override');
+assert.ok(elements.get('widget-user-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'widget-user-avatar must be synced with override');
+assert.ok(elements.get('clan-quick-composer-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'clan-quick-composer-avatar must be synced with override');
+assert.ok(elements.get('clan-modal-author-avatar').innerHTML.includes('/media/avatars/24050126-custom.webp'), 'clan-modal-author-avatar must be synced with override');
 
 console.log('✓ Profile renderer resolves advisor fields and avatar fallback without ReferenceError');
