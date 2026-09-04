@@ -11606,7 +11606,7 @@ h3,
     #ef233c 96%
   );
   filter: blur(2.5px) drop-shadow(0 0 7px rgba(239, 35, 60, .38)) drop-shadow(0 0 10px rgba(37, 99, 235, .34));
-  animation: aidti-energy-orbit 18s linear infinite;
+  animation: none;
 }
 
 .aidti-frame-stage {
@@ -11634,7 +11634,7 @@ h3,
 .aidti-frame-art {
   z-index: 3;
   filter: drop-shadow(0 0 4px rgba(239, 35, 60, .34)) drop-shadow(0 7px 11px rgba(30, 64, 175, .24));
-  animation: aidti-frame-idle 7.6s ease-in-out infinite;
+  animation: none;
 }
 
 .aidti-frame-chibi-layer {
@@ -11643,7 +11643,7 @@ h3,
   clip-path: polygon(77% 54%, 100% 54%, 100% 100%, 79% 100%);
   mix-blend-mode: screen;
   filter: brightness(1.16) saturate(1.06) drop-shadow(0 0 4px rgba(37, 99, 235, .35));
-  animation: aidti-chibi-greeting 6.8s ease-in-out infinite;
+  animation: none;
 }
 
 .aidti-circuit-ring,
@@ -11666,7 +11666,7 @@ h3,
   mask: radial-gradient(circle, transparent 61%, #000 62% 64%, transparent 65%);
   filter: drop-shadow(0 0 4px rgba(239, 35, 60, .42));
   opacity: .3;
-  animation: aidti-circuit-spin 22s linear infinite;
+  animation: none;
 }
 
 .aidti-data-scan {
@@ -11682,7 +11682,7 @@ h3,
   mix-blend-mode: screen;
   filter: drop-shadow(0 0 4px rgba(37, 99, 235, .38));
   opacity: .28;
-  animation: aidti-data-scan 7.2s cubic-bezier(.4, 0, .2, 1) infinite;
+  animation: none;
 }
 
 .aidti-node {
@@ -11693,7 +11693,7 @@ h3,
   border-radius: 2px;
   background: #ef233c;
   box-shadow: 0 0 5px rgba(239, 35, 60, .68), 0 0 10px rgba(37, 99, 235, .4);
-  animation: aidti-node-pulse 4.8s ease-in-out infinite;
+  animation: none;
 }
 
 .aidti-node-a { top: -20px; left: 7px; }
@@ -11707,7 +11707,7 @@ h3,
   width: 210%;
   height: 178%;
   background: linear-gradient(108deg, transparent 38%, rgba(255, 255, 255, .38) 49%, rgba(96, 165, 250, .18) 51%, transparent 62%);
-  animation: aidti-sheen-sweep 8.5s ease-in-out infinite;
+  animation: none;
 }
 
 .mini-avatar-wrap.has-frame-aidti-bdu .aidti-frame-art-mini {
@@ -11731,13 +11731,14 @@ h3,
     radial-gradient(circle, rgba(255, 255, 255, .24) 0 8%, rgba(37, 99, 235, .27) 32%, transparent 57%),
     conic-gradient(from 45deg, rgba(239, 35, 60, .23), transparent 24%, rgba(37, 99, 235, .26), transparent 74%, rgba(239, 35, 60, .23));
   box-shadow: inset 0 0 20px rgba(255, 255, 255, .1), 0 0 28px rgba(239, 35, 60, .2), 0 0 46px rgba(37, 99, 235, .14);
-  animation: aidti-portal-breathe 6.5s ease-in-out infinite;
+  animation: none;
 }
 
 .frame-effect-aidti-data-awaken .frame-rune-ring {
   background: repeating-conic-gradient(from 0deg, #ef233c 0 1.5deg, transparent 1.5deg 9deg, #60a5fa 9deg 10deg, transparent 10deg 18deg);
   filter: drop-shadow(0 0 3px rgba(239, 35, 60, .34));
   opacity: .2;
+  animation: none;
 }
 
 .frame-effect-aidti-data-awaken .frame-light-beams,
@@ -14969,6 +14970,8 @@ body.modal-lock {
 #tab-confession .forum-post-card {
   padding: 20px 22px;
   border-radius: 16px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
 }
 #tab-confession .forum-post-title {
   max-width: 72ch;

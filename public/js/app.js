@@ -542,10 +542,9 @@ function syncAllCurrentUserAvatars(presentation = AppState.identityPresentation)
     }
   }
 
-  // Sync author avatar in active feeds (Confession, CLB, Learning Hub)
-  if (typeof applyCurrentUserPresentationToFeeds === 'function') {
-    applyCurrentUserPresentationToFeeds();
-  }
+  // Chỉ đồng bộ các avatar cố định. Không render lại feed ở đây: hàm này được
+  // gọi từ onload của ảnh và nhiều luồng tải hồ sơ, nên việc dựng lại toàn bộ
+  // danh sách bài có thể làm mất node đang được click.
 }
 
 function applyResolvedAvatarToCurrentUser(presentation) {
@@ -744,6 +743,15 @@ function handleLogout(options = {}) {
   AppState.communityRealtimeReconnectTimer = null;
   AppState.communityRealtimeReconnectAttempt = 0;
   AppState.communityRealtimeEvents.clear();
+  if (AppState.confession) {
+    clearTimeout(AppState.confession.refreshTimer);
+    AppState.confession.refreshTimer = null;
+    AppState.confession.loadingPromise = null;
+    AppState.confession.loadingFilter = null;
+    AppState.confession.loadedFilter = null;
+    AppState.confession.profilePhotoRequest = null;
+    AppState.confession.profilePhotoRequestedFor = null;
+  }
   document.getElementById('identity-admin-panel')?.classList.add('hidden');
   delete document.getElementById('identity-admin-panel')?.dataset.initialized;
   localStorage.removeItem('bdu_token');
@@ -828,7 +836,7 @@ function handleCommunityRealtimeMessage(message) {
         loadClanPosts(data.scopeId).catch(() => {});
       }
     } else {
-      loadConfessions().catch(() => {});
+      scheduleConfessionRefresh();
     }
     return;
   }
@@ -5275,17 +5283,29 @@ async function loadCommentsForPost(postId) {
 
 function renderCommunityCommentsTree(comments) {
   const list = Array.isArray(comments) ? comments : [];
-  const ids = new Set(list.map((comment) => String(comment.id)));
-  const children = new Map();
+  const byId = new Map(list.map((comment) => [String(comment.id), comment]));
+  const rootIdFor = (comment) => {
+    let current = comment;
+    const visited = new Set([String(comment.id)]);
+    while (current?.parent_id && byId.has(String(current.parent_id))) {
+      const parentId = String(current.parent_id);
+      if (visited.has(parentId)) break;
+      visited.add(parentId);
+      current = byId.get(parentId);
+    }
+    return String(current?.id || comment.id);
+  };
+  const roots = list.filter((comment) => !comment.parent_id || !byId.has(String(comment.parent_id)));
+  const rootIds = new Set(roots.map((comment) => String(comment.id)));
+  const repliesByRoot = new Map();
   list.forEach((comment) => {
-    const parent = comment.parent_id && ids.has(String(comment.parent_id))
-      ? String(comment.parent_id)
-      : 'root';
-    if (!children.has(parent)) children.set(parent, []);
-    children.get(parent).push(comment);
+    if (rootIds.has(String(comment.id))) return;
+    const rootId = rootIdFor(comment);
+    if (!repliesByRoot.has(rootId)) repliesByRoot.set(rootId, []);
+    repliesByRoot.get(rootId).push(comment);
   });
 
-  const renderBranch = (comment, depth = 0) => {
+  const renderComment = (comment, rootId, isReply = false) => {
     const isAnon = Boolean(comment.is_anonymous);
     const rawName = isAnon ? 'Sinh viên giấu tên' : (comment.author?.name || 'Thành viên BDU');
     const safeName = escapeHtml(rawName);
@@ -5293,15 +5313,14 @@ function renderCommunityCommentsTree(comments) {
     const titles = isAnon
       ? renderIdentityTitleBadges([{ label: 'Ẩn danh', tone: 'member' }])
       : renderIdentityTitleBadges(comment.author?.titles, 'identity-title-comment');
-    const replies = children.get(String(comment.id)) || [];
     const actionHtml = comment.is_deleted ? '' : `
       <div class="comment-card-actions">
-        <button type="button" class="comment-inline-action" data-community-reply="${comment.id}" data-comment-author="${safeName}">Trả lời</button>
+        <button type="button" class="comment-inline-action" data-community-reply="${comment.id}" data-community-root="${rootId}" data-comment-author="${safeName}">Trả lời</button>
         ${comment.can_edit ? `<button type="button" class="comment-inline-action" data-community-edit="${comment.id}">Sửa</button>` : ''}
         ${comment.can_delete ? `<button type="button" class="comment-inline-action is-danger" data-community-delete="${comment.id}">Xóa</button>` : ''}
       </div>`;
     return `
-      <article class="comment-card-item ${depth ? 'is-reply' : ''} ${comment.is_deleted ? 'is-deleted' : ''}" style="--comment-depth: ${Math.min(depth, 1)}" data-comment-id="${comment.id}">
+      <article class="comment-card-item ${isReply ? 'is-reply' : ''} ${comment.is_deleted ? 'is-deleted' : ''}" style="--comment-depth: ${isReply ? 1 : 0}" data-comment-id="${comment.id}" data-comment-root-id="${rootId}">
         <div class="comment-card-layout">
           <div class="comment-card-avatar ${isAnon ? 'anon' : ''}">${isAnon ? '?' : renderIdentityAvatar(comment.author, rawName)}</div>
           <div class="comment-card-copy">
@@ -5313,11 +5332,14 @@ function renderCommunityCommentsTree(comments) {
             ${actionHtml}
           </div>
         </div>
-        ${replies.map((reply) => renderBranch(reply, depth + 1)).join('')}
       </article>
     `;
   };
-  return (children.get('root') || []).map((comment) => renderBranch(comment)).join('');
+  return roots.map((root) => {
+    const rootId = String(root.id);
+    const replies = repliesByRoot.get(rootId) || [];
+    return renderComment(root, rootId) + replies.map((reply) => renderComment(reply, rootId, true)).join('');
+  }).join('');
 }
 
 function ensureCommunityReplyContext(section) {
@@ -5349,7 +5371,7 @@ function attachCommunityCommentEvents(listEl, postId) {
     button.addEventListener('click', () => {
       const input = section?.querySelector('.comment-text-input');
       if (!input) return;
-      input.dataset.parentId = button.dataset.communityReply;
+      input.dataset.parentId = button.dataset.communityRoot || button.dataset.communityReply;
       input.placeholder = `Trả lời ${button.dataset.commentAuthor || 'bình luận này'}...`;
       const context = ensureCommunityReplyContext(section);
       if (context) {
@@ -5376,7 +5398,12 @@ function attachCommunityCommentEvents(listEl, postId) {
   });
   listEl.querySelectorAll('[data-community-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      if (!window.confirm('Xóa bình luận này? Các phản hồi vẫn được giữ lại.')) return;
+      const commentCard = button.closest('[data-comment-id]');
+      const deletesThread = String(commentCard?.dataset.commentId) === String(commentCard?.dataset.commentRootId);
+      const message = deletesThread
+        ? 'Xóa bình luận gốc và toàn bộ phản hồi trong thread này?'
+        : 'Xóa bình luận này?';
+      if (!window.confirm(message)) return;
       button.disabled = true;
       try {
         const result = await BduApi.deleteCommunityPostComment(AppState.token, postId, button.dataset.communityDelete);
@@ -5690,6 +5717,12 @@ AppState.confession = {
   activeCategory: 'all',
   activeFilter: 'all', // 'all' | 'mine' | 'anon'
   requestId: 0,
+  loadingPromise: null,
+  loadingFilter: null,
+  loadedFilter: null,
+  refreshTimer: null,
+  profilePhotoRequest: null,
+  profilePhotoRequestedFor: null,
   framePreview: (function() {
     try { return localStorage.getItem('bdu_custom_frame_preview') || null; } catch(e) { return null; }
   })()
@@ -6937,7 +6970,6 @@ function renderAcademicFrameMarkup(frameInfo) {
       <span class="aidti-circuit-ring" aria-hidden="true"></span>
       <span class="aidti-data-scan" aria-hidden="true"></span>
       <img class="aidti-frame-art" src="${safeArt}" alt="Khung ${safeTitle}" decoding="async">
-      <img class="aidti-frame-chibi-layer" src="${safeArt}" alt="" aria-hidden="true" decoding="async">
       <span class="aidti-node aidti-node-a" aria-hidden="true"></span>
       <span class="aidti-node aidti-node-b" aria-hidden="true"></span>
       <span class="aidti-node aidti-node-c" aria-hidden="true"></span>
@@ -7032,12 +7064,17 @@ function updateForumUserWidgets() {
   }
 
   if (frameInfo && heroFrameContainer) {
-    heroFrameContainer.innerHTML = renderAcademicFrameMarkup(frameInfo);
+    const frameRenderKey = `${frameInfo.tier || ''}:${frameInfo.frameSvg || ''}:${frameInfo.frameArt || ''}`;
+    const frameChanged = heroFrameContainer.dataset.frameRenderKey !== frameRenderKey;
+    if (frameChanged) {
+      heroFrameContainer.innerHTML = renderAcademicFrameMarkup(frameInfo);
+      heroFrameContainer.dataset.frameRenderKey = frameRenderKey;
+    }
     if (heroAvatarWrap) {
       heroAvatarWrap.classList.add(`has-frame-${frameInfo.tier}`, `has-frame-scope-${frameInfo.scope}`);
       if (frameInfo.frameFamily) heroAvatarWrap.classList.add(`has-frame-${frameInfo.frameFamily}`);
     }
-    prepareFrameCinematic(frameInfo);
+    if (frameChanged) prepareFrameCinematic(frameInfo);
     if (heroBadge) {
       heroBadge.className = `avatar-hero-rank-badge tier-${frameInfo.tier}`;
       heroBadge.textContent = frameInfo.badgeText;
@@ -7058,7 +7095,10 @@ function updateForumUserWidgets() {
       }, 200);
     }
   } else {
-    if (heroFrameContainer) heroFrameContainer.innerHTML = '';
+    if (heroFrameContainer && heroFrameContainer.dataset.frameRenderKey) {
+      heroFrameContainer.innerHTML = '';
+      delete heroFrameContainer.dataset.frameRenderKey;
+    }
     document.getElementById('frame-unlock-announcement')?.classList.remove('is-persistent', 'is-revealing');
     if (heroBadge) {
       heroBadge.className = 'avatar-hero-rank-badge tier-member';
@@ -7071,13 +7111,15 @@ function updateForumUserWidgets() {
     }
   }
 
-  const avatarContent = photoUrl 
-    ? `<img src="${photoUrl}" alt="${escapeHtml(name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">` 
+  const avatarContent = photoUrl
+    ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
     : initial;
-
-  if (heroAvatar) heroAvatar.innerHTML = avatarContent;
-  if (composerAvatar) composerAvatar.innerHTML = avatarContent;
-  if (widgetAvatar) widgetAvatar.innerHTML = avatarContent;
+  const avatarRenderKey = photoUrl ? `photo:${photoUrl}` : `initial:${initial}`;
+  [heroAvatar, composerAvatar, widgetAvatar].filter(Boolean).forEach((element) => {
+    if (element.dataset?.avatarRenderKey === avatarRenderKey) return;
+    element.innerHTML = avatarContent;
+    if (element.dataset) element.dataset.avatarRenderKey = avatarRenderKey;
+  });
   updateIdentityPresentationUI();
 
   const placeholderEl = document.getElementById('cfs-composer-placeholder-text');
@@ -7086,9 +7128,12 @@ function updateForumUserWidgets() {
   }
 
   // Proactively fetch student image from BDU API if missing
-  if (!photoUrl && AppState.token && mssv) {
+  if (!photoUrl && AppState.token && mssv
+      && AppState.confession.profilePhotoRequestedFor !== mssv
+      && !AppState.confession.profilePhotoRequest) {
     const idsv = user?.idsv || user?.id_sinh_vien || '';
-    BduApi.getProfile(AppState.token, idsv, mssv).then(profileRes => {
+    AppState.confession.profilePhotoRequestedFor = mssv;
+    AppState.confession.profilePhotoRequest = BduApi.getProfile(AppState.token, idsv, mssv).then(profileRes => {
       const pUrl = profileRes?.student_image || profileRes?.data?.[0]?.hinh_anh || profileRes?.data?.hinh_anh || '';
       if (pUrl) {
         let full = pUrl;
@@ -7099,15 +7144,24 @@ function updateForumUserWidgets() {
             full = (full.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + full;
           }
         }
-        if (user && AppState.identityPresentation?.avatar_source !== 'override') {
-          user.photoUrl = full;
-        }
+        AppState.bduSchoolPhoto = full;
+        if (user && AppState.identityPresentation?.avatar_source !== 'override') user.photoUrl = full;
         try { localStorage.setItem('bdu_user_photo', full); } catch(e) {}
         updateForumUserWidgets();
-        renderForumFeed();
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      AppState.confession.profilePhotoRequest = null;
+    });
   }
+}
+
+function scheduleConfessionRefresh() {
+  if (!document.getElementById('tab-confession')?.classList.contains('active')) return;
+  clearTimeout(AppState.confession.refreshTimer);
+  AppState.confession.refreshTimer = setTimeout(() => {
+    AppState.confession.refreshTimer = null;
+    loadConfessions().catch(() => {});
+  }, 250);
 }
 
 async function loadConfessions() {
@@ -7115,17 +7169,24 @@ async function loadConfessions() {
   const container = document.getElementById('confession-feed-stream');
   if (!container) return;
 
-  const requestId = ++AppState.confession.requestId;
   const requestedFilter = AppState.confession.activeFilter || 'all';
+  if (AppState.confession.loadingPromise && AppState.confession.loadingFilter === requestedFilter) {
+    return AppState.confession.loadingPromise;
+  }
 
-  container.innerHTML = `
-    <div class="loading-spinner-box">
-      <div class="spinner"></div>
-      <p>Đang tải dòng tin Diễn Đàn & Confession...</p>
-    </div>
-  `;
+  const requestId = ++AppState.confession.requestId;
+  AppState.confession.loadingFilter = requestedFilter;
 
-  try {
+  if (!AppState.confession.posts.length || AppState.confession.loadedFilter !== requestedFilter) {
+    container.innerHTML = `
+      <div class="loading-spinner-box">
+        <div class="spinner"></div>
+        <p>Đang tải dòng tin Diễn Đàn & Confession...</p>
+      </div>
+    `;
+  }
+
+  const loadingPromise = (async () => {
     // `forum` gồm bài toàn trường + Viện/Khoa, nhưng không trộn bài nội bộ CLB.
     // Lọc ở server để "Bài của tôi" không bị giới hạn trong trang 20 bài mới nhất.
     const res = await BduApi.getCommunityPosts(AppState.token, {
@@ -7136,7 +7197,13 @@ async function loadConfessions() {
     if (requestId !== AppState.confession.requestId || requestedFilter !== AppState.confession.activeFilter) return;
     const posts = res.posts || [];
     AppState.confession.posts = posts;
+    AppState.confession.loadedFilter = requestedFilter;
     renderForumFeed();
+  })();
+  AppState.confession.loadingPromise = loadingPromise;
+
+  try {
+    await loadingPromise;
   } catch (err) {
     if (requestId !== AppState.confession.requestId) return;
     console.error('Lỗi tải forum confessions:', err);
@@ -7146,12 +7213,71 @@ async function loadConfessions() {
         <button class="btn btn-secondary btn-sm" onclick="loadConfessions()" style="margin-top: 10px;">Thử lại</button>
       </div>
     `;
+  } finally {
+    if (AppState.confession.loadingPromise === loadingPromise) {
+      AppState.confession.loadingPromise = null;
+      AppState.confession.loadingFilter = null;
+    }
   }
+}
+
+function captureForumInteractionState(container) {
+  const state = new Map();
+  container.querySelectorAll('[data-post-id]').forEach((card) => {
+    const postId = card.dataset.postId;
+    const section = card.querySelector('.forum-comments-wrapper');
+    if (!postId || !section) return;
+    const input = section.querySelector('.comment-text-input');
+    const list = section.querySelector('.comments-feed-list');
+    const replyContext = section.querySelector('[data-community-reply-context] span');
+    if (section.classList.contains('hidden') && !input?.value) return;
+    state.set(postId, {
+      open: !section.classList.contains('hidden'),
+      value: input?.value || '',
+      parentId: input?.dataset.parentId || '',
+      replyText: replyContext?.textContent || '',
+      commentsHtml: list?.innerHTML || '',
+      focused: document.activeElement === input
+    });
+  });
+  return state;
+}
+
+function restoreForumInteractionState(container, state) {
+  state.forEach((saved, postId) => {
+    const card = [...container.querySelectorAll('[data-post-id]')]
+      .find((item) => String(item.dataset.postId) === String(postId));
+    const section = card?.querySelector('.forum-comments-wrapper');
+    if (!section) return;
+    const input = section.querySelector('.comment-text-input');
+    const list = section.querySelector('.comments-feed-list');
+    if (saved.open) {
+      section.classList.remove('hidden');
+      communityRealtimeSubscribe(`post:${postId}`);
+    }
+    if (input) {
+      input.value = saved.value;
+      if (saved.parentId) input.dataset.parentId = saved.parentId;
+    }
+    if (saved.parentId) {
+      const context = ensureCommunityReplyContext(section);
+      if (context) {
+        context.querySelector('span').textContent = saved.replyText;
+        context.classList.remove('hidden');
+      }
+    }
+    if (list && saved.commentsHtml) {
+      list.innerHTML = saved.commentsHtml;
+      attachCommunityCommentEvents(list, postId);
+    }
+    if (saved.focused) requestAnimationFrame(() => input?.focus());
+  });
 }
 
 function renderForumFeed() {
   const container = document.getElementById('confession-feed-stream');
   if (!container) return;
+  const interactionState = captureForumInteractionState(container);
 
   const currentFilter = AppState.confession.activeFilter || 'all';
   let filtered = AppState.confession.posts || [];
@@ -7180,6 +7306,7 @@ function renderForumFeed() {
 
   container.innerHTML = filtered.map(post => renderConfessionCardHtml(post)).join('');
   attachPostCardEvents(container);
+  restoreForumInteractionState(container, interactionState);
 }
 
 function renderConfessionCardHtml(post) {

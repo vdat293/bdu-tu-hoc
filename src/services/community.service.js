@@ -998,7 +998,8 @@ export const CommunityService = {
   },
 
   /**
-   * Thêm bình luận vào bài viết (Hỗ trợ trả lời lồng nhau)
+   * Thêm bình luận vào bài viết với tối đa hai cấp hiển thị.
+   * Trả lời một reply vẫn được gắn vào bình luận gốc của thread.
    */
   async addComment({ postId, authorMssv, content, parentId = null, isAnonymous = false }) {
     if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
@@ -1013,6 +1014,7 @@ export const CommunityService = {
     if (cleanContent.length > MAX_COMMENT_LENGTH) throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
 
     const createdComment = await transaction(async (client) => {
+      let resolvedParentId = cleanParentId;
       const postResult = await client.query(
         'SELECT id, scope, scope_id FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
         [cleanPostId]
@@ -1025,7 +1027,7 @@ export const CommunityService = {
 
       if (cleanParentId) {
         const parentResult = await client.query(
-          'SELECT parent_id, deleted_at FROM community_post_comments WHERE id = $1 AND post_id = $2',
+          'SELECT id, parent_id, deleted_at FROM community_post_comments WHERE id = $1 AND post_id = $2',
           [cleanParentId, cleanPostId]
         );
         if (!parentResult.rowCount) {
@@ -1034,8 +1036,17 @@ export const CommunityService = {
         if (parentResult.rows[0].deleted_at) {
           throw httpError('Không thể trả lời bình luận đã bị xoá.');
         }
+        // Nếu người dùng bấm trả lời một reply cấp 2, đưa bình luận mới về
+        // cùng bình luận gốc để thread luôn phẳng như Facebook.
         if (parentResult.rows[0].parent_id) {
-          throw httpError('Chỉ hỗ trợ trả lời tối đa một cấp.');
+          const rootResult = await client.query(
+            'SELECT id, deleted_at FROM community_post_comments WHERE id = $1 AND post_id = $2',
+            [parentResult.rows[0].parent_id, cleanPostId]
+          );
+          if (!rootResult.rowCount || rootResult.rows[0].deleted_at) {
+            throw httpError('Bình luận gốc không còn tồn tại.');
+          }
+          resolvedParentId = String(rootResult.rows[0].id);
         }
       }
 
@@ -1054,7 +1065,7 @@ export const CommunityService = {
       const result = await client.query(insertSql, [
         cleanPostId,
         cleanMssv,
-        cleanParentId,
+        resolvedParentId,
         cleanContent,
         normalizeBoolean(isAnonymous)
       ]);
@@ -1132,23 +1143,40 @@ export const CommunityService = {
       }
       if (!canDelete) throw httpError('Bạn không có quyền xóa bình luận này.', 403);
 
+      let deletedCount = 0;
       if (!row.deleted_at) {
-        await client.query(`
-          UPDATE community_post_comments
+        const deletedComments = await client.query(`
+          WITH RECURSIVE comment_tree AS (
+            SELECT id
+            FROM community_post_comments
+            WHERE id = $1 AND post_id = $2
+
+            UNION
+
+            SELECT child.id
+            FROM community_post_comments child
+            JOIN comment_tree parent ON child.parent_id = parent.id
+            WHERE child.post_id = $2
+          )
+          UPDATE community_post_comments AS comment
           SET deleted_at = NOW(), deleted_by_mssv = $3, delete_reason = $4, updated_at = NOW()
-          WHERE id = $1 AND post_id = $2;
+          WHERE comment.id IN (SELECT id FROM comment_tree)
+            AND comment.deleted_at IS NULL
+          RETURNING comment.id;
         `, [cleanCommentId, cleanPostId, cleanRequester, String(reason || 'user_request').slice(0, 200)]);
+        deletedCount = deletedComments.rowCount;
         await client.query(`
           UPDATE community_posts
-          SET comment_count = GREATEST(0, comment_count - 1), updated_at = NOW()
+          SET comment_count = GREATEST(0, comment_count - $2), updated_at = NOW()
           WHERE id = $1;
-        `, [cleanPostId]);
+        `, [cleanPostId, deletedCount]);
       }
       const count = await client.query('SELECT comment_count FROM community_posts WHERE id = $1', [cleanPostId]);
       return {
         deleted: true,
         id: cleanCommentId,
         post_id: cleanPostId,
+        deleted_count: deletedCount,
         comment_count: Number(count.rows[0]?.comment_count || 0)
       };
     });
@@ -1205,7 +1233,7 @@ export const CommunityService = {
       FROM community_post_comments c
       JOIN students s ON c.author_mssv = s.mssv
       JOIN community_posts p ON p.id = c.post_id
-      WHERE c.post_id = $1 AND p.deleted_at IS NULL
+      WHERE c.post_id = $1 AND p.deleted_at IS NULL AND c.deleted_at IS NULL
       ORDER BY c.created_at ASC;
     `;
     const result = await query(sql, [cleanPostId]);

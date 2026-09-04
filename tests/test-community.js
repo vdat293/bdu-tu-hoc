@@ -116,14 +116,36 @@ try {
   });
   assert.equal(replyComment.parent_id, comment1.id);
 
+  const replyToReply = await CommunityService.addComment({
+    postId: post.id,
+    authorMssv: TEST_VIEWER,
+    content: 'Mình cảm ơn bạn nha!',
+    parentId: replyComment.id
+  });
+  assert.equal(
+    String(replyToReply.parent_id),
+    String(comment1.id),
+    'Trả lời bình luận cấp 2 phải được đưa về cùng bình luận gốc'
+  );
+
   const comments = await CommunityService.getComments(post.id, TEST_VIEWER);
-  assert.equal(comments.length, 2);
+  assert.equal(comments.length, 3);
   assert.equal(comments[0].content, 'Cảm ơn bạn nhiều, tài liệu rất chi tiết!');
   assert.equal(comments[1].parent_id, comment1.id);
+  assert.equal(String(comments[2].parent_id), String(comment1.id));
 
   const updatedPost = await CommunityService.getPostById(post.id);
-  assert.equal(updatedPost.comment_count, 2, 'comment_count trên bài viết phải là 2');
-  console.log('✅ PASSED: Bình luận và phản hồi bình luận thành công.');
+  assert.equal(updatedPost.comment_count, 3, 'comment_count trên bài viết phải là 3');
+
+  const deletedThread = await CommunityService.deleteComment({
+    postId: post.id,
+    commentId: comment1.id,
+    requesterMssv: TEST_VIEWER
+  });
+  assert.equal(deletedThread.deleted_count, 3, 'Xóa bình luận gốc phải xóa toàn bộ thread');
+  assert.equal(deletedThread.comment_count, 0, 'Bộ đếm phải trừ cả bình luận gốc và các reply');
+  assert.equal((await CommunityService.getComments(post.id, TEST_VIEWER)).length, 0);
+  console.log('✅ PASSED: Bình luận chỉ có 2 cấp và xóa bình luận gốc sẽ xóa toàn bộ thread.');
 
   // 5. Kiểm thử Chế độ Ẩn danh (Confession Mode)
   console.log('--- [Test 5] Chế độ Confession ẩn danh ---');
