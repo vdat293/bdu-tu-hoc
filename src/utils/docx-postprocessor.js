@@ -13,6 +13,29 @@ const BODY_STYLE_IDS = new Set(['WFBody']);
 
 const TEXT_PART_PATTERN = /^word\/(?:document|styles|numbering|footnotes|endnotes|comments|[^/]*header[^/]*|[^/]*footer[^/]*)\.xml$/i;
 
+// Word is stricter than LibreOffice about the sequence order in these two
+// property containers. Keep the ECMA-376 order after every regex-based patch;
+// otherwise a syntactically valid DOCX can still be rejected by Word.
+const PARAGRAPH_PROPERTY_ORDER = [
+  'pStyle', 'keepNext', 'keepLines', 'pageBreakBefore', 'framePr',
+  'widowControl', 'numPr', 'suppressLineNumbers', 'pBdr', 'shd', 'tabs',
+  'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'overflowPunct',
+  'topLinePunct', 'autoSpaceDE', 'autoSpaceDN', 'bidi', 'adjustRightInd',
+  'snapToGrid', 'spacing', 'ind', 'contextualSpacing', 'mirrorIndents',
+  'suppressOverlap', 'jc', 'textDirection', 'textAlignment',
+  'textboxTightWrap', 'outlineLvl', 'divId', 'cnfStyle', 'rPr', 'sectPr',
+  'pPrChange'
+];
+
+const RUN_PROPERTY_ORDER = [
+  'rStyle', 'rFonts', 'b', 'bCs', 'i', 'iCs', 'caps', 'smallCaps',
+  'strike', 'dstrike', 'outline', 'shadow', 'emboss', 'imprint', 'noProof',
+  'snapToGrid', 'vanish', 'webHidden', 'color', 'spacing', 'w', 'kern',
+  'position', 'sz', 'szCs', 'highlight', 'u', 'effect', 'bdr', 'shd',
+  'fitText', 'vertAlign', 'rtl', 'cs', 'em', 'lang', 'eastAsianLayout',
+  'specVanish', 'oMath', 'rPrChange'
+];
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -916,6 +939,82 @@ function splitTopLevelElements(xml) {
   return elements;
 }
 
+function propertyName(elementXml) {
+  return elementXml.match(/^<w:([A-Za-z0-9]+)/)?.[1] || '';
+}
+
+function normalizePropertyContainerOrder(xml, containerName, propertyOrder) {
+  const order = new Map(propertyOrder.map((name, index) => [name, index]));
+  const pattern = new RegExp(
+    `<w:${containerName}\\b([^>]*)>((?:(?!<w:${containerName}\\b)[\\s\\S])*?)<\\/w:${containerName}>`,
+    'g'
+  );
+  let containersReordered = 0;
+
+  const normalized = xml.replace(pattern, (fullMatch, attributes, contents) => {
+    const children = splitTopLevelElements(contents);
+    if (children.length < 2) return fullMatch;
+
+    const knownChildren = children
+      .map((child, originalIndex) => ({
+        child,
+        originalIndex,
+        order: order.get(propertyName(child))
+      }))
+      .filter(item => item.order !== undefined)
+      .sort((left, right) => left.order - right.order || left.originalIndex - right.originalIndex);
+    let knownIndex = 0;
+    const sorted = children.map(child => (
+      order.has(propertyName(child)) ? knownChildren[knownIndex++].child : child
+    ));
+    if (sorted.every((child, index) => child === children[index])) return fullMatch;
+
+    containersReordered += 1;
+    return `<w:${containerName}${attributes}>${sorted.join('')}</w:${containerName}>`;
+  });
+
+  return { xml: normalized, containersReordered };
+}
+
+function propertyContainersAreOrdered(xml, containerName, propertyOrder) {
+  const order = new Map(propertyOrder.map((name, index) => [name, index]));
+  const pattern = new RegExp(
+    `<w:${containerName}\\b[^>]*>((?:(?!<w:${containerName}\\b)[\\s\\S])*?)<\\/w:${containerName}>`,
+    'g'
+  );
+
+  for (const match of xml.matchAll(pattern)) {
+    let previous = -1;
+    for (const child of splitTopLevelElements(match[1])) {
+      const current = order.get(propertyName(child));
+      if (current === undefined) continue;
+      if (current < previous) return false;
+      previous = current;
+    }
+  }
+  return true;
+}
+
+export function normalizeWordprocessingPropertyOrder(xml) {
+  const paragraphResult = normalizePropertyContainerOrder(
+    xml,
+    'pPr',
+    PARAGRAPH_PROPERTY_ORDER
+  );
+  const runResult = normalizePropertyContainerOrder(
+    paragraphResult.xml,
+    'rPr',
+    RUN_PROPERTY_ORDER
+  );
+  return {
+    xml: runResult.xml,
+    stats: {
+      paragraphPropertyContainersReordered: paragraphResult.containersReordered,
+      runPropertyContainersReordered: runResult.containersReordered
+    }
+  };
+}
+
 function rewriteBodyChildren(documentXml, transform) {
   const bodyMatch = documentXml.match(/(<w:body\b[^>]*>)([\s\S]*)(<\/w:body>)/);
   if (!bodyMatch) return { xml: documentXml, stats: {} };
@@ -1066,7 +1165,16 @@ export function normalizeTablesAndDrawings(documentXml) {
     normalized = normalized.replace(/<wp:anchor\b[^>]*>[\s\S]*?<\/wp:anchor>/g, anchorXml => {
       const withoutWrap = anchorXml.replace(/<wp:wrap(?:None|Square|Tight|Through|TopAndBottom)\b[^>]*(?:\/>|>[\s\S]*?<\/wp:wrap(?:None|Square|Tight|Through|TopAndBottom)>)/g, '');
       anchoredImagesWrapped += 1;
-      return withoutWrap.replace(/(<wp:positionV\b[^>]*>[\s\S]*?<\/wp:positionV>)/, '$1<wp:wrapTopAndBottom/>');
+      // CT_Anchor requires wrap to come after extent/effectExtent. Inserting it
+      // after positionV creates well-formed XML that LibreOffice accepts but
+      // Microsoft Word rejects as a damaged document.
+      if (/<wp:effectExtent\b[^>]*\/>/.test(withoutWrap)) {
+        return withoutWrap.replace(/(<wp:effectExtent\b[^>]*\/>)/, '$1<wp:wrapTopAndBottom/>');
+      }
+      if (/<wp:extent\b[^>]*\/>/.test(withoutWrap)) {
+        return withoutWrap.replace(/(<wp:extent\b[^>]*\/>)/, '$1<wp:wrapTopAndBottom/>');
+      }
+      return withoutWrap;
     });
     return normalized;
   });
@@ -1150,6 +1258,21 @@ function auditCompliance(documentXml, stylesXml, stats) {
   const margins = sections.every(section => /<w:pgMar\b[^>]*w:top="1134"[^>]*w:right="1134"[^>]*w:bottom="1134"[^>]*w:left="1701"/.test(section));
   const bodyStyle = stylesXml.match(/<w:style\b(?=[^>]*w:styleId="WFBody")[^>]*>[\s\S]*?<\/w:style>/)?.[0] || '';
   const bodySpacing = /<w:spacing\b[^>]*w:before="120"[^>]*w:after="0"[^>]*w:line="288"/.test(bodyStyle);
+  const anchors = documentXml.match(/<wp:anchor\b[^>]*>[\s\S]*?<\/wp:anchor>/g) || [];
+  const wordCompatibleAnchors = anchors.every(anchor => {
+    const wrapIndex = anchor.search(/<wp:wrap(?:None|Square|Tight|Through|TopAndBottom)\b/);
+    const extentIndex = anchor.search(/<wp:extent\b/);
+    const effectExtentIndex = anchor.search(/<wp:effectExtent\b/);
+    return wrapIndex < 0
+      || (extentIndex >= 0 && wrapIndex > extentIndex && (effectExtentIndex < 0 || wrapIndex > effectExtentIndex));
+  });
+  const wordprocessingPropertyOrder = propertyContainersAreOrdered(
+    documentXml,
+    'pPr',
+    PARAGRAPH_PROPERTY_ORDER
+  ) && propertyContainersAreOrdered(documentXml, 'rPr', RUN_PROPERTY_ORDER)
+    && propertyContainersAreOrdered(stylesXml, 'pPr', PARAGRAPH_PROPERTY_ORDER)
+    && propertyContainersAreOrdered(stylesXml, 'rPr', RUN_PROPERTY_ORDER);
   return {
     a4Portrait,
     margins,
@@ -1158,7 +1281,9 @@ function auditCompliance(documentXml, stylesXml, stats) {
     referenceHyperlinksRemoved: stats.hyperlinksRemoved >= 0 && stats.remainingReferenceHyperlinks === 0,
     smartQuotesPreserved: stats.straightQuotesReplaced === 0,
     longDashesNormalized: !/[–—]/.test(documentXml),
-    wideTablesFitPortrait: stats.wideTablesDetected === 0
+    wideTablesFitPortrait: stats.wideTablesDetected === 0,
+    wordCompatibleAnchors,
+    wordprocessingPropertyOrder
   };
 }
 
@@ -1212,7 +1337,9 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
     figureCaptionsMoved: 0,
     coverLabelsRenamed: 0,
     coverMetadataValuesBolded: 0,
-    supportingStyles: 0
+    supportingStyles: 0,
+    paragraphPropertyContainersReordered: 0,
+    runPropertyContainersReordered: 0
   };
 
   if (!documentXml) throw new Error('DOCX không có word/document.xml.');
@@ -1283,6 +1410,16 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
   sourceStylesXml = stylesResult.xml;
   Object.assign(stats, stylesResult.stats);
 
+  const documentOrderResult = normalizeWordprocessingPropertyOrder(documentXml);
+  documentXml = documentOrderResult.xml;
+  stats.paragraphPropertyContainersReordered += documentOrderResult.stats.paragraphPropertyContainersReordered;
+  stats.runPropertyContainersReordered += documentOrderResult.stats.runPropertyContainersReordered;
+
+  const stylesOrderResult = normalizeWordprocessingPropertyOrder(sourceStylesXml);
+  sourceStylesXml = stylesOrderResult.xml;
+  stats.paragraphPropertyContainersReordered += stylesOrderResult.stats.paragraphPropertyContainersReordered;
+  stats.runPropertyContainersReordered += stylesOrderResult.stats.runPropertyContainersReordered;
+
   archive.updateFile('word/document.xml', Buffer.from(documentXml, 'utf8'));
   archive.updateFile('word/styles.xml', Buffer.from(sourceStylesXml, 'utf8'));
   if (relationshipsXml) {
@@ -1312,10 +1449,18 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
       }
     }
 
+    const propertyOrderResult = normalizeWordprocessingPropertyOrder(xml);
+    xml = propertyOrderResult.xml;
+    stats.paragraphPropertyContainersReordered += propertyOrderResult.stats.paragraphPropertyContainersReordered;
+    stats.runPropertyContainersReordered += propertyOrderResult.stats.runPropertyContainersReordered;
+
     archive.updateFile(entry.entryName, Buffer.from(xml, 'utf8'));
   }
 
   stats.compliance = auditCompliance(documentXml, sourceStylesXml, stats);
+  if (!stats.compliance.wordCompatibleAnchors || !stats.compliance.wordprocessingPropertyOrder) {
+    throw new Error('DOCX hậu xử lý không tương thích với thứ tự schema của Microsoft Word.');
+  }
 
   writeArchiveAtomically(archive, docxPath);
 

@@ -9,6 +9,8 @@ import {
   normalizeReferenceHeader,
   normalizeReferenceSection,
   normalizeSectionProperties,
+  normalizeTablesAndDrawings,
+  normalizeWordprocessingPropertyOrder,
   processDocumentXml,
   processStylesXml,
   removeUnusedHyperlinkRelationships,
@@ -160,6 +162,28 @@ const normalizedSections = normalizeSectionProperties(sectionDocumentXml);
 assert.match(normalizedSections.xml, /w:w="11906" w:h="16838" w:orient="portrait"/);
 assert.match(normalizedSections.xml, /w:top="1134" w:right="1134" w:bottom="1134" w:left="1701"/);
 assert.match(normalizedSections.xml, /<w:pgBorders/);
+
+const anchoredDrawingXml = `<w:document xmlns:w="x" xmlns:wp="y"><w:body><w:p><w:pPr><w:pStyle w:val="WFBody"/></w:pPr><w:r><w:drawing><wp:anchor><wp:simplePos x="0" y="0"/><wp:positionH/><wp:positionV/><wp:extent cx="10" cy="10"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare/><wp:docPr id="1" name="Image"/></wp:anchor></w:drawing></w:r></w:p></w:body></w:document>`;
+const normalizedDrawing = normalizeTablesAndDrawings(anchoredDrawingXml);
+assert.equal(normalizedDrawing.stats.anchoredImagesWrapped, 1);
+assert.match(
+  normalizedDrawing.xml,
+  /<wp:extent[^>]*\/><wp:effectExtent[^>]*\/><wp:wrapTopAndBottom\/><wp:docPr/
+);
+assert.doesNotMatch(normalizedDrawing.xml, /<wp:positionV[^>]*\/><wp:wrapTopAndBottom\/><wp:extent/);
+
+const misorderedPropertiesXml = `<w:document xmlns:w="x"><w:body><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="120"/><w:pStyle w:val="WFBody"/></w:pPr><w:r><w:rPr><w:sz w:val="26"/><w:color w:val="000000"/><w:b/><w:rFonts w:ascii="Times New Roman"/></w:rPr><w:t>Thử</w:t></w:r></w:p></w:body></w:document>`;
+const orderedProperties = normalizeWordprocessingPropertyOrder(misorderedPropertiesXml);
+assert.equal(orderedProperties.stats.paragraphPropertyContainersReordered, 1);
+assert.equal(orderedProperties.stats.runPropertyContainersReordered, 1);
+assert.match(
+  orderedProperties.xml,
+  /<w:pPr><w:pStyle[^>]*\/><w:spacing[^>]*\/><w:jc[^>]*\/><\/w:pPr>/
+);
+assert.match(
+  orderedProperties.xml,
+  /<w:rPr><w:rFonts[^>]*\/><w:b\/><w:color[^>]*\/><w:sz[^>]*\/><\/w:rPr>/
+);
 
 const formattingProfile = JSON.parse(
   await import('node:fs').then(({ readFileSync }) => (

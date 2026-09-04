@@ -92,6 +92,8 @@ try {
   assert.equal(result.report.outputNormalization.compliance.margins, true);
   assert.equal(result.report.outputNormalization.compliance.bodySpacing, true);
   assert.equal(result.report.outputNormalization.compliance.referenceHyperlinksRemoved, true);
+  assert.equal(result.report.outputNormalization.compliance.wordCompatibleAnchors, true);
+  assert.equal(result.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
   assert.equal(result.report.outputNormalization.tableCaptionsMoved, 1);
   assert.equal(result.report.outputNormalization.figureCaptionsMoved, 1);
   assert.equal(result.report.outputNormalization.decorativeDrawingsRemoved, 1);
