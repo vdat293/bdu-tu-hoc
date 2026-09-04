@@ -280,6 +280,21 @@
     }
   },
   {
+    "id": "frame:aidti-bdu",
+    "item_type": "frame",
+    "label": "AIDTI",
+    "description": "Khung Signature Viện Trí tuệ Nhân tạo và Chuyển đổi số với sinh viên BDU chibi.",
+    "rarity": "legendary",
+    "asset_key": "aidti-bdu",
+    "display_policy": "optional",
+    "sort_order": 12,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "motion": "aidti-data-awaken"
+    }
+  },
+  {
     "id": "frame:truong-1",
     "item_type": "frame",
     "label": "Thiên Cực Đế Tinh BDU",

@@ -11580,6 +11580,297 @@ h3,
   filter: drop-shadow(0 0 5px rgba(239, 68, 68, .68)) drop-shadow(0 8px 12px rgba(0, 0, 0, .92));
 }
 
+/* AIDTI BDU Signature: data orbit, scan line, AI nodes and a soft chibi greeting. */
+.has-frame-aidti-bdu .forum-hero-avatar {
+  border-color: rgba(255, 255, 255, .98);
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, .38),
+    0 0 18px rgba(239, 35, 60, .3),
+    0 0 34px rgba(37, 99, 235, .2);
+}
+
+.has-frame-aidti-bdu .avatar-energy-ring {
+  opacity: .52;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  clip-path: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 8%,
+    #ef233c 12% 19%,
+    transparent 24% 43%,
+    #fff 48% 52%,
+    #2563eb 57% 67%,
+    transparent 72% 91%,
+    #ef233c 96%
+  );
+  filter: blur(2.5px) drop-shadow(0 0 7px rgba(239, 35, 60, .38)) drop-shadow(0 0 10px rgba(37, 99, 235, .34));
+  animation: aidti-energy-orbit 18s linear infinite;
+}
+
+.aidti-frame-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.aidti-frame-art,
+.aidti-frame-chibi-layer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 188%;
+  height: 188%;
+  max-width: none;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.aidti-frame-art {
+  z-index: 3;
+  filter: drop-shadow(0 0 4px rgba(239, 35, 60, .34)) drop-shadow(0 7px 11px rgba(30, 64, 175, .24));
+  animation: aidti-frame-idle 7.6s ease-in-out infinite;
+}
+
+.aidti-frame-chibi-layer {
+  z-index: 4;
+  opacity: .12;
+  clip-path: polygon(77% 54%, 100% 54%, 100% 100%, 79% 100%);
+  mix-blend-mode: screen;
+  filter: brightness(1.16) saturate(1.06) drop-shadow(0 0 4px rgba(37, 99, 235, .35));
+  animation: aidti-chibi-greeting 6.8s ease-in-out infinite;
+}
+
+.aidti-circuit-ring,
+.aidti-data-scan,
+.aidti-node {
+  position: absolute;
+  pointer-events: none;
+}
+
+.aidti-circuit-ring {
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: 158px;
+  height: 158px;
+  margin: -79px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 12deg, #ef233c 0 1.2deg, transparent 1.2deg 8deg, #60a5fa 8deg 9deg, transparent 9deg 18deg);
+  -webkit-mask: radial-gradient(circle, transparent 61%, #000 62% 64%, transparent 65%);
+  mask: radial-gradient(circle, transparent 61%, #000 62% 64%, transparent 65%);
+  filter: drop-shadow(0 0 4px rgba(239, 35, 60, .42));
+  opacity: .3;
+  animation: aidti-circuit-spin 22s linear infinite;
+}
+
+.aidti-data-scan {
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 116px;
+  height: 116px;
+  margin: -58px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(to bottom, transparent 0 44%, rgba(255, 255, 255, .08) 47%, rgba(96, 165, 250, .66) 49%, rgba(239, 35, 60, .78) 50%, transparent 54% 100%);
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, .38));
+  opacity: .28;
+  animation: aidti-data-scan 7.2s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+
+.aidti-node {
+  z-index: 6;
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgba(255, 255, 255, .96);
+  border-radius: 2px;
+  background: #ef233c;
+  box-shadow: 0 0 5px rgba(239, 35, 60, .68), 0 0 10px rgba(37, 99, 235, .4);
+  animation: aidti-node-pulse 4.8s ease-in-out infinite;
+}
+
+.aidti-node-a { top: -20px; left: 7px; }
+.aidti-node-b { top: 20px; right: -27px; animation-delay: -.75s; }
+.aidti-node-c { bottom: -28px; left: -18px; animation-delay: -1.4s; }
+
+.has-frame-aidti-bdu .avatar-frame-sheen {
+  display: block;
+  top: -45%;
+  left: -56%;
+  width: 210%;
+  height: 178%;
+  background: linear-gradient(108deg, transparent 38%, rgba(255, 255, 255, .38) 49%, rgba(96, 165, 250, .18) 51%, transparent 62%);
+  animation: aidti-sheen-sweep 8.5s ease-in-out infinite;
+}
+
+.mini-avatar-wrap.has-frame-aidti-bdu .aidti-frame-art-mini {
+  width: 188%;
+  height: 188%;
+  animation: none;
+  filter: drop-shadow(0 0 3px rgba(239, 35, 60, .58));
+}
+
+.frame-tag.tier-aidti-bdu,
+.forum-post-rank-tag.tier-aidti-bdu {
+  color: #fff;
+  border-color: rgba(96, 165, 250, .7);
+  background: linear-gradient(115deg, rgba(190, 18, 60, .86), rgba(30, 64, 175, .88));
+  box-shadow: 0 0 12px rgba(239, 35, 60, .24);
+}
+
+.frame-effect-aidti-data-awaken .frame-portal-glow {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, .24) 0 8%, rgba(37, 99, 235, .27) 32%, transparent 57%),
+    conic-gradient(from 45deg, rgba(239, 35, 60, .23), transparent 24%, rgba(37, 99, 235, .26), transparent 74%, rgba(239, 35, 60, .23));
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, .1), 0 0 28px rgba(239, 35, 60, .2), 0 0 46px rgba(37, 99, 235, .14);
+  animation: aidti-portal-breathe 6.5s ease-in-out infinite;
+}
+
+.frame-effect-aidti-data-awaken .frame-rune-ring {
+  background: repeating-conic-gradient(from 0deg, #ef233c 0 1.5deg, transparent 1.5deg 9deg, #60a5fa 9deg 10deg, transparent 10deg 18deg);
+  filter: drop-shadow(0 0 3px rgba(239, 35, 60, .34));
+  opacity: .2;
+}
+
+.frame-effect-aidti-data-awaken .frame-light-beams,
+.frame-effect-aidti-data-awaken .frame-signature-fx,
+.frame-effect-aidti-data-awaken .frame-intro-flash,
+.frame-effect-aidti-data-awaken .frame-intro-shockwave {
+  display: none;
+}
+
+.frame-cinematic-active.frame-effect-aidti-data-awaken .frame-cinematic-backdrop {
+  animation: aidti-backdrop-soft 2.4s ease both;
+}
+
+.frame-cinematic-active.frame-effect-aidti-data-awaken .forum-hero-content {
+  animation: aidti-content-settle 2.2s ease both;
+}
+
+.frame-cinematic-active.frame-effect-aidti-data-awaken .forum-hero-username,
+.frame-cinematic-active.frame-effect-aidti-data-awaken .identity-title-hero,
+.frame-cinematic-active.frame-effect-aidti-data-awaken .forum-hero-sub {
+  animation: aidti-details-soft 2.2s ease both;
+}
+
+.frame-intro-burst.frame-effect-aidti-data-awaken .aidti-frame-art {
+  animation: aidti-frame-boot 2.15s cubic-bezier(.22, 1, .36, 1) forwards !important;
+}
+
+.frame-intro-burst.frame-effect-aidti-data-awaken .aidti-frame-chibi-layer {
+  animation: aidti-chibi-arrival 2.4s cubic-bezier(.22, 1, .36, 1) both !important;
+}
+
+.frame-intro-burst.frame-effect-aidti-data-awaken .aidti-circuit-ring {
+  animation: aidti-circuit-boot 2.2s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.frame-intro-burst.frame-effect-aidti-data-awaken .aidti-data-scan {
+  animation: aidti-scan-boot 2.25s ease .16s both;
+}
+
+.frame-intro-burst.frame-effect-aidti-data-awaken .aidti-node {
+  animation: aidti-node-boot 2s ease both;
+}
+
+@keyframes aidti-energy-orbit {
+  from { transform: translate(-50%, -50%) rotate(0deg) scale(.98); }
+  50% { filter: blur(2.5px) drop-shadow(0 0 9px rgba(239, 35, 60, .46)) drop-shadow(0 0 12px rgba(37, 99, 235, .4)); }
+  to { transform: translate(-50%, -50%) rotate(360deg) scale(.98); }
+}
+
+@keyframes aidti-frame-idle {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); filter: drop-shadow(0 0 4px rgba(239,35,60,.46)) drop-shadow(0 8px 12px rgba(30,64,175,.3)); }
+  50% { transform: translate(-50%, calc(-50% - 1px)) scale(1.006); filter: drop-shadow(0 0 6px rgba(239,35,60,.44)) drop-shadow(0 8px 12px rgba(37,99,235,.3)); }
+}
+
+@keyframes aidti-chibi-greeting {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); opacity: .08; }
+  45% { transform: translate(-49.8%, calc(-50% - 1px)) rotate(.22deg); opacity: .18; }
+  60% { transform: translate(-50%, -50%) rotate(-.12deg); opacity: .12; }
+}
+
+@keyframes aidti-circuit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes aidti-data-scan {
+  0%, 100% { transform: translateY(-38px) scaleX(.72); opacity: 0; }
+  18% { opacity: .72; }
+  72% { opacity: .5; }
+  88% { transform: translateY(38px) scaleX(1); opacity: 0; }
+}
+
+@keyframes aidti-node-pulse {
+  0%, 100% { transform: scale(.82); opacity: .28; }
+  50% { transform: scale(1.08); opacity: .72; }
+}
+
+@keyframes aidti-sheen-sweep {
+  0%, 66%, 100% { transform: translateY(-128%) rotate(25deg); opacity: 0; }
+  74% { opacity: .38; }
+  88% { transform: translateY(128%) rotate(25deg); opacity: 0; }
+}
+
+@keyframes aidti-portal-breathe {
+  0%, 100% { transform: scale(.98); opacity: .34; }
+  50% { transform: scale(1.025); opacity: .55; }
+}
+
+@keyframes aidti-frame-boot {
+  0% { transform: translate(-50%, calc(-50% + 8px)) scale(.94); opacity: 0; filter: brightness(1.18) blur(2px); }
+  55% { opacity: .88; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: drop-shadow(0 0 4px rgba(239,35,60,.34)) drop-shadow(0 7px 11px rgba(30,64,175,.24)); }
+}
+
+@keyframes aidti-chibi-arrival {
+  0%, 30% { transform: translate(-48%, calc(-50% + 7px)) scale(.96); opacity: 0; filter: brightness(1.1) blur(2px); }
+  72% { transform: translate(-50%, calc(-50% - 1px)) scale(1.01); opacity: .16; filter: brightness(1.16) blur(0); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: .12; }
+}
+
+@keyframes aidti-circuit-boot {
+  0% { transform: rotate(-24deg) scale(.92); opacity: 0; }
+  100% { transform: rotate(0deg) scale(1); opacity: .3; }
+}
+
+@keyframes aidti-scan-boot {
+  0% { transform: translateY(-34px) scaleX(.76); opacity: 0; }
+  32% { opacity: .32; }
+  82% { transform: translateY(34px) scaleX(1); opacity: .22; }
+  100% { transform: translateY(38px) scaleX(1); opacity: 0; }
+}
+
+@keyframes aidti-node-boot {
+  0% { transform: scale(.7); opacity: 0; }
+  65% { transform: scale(1.05); opacity: .64; }
+  100% { transform: scale(1); opacity: .42; }
+}
+
+@keyframes aidti-backdrop-soft {
+  0%, 100% { opacity: 0; }
+  45% { opacity: .34; }
+}
+
+@keyframes aidti-content-settle {
+  0% { transform: translateY(4px); filter: brightness(.92); }
+  100% { transform: translateY(0); filter: none; }
+}
+
+@keyframes aidti-details-soft {
+  0% { opacity: .72; transform: translateY(3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 .anime-frame-character {
   position: absolute;
   z-index: 8;
@@ -12550,6 +12841,11 @@ h3,
   .anime-eye-state,
   .anime-eye-burst,
   .anime-awakening-pressure,
+  .aidti-frame-art,
+  .aidti-frame-chibi-layer,
+  .aidti-circuit-ring,
+  .aidti-data-scan,
+  .aidti-node,
   .frame-unlock-announcement,
   .frame-cinematic-active .forum-hero-content,
   .frame-cinematic-active .forum-hero-username,

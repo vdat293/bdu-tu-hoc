@@ -6165,6 +6165,26 @@ function buildAnimeSignatureFrameConfig(key) {
   return frames[key] || null;
 }
 
+function buildAidtiSignatureFrameConfig() {
+  return {
+    rank: 0,
+    scope: 'aidti',
+    scopeLabel: 'Viện Trí tuệ Nhân tạo và Chuyển đổi số',
+    scopeUpper: 'AIDTI • BDU',
+    totalStudents: 0,
+    tier: 'aidti-bdu',
+    frameSvg: 'assets/images/frame-aidti-bdu-chibi-v2.png',
+    frameArt: 'assets/images/frame-aidti-bdu-chibi-v2.png',
+    introEffect: 'aidti-data-awaken',
+    themeKey: 'aidti-bdu',
+    frameFamily: 'aidti-bdu',
+    icon: 'AI',
+    title: 'AIDTI',
+    badgeText: 'AI • AIDTI BDU',
+    rankLabel: 'TRUNG TÂM CHUYỂN ĐỔI SỐ'
+  };
+}
+
 function getAcademicAvatarFrame(rankingData) {
   // 1. Kiểm tra nếu người dùng đang chủ động chọn thử khung (Preview Mode)
   const previewTier = AppState.confession?.framePreview;
@@ -6178,7 +6198,9 @@ function getAcademicAvatarFrame(rankingData) {
       : (previewTier === 'top-2' ? 'vien-top' : (previewTier === 'top-4-5' ? 'khoa-top' : (previewTier === 'top-3' ? 'lop-top' : (previewTier === 'top-6-10' ? 'truong-top' : previewTier))));
     const previewAccess = getStudentAcademicUnlockedFrames()?.[previewKey];
     if (!previewAccess?.unlocked) return null;
-    if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi') {
+    if (previewTier === 'aidti-bdu') {
+      return buildAidtiSignatureFrameConfig();
+    } else if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi') {
       return buildAnimeSignatureFrameConfig(previewTier);
     } else if (previewTier === 'truong-1' || previewTier === 'top-1') {
       return buildScopeFrameConfig('truong', 1, 1800);
@@ -6422,11 +6444,26 @@ const ANIME_SIGNATURE_FRAME_COLLECTION = [
   }
 ];
 
+const AIDTI_SIGNATURE_FRAME_COLLECTION = [
+  {
+    key: 'aidti-bdu',
+    scope: 'aidti',
+    family: 'aidti-bdu',
+    tier: 'aidti-bdu',
+    svg: 'assets/images/frame-aidti-bdu-chibi-v2.png',
+    art: 'assets/images/frame-aidti-bdu-chibi-v2.png',
+    icon: 'AI',
+    tag: 'ĐỘC QUYỀN • AIDTI BDU',
+    title: 'AIDTI',
+    desc: 'Sinh viên BDU chibi, mạch dữ liệu đỏ–lam, node AI và hiệu ứng quét số dành riêng cho Viện Trí tuệ Nhân tạo và Chuyển đổi số.'
+  }
+];
+
 function getAcademicFrameCollection(rankingData) {
   if (!isThFaculty(rankingData) && !hasFullFramePreviewAccess()) {
-    return [...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION];
+    return [...AIDTI_SIGNATURE_FRAME_COLLECTION, ...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION];
   }
-  return [...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION.flatMap(item => {
+  return [...AIDTI_SIGNATURE_FRAME_COLLECTION, ...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION.flatMap(item => {
     if (item.key === 'khoa-1') return KHOA_TH_FRAME_COLLECTION;
     if (item.key === 'khoa-top') return [];
     return [item];
@@ -6463,6 +6500,7 @@ function getStudentAcademicUnlockedFrames() {
   const lopRank = getBestRankForScope('lop');
 
   const unlockedFrames = {
+    'aidti-bdu': { unlocked: false, currentRank: 0, req: 'Khung độc quyền AIDTI' },
     'anime-gojo': { unlocked: false, currentRank: 0, req: 'Khung độc quyền' },
     'anime-itachi': { unlocked: false, currentRank: 0, req: 'Khung độc quyền' },
     'truong-1': { unlocked: truongRank === 1, currentRank: truongRank, req: 'Top 1 Toàn Trường' },
@@ -6580,7 +6618,9 @@ function renderFrameCollectionModal() {
           <div class="mini-avatar-wrap has-frame-${item.tier} has-frame-scope-${item.scope} ${item.family ? `has-frame-${item.family}` : ''}">
             <div class="avatar-energy-ring"></div>
             <div class="mini-avatar-circle">${item.icon}</div>
-            <img class="avatar-frame-overlay ${item.art ? 'anime-frame-art-mini' : ''}" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">
+            ${item.family === 'aidti-bdu'
+              ? `<img class="avatar-frame-overlay aidti-frame-art-mini" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`
+              : `<img class="avatar-frame-overlay ${item.art ? 'anime-frame-art-mini' : ''}" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`}
             ${item.character ? `<img class="anime-frame-character is-${item.characterSide}" src="${item.character}" alt="" loading="lazy" decoding="async">` : ''}
           </div>
         </div>
@@ -6668,6 +6708,7 @@ window.selectAvatarFramePreview = function(tier) {
   }
 
   const labels = {
+    'aidti-bdu': 'AIDTI - Trung tâm Chuyển đổi số',
     'anime-gojo': '∞ Anime Signature - Thiên Thượng Thiên Hạ',
     'anime-itachi': '● Anime Signature - Ảo Nguyệt Hắc Viêm',
     'truong-1': '✦ Top 1 Toàn Trường - Thiên Cực Đế Tinh BDU',
@@ -6780,6 +6821,13 @@ const FRAME_CINEMATIC_THEMES = {
     rgb: '239, 68, 68',
     rarity: 'GENJUTSU'
   },
+  'aidti-bdu': {
+    primary: '#ef233c',
+    secondary: '#2563eb',
+    highlight: '#ffffff',
+    rgb: '239, 35, 60',
+    rarity: 'AIDTI SIGNATURE'
+  },
   lop: {
     primary: '#fb923c',
     secondary: '#ef4444',
@@ -6792,7 +6840,7 @@ const FRAME_CINEMATIC_THEMES = {
 const FRAME_INTRO_EFFECTS = [
   'constellation-forge', 'binary-eclipse', 'triad-supernova', 'orbit-lock', 'dragon-awaken', 'crystal-wings', 'mecha-assemble', 'phoenix-rise',
   'runner-up-dual', 'blade-cross', 'elite-pulse', 'th-quantum-compile', 'th-dual-synapse', 'th-ternary-boot', 'th-protocol-lock',
-  'gojo-limitless-awaken', 'itachi-crow-genjutsu'
+  'gojo-limitless-awaken', 'itachi-crow-genjutsu', 'aidti-data-awaken'
 ];
 
 let frameIntroTimer = null;
@@ -6830,7 +6878,10 @@ function prepareFrameCinematic(frameInfo) {
 
   if (!particleField || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const particles = document.createDocumentFragment();
-  const desktopParticleCount = frameInfo.frameFamily?.startsWith('anime-')
+  const isAidtiFrame = frameInfo.frameFamily === 'aidti-bdu';
+  const desktopParticleCount = isAidtiFrame
+    ? 18
+    : frameInfo.frameFamily?.startsWith('anime-')
     ? 46
     : frameInfo.frameFamily === 'khoa-th'
     ? (frameInfo.rank === 1 ? 42 : (frameInfo.rank === 2 ? 34 : (frameInfo.rank === 3 ? 28 : 18)))
@@ -6841,9 +6892,13 @@ function prepareFrameCinematic(frameInfo) {
   for (let index = 0; index < particleCount; index += 1) {
     const angle = (Math.PI * 2 * index / particleCount) + ((Math.random() - 0.5) * 0.34);
     const prestigeDistance = frameInfo.scope === 'truong' && frameInfo.rank <= 3 ? (4 - frameInfo.rank) * 18 : 0;
-    const distance = 82 + prestigeDistance + Math.random() * 105;
+    const distance = isAidtiFrame
+      ? 64 + Math.random() * 54
+      : 82 + prestigeDistance + Math.random() * 105;
     const particle = document.createElement('i');
-    const particleKind = frameInfo.frameFamily === 'anime-itachi'
+    const particleKind = frameInfo.frameFamily === 'aidti-bdu'
+      ? (index % 4 === 0 ? 'star' : 'spark')
+      : frameInfo.frameFamily === 'anime-itachi'
       ? (index % 3 === 0 ? 'shard' : 'spark')
       : (frameInfo.frameFamily === 'anime-gojo'
         ? (index % 2 === 0 ? 'star' : 'spark')
@@ -6857,10 +6912,10 @@ function prepareFrameCinematic(frameInfo) {
     particle.className = `frame-particle frame-particle-${particleKind}`;
     particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
     particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
-    particle.style.setProperty('--particle-delay', `${80 + Math.random() * 300}ms`);
-    particle.style.setProperty('--particle-duration', `${680 + Math.random() * 620}ms`);
-    particle.style.setProperty('--particle-size', `${2 + Math.random() * 5}px`);
-    particle.style.setProperty('--particle-spin', `${180 + Math.random() * 540}deg`);
+    particle.style.setProperty('--particle-delay', `${isAidtiFrame ? 180 + Math.random() * 520 : 80 + Math.random() * 300}ms`);
+    particle.style.setProperty('--particle-duration', `${isAidtiFrame ? 1500 + Math.random() * 900 : 680 + Math.random() * 620}ms`);
+    particle.style.setProperty('--particle-size', `${isAidtiFrame ? 1.5 + Math.random() * 2.5 : 2 + Math.random() * 5}px`);
+    particle.style.setProperty('--particle-spin', `${isAidtiFrame ? 20 + Math.random() * 80 : 180 + Math.random() * 540}deg`);
     particles.appendChild(particle);
   }
   particleField.replaceChildren(particles);
@@ -6876,6 +6931,18 @@ function renderAcademicFrameMarkup(frameInfo) {
   const characterMarkup = frameInfo.characterAsset
     ? `<img class="anime-frame-character is-${frameInfo.characterSide === 'right' ? 'right' : 'left'}" src="${escapeHtml(frameInfo.characterAsset)}" alt="Nhân vật chibi của khung ${safeTitle}" decoding="async">`
     : '';
+  if (frameInfo.frameFamily === 'aidti-bdu') {
+    const safeArt = escapeHtml(frameInfo.frameArt || frameInfo.frameSvg);
+    return `<div class="aidti-frame-stage" aria-label="${safeTitle}">
+      <span class="aidti-circuit-ring" aria-hidden="true"></span>
+      <span class="aidti-data-scan" aria-hidden="true"></span>
+      <img class="aidti-frame-art" src="${safeArt}" alt="Khung ${safeTitle}" decoding="async">
+      <img class="aidti-frame-chibi-layer" src="${safeArt}" alt="" aria-hidden="true" decoding="async">
+      <span class="aidti-node aidti-node-a" aria-hidden="true"></span>
+      <span class="aidti-node aidti-node-b" aria-hidden="true"></span>
+      <span class="aidti-node aidti-node-c" aria-hidden="true"></span>
+    </div>`;
+  }
   if (frameInfo.frameArt) {
     const safeArt = escapeHtml(frameInfo.frameArt);
     const awakeningMarkup = frameInfo.awakeningAsset && frameInfo.awakeningClosedAsset && frameInfo.awakeningHalfAsset
@@ -6960,7 +7027,7 @@ function updateForumUserWidgets() {
     heroAvatarWrap.classList.remove(
       'has-frame-top-1', 'has-frame-top-2', 'has-frame-top-3', 'has-frame-top-4-5', 'has-frame-top-6-10',
       'has-frame-scope-truong', 'has-frame-scope-vien', 'has-frame-scope-khoa', 'has-frame-scope-lop', 'has-frame-scope-anime',
-      'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi'
+      'has-frame-scope-aidti', 'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi', 'has-frame-aidti-bdu'
     );
   }
 

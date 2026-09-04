@@ -108,6 +108,25 @@ assert.match(appJs, /function hasAnimeFrameAccess[\s\S]*?frame_access[\s\S]*?ani
 assert.equal(appJs.includes('chibi-gojo-signature.png'), true, 'Khung Gojo phải gắn asset chibi riêng');
 assert.equal(appJs.includes('chibi-itachi-signature.png'), true, 'Khung Itachi phải gắn asset chibi riêng');
 
+const aidtiMigration = fs.readFileSync('migrations/024_aidti_bdu_signature_frame.sql', 'utf8');
+const identityItems = JSON.parse(fs.readFileSync('src/config/identity-items.json', 'utf8'));
+const aidtiItem = identityItems.find(item => item.id === 'frame:aidti-bdu');
+assert.ok(aidtiItem, 'Catalog phải đăng ký frame:aidti-bdu');
+assert.equal(aidtiItem.asset_key, 'aidti-bdu', 'AIDTI frame phải dùng asset key ổn định');
+assert.equal(aidtiItem.metadata?.manual_grantable, true, 'Admin Tool phải cấp được khung AIDTI');
+assert.match(aidtiMigration, /'frame:aidti-bdu'[\s\S]*?'aidti-bdu'/, 'Migration phải đăng ký khung AIDTI trên database');
+assert.equal(appJs.includes('aidti-data-awaken'), true, 'Khung AIDTI phải có opening data-awaken riêng');
+assert.equal(appJs.includes('aidti-frame-stage'), true, 'Renderer phải dựng stage animation riêng cho khung AIDTI');
+assert.equal(styleCss.includes('@keyframes aidti-frame-boot'), true, 'AIDTI phải có timeline khởi động frame');
+assert.equal(styleCss.includes('@keyframes aidti-data-scan'), true, 'AIDTI phải có hiệu ứng quét dữ liệu liên tục');
+assert.equal(styleCss.includes('@keyframes aidti-chibi-greeting'), true, 'Chibi BDU phải có chuyển động chào nhẹ');
+
+const aidtiAsset = 'public/assets/images/frame-aidti-bdu-chibi-v2.png';
+assert.equal(fs.existsSync(aidtiAsset), true, `${aidtiAsset} phải tồn tại`);
+const aidtiPng = fs.readFileSync(aidtiAsset);
+assert.equal(aidtiPng.subarray(1, 4).toString(), 'PNG', 'AIDTI frame phải là PNG thật');
+assert.equal(aidtiPng[25], 6, 'AIDTI frame phải là PNG RGBA có kênh alpha');
+
 const animeAssets = [
   'public/assets/images/chibi-gojo-signature.png',
   'public/assets/images/chibi-itachi-signature.png',
@@ -227,6 +246,13 @@ vm.runInContext(`
   AppState.user = { mssv: '24050126' };
   AppState.identityPresentation = { frame_access: { all: true, keys: [] } };
   if (!getStudentAcademicUnlockedFrames()['anime-gojo']?.unlocked) throw new Error('24050126 phải có quyền toàn bộ khung');
+  if (!getStudentAcademicUnlockedFrames()['aidti-bdu']?.unlocked) throw new Error('Tài khoản toàn quyền phải mở được khung AIDTI');
+  AppState.confession.framePreview = 'aidti-bdu';
+  const aidtiFrame = getAcademicAvatarFrame(null);
+  if (!aidtiFrame || aidtiFrame.tier !== 'aidti-bdu') throw new Error('Không render được khung AIDTI');
+  if (aidtiFrame.introEffect !== 'aidti-data-awaken') throw new Error('AIDTI dùng sai opening animation');
+  if (aidtiFrame.title !== 'AIDTI') throw new Error('Tiêu đề giữa của AIDTI phải ngắn gọn');
+  if (aidtiFrame.rankLabel !== 'TRUNG TÂM CHUYỂN ĐỔI SỐ') throw new Error('Dòng phụ AIDTI phải hiển thị Trung tâm Chuyển đổi số');
 
   // Kiểm tra tài khoản bình thường không được tự ý mở khung Anime
   AppState.user = { mssv: '22050001' };
@@ -234,6 +260,7 @@ vm.runInContext(`
   const unAuth = getStudentAcademicUnlockedFrames();
   if (unAuth['anime-gojo']?.unlocked) throw new Error('22050001 không được tự động mở khung Gojo');
   if (unAuth['anime-itachi']?.unlocked) throw new Error('22050001 không được tự động mở khung Itachi');
+  if (unAuth['aidti-bdu']?.unlocked) throw new Error('22050001 không được tự động mở khung AIDTI');
   AppState.confession.framePreview = 'anime-gojo';
   if (getAcademicAvatarFrame(null) !== null) throw new Error('22050001 không được phép hiển thị khung Gojo khi chưa được cấp quyền');
 `, sandbox);
