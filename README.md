@@ -66,6 +66,10 @@ npm install
 ```bash
 npm run db:setup:dev # Chỉ dùng khi DATABASE_URL trỏ tới PostgreSQL localhost
 npm run db:migrate
+
+# Xuất / Nhập dữ liệu (Đồng bộ giữa Mac & PC hoặc Sao lưu):
+npm run db:dump     # Xuất dữ liệu ra file data/backup.sql
+npm run db:restore  # Nạp dữ liệu từ file data/backup.sql vào database hiện tại
 ```
 
 4. Có thể chạy đồng bộ thủ công lần đầu để giao diện có dữ liệu ngay:

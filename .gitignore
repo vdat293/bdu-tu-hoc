@@ -6,3 +6,5 @@ outside-src/
 .env
 .env.*
 !.env.example
+data/*.sql
+data/*.dump
