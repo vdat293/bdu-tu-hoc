@@ -27,6 +27,10 @@ const AppState = {
   eventSource: null,
   englishSessionId: null,
   englishEventSource: null,
+  communityRealtime: null,
+  communityRealtimeReconnectTimer: null,
+  communityRealtimeReconnectAttempt: 0,
+  communityRealtimeEvents: new Set(),
   englishActivities: [],
   learning: {
     courses: [],
@@ -56,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initClansModule();
   initConfessionModule();
   initTitleCustomizer();
+  initIdentityAdmin();
 });
 
 // ============================================================================
@@ -299,14 +304,131 @@ async function saveTitleCustomizer() {
   }
 }
 
+async function initIdentityAdmin() {
+  const panel = document.getElementById('identity-admin-panel');
+  if (!panel || !AppState.token || panel.dataset.initialized === 'true') return;
+  const status = document.getElementById('identity-admin-status');
+  try {
+    const items = await BduApi.getAdminIdentityItems(AppState.token);
+    panel.dataset.initialized = 'true';
+    panel.classList.remove('hidden');
+    if (status) status.textContent = 'Quyền truy cập hợp lệ';
+    const select = document.getElementById('identity-admin-item');
+    if (select) {
+      select.innerHTML = items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)} · ${escapeHtml(item.item_type)}</option>`).join('');
+    }
+    const mssvInput = document.getElementById('identity-admin-mssv');
+    const grantsEl = document.getElementById('identity-admin-grants');
+    const loadGrants = async () => {
+      const mssv = mssvInput?.value?.trim();
+      if (!mssv || !grantsEl) return;
+      try {
+        const grants = await BduApi.getAdminIdentityGrants(AppState.token, mssv);
+        grantsEl.innerHTML = grants.length ? grants.map((grant) => `
+          <div class="identity-admin-grant-row">
+            <span>${escapeHtml(grant.label || grant.item_id)}${grant.revoked_at ? ' · đã thu hồi' : ''}</span>
+            ${grant.revoked_at ? '' : `<button type="button" data-identity-revoke="${grant.id}">Thu hồi</button>`}
+          </div>`).join('') : '<span class="identity-admin-status">Chưa có grant.</span>';
+        grantsEl.querySelectorAll('[data-identity-revoke]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            const reason = window.prompt('Lý do thu hồi quyền:', 'Điều chỉnh quyền hiển thị') || '';
+            try {
+              await BduApi.revokeAdminIdentityGrant(AppState.token, button.dataset.identityRevoke, reason);
+              await loadGrants();
+              showToast('Đã thu hồi quyền hiển thị.', 'success');
+            } catch (error) {
+              showToast(error.message || 'Không thể thu hồi quyền.', 'error');
+            }
+          });
+        });
+      } catch (error) {
+        grantsEl.textContent = error.message || 'Không thể tải grant.';
+      }
+    };
+    mssvInput?.addEventListener('change', loadGrants);
+    document.getElementById('identity-admin-grant')?.addEventListener('click', async () => {
+      const mssv = mssvInput?.value?.trim();
+      const itemId = select?.value;
+      if (!mssv || !itemId) {
+        showToast('Nhập MSSV và chọn item cần cấp.', 'warning');
+        return;
+      }
+      try {
+        await BduApi.createAdminIdentityGrant(AppState.token, {
+          mssv,
+          itemId,
+          reason: document.getElementById('identity-admin-reason')?.value?.trim()
+        });
+        await loadGrants();
+        showToast('Đã cấp quyền hiển thị.', 'success');
+      } catch (error) {
+        showToast(error.message || 'Không thể cấp quyền.', 'error');
+      }
+    });
+  } catch (error) {
+    // Non-admin users should not see an empty or broken admin panel.
+    panel.classList.add('hidden');
+    if (error?.status !== 403) console.info('Identity admin unavailable:', error.message);
+  }
+}
+
 function updateIdentityPresentationUI() {
   const presentation = AppState.identityPresentation;
   if (!presentation) return;
+  applyResolvedAvatarToCurrentUser(presentation);
   const badges = renderIdentityTitleBadges(presentation.selected_titles || []);
   const heroTitles = document.getElementById('cfs-hero-titles');
   const widgetTitles = document.getElementById('widget-user-titles');
   if (heroTitles) heroTitles.innerHTML = badges;
   if (widgetTitles) widgetTitles.innerHTML = badges || '<span class="identity-title-empty">Chưa hiển thị danh hiệu</span>';
+}
+
+function applyResolvedAvatarToCurrentUser(presentation) {
+  const currentPhoto = AppState.user?.photoUrl || localStorage.getItem('bdu_user_photo') || '';
+  const isOverride = presentation?.avatar_source === 'override' && Boolean(presentation?.avatar_url);
+  const url = isOverride
+    ? presentation.avatar_url
+    : (presentation?.avatar_url || currentPhoto);
+  const name = presentation?.name || AppState.user?.name || 'Sinh viên BDU';
+
+  if (AppState.user) {
+    if (url) {
+      AppState.user.photoUrl = url;
+      AppState.user.avatarSource = isOverride
+        ? 'override'
+        : (presentation?.avatar_url ? (presentation?.avatar_source || 'bdu') : 'bdu-api-live');
+    }
+  }
+
+  try {
+    if (url) localStorage.setItem('bdu_user_photo', url);
+  } catch (e) {}
+
+  const markup = url
+    ? `<img src="${escapeHtml(url)}" alt="Ảnh của ${escapeHtml(name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
+    : escapeHtml(getInitials(name));
+  ['user-avatar', 'hero-avatar', 'cfs-hero-avatar', 'cfs-composer-avatar', 'widget-user-avatar'].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) element.innerHTML = markup;
+  });
+
+  const profilePhoto = document.getElementById('profile-student-photo');
+  const profileFallback = document.getElementById('card-avatar');
+  if (profilePhoto) {
+    if (url) {
+      if (profilePhoto.src !== url) {
+        profilePhoto.src = url;
+      }
+      profilePhoto.classList.remove('hidden');
+      profileFallback?.classList.add('hidden');
+    } else if (!profilePhoto.src || profilePhoto.classList.contains('hidden')) {
+      profilePhoto.classList.add('hidden');
+      if (profileFallback) {
+        profileFallback.classList.remove('hidden');
+        profileFallback.textContent = getInitials(name);
+      }
+    }
+  }
 }
 
 function applyCurrentUserPresentationToFeeds() {
@@ -316,8 +438,10 @@ function applyCurrentUserPresentationToFeeds() {
   [AppState.learning.posts, AppState.confession?.posts, AppState.clans?.posts].forEach((posts) => {
     (posts || []).forEach((post) => {
       if (post.author?.mssv === mssv) {
-        post.author.photo_url = presentation.avatar_url || post.author.photo_url;
+        post.author.photo_url = presentation.avatar_url || AppState.user?.photoUrl || post.author.photo_url;
+        post.author.avatar_source = presentation.avatar_source || AppState.user?.avatarSource || post.author.avatar_source;
         post.author.titles = presentation.selected_titles || [];
+        post.author.equipped_frame_id = presentation.equipped_frame_id || null;
       }
     });
   });
@@ -396,7 +520,8 @@ function initAuth() {
           name: res.name,
           mssv: res.mssv,
           email: res.email,
-          roles: res.roles
+          roles: res.roles,
+          idsv: res.idsv || ''
         };
         AppState.token = res.token;
 
@@ -415,6 +540,8 @@ function initAuth() {
 
         showToast(`Xin chào, ${res.name}!`, 'success');
         switchToDashboard();
+        connectCommunityRealtime();
+        initIdentityAdmin();
         await loadAllDashboardData();
       } catch (err) {
         showToast(err.message, 'error');
@@ -456,7 +583,16 @@ function initAuth() {
       try {
         AppState.token = savedToken;
         AppState.user = JSON.parse(savedUser);
+        if (!AppState.user.photoUrl) {
+          const cachedPhoto = localStorage.getItem('bdu_user_photo');
+          if (cachedPhoto) {
+            AppState.user.photoUrl = cachedPhoto;
+            AppState.user.avatarSource = 'bdu-api-live';
+          }
+        }
         switchToDashboard();
+        connectCommunityRealtime();
+        initIdentityAdmin();
         loadAllDashboardData();
       } catch (e) {
         handleLogout({ reason: 'Dữ liệu phiên không hợp lệ. Vui lòng đăng nhập lại.', isExpired: true });
@@ -481,6 +617,14 @@ function handleLogout(options = {}) {
   }
   AppState.englishEventSource?.close();
   AppState.eventSource?.close();
+  AppState.communityRealtime?.close();
+  clearTimeout(AppState.communityRealtimeReconnectTimer);
+  AppState.communityRealtime = null;
+  AppState.communityRealtimeReconnectTimer = null;
+  AppState.communityRealtimeReconnectAttempt = 0;
+  AppState.communityRealtimeEvents.clear();
+  document.getElementById('identity-admin-panel')?.classList.add('hidden');
+  delete document.getElementById('identity-admin-panel')?.dataset.initialized;
   localStorage.removeItem('bdu_token');
   localStorage.removeItem('bdu_user');
   localStorage.removeItem('bdu_token_expires_at');
@@ -493,6 +637,9 @@ function handleLogout(options = {}) {
   AppState.semesters = [];
   AppState.rawGradeData = null;
   AppState.academicRanking = null;
+  AppState.identityPresentation = null;
+  if (AppState.confession) AppState.confession.framePreview = 'real';
+  try { localStorage.removeItem('bdu_custom_frame_preview'); } catch (e) {}
   AppState.leaderboard.loaded = false;
   AppState.englishSessionId = null;
   AppState.englishEventSource = null;
@@ -511,6 +658,121 @@ function handleLogout(options = {}) {
     showToast(reason || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', 'warning');
   } else {
     showToast(reason, 'info');
+  }
+}
+
+function connectCommunityRealtime() {
+  if (!AppState.token || typeof WebSocket === 'undefined') return;
+  AppState.communityRealtime?.close();
+  clearTimeout(AppState.communityRealtimeReconnectTimer);
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws/community`);
+  AppState.communityRealtime = socket;
+  socket.addEventListener('open', () => {
+    AppState.communityRealtimeReconnectAttempt = 0;
+    socket.send(JSON.stringify({ type: 'auth', token: AppState.token }));
+  });
+  socket.addEventListener('message', (event) => {
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    handleCommunityRealtimeMessage(message);
+  });
+  socket.addEventListener('close', () => {
+    if (socket !== AppState.communityRealtime || !AppState.token) return;
+    const attempt = Math.min(6, AppState.communityRealtimeReconnectAttempt + 1);
+    AppState.communityRealtimeReconnectAttempt = attempt;
+    AppState.communityRealtimeReconnectTimer = setTimeout(connectCommunityRealtime, Math.min(30_000, 1000 * (2 ** attempt)));
+  });
+  socket.addEventListener('error', () => {});
+}
+
+function communityRealtimeSubscribe(room) {
+  const socket = AppState.communityRealtime;
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'subscribe', room }));
+}
+
+function handleCommunityRealtimeMessage(message) {
+  if (!message || message.type === 'hello' || message.type === 'auth.ok' || message.type === 'subscribed' || message.type === 'pong') return;
+  if (message.eventId) {
+    if (AppState.communityRealtimeEvents.has(message.eventId)) return;
+    AppState.communityRealtimeEvents.add(message.eventId);
+    if (AppState.communityRealtimeEvents.size > 500) {
+      AppState.communityRealtimeEvents = new Set([...AppState.communityRealtimeEvents].slice(-250));
+    }
+  }
+  const data = message.data || {};
+  if (message.type === 'community.post.created' || message.type === 'community.post.deleted') {
+    if (data.scope === 'clan') {
+      if (AppState.clans?.currentClan && String(AppState.clans.currentClan.id) === String(data.scopeId)) {
+        loadClanPosts(data.scopeId).catch(() => {});
+      }
+    } else {
+      loadConfessions().catch(() => {});
+    }
+    return;
+  }
+  if (message.type === 'community.comment.created' || message.type === 'community.comment.updated' || message.type === 'community.comment.deleted') {
+    const section = document.getElementById(`comments-section-${data.postId}`);
+    if (section && !section.classList.contains('hidden')) loadCommentsForPost(data.postId).catch(() => {});
+    if (data.commentCount !== null && data.commentCount !== undefined) {
+      document.querySelectorAll('[data-post-id]').forEach((card) => {
+        if (String(card.dataset.postId) !== String(data.postId)) return;
+        card.querySelectorAll('.comment-count-num, .comments-count-inline').forEach((el) => {
+          el.textContent = Number(data.commentCount);
+        });
+      });
+    }
+    return;
+  }
+  if (message.type === 'community.reaction.updated') {
+    document.querySelectorAll('[data-post-id]').forEach((card) => {
+      if (String(card.dataset.postId) !== String(data.postId)) return;
+      card.querySelectorAll('.like-count-num').forEach((el) => {
+        el.textContent = Number(data.likeCount || 0);
+      });
+    });
+    return;
+  }
+  if (message.type === 'identity.presentation.changed') {
+    const avatarUrl = data.avatarUrl || null;
+    const openCommentPostIds = [...document.querySelectorAll('[id^="comments-section-"]:not(.hidden)')]
+      .map((section) => section.id.replace('comments-section-', ''))
+      .filter(Boolean);
+    [AppState.learning.posts, AppState.confession?.posts, AppState.clans?.posts].forEach((posts) => {
+      (posts || []).forEach((post) => {
+        if (post.author?.mssv === data.mssv && !post.author?.is_anonymous) {
+          post.author.photo_url = avatarUrl;
+          post.author.avatar_source = data.avatarSource || 'initials';
+        }
+      });
+    });
+    if (AppState.learning.activeCourse) renderLearningCoursePosts();
+    if (document.getElementById('tab-confession')?.classList.contains('active')) renderForumFeed();
+    if (AppState.clans?.currentClan) loadClanPosts(AppState.clans.currentClan.id).catch(() => {});
+    openCommentPostIds.forEach((postId) => {
+      const section = document.getElementById(`comments-section-${postId}`);
+      section?.classList.remove('hidden');
+      loadCommentsForPost(postId).catch(() => {});
+    });
+    if (AppState.user?.mssv === data.mssv) {
+      BduApi.getMyIdentityPresentation(AppState.token).then((presentation) => {
+        AppState.identityPresentation = presentation;
+        updateIdentityPresentationUI();
+      }).catch(() => {});
+    }
+    return;
+  }
+  if (message.type === 'identity.entitlements.changed' && AppState.user?.mssv === data.mssv) {
+    BduApi.getMyIdentityPresentation(AppState.token)
+      .then((presentation) => {
+        AppState.identityPresentation = presentation;
+        AppState.confession.framePreview = presentation.equipped_frame_id
+          ? String(presentation.equipped_frame_id).replace(/^frame:/, '')
+          : 'real';
+        updateIdentityPresentationUI();
+        applyCurrentUserPresentationToFeeds();
+      })
+      .catch(() => {});
   }
 }
 
@@ -572,13 +834,19 @@ function switchToDashboard() {
   const navAvatar = document.getElementById('user-avatar');
   if (navName) navName.textContent = name;
   if (navMssv) navMssv.textContent = `MSSV: ${mssv}`;
-  if (navAvatar) navAvatar.textContent = avatarInitials;
+
+  const cachedPhoto = AppState.user?.photoUrl || localStorage.getItem('bdu_user_photo') || '';
+  const avatarMarkup = cachedPhoto
+    ? `<img src="${escapeHtml(cachedPhoto)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : avatarInitials;
+
+  if (navAvatar) navAvatar.innerHTML = avatarMarkup;
 
   const heroAvatar = document.getElementById('hero-avatar');
   const heroName = document.getElementById('hero-name');
   const heroMssv = document.getElementById('hero-mssv');
   const heroEmail = document.getElementById('hero-email');
-  if (heroAvatar) heroAvatar.textContent = avatarInitials;
+  if (heroAvatar) heroAvatar.innerHTML = avatarMarkup;
   if (heroName) heroName.textContent = name;
   if (heroMssv) heroMssv.textContent = mssv;
   if (heroEmail) heroEmail.textContent = AppState.user?.email || `${mssv}@student.bdu.edu.vn`;
@@ -699,6 +967,12 @@ async function loadAllDashboardData() {
     renderProfile(profileRes);
     try {
       AppState.identityPresentation = await BduApi.getMyIdentityPresentation(AppState.token);
+      AppState.confession.framePreview = AppState.identityPresentation.equipped_frame_id
+        ? String(AppState.identityPresentation.equipped_frame_id).replace(/^frame:/, '')
+        : 'real';
+      if (!AppState.identityPresentation.equipped_frame_id) {
+        try { localStorage.removeItem('bdu_custom_frame_preview'); } catch (e) {}
+      }
       updateIdentityPresentationUI();
     } catch (presentationError) {
       AppState.identityPresentation = null;
@@ -1458,40 +1732,56 @@ function renderProfile(profileRes) {
   // Avatar / Photo
   const imgEl = document.getElementById('profile-student-photo');
   const avatarPlaceholder = document.getElementById('card-avatar');
+  const isOverrideActive = AppState.identityPresentation?.avatar_source === 'override' && Boolean(AppState.identityPresentation?.avatar_url);
+
   if (photoUrl && imgEl) {
     let fullPhotoUrl = photoUrl;
     if (!fullPhotoUrl.startsWith('http') && !fullPhotoUrl.startsWith('data:')) {
-      fullPhotoUrl = (fullPhotoUrl.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + fullPhotoUrl;
+      if (fullPhotoUrl.startsWith('/9j/') || fullPhotoUrl.length > 500) {
+        fullPhotoUrl = `data:image/jpeg;base64,${fullPhotoUrl.replace(/\s+/g, '')}`;
+      } else {
+        fullPhotoUrl = (fullPhotoUrl.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + fullPhotoUrl;
+      }
     }
-    if (AppState.user) {
+    if (!isOverrideActive && AppState.user) {
       AppState.user.photoUrl = fullPhotoUrl;
+      AppState.user.avatarSource = 'bdu-api-live';
+      try {
+        localStorage.setItem('bdu_user_photo', fullPhotoUrl);
+      } catch(e) {}
     }
-    try {
-      localStorage.setItem('bdu_user_photo', fullPhotoUrl);
-    } catch(e) {}
     if (typeof updateForumUserWidgets === 'function') {
       updateForumUserWidgets();
     }
-    imgEl.src = fullPhotoUrl;
+    const displayUrl = isOverrideActive ? AppState.identityPresentation.avatar_url : fullPhotoUrl;
+    imgEl.src = displayUrl;
     imgEl.onload = () => {
       imgEl.classList.remove('hidden');
       if (avatarPlaceholder) avatarPlaceholder.classList.add('hidden');
       const navAvatar = document.getElementById('user-avatar');
       const heroAvatar = document.getElementById('hero-avatar');
-      if (navAvatar) navAvatar.innerHTML = `<img src="${fullPhotoUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-      if (heroAvatar) heroAvatar.innerHTML = `<img src="${fullPhotoUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      if (navAvatar) navAvatar.innerHTML = `<img src="${escapeHtml(displayUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      if (heroAvatar) heroAvatar.innerHTML = `<img src="${escapeHtml(displayUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     };
     imgEl.onerror = () => {
+      if (isOverrideActive) return;
       imgEl.classList.add('hidden');
       if (avatarPlaceholder) {
         avatarPlaceholder.classList.remove('hidden');
         avatarPlaceholder.textContent = getInitials(name);
       }
     };
-  } else if (avatarPlaceholder) {
-    if (imgEl) imgEl.classList.add('hidden');
-    avatarPlaceholder.classList.remove('hidden');
-    avatarPlaceholder.textContent = getInitials(name);
+  } else {
+    const fallbackPhoto = isOverrideActive ? AppState.identityPresentation.avatar_url : (AppState.user?.photoUrl || localStorage.getItem('bdu_user_photo'));
+    if (fallbackPhoto && imgEl) {
+      imgEl.src = fallbackPhoto;
+      imgEl.classList.remove('hidden');
+      if (avatarPlaceholder) avatarPlaceholder.classList.add('hidden');
+    } else if (avatarPlaceholder) {
+      if (imgEl) imgEl.classList.add('hidden');
+      avatarPlaceholder.classList.remove('hidden');
+      avatarPlaceholder.textContent = getInitials(name);
+    }
   }
 
   // 2. Thông tin khóa học
@@ -4550,6 +4840,8 @@ function attachPostCardEvents(container) {
       const isHidden = section.classList.contains('hidden');
       if (isHidden) {
         section.classList.remove('hidden');
+        communityRealtimeSubscribe(`post:${postId}`);
+        ensureCommunityReplyContext(section);
         await loadCommentsForPost(postId);
       } else {
         section.classList.add('hidden');
@@ -4572,8 +4864,12 @@ function attachPostCardEvents(container) {
 
       try {
         btn.disabled = true;
-        await BduApi.addCommunityPostComment(AppState.token, postId, { content });
+        await BduApi.addCommunityPostComment(AppState.token, postId, {
+          content,
+          parentId: input.dataset.parentId || null
+        });
         input.value = '';
+        resetCommunityReplyComposer(btn.closest('.forum-comments-wrapper, .post-comments-section, .clan-comments-wrapper'));
         await loadCommentsForPost(postId);
         // Increment comment counter on post
         const postCard = btn.closest('[data-post-id]');
@@ -4605,33 +4901,135 @@ async function loadCommentsForPost(postId) {
       return;
     }
 
-    listEl.innerHTML = comments.map(c => {
-      const isAnon = Boolean(c.is_anonymous);
-      const rawName = isAnon ? 'Sinh viên giấu tên' : (c.author?.name || 'Thành viên BDU');
-      const name = escapeHtml(rawName);
-      const relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(c.created_at) : 'Vừa xong';
-      const titles = isAnon
-        ? renderIdentityTitleBadges([{ label: 'Ẩn danh', tone: 'member' }])
-        : renderIdentityTitleBadges(c.author?.titles, 'identity-title-comment');
-
-      return `
-        <div class="comment-card-item">
-          <div class="comment-card-layout">
-            <div class="comment-card-avatar ${isAnon ? 'anon' : ''}">${isAnon ? '?' : renderIdentityAvatar(c.author, rawName)}</div>
-            <div class="comment-card-copy">
-              <div class="comment-card-top">
-                <span class="comment-author-name ${isAnon ? 'anon' : ''}">${name} ${titles}</span>
-                <span class="comment-time">${relativeTime}</span>
-              </div>
-              <div class="comment-body-text">${escapeHtml(c.content)}</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    listEl.innerHTML = renderCommunityCommentsTree(comments);
+    attachCommunityCommentEvents(listEl, postId);
   } catch (err) {
     listEl.innerHTML = `<p style="font-size: 12px; color: var(--color-rose); padding: 10px;">${escapeHtml(err.message || 'Lỗi tải bình luận.')}</p>`;
   }
+}
+
+function renderCommunityCommentsTree(comments) {
+  const list = Array.isArray(comments) ? comments : [];
+  const ids = new Set(list.map((comment) => String(comment.id)));
+  const children = new Map();
+  list.forEach((comment) => {
+    const parent = comment.parent_id && ids.has(String(comment.parent_id))
+      ? String(comment.parent_id)
+      : 'root';
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(comment);
+  });
+
+  const renderBranch = (comment, depth = 0) => {
+    const isAnon = Boolean(comment.is_anonymous);
+    const rawName = isAnon ? 'Sinh viên giấu tên' : (comment.author?.name || 'Thành viên BDU');
+    const safeName = escapeHtml(rawName);
+    const relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(comment.created_at) : 'Vừa xong';
+    const titles = isAnon
+      ? renderIdentityTitleBadges([{ label: 'Ẩn danh', tone: 'member' }])
+      : renderIdentityTitleBadges(comment.author?.titles, 'identity-title-comment');
+    const replies = children.get(String(comment.id)) || [];
+    const actionHtml = comment.is_deleted ? '' : `
+      <div class="comment-card-actions">
+        <button type="button" class="comment-inline-action" data-community-reply="${comment.id}" data-comment-author="${safeName}">Trả lời</button>
+        ${comment.can_edit ? `<button type="button" class="comment-inline-action" data-community-edit="${comment.id}">Sửa</button>` : ''}
+        ${comment.can_delete ? `<button type="button" class="comment-inline-action is-danger" data-community-delete="${comment.id}">Xóa</button>` : ''}
+      </div>`;
+    return `
+      <article class="comment-card-item ${depth ? 'is-reply' : ''} ${comment.is_deleted ? 'is-deleted' : ''}" style="--comment-depth: ${Math.min(depth, 1)}" data-comment-id="${comment.id}">
+        <div class="comment-card-layout">
+          <div class="comment-card-avatar ${isAnon ? 'anon' : ''}">${isAnon ? '?' : renderIdentityAvatar(comment.author, rawName)}</div>
+          <div class="comment-card-copy">
+            <div class="comment-card-top">
+              <span class="comment-author-name ${isAnon ? 'anon' : ''}">${safeName} ${titles}</span>
+              <span class="comment-time">${relativeTime}${comment.edited_at ? ' · đã sửa' : ''}</span>
+            </div>
+            <div class="comment-body-text">${escapeHtml(comment.content)}</div>
+            ${actionHtml}
+          </div>
+        </div>
+        ${replies.map((reply) => renderBranch(reply, depth + 1)).join('')}
+      </article>
+    `;
+  };
+  return (children.get('root') || []).map((comment) => renderBranch(comment)).join('');
+}
+
+function ensureCommunityReplyContext(section) {
+  if (!section) return null;
+  let context = section.querySelector('[data-community-reply-context]');
+  if (!context) {
+    context = document.createElement('div');
+    context.dataset.communityReplyContext = 'true';
+    context.className = 'community-reply-context hidden';
+    context.innerHTML = '<span></span><button type="button" data-community-cancel-reply>Hủy trả lời</button>';
+    section.querySelector('.comment-composer-inline, .comment-input-row')?.before(context);
+  }
+  return context;
+}
+
+function resetCommunityReplyComposer(section) {
+  const input = section?.querySelector('.comment-text-input');
+  if (input) {
+    delete input.dataset.parentId;
+    input.placeholder = 'Viết bình luận cho bài đăng này...';
+  }
+  const context = section?.querySelector('[data-community-reply-context]');
+  context?.classList.add('hidden');
+}
+
+function attachCommunityCommentEvents(listEl, postId) {
+  const section = listEl.closest('.forum-comments-wrapper, .post-comments-section, .clan-comments-wrapper');
+  listEl.querySelectorAll('[data-community-reply]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = section?.querySelector('.comment-text-input');
+      if (!input) return;
+      input.dataset.parentId = button.dataset.communityReply;
+      input.placeholder = `Trả lời ${button.dataset.commentAuthor || 'bình luận này'}...`;
+      const context = ensureCommunityReplyContext(section);
+      if (context) {
+        context.querySelector('span').textContent = `Đang trả lời ${button.dataset.commentAuthor || 'bình luận này'}`;
+        context.classList.remove('hidden');
+      }
+      input.focus();
+    });
+  });
+  section?.querySelector('[data-community-cancel-reply]')?.addEventListener('click', () => resetCommunityReplyComposer(section));
+  listEl.querySelectorAll('[data-community-edit]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const card = button.closest('[data-comment-id]');
+      const current = card?.querySelector('.comment-body-text')?.textContent?.trim();
+      const next = window.prompt('Chỉnh sửa bình luận:', current || '');
+      if (next === null || !next.trim() || next.trim() === current) return;
+      try {
+        await BduApi.editCommunityPostComment(AppState.token, postId, button.dataset.communityEdit, next.trim());
+        await loadCommentsForPost(postId);
+      } catch (err) {
+        showToast(err.message || 'Không thể sửa bình luận.', 'error');
+      }
+    });
+  });
+  listEl.querySelectorAll('[data-community-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!window.confirm('Xóa bình luận này? Các phản hồi vẫn được giữ lại.')) return;
+      button.disabled = true;
+      try {
+        const result = await BduApi.deleteCommunityPostComment(AppState.token, postId, button.dataset.communityDelete);
+        await loadCommentsForPost(postId);
+        const card = button.closest('[data-post-id]');
+        card?.querySelectorAll('.comment-count-num, .comments-count-inline').forEach((el) => {
+          el.textContent = result.comment_count;
+        });
+        const post = [...(AppState.confession.posts || []), ...(AppState.clans.posts || [])]
+          .find((item) => String(item.id) === String(postId));
+        if (post) post.comment_count = result.comment_count;
+        showToast('Đã xóa bình luận.', 'success');
+      } catch (err) {
+        button.disabled = false;
+        showToast(err.message || 'Không thể xóa bình luận.', 'error');
+      }
+    });
+  });
 }
 
 async function handleSubmitClanPost() {
@@ -5202,24 +5600,15 @@ function isThFaculty(source) {
   return normalizeFacultyCode(source) === 'TH';
 }
 
-const FULL_FRAME_PREVIEW_MSSV = new Set(['24050126']);
-const ANIME_FRAME_ACCESS_MSSV = new Set([
-  '21050008',
-  '21050011',
-  '21050044',
-  '22050068',
-  '22050090',
-  '22050101'
-]);
-
 function hasFullFramePreviewAccess(user = AppState.user) {
-  const mssv = (typeof user === 'string' ? user : String(user?.mssv || '')).trim().toUpperCase();
-  return FULL_FRAME_PREVIEW_MSSV.has(mssv);
+  if (user !== AppState.user) return false;
+  return Boolean(AppState.identityPresentation?.frame_access?.all);
 }
 
 function hasAnimeFrameAccess(user = AppState.user) {
-  const mssv = (typeof user === 'string' ? user : String(user?.mssv || '')).trim().toUpperCase();
-  return hasFullFramePreviewAccess(user) || ANIME_FRAME_ACCESS_MSSV.has(mssv);
+  if (user !== AppState.user) return false;
+  const access = AppState.identityPresentation?.frame_access;
+  return Boolean(access?.all || access?.keys?.includes('anime-gojo') || access?.keys?.includes('anime-itachi'));
 }
 
 function buildScopeFrameConfig(scope, rank, totalStudents, facultyCode = '') {
@@ -5420,8 +5809,12 @@ function getAcademicAvatarFrame(rankingData) {
     return actualRank >= 2 && actualRank <= 10 ? actualRank : fallbackRank;
   };
   if (previewTier && previewTier !== 'real') {
+    const previewKey = previewTier === 'top-1' ? 'truong-1'
+      : (previewTier === 'top-2' ? 'vien-top' : (previewTier === 'top-4-5' ? 'khoa-top' : (previewTier === 'top-3' ? 'lop-top' : (previewTier === 'top-6-10' ? 'truong-top' : previewTier))));
+    const previewAccess = getStudentAcademicUnlockedFrames()?.[previewKey];
+    if (!previewAccess?.unlocked) return null;
     if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi') {
-      if (hasFullFramePreviewAccess() || hasAnimeFrameAccess()) return buildAnimeSignatureFrameConfig(previewTier);
+      return buildAnimeSignatureFrameConfig(previewTier);
     } else if (previewTier === 'truong-1' || previewTier === 'top-1') {
       return buildScopeFrameConfig('truong', 1, 1800);
     } else if (previewTier === 'truong-2') {
@@ -5736,6 +6129,14 @@ function getStudentAcademicUnlockedFrames() {
     });
   }
 
+  const grantedFrameKeys = AppState.identityPresentation?.frame_access?.keys || [];
+  grantedFrameKeys.forEach((key) => {
+    if (unlockedFrames[key]) {
+      unlockedFrames[key].unlocked = true;
+      unlockedFrames[key].req = 'Được cấp quyền đặc biệt';
+    }
+  });
+
   return unlockedFrames;
 }
 
@@ -5867,6 +6268,7 @@ window.selectAvatarFramePreview = function(tier) {
     return;
   }
 
+  const previous = AppState.confession.framePreview || 'real';
   AppState.confession.framePreview = tier;
   try {
     if (tier === 'real') {
@@ -5880,6 +6282,25 @@ window.selectAvatarFramePreview = function(tier) {
   renderForumFeed();
   renderFrameCollectionModal();
   triggerFrameIntroAnimation();
+
+  if (AppState.token) {
+    BduApi.updateMyEquippedFrame(AppState.token, tier)
+      .then((presentation) => {
+        AppState.identityPresentation = presentation;
+        updateIdentityPresentationUI();
+      })
+      .catch((error) => {
+        AppState.confession.framePreview = previous;
+        try {
+          if (previous === 'real') localStorage.removeItem('bdu_custom_frame_preview');
+          else localStorage.setItem('bdu_custom_frame_preview', previous);
+        } catch (e) {}
+        updateForumUserWidgets();
+        renderForumFeed();
+        renderFrameCollectionModal();
+        showToast(error.message || 'Không thể trang bị khung này.', 'error');
+      });
+  }
 
   const labels = {
     'anime-gojo': '∞ Anime Signature - Thiên Thượng Thiên Hạ',
@@ -6240,9 +6661,15 @@ function updateForumUserWidgets() {
       if (pUrl) {
         let full = pUrl;
         if (!full.startsWith('http') && !full.startsWith('data:')) {
-          full = (full.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + full;
+          if (full.startsWith('/9j/') || full.length > 500) {
+            full = `data:image/jpeg;base64,${full.replace(/\s+/g, '')}`;
+          } else {
+            full = (full.startsWith('/') ? 'https://sv.bdu.edu.vn' : 'https://sv.bdu.edu.vn/') + full;
+          }
         }
-        if (user) user.photoUrl = full;
+        if (user && AppState.identityPresentation?.avatar_source !== 'override') {
+          user.photoUrl = full;
+        }
         try { localStorage.setItem('bdu_user_photo', full); } catch(e) {}
         updateForumUserWidgets();
         renderForumFeed();

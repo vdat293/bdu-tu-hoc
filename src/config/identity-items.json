@@ -1,0 +1,226 @@
+[
+  {
+    "id": "title:ttcds",
+    "item_type": "title",
+    "label": "#TTCDS",
+    "description": "Trung tâm Chuyển đổi số BDU",
+    "rarity": "vip",
+    "asset_key": "ttcds",
+    "display_policy": "auto_equip",
+    "sort_order": 5,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:anime-gojo",
+    "item_type": "frame",
+    "label": "Thiên Thượng Thiên Hạ",
+    "description": "Khung Anime Signature Gojo Satoru.",
+    "rarity": "legendary",
+    "asset_key": "anime-gojo",
+    "display_policy": "optional",
+    "sort_order": 10,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:anime-itachi",
+    "item_type": "frame",
+    "label": "Ảo Nguyệt Hắc Viêm",
+    "description": "Khung Anime Signature Uchiha Itachi.",
+    "rarity": "legendary",
+    "asset_key": "anime-itachi",
+    "display_policy": "optional",
+    "sort_order": 11,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:truong-1",
+    "item_type": "frame",
+    "label": "Thiên Cực Đế Tinh BDU",
+    "description": "Khung Top 1 toàn trường.",
+    "rarity": "legendary",
+    "asset_key": "truong-1",
+    "display_policy": "optional",
+    "sort_order": 20,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:truong-2",
+    "item_type": "frame",
+    "label": "Song Nguyệt Tinh Vân BDU",
+    "description": "Khung Top 2 toàn trường.",
+    "rarity": "epic",
+    "asset_key": "truong-2",
+    "display_policy": "optional",
+    "sort_order": 21,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:truong-3",
+    "item_type": "frame",
+    "label": "Tam Tinh Xích Quang BDU",
+    "description": "Khung Top 3 toàn trường.",
+    "rarity": "epic",
+    "asset_key": "truong-3",
+    "display_policy": "optional",
+    "sort_order": 22,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:truong-top",
+    "item_type": "frame",
+    "label": "Kinh Tuyến Tinh Tú BDU",
+    "description": "Khung Top 4-10 toàn trường.",
+    "rarity": "rare",
+    "asset_key": "truong-top",
+    "display_policy": "optional",
+    "sort_order": 23,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:vien-1",
+    "item_type": "frame",
+    "label": "Bạch Kim Sapphire Viện Trưởng",
+    "description": "Khung Top 1 viện.",
+    "rarity": "epic",
+    "asset_key": "vien-1",
+    "display_policy": "optional",
+    "sort_order": 30,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:vien-top",
+    "item_type": "frame",
+    "label": "Băng Tinh Lam Vũ Sapphire",
+    "description": "Khung Top 2-10 viện.",
+    "rarity": "rare",
+    "asset_key": "vien-top",
+    "display_policy": "optional",
+    "sort_order": 31,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:khoa-1",
+    "item_type": "frame",
+    "label": "Chiến Tướng Khiên Vàng Lục Bảo",
+    "description": "Khung Top 1 khoa.",
+    "rarity": "epic",
+    "asset_key": "khoa-1",
+    "display_policy": "optional",
+    "sort_order": 40,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:khoa-2",
+    "item_type": "frame",
+    "label": "Dual-Core Synapse",
+    "description": "Khung Top 2 khoa TH.",
+    "rarity": "rare",
+    "asset_key": "khoa-2",
+    "display_policy": "optional",
+    "sort_order": 41,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:khoa-3",
+    "item_type": "frame",
+    "label": "Ternary Data Stack",
+    "description": "Khung Top 3 khoa TH.",
+    "rarity": "rare",
+    "asset_key": "khoa-3",
+    "display_policy": "optional",
+    "sort_order": 42,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:khoa-top",
+    "item_type": "frame",
+    "label": "Cyber Knight Emerald",
+    "description": "Khung Top 4-10 khoa.",
+    "rarity": "rare",
+    "asset_key": "khoa-top",
+    "display_policy": "optional",
+    "sort_order": 43,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:lop-1",
+    "item_type": "frame",
+    "label": "Phượng Hoàng Hoàng Kim Lửa",
+    "description": "Khung Top 1 lớp.",
+    "rarity": "epic",
+    "asset_key": "lop-1",
+    "display_policy": "optional",
+    "sort_order": 50,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "frame:lop-top",
+    "item_type": "frame",
+    "label": "Hoàng Đồng Hổ Phách Nung",
+    "description": "Khung Top 2-10 lớp.",
+    "rarity": "rare",
+    "asset_key": "lop-top",
+    "display_policy": "optional",
+    "sort_order": 51,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  },
+  {
+    "id": "capability:frame-preview-all",
+    "item_type": "capability",
+    "label": "Toàn bộ bộ sưu tập khung",
+    "description": "Mở khóa toàn bộ khung hiện có và khung mới.",
+    "rarity": "vip",
+    "asset_key": "frame-preview-all",
+    "display_policy": "optional",
+    "sort_order": 1,
+    "metadata": {
+      "manual_grantable": false,
+      "source": "config"
+    }
+  }
+]

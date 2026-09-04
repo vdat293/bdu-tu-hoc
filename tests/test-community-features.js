@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const routes = fs.readFileSync(new URL('../src/routes/api.routes.js', import.meta.url), 'utf8');
+const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
+const realtime = fs.readFileSync(new URL('../src/services/community-realtime.service.js', import.meta.url), 'utf8');
+const identityService = fs.readFileSync(new URL('../src/services/identity-presentation.service.js', import.meta.url), 'utf8');
+const adminService = fs.readFileSync(new URL('../src/services/identity-admin.service.js', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../migrations/016_community_identity_entitlements.sql', import.meta.url), 'utf8');
+const appJs = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+
+assert.match(routes, /comments\/:commentId.*ApiController\.editCommunityPostComment/);
+assert.match(routes, /comments\/:commentId.*ApiController\.deleteCommunityPostComment/);
+assert.match(communityService, /parent_id/);
+assert.match(communityService, /async deleteComment/);
+assert.match(communityService, /deleted_at/);
+assert.match(realtime, /WebSocketServer/);
+assert.match(realtime, /community\.post\.created/);
+assert.match(realtime, /requiresAuthMessage/);
+assert.match(identityService, /frame_access/);
+assert.match(identityService, /updateEquippedFrame/);
+assert.match(adminService, /identity_entitlement_grants/);
+assert.match(adminService, /requireRole/);
+assert.match(migration, /CREATE TABLE IF NOT EXISTS identity_items/);
+assert.match(migration, /CREATE TABLE IF NOT EXISTS identity_entitlement_grants/);
+assert.match(migration, /\('24050126',\s*'capability:frame-preview-all'/);
+assert.doesNotMatch(appJs, /FULL_FRAME_PREVIEW_MSSV|ANIME_FRAME_ACCESS_MSSV/);
+assert.match(appJs, /new WebSocket\([^\n]*\/ws\/community/);
+assert.match(appJs, /parentId:\s*input\.dataset\.parentId/);
+assert.match(serverJs, /admin-tool/);
+const adminHtml = fs.readFileSync(new URL('../public/admin-tool.html', import.meta.url), 'utf8');
+const adminJs = fs.readFileSync(new URL('../public/js/admin-tool.js', import.meta.url), 'utf8');
+assert.match(adminHtml, /Quản lý khung & name tag/);
+assert.match(adminHtml, /admin-login-form/);
+assert.match(adminHtml, /admin-protected/);
+assert.match(adminJs, /getAdminIdentityItems/);
+assert.match(adminJs, /BduApi\.login/);
+
+console.log('✓ Community replies/deletes, realtime gateway and identity entitlements are wired.');

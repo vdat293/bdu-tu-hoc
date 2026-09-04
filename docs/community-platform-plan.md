@@ -72,8 +72,26 @@ Quy tắc:
 - `bookmarks`: student_id, post_id.
 - `reports`: reporter_id, target_type, target_id, reason, status.
 - `moderation_actions`: moderator_id, report_id, action, note, created_at.
+- Realtime: REST là nguồn ghi dữ liệu; WebSocket chỉ phát event tối giản sau khi
+  transaction commit. Room gồm `forum`, `post:{id}` và `clan:{id}`.
 
-### 4.3. Guild/CLB
+### 4.3. Entitlement khung và name tag
+
+- `identity_items`: catalog frame, title và capability.
+- `identity_entitlement_grants`: cấp/thu hồi quyền theo MSSV, thời hạn, lý do
+  và người thực hiện.
+- `identity_entitlement_audit`: audit grant, revoke, equip và chọn title.
+- `system_roles`: owner, identity_admin và moderator.
+- `SYSTEM_OWNER_MSSV` là bootstrap owner ở server; không đưa MSSV quản trị vào
+  frontend hoặc migration dữ liệu nghiệp vụ.
+- `students.equipped_frame_id`: khung đang trang bị phía server; `displayed_title_ids`
+  tiếp tục giới hạn tối đa 3 name tag.
+- `student_avatar_overrides`: ảnh avatar do admin tải lên VPS. Resolver luôn ưu
+  tiên override, sau đó mới dùng `students.avatar_url` từ API BDU.
+- Ảnh được chuẩn hóa WebP 512x512, lưu trong volume `data/avatars` và phục vụ
+  qua `/media/avatars`; không ghi file runtime vào `src` hoặc Docker image.
+
+### 4.4. Guild/CLB
 
 - `guilds`: owner_id, name, slug, description, visibility, status.
 - `guild_members`: guild_id, student_id, role, contribution_points, joined_at.
@@ -83,7 +101,7 @@ Quy tắc:
 - Unique: `(guild_id, student_id)` và unique `guilds.slug`.
 - Vai trò: `owner`, `admin`, `moderator`, `member`.
 
-### 4.4. Bảng xếp hạng
+### 4.5. Bảng xếp hạng
 
 Không lưu một cột `rank` chỉnh sửa trực tiếp. Thứ hạng được tạo từ
 `academic_snapshots` bằng query/window function; khi dữ liệu lớn sẽ chuyển sang
@@ -228,8 +246,30 @@ không chỉnh schema production thủ công qua dashboard.
 - Load: feed phân trang, leaderboard theo cohort và nhiều reaction đồng thời.
 - Migration: chạy từ database rỗng và nâng cấp từ schema liền trước.
 
-## 9. Phạm vi MVP nên giữ lại
+## 9. Trạng thái triển khai hiện tại
 
-MVP gồm local account/session, bài viết text + link, bình luận, bookmark, report,
-guild cơ bản và leaderboard opt-in. Chưa làm chat realtime, upload file, thuật toán
-gợi ý AI, cấp độ guild phức tạp hoặc app mobile cho đến khi có dữ liệu sử dụng.
+- [x] Reply một cấp, sửa/xóa comment, soft delete và đồng bộ comment counter.
+- [x] WebSocket community với auth message, room authorization, reconnect và
+  event tối giản không làm lộ confession ẩn danh.
+- [x] Entitlement server cho khung/name tag, cấp/thu hồi qua API quản trị và
+  lưu khung đang trang bị.
+- [x] Backfill quyền hiện tại, gồm `24050126` với `#TTCDS` và capability preview
+  toàn bộ khung.
+- [x] Admin upload/gỡ avatar override; Confession, comment, profile và Learning
+  Hub dùng cùng resolver, đồng bộ qua WebSocket.
+- [ ] Redis/PostgreSQL pub-sub adapter khi chạy nhiều app instance.
+- [ ] Report queue và moderation dashboard đầy đủ.
+
+## 10. Phạm vi MVP nên giữ lại
+
+MVP gồm local account/session, bài viết text + link, bình luận/reply, realtime
+community, bookmark, report, entitlement khung/name tag, guild cơ bản và
+leaderboard opt-in. Chưa làm chat hai chiều, upload file, thuật toán gợi ý AI,
+cấp độ guild phức tạp hoặc app mobile cho đến khi có dữ liệu sử dụng.
+
+### Vận hành entitlement
+
+Đặt `SYSTEM_OWNER_MSSV` ở environment server để bootstrap owner. Sau khi
+migrate, owner/identity-admin dùng các endpoint `/api/admin/identity/*` hoặc
+panel Quản trị hiển thị trong tab Confession để cấp/thu hồi item. Không sửa
+`public/js/app.js` hoặc chèn MSSV mới vào migration cho các lần cấp sau.

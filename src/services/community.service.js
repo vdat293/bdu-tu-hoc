@@ -52,6 +52,46 @@ function normalizeBoolean(value) {
   return value === true || value === 1 || value === 'true' || value === '1';
 }
 
+async function canAccessPost(post, viewerMssv, client = null) {
+  if (!post) return false;
+  if (post.scope !== 'clan') return true;
+  const cleanViewer = normalizeMssv(viewerMssv);
+  if (!cleanViewer || !post.scope_id || !/^\d+$/.test(String(post.scope_id))) return false;
+  const runner = client || { query };
+  const result = await runner.query(
+    'SELECT 1 FROM student_clans WHERE clan_id = $1 AND mssv = $2 LIMIT 1',
+    [String(post.scope_id), cleanViewer]
+  );
+  return result.rowCount > 0;
+}
+
+function mapCommentRow(row, viewerMssv = null, permissions = {}) {
+  const cleanViewer = viewerMssv ? normalizeMssv(viewerMssv) : null;
+  const isAuthor = Boolean(cleanViewer && cleanViewer === row.raw_author_mssv);
+  const maskIdentity = row.is_anonymous && !isAuthor;
+  const isDeleted = Boolean(row.deleted_at);
+  return {
+    id: row.id,
+    post_id: row.post_id,
+    parent_id: row.parent_id,
+    content: isDeleted ? 'Bình luận đã bị xoá.' : row.content,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    edited_at: row.edited_at || null,
+    deleted_at: row.deleted_at || null,
+    is_deleted: isDeleted,
+    is_anonymous: row.is_anonymous,
+    is_mine: isAuthor,
+    can_edit: isAuthor && !isDeleted,
+    can_delete: Boolean(permissions.canModerate || (isAuthor && !isDeleted)),
+    author: {
+      mssv: maskIdentity ? null : row.raw_author_mssv,
+      name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
+      is_anonymous: row.is_anonymous
+    }
+  };
+}
+
 async function enrichCommunityIdentities(records) {
   const presentations = await IdentityPresentationService.getPresentations(
     records.map((record) => record.author?.mssv)
@@ -64,7 +104,9 @@ async function enrichCommunityIdentities(records) {
       author: {
         ...record.author,
         photo_url: presentation.avatar_url,
-        titles: presentation.selected_titles
+        avatar_source: presentation.avatar_source,
+        titles: presentation.selected_titles,
+        equipped_frame_id: presentation.equipped_frame_id || null
       }
     };
   });
@@ -413,6 +455,10 @@ export const CommunityService = {
     const conditions = [];
     const params = [];
 
+    // Deleted posts remain as tombstones for moderation/audit, but never
+    // appear in public feeds.
+    conditions.push('p.deleted_at IS NULL');
+
     if (scope) {
       if (scope === 'forum') {
         conditions.push(`p.scope IN ('school', 'institute', 'faculty')`);
@@ -444,6 +490,14 @@ export const CommunityService = {
     if (isPinned !== null && isPinned !== undefined) {
       params.push(normalizeBoolean(isPinned));
       conditions.push(`p.is_pinned = $${params.length}`);
+    }
+
+    if (scope === 'clan' && viewerMssv) {
+      const member = await query(
+        'SELECT 1 FROM student_clans WHERE clan_id = $1 AND mssv = $2 LIMIT 1',
+        [String(scopeId || '').trim(), cleanViewerMssv]
+      );
+      if (!member.rowCount) throw httpError('Bạn cần tham gia CLB để xem bài viết.', 403);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -572,12 +626,13 @@ export const CommunityService = {
         ON p.scope = 'clan' AND p.scope_id ~ '^[0-9]+$' AND sc.clan_id = p.scope_id::bigint AND sc.mssv = p.author_mssv
       LEFT JOIN community_post_likes l 
         ON p.id = l.post_id AND l.mssv = $2::text
-      WHERE p.id = $1;
+      WHERE p.id = $1 AND p.deleted_at IS NULL;
     `;
     const result = await query(sql, [cleanPostId, cleanViewerMssv]);
     if (!result.rows.length) return null;
 
     const row = result.rows[0];
+    if (!(await canAccessPost(row, cleanViewerMssv))) return null;
     const isAuthor = cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv;
     const maskIdentity = row.is_anonymous && !isAuthor;
 
@@ -622,7 +677,7 @@ export const CommunityService = {
 
     return transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT author_mssv, scope, scope_id FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, author_mssv, scope, scope_id, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
@@ -644,8 +699,19 @@ export const CommunityService = {
         throw httpError('Bạn không có quyền xóa bài viết này.', 403);
       }
 
-      await client.query('DELETE FROM community_posts WHERE id = $1', [cleanPostId]);
-      return { deleted: true, id: cleanPostId };
+      if (!postRow.deleted_at) {
+        await client.query(`
+          UPDATE community_posts
+          SET deleted_at = NOW(), deleted_by_mssv = $2, delete_reason = $3, updated_at = NOW()
+          WHERE id = $1;
+        `, [cleanPostId, cleanRequester, 'user_request']);
+      }
+      return {
+        deleted: true,
+        id: cleanPostId,
+        scope: postRow.scope,
+        scope_id: postRow.scope_id
+      };
     });
   },
 
@@ -660,7 +726,7 @@ export const CommunityService = {
 
     return transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id, scope, scope_id, is_pinned FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, scope, scope_id, is_pinned FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
@@ -778,10 +844,14 @@ export const CommunityService = {
    * Lấy Kho Tài Liệu CLB: Tự động trích xuất mọi tệp đính kèm (Drive File/Folder, Video, Link)
    * từ các bài viết trong CLB kèm thông tin bài viết gốc.
    */
-  async getClanDocuments(clanId, { type = null, search = null, limit = 50, offset = 0 } = {}) {
+  async getClanDocuments(clanId, { type = null, search = null, limit = 50, offset = 0, viewerMssv = null } = {}) {
     if (!isDatabaseConfigured() || !clanId) return { total: 0, documents: [], stats: { total_files: 0, folders: 0, files: 0, videos: 0, links: 0 } };
     const cleanClanId = String(clanId).trim();
     if (!/^\d+$/.test(cleanClanId)) throw httpError('ID CLB không hợp lệ.');
+    if (viewerMssv) {
+      const member = await query('SELECT 1 FROM student_clans WHERE clan_id = $1 AND mssv = $2 LIMIT 1', [cleanClanId, normalizeMssv(viewerMssv)]);
+      if (!member.rowCount) throw httpError('Bạn cần tham gia CLB để xem kho tài liệu.', 403);
+    }
     const safeLimit = Math.trunc(Math.max(1, Math.min(100, Number(limit) || 50)));
     const safeOffset = Math.trunc(Math.max(0, Number(offset) || 0));
 
@@ -801,6 +871,7 @@ export const CommunityService = {
       LEFT JOIN student_clans sc ON sc.clan_id = p.scope_id::bigint AND sc.mssv = p.author_mssv
       WHERE p.scope = 'clan' 
         AND p.scope_id = $1 
+        AND p.deleted_at IS NULL
         AND jsonb_array_length(p.attachments) > 0
       ORDER BY 
         CASE WHEN p.scope = 'clan' THEN COALESCE(p.is_pinned, false) ELSE false END DESC,
@@ -881,10 +952,14 @@ export const CommunityService = {
     return transaction(async (client) => {
       // Khóa bài viết để hai thao tác like đồng thời không làm lệch bộ đếm.
       const postResult = await client.query(
-        'SELECT like_count FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT like_count, scope, scope_id FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
+
+      if (!(await canAccessPost(postResult.rows[0], cleanMssv, client))) {
+        throw httpError('Bạn không có quyền tương tác với bài viết này.', 403);
+      }
 
       // Đảm bảo sinh viên tồn tại
       await client.query(`
@@ -947,20 +1022,30 @@ export const CommunityService = {
     if (!cleanContent) throw httpError('Nội dung bình luận không được để trống.');
     if (cleanContent.length > MAX_COMMENT_LENGTH) throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
 
-    return transaction(async (client) => {
+    const createdComment = await transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, scope, scope_id FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
 
+      if (!(await canAccessPost(postResult.rows[0], cleanMssv, client))) {
+        throw httpError('Bạn không có quyền bình luận bài viết này.', 403);
+      }
+
       if (cleanParentId) {
         const parentResult = await client.query(
-          'SELECT 1 FROM community_post_comments WHERE id = $1 AND post_id = $2',
+          'SELECT parent_id, deleted_at FROM community_post_comments WHERE id = $1 AND post_id = $2',
           [cleanParentId, cleanPostId]
         );
         if (!parentResult.rowCount) {
           throw httpError('Bình luận cha không tồn tại trong bài viết này.');
+        }
+        if (parentResult.rows[0].deleted_at) {
+          throw httpError('Không thể trả lời bình luận đã bị xoá.');
+        }
+        if (parentResult.rows[0].parent_id) {
+          throw httpError('Chỉ hỗ trợ trả lời tối đa một cấp.');
         }
       }
 
@@ -991,6 +1076,124 @@ export const CommunityService = {
 
       return result.rows[0];
     });
+    const safeComment = await this.getCommentById(createdComment.id, cleanMssv);
+    const countResult = await query('SELECT comment_count FROM community_posts WHERE id = $1', [cleanPostId]);
+    return {
+      ...safeComment,
+      comment_count: Number(countResult.rows[0]?.comment_count || 0)
+    };
+  },
+
+  async editComment({ postId, commentId, requesterMssv, content }) {
+    if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
+    const cleanPostId = normalizePostId(postId);
+    const cleanCommentId = normalizePostId(commentId);
+    const cleanRequester = normalizeMssv(requesterMssv);
+    const cleanContent = String(content || '').trim();
+    if (!cleanPostId || !cleanCommentId || !cleanRequester) throw httpError('Thông tin bình luận không hợp lệ.');
+    if (!cleanContent) throw httpError('Nội dung bình luận không được để trống.');
+    if (cleanContent.length > MAX_COMMENT_LENGTH) throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
+
+    const post = await query(
+      'SELECT scope, scope_id FROM community_posts WHERE id = $1 AND deleted_at IS NULL',
+      [cleanPostId]
+    );
+    if (!post.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
+    if (!(await canAccessPost(post.rows[0], cleanRequester))) {
+      throw httpError('Bạn không có quyền sửa bình luận trong bài viết này.', 403);
+    }
+
+    const result = await query(`
+      UPDATE community_post_comments
+      SET content = $3, edited_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND post_id = $2 AND author_mssv = $4 AND deleted_at IS NULL
+      RETURNING id;
+    `, [cleanCommentId, cleanPostId, cleanContent, cleanRequester]);
+    if (!result.rowCount) throw httpError('Không tìm thấy bình luận hoặc bạn không có quyền sửa.', 403);
+    return this.getCommentById(cleanCommentId, cleanRequester);
+  },
+
+  async deleteComment({ postId, commentId, requesterMssv, reason = 'user_request' }) {
+    if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
+    const cleanPostId = normalizePostId(postId);
+    const cleanCommentId = normalizePostId(commentId);
+    const cleanRequester = normalizeMssv(requesterMssv);
+    if (!cleanPostId || !cleanCommentId || !cleanRequester) throw httpError('Thông tin xóa bình luận không hợp lệ.');
+
+    return transaction(async (client) => {
+      const result = await client.query(`
+        SELECT c.id, c.author_mssv, c.deleted_at,
+               p.author_mssv AS post_author_mssv, p.scope, p.scope_id,
+               p.comment_count
+        FROM community_post_comments c
+        JOIN community_posts p ON p.id = c.post_id
+        WHERE c.id = $1 AND c.post_id = $2 AND p.deleted_at IS NULL
+        FOR UPDATE;
+      `, [cleanCommentId, cleanPostId]);
+      if (!result.rowCount) throw httpError('Không tìm thấy bình luận.', 404);
+      const row = result.rows[0];
+      if (!(await canAccessPost(row, cleanRequester, client))) {
+        throw httpError('Bạn không có quyền thao tác bình luận trong bài viết này.', 403);
+      }
+
+      let canDelete = row.author_mssv === cleanRequester || row.post_author_mssv === cleanRequester;
+      if (!canDelete && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
+        const role = await client.query(
+          `SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2`,
+          [row.scope_id, cleanRequester]
+        );
+        canDelete = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+      }
+      if (!canDelete) throw httpError('Bạn không có quyền xóa bình luận này.', 403);
+
+      if (!row.deleted_at) {
+        await client.query(`
+          UPDATE community_post_comments
+          SET deleted_at = NOW(), deleted_by_mssv = $3, delete_reason = $4, updated_at = NOW()
+          WHERE id = $1 AND post_id = $2;
+        `, [cleanCommentId, cleanPostId, cleanRequester, String(reason || 'user_request').slice(0, 200)]);
+        await client.query(`
+          UPDATE community_posts
+          SET comment_count = GREATEST(0, comment_count - 1), updated_at = NOW()
+          WHERE id = $1;
+        `, [cleanPostId]);
+      }
+      const count = await client.query('SELECT comment_count FROM community_posts WHERE id = $1', [cleanPostId]);
+      return {
+        deleted: true,
+        id: cleanCommentId,
+        post_id: cleanPostId,
+        comment_count: Number(count.rows[0]?.comment_count || 0)
+      };
+    });
+  },
+
+  async getCommentById(commentId, viewerMssv = null) {
+    const cleanCommentId = normalizePostId(commentId);
+    if (!cleanCommentId || !isDatabaseConfigured()) return null;
+    const result = await query(`
+      SELECT c.id, c.post_id, c.parent_id, c.content, c.is_anonymous,
+             c.created_at, c.updated_at, c.deleted_at, c.edited_at,
+             c.author_mssv AS raw_author_mssv, s.full_name AS raw_author_name,
+             p.scope, p.scope_id, p.author_mssv AS post_author_mssv
+      FROM community_post_comments c
+      JOIN students s ON s.mssv = c.author_mssv
+      JOIN community_posts p ON p.id = c.post_id
+      WHERE c.id = $1 AND p.deleted_at IS NULL;
+    `, [cleanCommentId]);
+    if (!result.rowCount) return null;
+    const row = result.rows[0];
+    const cleanViewer = viewerMssv ? normalizeMssv(viewerMssv) : null;
+    if (!(await canAccessPost(row, cleanViewer))) return null;
+    let canModerate = cleanViewer && row.post_author_mssv === cleanViewer;
+    if (!canModerate && cleanViewer && row.scope === 'clan') {
+      const role = await query(
+        'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
+        [row.scope_id, cleanViewer]
+      );
+      canModerate = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+    }
+    return mapCommentRow(row, cleanViewer, { canModerate });
   },
 
   /**
@@ -1009,34 +1212,33 @@ export const CommunityService = {
         c.content,
         c.is_anonymous,
         c.created_at,
+        c.updated_at,
+        c.deleted_at,
+        c.edited_at,
         s.full_name AS raw_author_name,
-        c.author_mssv AS raw_author_mssv
+        c.author_mssv AS raw_author_mssv,
+        p.scope,
+        p.scope_id,
+        p.author_mssv AS post_author_mssv
       FROM community_post_comments c
       JOIN students s ON c.author_mssv = s.mssv
-      WHERE c.post_id = $1
+      JOIN community_posts p ON p.id = c.post_id
+      WHERE c.post_id = $1 AND p.deleted_at IS NULL
       ORDER BY c.created_at ASC;
     `;
     const result = await query(sql, [cleanPostId]);
 
-    const comments = result.rows.map((row) => {
-      const isAuthor = cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv;
-      const maskIdentity = row.is_anonymous && !isAuthor;
-
-      return {
-        id: row.id,
-        post_id: row.post_id,
-        parent_id: row.parent_id,
-        content: row.content,
-        created_at: row.created_at,
-        is_anonymous: row.is_anonymous,
-        is_mine: Boolean(isAuthor),
-        author: {
-          mssv: maskIdentity ? null : row.raw_author_mssv,
-          name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
-          is_anonymous: row.is_anonymous
-        }
-      };
-    });
+    if (!result.rows.length) return [];
+    if (!(await canAccessPost(result.rows[0], cleanViewerMssv))) return [];
+    let canModerate = Boolean(cleanViewerMssv && result.rows[0].post_author_mssv === cleanViewerMssv);
+    if (!canModerate && cleanViewerMssv && result.rows[0].scope === 'clan') {
+      const role = await query(
+        'SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2',
+        [result.rows[0].scope_id, cleanViewerMssv]
+      );
+      canModerate = ['leader', 'vice_leader'].includes(role.rows[0]?.role);
+    }
+    const comments = result.rows.map((row) => mapCommentRow(row, cleanViewerMssv, { canModerate }));
     return enrichCommunityIdentities(comments);
   }
 };

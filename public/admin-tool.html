@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>BDU Admin Tool · Quản lý khung & name tag</title>
+  <link rel="stylesheet" href="/css/admin-tool.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <a class="admin-back" href="/">← Quay lại BDU Tự Học</a>
+        <p class="admin-kicker">BDU TỰ HỌC · ADMIN TOOL</p>
+        <h1>Quản lý khung & name tag</h1>
+        <p class="admin-subtitle">Tra cứu trạng thái, cấp danh hiệu, khung và cập nhật ảnh đại diện sinh viên trên một luồng thống nhất.</p>
+      </div>
+      <div class="admin-header-actions">
+        <span id="admin-identity" class="admin-identity">Đang kiểm tra quyền…</span>
+        <button id="admin-refresh" class="admin-button admin-button-secondary" type="button">Làm mới</button>
+        <button id="admin-logout-btn" class="admin-button admin-button-danger is-hidden" type="button">Đăng xuất</button>
+      </div>
+    </header>
+
+    <!-- Thẻ đăng nhập khi chưa xác thực hoặc không đủ quyền -->
+    <section id="admin-login-card" class="admin-login-card" aria-labelledby="admin-login-title">
+      <div>
+        <p class="admin-eyebrow">XÁC THỰC QUẢN TRỊ</p>
+        <h2 id="admin-login-title">Đăng nhập để vào Admin Tool</h2>
+        <p>Hệ thống chỉ cho phép tài khoản được cấp quyền quản trị viên truy cập. Tài khoản không có quyền sẽ bị tự động đăng xuất ngay lập tức.</p>
+      </div>
+      <form id="admin-login-form" class="admin-login-form">
+        <label>Tài khoản BDU
+          <input id="admin-login-username" class="admin-input" autocomplete="username" required placeholder="MSSV hoặc tài khoản BDU">
+        </label>
+        <label>Mật khẩu
+          <input id="admin-login-password" class="admin-input" type="password" autocomplete="current-password" required placeholder="Mật khẩu BDU">
+        </label>
+        <label class="admin-check-label">
+          <input id="admin-login-remember" type="checkbox" checked> Giữ phiên đăng nhập trên thiết bị này
+        </label>
+        <button id="admin-login-submit" class="admin-button admin-button-primary" type="submit">Đăng nhập Quản trị</button>
+      </form>
+    </section>
+
+    <!-- Hộp thông báo / Alert hệ thống -->
+    <section id="admin-alert" class="admin-alert" role="status" aria-live="polite"></section>
+
+    <!-- GIAO DIỆN BÊN TRONG KHI ĐƯỢC CẤP QUYỀN (admin-protected) -->
+    <div class="admin-protected is-locked">
+
+      <!-- BƯỚC 1: Ô NHẬP MSSV & NÚT XEM TRẠNG THÁI -->
+      <section class="admin-card search-card">
+        <div class="admin-card-heading">
+          <div>
+            <p class="admin-eyebrow">BƯỚC 1 · TRA CỨU SINH VIÊN</p>
+            <h2>Nhập MSSV sinh viên</h2>
+          </div>
+          <span class="admin-step">01</span>
+        </div>
+        <form id="student-search-form" class="student-search-form">
+          <div class="student-search-input-wrap">
+            <input id="target-mssv" class="admin-input target-mssv-input" maxlength="32" autocomplete="off" required placeholder="Nhập MSSV sinh viên (ví dụ: 24050126)" autofocus>
+            <button id="btn-check-status" class="admin-button admin-button-primary search-submit-btn" type="submit">
+              <span class="btn-icon">🔍</span> Xem trạng thái
+            </button>
+          </div>
+          <p class="admin-field-hint">Nhập MSSV sinh viên cần quản lý và bấm <strong>“Xem trạng thái”</strong> để hiển thị danh hiệu, khung và ảnh đại diện hiện tại.</p>
+        </form>
+      </section>
+
+      <!-- BƯỚC 2: KHU VỰC HIỂN THỊ TRẠNG THÁI SINH VIÊN (Ban đầu ẩn, hiện khi bấm Xem trạng thái) -->
+      <section id="student-status-panel" class="student-status-panel is-hidden">
+        <div class="student-banner-card">
+          <div class="student-banner-left">
+            <div id="status-avatar-circle" class="status-avatar-circle">SV</div>
+            <div class="student-banner-copy">
+              <div class="student-banner-title-row">
+                <h2 id="status-student-name">Sinh viên</h2>
+                <span id="status-mssv-badge" class="badge-mssv">MSSV: —</span>
+              </div>
+              <p class="student-banner-subtitle">Dữ liệu hồ sơ và các thuộc tính nhận diện trên hệ thống BDU Tự Học.</p>
+            </div>
+          </div>
+          <div class="student-banner-stats">
+            <div class="stat-pill">
+              <span class="stat-label">Danh hiệu</span>
+              <strong id="stat-titles-count">0</strong>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-label">Khung avatar</span>
+              <strong id="stat-frames-count">0</strong>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-label">Nguồn Avatar</span>
+              <strong id="stat-avatar-source-label">—</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 KHỐI TRẠNG THÁI: DANH HIỆU SỞ HỮU, KHUNG SỞ HỮU, TRẠNG THÁI AVATAR -->
+        <div class="status-grid-three">
+
+          <!-- 1. Danh hiệu đang sở hữu -->
+          <article class="admin-card status-card">
+            <div class="admin-card-heading">
+              <div>
+                <p class="admin-eyebrow">DANH HIỆU HIỆN TẠI</p>
+                <h3>Danh hiệu đang sở hữu</h3>
+              </div>
+              <span id="current-titles-count" class="admin-count">0</span>
+            </div>
+            <div id="current-titles-list" class="status-item-list">
+              <p class="admin-empty">Chưa có danh hiệu nào.</p>
+            </div>
+          </article>
+
+          <!-- 2. Khung đang sở hữu -->
+          <article class="admin-card status-card">
+            <div class="admin-card-heading">
+              <div>
+                <p class="admin-eyebrow">KHUNG AVATAR HIỆN TẠI</p>
+                <h3>Khung đang sở hữu</h3>
+              </div>
+              <span id="current-frames-count" class="admin-count">0</span>
+            </div>
+            <div id="current-frames-list" class="status-item-list">
+              <p class="admin-empty">Chưa có khung nào.</p>
+            </div>
+          </article>
+
+          <!-- 3. Trạng thái Avatar hiện tại -->
+          <article class="admin-card status-card">
+            <div class="admin-card-heading">
+              <div>
+                <p class="admin-eyebrow">ẢNH ĐẠI DIỆN HIỆN TẠI</p>
+                <h3>Trạng thái Avatar</h3>
+              </div>
+              <span id="avatar-preview-source" class="avatar-source-badge">Chưa có dữ liệu</span>
+            </div>
+            <div class="avatar-current-details">
+              <div class="avatar-current-preview-box">
+                <div id="avatar-preview" class="avatar-preview">SV</div>
+              </div>
+              <div class="avatar-current-meta">
+                <strong id="avatar-preview-name">Chưa chọn sinh viên</strong>
+                <small id="avatar-preview-url" class="avatar-url-text">Không có URL ảnh</small>
+                <div id="avatar-override-actions" class="avatar-override-actions is-hidden">
+                  <span class="avatar-override-tag">Đang sử dụng ảnh VPS</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- BƯỚC 3: THAO TÁC CẤP DANH HIỆU, CẤP KHUNG, HOẶC THAY ẢNH ĐẠI DIỆN -->
+      <section id="student-actions-panel" class="student-actions-panel is-hidden">
+        <div class="actions-section-header">
+          <div>
+            <p class="admin-eyebrow">BƯỚC 3 · CẤP QUYỀN & THAY ĐỔI</p>
+            <h2>Cấp quyền danh hiệu, khung & thay ảnh đại diện</h2>
+          </div>
+          <span id="actions-target-label" class="actions-target-badge">Áp dụng cho MSSV: —</span>
+        </div>
+
+        <div class="actions-grid-three">
+
+          <!-- 1. Cấp danh hiệu -->
+          <article class="admin-card action-card action-card-title">
+            <div class="action-card-header">
+              <div class="action-card-badge">🏷️ Danh hiệu</div>
+              <h4>Cấp danh hiệu mới</h4>
+            </div>
+            <form id="grant-title-form" class="admin-form">
+              <label>Chọn danh hiệu
+                <select id="grant-title-item" class="admin-input" required>
+                  <option value="">Đang tải danh hiệu…</option>
+                </select>
+              </label>
+              <label>Lý do cấp quyền (tùy chọn)
+                <input id="grant-title-reason" class="admin-input" maxlength="500" placeholder="Ví dụ: Khen thưởng học tập, phong trào">
+              </label>
+              <button class="admin-button admin-button-primary btn-block" type="submit">Cấp danh hiệu</button>
+            </form>
+          </article>
+
+          <!-- 2. Cấp khung nhân vật -->
+          <article class="admin-card action-card action-card-frame">
+            <div class="action-card-header">
+              <div class="action-card-badge">🖼️ Khung Avatar</div>
+              <h4>Cấp khung nhân vật mới</h4>
+            </div>
+            <form id="grant-frame-form" class="admin-form">
+              <label>Chọn khung nhân vật
+                <select id="grant-frame-item" class="admin-input" required>
+                  <option value="">Đang tải khung…</option>
+                </select>
+              </label>
+              <label class="admin-check-label admin-check-label-inline" style="font-size: 0.73rem; margin-top: -4px;">
+                <input id="toggle-ranking-frames" type="checkbox"> Hiển thị cả khung học thuật (Ranking)
+              </label>
+              <label>Lý do cấp quyền (tùy chọn)
+                <input id="grant-frame-reason" class="admin-input" maxlength="500" placeholder="Ví dụ: Đạt giải cuộc thi, vinh danh">
+              </label>
+              <button class="admin-button admin-button-primary btn-block" type="submit">Cấp khung nhân vật</button>
+            </form>
+          </article>
+
+          <!-- 3. Thay ảnh đại diện -->
+          <article class="admin-card action-card action-card-avatar">
+            <div class="action-card-header">
+              <div class="action-card-badge">📷 Ảnh đại diện</div>
+              <h4>Thay ảnh đại diện</h4>
+            </div>
+            <form id="avatar-form" class="admin-form">
+              <input id="avatar-mssv" type="hidden">
+              <label class="avatar-dropzone" for="avatar-file">
+                <input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <span class="avatar-dropzone-title">Chọn ảnh JPG, PNG, WebP</span>
+                <small>Tối đa 3 MB · Hệ thống tự crop vuông 512 × 512</small>
+              </label>
+              <div id="avatar-file-selected-status" class="avatar-file-selected-status is-hidden">
+                <span class="status-file-icon">✓</span>
+                <span id="avatar-file-name">Chưa có file</span>
+              </div>
+              <div class="admin-form-actions-stack">
+                <button id="avatar-upload" class="admin-button admin-button-primary btn-block" type="submit">Tải lên ảnh mới</button>
+                <button id="avatar-remove" class="admin-button admin-button-danger btn-block" type="button">Gỡ ảnh VPS (Dùng lại ảnh BDU)</button>
+              </div>
+            </form>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- PHẦN THAM KHẢO & QUẢN TRỊ: DANH MỤC ITEM VÀ LỊCH SỬ THAO TÁC -->
+      <section class="admin-card admin-card-catalog">
+        <div class="admin-card-heading">
+          <div>
+            <p class="admin-eyebrow">QUẢN TRỊ CATALOG</p>
+            <h2>Danh mục item toàn hệ thống</h2>
+            <p class="admin-field-hint">Thêm, sửa, hoặc tắt các khung và danh hiệu trực tiếp trên web mà không cần đụng tới database.</p>
+          </div>
+          <div class="catalog-heading-actions">
+            <span id="catalog-count" class="admin-count">0</span>
+            <button id="btn-open-create-item" class="admin-button admin-button-primary" type="button">➕ Thêm Khung / Danh hiệu mới</button>
+          </div>
+        </div>
+
+        <!-- FORM TẠO / CHỈNH SỬA ITEM (ẨN MẶC ĐỊNH) -->
+        <div id="item-editor-card" class="item-editor-card is-hidden">
+          <div class="item-editor-header">
+            <h3 id="item-editor-title">Tạo Khung / Danh hiệu mới</h3>
+            <button id="btn-close-item-editor" class="btn-close-text" type="button">✕ Đóng</button>
+          </div>
+          <form id="item-editor-form" class="admin-form">
+            <input id="item-editor-mode" type="hidden" value="create">
+            <div class="editor-form-grid">
+              <label>Loại Item
+                <select id="item-editor-type" class="admin-input" required>
+                  <option value="frame">Khung nhân vật (frame)</option>
+                  <option value="title">Danh hiệu / Name tag (title)</option>
+                  <option value="capability">Tính năng đặc biệt (capability)</option>
+                </select>
+              </label>
+              <label>Mã ID duy nhất (Prefix tự động)
+                <input id="item-editor-id" class="admin-input" required placeholder="ví dụ: frame:anime-sukuna" maxlength="64">
+              </label>
+              <label>Tên hiển thị (Label)
+                <input id="item-editor-label" class="admin-input" required placeholder="ví dụ: Chúa Tể Nguyền Hồn Sukuna" maxlength="200">
+              </label>
+              <label>Độ hiếm
+                <select id="item-editor-rarity" class="admin-input" required>
+                  <option value="legendary">Huyền thoại (legendary)</option>
+                  <option value="vip">VIP (vip)</option>
+                  <option value="epic">Sử thi (epic)</option>
+                  <option value="rare">Hiếm (rare)</option>
+                  <option value="common">Thường (common)</option>
+                </select>
+              </label>
+              <label>Asset Key (Mã class CSS / SVG)
+                <input id="item-editor-asset" class="admin-input" placeholder="ví dụ: anime-sukuna" maxlength="64">
+              </label>
+              <label>Chính sách hiển thị
+                <select id="item-editor-policy" class="admin-input">
+                  <option value="optional">Tùy chọn trang bị (optional)</option>
+                  <option value="auto_equip">Tự động gắn khi nhận (auto_equip)</option>
+                  <option value="mandatory">Bắt buộc hiển thị (mandatory)</option>
+                </select>
+              </label>
+            </div>
+            <label>Mô tả chi tiết
+              <input id="item-editor-desc" class="admin-input" placeholder="Ví dụ: Khung vinh danh đặc biệt cho người dùng xuất sắc" maxlength="500">
+            </label>
+            <label class="admin-check-label" style="font-size: 0.78rem;">
+              <input id="item-editor-manual" type="checkbox" checked> Cho phép cấp thủ công trong ô "Chọn item cấp" ở Admin Tool
+            </label>
+            <div class="admin-form-actions">
+              <button id="btn-submit-item-editor" class="admin-button admin-button-primary" type="submit">Lưu vào Hệ Thống</button>
+              <button id="btn-cancel-item-editor" class="admin-button admin-button-secondary" type="button">Hủy</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="catalog-list" class="catalog-list"></div>
+      </section>
+
+      <section class="admin-card admin-card-audit">
+        <div class="admin-card-heading">
+          <div>
+            <p class="admin-eyebrow">AUDIT TRAIL</p>
+            <h2>Lịch sử thao tác gần đây</h2>
+          </div>
+          <span class="admin-hint">Truy vết mọi thao tác cấp, thu hồi quyền và cập nhật avatar</span>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr><th>Thời gian</th><th>MSSV</th><th>Item</th><th>Hành động</th><th>Người thao tác</th><th>Lý do</th></tr>
+            </thead>
+            <tbody id="audit-body"><tr><td colspan="6" class="admin-empty">Đang tải audit…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- DANH SÁCH ẢNH OVERRIDE TRÊN VPS -->
+      <section class="admin-card admin-vps-list-card">
+        <div class="admin-card-heading">
+          <div>
+            <p class="admin-eyebrow">PROFILE MEDIA VPS</p>
+            <h2>Danh sách ảnh đang lưu trên VPS</h2>
+          </div>
+          <div class="avatar-list-toolbar-actions">
+            <span id="avatar-count" class="admin-count">0</span>
+            <button id="avatar-refresh" class="admin-button admin-button-secondary" type="button">Làm mới danh sách</button>
+          </div>
+        </div>
+        <div id="avatar-list" class="avatar-list"><p class="admin-empty">Đang tải danh sách ảnh…</p></div>
+      </section>
+
+    </div>
+  </main>
+  <script src="/js/api.js"></script>
+  <script src="/js/admin-tool.js"></script>
+</body>
+</html>

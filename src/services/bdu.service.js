@@ -5,6 +5,68 @@
 
 const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
 
+function normalizeStudentImageValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^data:image\/[a-z0-9+.-]+;base64,/i.test(raw)) return raw;
+
+  const compact = raw.replace(/\s+/g, '');
+  if (compact.length >= 64 && /^[A-Za-z0-9+/]+={0,2}$/.test(compact)) {
+    const mime = compact.startsWith('iVBOR')
+      ? 'image/png'
+      : (compact.startsWith('UklGR') ? 'image/webp' : (compact.startsWith('R0lGO') ? 'image/gif' : 'image/jpeg'));
+    return `data:${mime};base64,${compact}`;
+  }
+
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('/') && raw.length < 2048 && !raw.startsWith('/9j/')) {
+    return raw;
+  }
+
+  return null;
+}
+
+function findStudentImage(payload, depth = 0) {
+  if (payload === null || payload === undefined || depth > 8) return null;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const found = findStudentImage(parsed, depth + 1);
+        if (found) return found;
+      } catch {}
+    }
+    return normalizeStudentImageValue(payload);
+  }
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const found = findStudentImage(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof payload !== 'object') return null;
+
+  const preferredKeys = [
+    'image', 'student_image', 'hinh_anh', 'url_hinh_anh', 'avatar',
+    'anh_the', 'duong_dan', 'photo', 'picture', 'file_anh', 'str_image',
+    'image_base64', 'anh_sinh_vien'
+  ];
+  for (const preferred of preferredKeys) {
+    for (const [key, value] of Object.entries(payload)) {
+      if (key.toLowerCase() !== preferred) continue;
+      const found = findStudentImage(value, depth + 1);
+      if (found) return found;
+    }
+  }
+  for (const value of Object.values(payload)) {
+    const found = findStudentImage(value, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 export const BduService = {
   /**
    * Proxy login request to BDU server
@@ -105,15 +167,23 @@ export const BduService = {
           'Accept': 'application/json, text/plain, */*',
           'idpc': '0',
           'Content-Type': 'text/plain'
-        }
+        },
+        body: ''
       });
 
-      const data = await response.json();
-      if (data?.data?.thong_tin_sinh_vien?.image) {
-        const rawImage = data.data.thong_tin_sinh_vien.image;
-        const base64 = rawImage.startsWith('data:') ? rawImage : `data:image/jpeg;base64,${rawImage}`;
-        return base64;
+      if (!response.ok) return null;
+      let data;
+      if (typeof response.text === 'function') {
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = text;
+        }
+      } else if (typeof response.json === 'function') {
+        data = await response.json();
       }
+      return findStudentImage(data);
     } catch (e) {
       console.error('Error fetching student image:', e);
     }
@@ -162,14 +232,16 @@ export const BduService = {
       }
     }
 
-    // Attach student photo if fetched
-    if (imageBase64) {
-      data.student_image = imageBase64;
+    // Attach student photo if fetched or found in payload
+    const finalImage = imageBase64 || findStudentImage(data);
+
+    if (finalImage) {
+      data.student_image = finalImage;
       if (data.data) {
         if (Array.isArray(data.data) && data.data.length > 0) {
-          data.data[0].hinh_anh = imageBase64;
+          data.data[0].hinh_anh = finalImage;
         } else if (typeof data.data === 'object') {
-          data.data.hinh_anh = imageBase64;
+          data.data.hinh_anh = finalImage;
         }
       }
     }
@@ -390,3 +462,5 @@ export const BduService = {
     };
   }
 };
+
+export const BduServiceInternals = { findStudentImage, normalizeStudentImageValue };

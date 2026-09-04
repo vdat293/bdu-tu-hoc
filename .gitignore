@@ -8,3 +8,4 @@ outside-src/
 !.env.example
 data/*.sql
 data/*.dump
+data/avatars/

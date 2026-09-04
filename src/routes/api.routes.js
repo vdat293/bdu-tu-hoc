@@ -32,6 +32,15 @@ const upload = multer({
   }
 });
 
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: Math.max(1, Math.min(10, Number(process.env.AVATAR_MAX_SIZE_MB) || 3)) * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(null, true);
+    cb(new Error('Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.'));
+  }
+});
+
 // 1. Auth & Portal
 router.post('/login', ApiController.login);
 router.post('/grades', ApiController.getGrades);
@@ -70,6 +79,23 @@ router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiControlle
 
 router.get('/students/me/presentation', ApiController.getMyIdentityPresentation);
 router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
+router.put('/students/me/cosmetics/frame', ApiController.updateMyEquippedFrame);
+
+// Identity entitlement administration (server-side role checked)
+router.get('/admin/identity/items', ApiController.getAdminIdentityItems);
+router.post('/admin/identity/items', ApiController.createAdminIdentityItem);
+router.put('/admin/identity/items/:id', ApiController.updateAdminIdentityItem);
+router.delete('/admin/identity/items/:id', ApiController.deleteAdminIdentityItem);
+router.get('/admin/identity/students/:mssv/grants', ApiController.getAdminIdentityGrants);
+router.post('/admin/identity/grants', ApiController.createAdminIdentityGrant);
+router.delete('/admin/identity/grants/:grantId', ApiController.revokeAdminIdentityGrant);
+router.get('/admin/identity/audit', ApiController.getAdminIdentityAudit);
+router.post('/admin/system-roles', ApiController.grantAdminSystemRole);
+router.delete('/admin/system-roles/:mssv/:role', ApiController.revokeAdminSystemRole);
+router.get('/admin/avatars', ApiController.getAdminAvatars);
+router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
+router.post('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, avatarUpload.single('avatar'), ApiController.uploadAdminAvatar);
+router.delete('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, ApiController.deleteAdminAvatar);
 
 // 6. Góc Tự Học Số (Community Study Hub & Clans)
 router.get('/community/posts', ApiController.getCommunityPosts);
@@ -80,6 +106,8 @@ router.post('/community/posts/:id/pin', ApiController.toggleClanPostPin);
 router.post('/community/posts/:id/like', ApiController.toggleCommunityPostLike);
 router.get('/community/posts/:id/comments', ApiController.getCommunityPostComments);
 router.post('/community/posts/:id/comments', ApiController.addCommunityPostComment);
+router.patch('/community/posts/:id/comments/:commentId', ApiController.editCommunityPostComment);
+router.delete('/community/posts/:id/comments/:commentId', ApiController.deleteCommunityPostComment);
 
 // 7. CLB & Nhóm Học Tập (Clans/Guilds)
 router.get('/community/clans', ApiController.getClans);

@@ -311,6 +311,176 @@ const BduApi = {
     return data.data;
   },
 
+  async updateMyEquippedFrame(token, frameId) {
+    const response = await fetch('/api/students/me/cosmetics/frame', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ frameId })
+    });
+    const data = await this.handleResponse(response, 'Không thể cập nhật khung hiển thị.');
+    return data.data;
+  },
+
+  async getAdminIdentityItems(token, params = {}) {
+    const query = new URLSearchParams();
+    if (params.type) query.set('type', params.type);
+    if (params.includeInactive) query.set('includeInactive', 'true');
+    const response = await fetch(`/api/admin/identity/items?${query.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải catalog quyền hiển thị.');
+    return data.data || [];
+  },
+
+  async createAdminIdentityItem(token, itemData) {
+    const response = await fetch('/api/admin/identity/items', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemData)
+    });
+    const data = await this.handleResponse(response, 'Không thể tạo item mới.');
+    return data.data;
+  },
+
+  async updateAdminIdentityItem(token, itemId, itemData) {
+    const response = await fetch(`/api/admin/identity/items/${encodeURIComponent(itemId)}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemData)
+    });
+    const data = await this.handleResponse(response, 'Không thể cập nhật item.');
+    return data.data;
+  },
+
+  async deleteAdminIdentityItem(token, itemId, reason = '') {
+    const response = await fetch(`/api/admin/identity/items/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    const data = await this.handleResponse(response, 'Không thể xóa item.');
+    return data.data;
+  },
+
+  async getAdminIdentityGrants(token, mssv) {
+    const response = await fetch(`/api/admin/identity/students/${encodeURIComponent(mssv)}/grants`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải grant của sinh viên.');
+    return data.data || [];
+  },
+
+  async createAdminIdentityGrant(token, grant) {
+    const response = await fetch('/api/admin/identity/grants', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(grant)
+    });
+    const data = await this.handleResponse(response, 'Không thể cấp quyền hiển thị.');
+    return data.data;
+  },
+
+  async revokeAdminIdentityGrant(token, grantId, reason = '') {
+    const response = await fetch(`/api/admin/identity/grants/${encodeURIComponent(grantId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    const data = await this.handleResponse(response, 'Không thể thu hồi quyền hiển thị.');
+    return data.data;
+  },
+
+  async getAdminIdentityAudit(token, params = {}) {
+    const query = new URLSearchParams();
+    if (params.mssv) query.set('mssv', params.mssv);
+    if (params.limit) query.set('limit', params.limit);
+    const response = await fetch(`/api/admin/identity/audit?${query.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải audit log.');
+    return data.data || [];
+  },
+
+  async grantAdminSystemRole(token, mssv, role) {
+    const response = await fetch('/api/admin/system-roles', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ mssv, role })
+    });
+    const data = await this.handleResponse(response, 'Không thể cấp role quản trị.');
+    return data.data;
+  },
+
+  async revokeAdminSystemRole(token, mssv, role) {
+    const response = await fetch(`/api/admin/system-roles/${encodeURIComponent(mssv)}/${encodeURIComponent(role)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể thu hồi role quản trị.');
+    return data.data;
+  },
+
+  async getAdminAvatars(token, { search = '', limit = 100 } = {}) {
+    const query = new URLSearchParams();
+    if (search) query.set('search', search);
+    query.set('limit', limit);
+    const response = await fetch(`/api/admin/avatars?${query.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải danh sách avatar.');
+    return data.data || [];
+  },
+
+  async getAdminAvatar(token, mssv) {
+    const response = await fetch(`/api/admin/avatars/${encodeURIComponent(mssv)}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải avatar sinh viên.');
+    return data.data;
+  },
+
+  async uploadAdminAvatar(token, mssv, file) {
+    const body = new FormData();
+    body.append('avatar', file);
+    const response = await fetch(`/api/admin/avatars/${encodeURIComponent(mssv)}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body
+    });
+    const data = await this.handleResponse(response, 'Không thể cập nhật ảnh đại diện.');
+    return data.data;
+  },
+
+  async deleteAdminAvatar(token, mssv) {
+    const response = await fetch(`/api/admin/avatars/${encodeURIComponent(mssv)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể gỡ ảnh đại diện.');
+    return data.data;
+  },
+
   /**
    * CLB / Nhóm Học Tập (Clans/Guilds) & Góc Tự Học Số
    */
@@ -424,6 +594,32 @@ const BduApi = {
       body: JSON.stringify(commentData)
     });
     const data = await this.handleResponse(response, 'Không thể gửi bình luận.');
+    return data.data;
+  },
+
+  async editCommunityPostComment(token, postId, commentId, content) {
+    const response = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ content })
+    });
+    const data = await this.handleResponse(response, 'Không thể sửa bình luận.');
+    return data.data;
+  },
+
+  async deleteCommunityPostComment(token, postId, commentId, reason = '') {
+    const response = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    const data = await this.handleResponse(response, 'Không thể xóa bình luận.');
     return data.data;
   },
 

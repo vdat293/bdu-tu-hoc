@@ -91,8 +91,10 @@ assert.equal(appJs.includes('getPreviewRank'), true, 'Preview khung phải giữ
 assert.match(appJs, /normalizeFacultyCode[\s\S]*?ma_khoa[\s\S]*?===\s*'TH'/, 'Bộ frame Khoa TH phải được cô lập bằng đúng mã khoa TH');
 assert.match(appJs, /frame-khoa-th-top-1\.svg[\s\S]*?frame-khoa-th-top-2\.svg[\s\S]*?frame-khoa-th-top-3\.svg[\s\S]*?frame-khoa-th-top-4-10\.svg/, 'Top 1, 2, 3 và 4-10 Khoa TH phải dùng bốn SVG độc lập');
 assert.match(appJs, /th-quantum-compile[\s\S]*?th-dual-synapse[\s\S]*?th-ternary-boot[\s\S]*?th-protocol-lock/, 'Mỗi tier Khoa TH phải có opening biến hình riêng');
-assert.match(appJs, /FULL_FRAME_PREVIEW_MSSV\s*=\s*new Set\(\['24050126'\]\)/, 'MSSV 24050126 phải là tài khoản kiểm thử toàn bộ khung');
-assert.match(appJs, /hasFullFramePreviewAccess\(\)[\s\S]*?Object\.values\(unlockedFrames\)[\s\S]*?frame\.unlocked\s*=\s*true/, 'Tài khoản kiểm thử phải tự động mở khóa mọi frame trong collection');
+assert.doesNotMatch(appJs, /FULL_FRAME_PREVIEW_MSSV|ANIME_FRAME_ACCESS_MSSV/, 'MSSV đặc biệt không được hard-code trong frontend');
+assert.match(appJs, /identityPresentation\?\.frame_access[\s\S]*?\.all/, 'Quyền toàn bộ khung phải lấy từ presentation phía server');
+const entitlementsMigration = fs.readFileSync('migrations/016_community_identity_entitlements.sql', 'utf8');
+assert.match(entitlementsMigration, /\('24050126',\s*'capability:frame-preview-all'/, 'MSSV 24050126 phải được chuyển vào entitlement server');
 assert.match(appJs, /'anime-gojo':\s*\{\s*unlocked:\s*false[\s\S]*?'anime-itachi':\s*\{\s*unlocked:\s*false/, 'Gojo và Itachi phải khóa mặc định với mọi tài khoản');
 assert.match(appJs, /previewTier === 'anime-gojo' \|\| previewTier === 'anime-itachi'[\s\S]*?hasFullFramePreviewAccess\(\)/, 'Chỉ tài khoản sở hữu toàn bộ khung mới được render Gojo/Itachi từ localStorage');
 assert.match(appJs, /window\.selectAvatarFramePreview[\s\S]*?access\.unlocked[\s\S]*?return;/, 'Không được gọi hàm trực tiếp để vượt khóa khung');
@@ -100,9 +102,9 @@ assert.match(appJs, /storedEquipped[\s\S]*?unlocked[\s\S]*?:\s*'real'/, 'Khung �
 assert.equal(appJs.includes('(14 Sao) ⭐'), false, 'app.js không được gán text (14 Sao) ⭐');
 const animeAuthorizedMssvs = ['21050008', '21050011', '21050044', '22050068', '22050090', '22050101'];
 animeAuthorizedMssvs.forEach(mssv => {
-  assert.match(appJs, new RegExp(`ANIME_FRAME_ACCESS_MSSV[\\s\\S]*?'${mssv}'`), `MSSV ${mssv} phải có trong danh sách mở khóa khung anime`);
+  assert.match(entitlementsMigration, new RegExp(`'${mssv}',\\s*'frame:anime-gojo'`), `MSSV ${mssv} phải có grant khung anime phía server`);
 });
-assert.match(appJs, /hasAnimeFrameAccess\(\)[\s\S]*?unlockedFrames\['anime-gojo'\][\s\S]*?unlocked\s*=\s*true[\s\S]*?unlockedFrames\['anime-itachi'\][\s\S]*?unlocked\s*=\s*true/, 'Tài khoản được mở khung anime phải mở cả Gojo và Itachi');
+assert.match(appJs, /function hasAnimeFrameAccess[\s\S]*?frame_access[\s\S]*?anime-gojo/, 'Khung anime phải lấy quyền từ entitlement server');
 assert.equal(appJs.includes('chibi-gojo-signature.png'), true, 'Khung Gojo phải gắn asset chibi riêng');
 assert.equal(appJs.includes('chibi-itachi-signature.png'), true, 'Khung Itachi phải gắn asset chibi riêng');
 
@@ -177,7 +179,7 @@ assert.match(styleCss, /@media\s*\(min-width:\s*700px\)[\s\S]*?\.frame-unlock-an
 assert.match(styleCss, /@keyframes frame-title-reveal-side\s*\{[\s\S]*?0%\s*\{\s*opacity:\s*1[\s\S]*?100%\s*\{\s*opacity:\s*1/, 'Bảng danh hiệu desktop không được biến mất trước hoặc sau opening');
 assert.match(appJs, /announcement\?\.classList\.add\('is-persistent'\)/, 'Khi có frame phải đánh dấu bảng danh hiệu ở trạng thái thường trực');
 
-// 5. Kiểm thử runtime trong VM: Mở khóa khung Anime Gojo & Itachi cho đúng danh sách MSSV
+// 5. Kiểm thử runtime trong VM: quyền khung đến từ presentation server
 const sandbox = {
   console,
   document: {
@@ -205,6 +207,7 @@ vm.runInContext(`
   const authorized = ['21050008', '21050011', '21050044', '22050068', '22050090', '22050101'];
   authorized.forEach(mssv => {
     AppState.user = { mssv };
+    AppState.identityPresentation = { frame_access: { all: false, keys: ['anime-gojo', 'anime-itachi'] } };
     const unlocked = getStudentAcademicUnlockedFrames();
     if (!unlocked['anime-gojo']?.unlocked) throw new Error(mssv + ' phải được mở khóa khung Gojo');
     if (!unlocked['anime-itachi']?.unlocked) throw new Error(mssv + ' phải được mở khóa khung Itachi');
@@ -221,8 +224,13 @@ vm.runInContext(`
     if (!itachiFrame || itachiFrame.tier !== 'anime-itachi') throw new Error(mssv + ' không render được khung Itachi');
   });
 
+  AppState.user = { mssv: '24050126' };
+  AppState.identityPresentation = { frame_access: { all: true, keys: [] } };
+  if (!getStudentAcademicUnlockedFrames()['anime-gojo']?.unlocked) throw new Error('24050126 phải có quyền toàn bộ khung');
+
   // Kiểm tra tài khoản bình thường không được tự ý mở khung Anime
   AppState.user = { mssv: '22050001' };
+  AppState.identityPresentation = { frame_access: { all: false, keys: [] } };
   const unAuth = getStudentAcademicUnlockedFrames();
   if (unAuth['anime-gojo']?.unlocked) throw new Error('22050001 không được tự động mở khung Gojo');
   if (unAuth['anime-itachi']?.unlocked) throw new Error('22050001 không được tự động mở khung Itachi');

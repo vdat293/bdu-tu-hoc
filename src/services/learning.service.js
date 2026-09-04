@@ -211,6 +211,7 @@ async function enrichCourseIdentities(records) {
       author: {
         ...record.author,
         photo_url: presentation.avatar_url,
+        avatar_source: presentation.avatar_source,
         titles: presentation.selected_titles
       }
     };

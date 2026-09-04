@@ -12,6 +12,9 @@ import { StudentService } from '../services/student.service.js';
 import { CommunityService } from '../services/community.service.js';
 import { LearningService } from '../services/learning.service.js';
 import { IdentityPresentationService } from '../services/identity-presentation.service.js';
+import { IdentityAdminService } from '../services/identity-admin.service.js';
+import { AvatarOverrideService } from '../services/avatar-override.service.js';
+import { CommunityRealtime } from '../services/community-realtime.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import path from 'path';
 import fs from 'fs';
@@ -142,15 +145,21 @@ export const ApiController = {
       const authHeader = req.headers.authorization;
       const token = req.body?.token || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader);
       const idsv = req.query?.IDSV || req.query?.idsv || req.body?.idsv || '';
-      const maSV = req.query?.MaSV || req.query?.maSV || req.query?.mssv || req.body?.maSV || req.body?.mssv || req.body?.userName || '';
+      let maSV = req.query?.MaSV || req.query?.maSV || req.query?.mssv || req.body?.maSV || req.body?.mssv || req.body?.userName || '';
 
       if (!token) {
         return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token). Vui lòng đăng nhập lại.' });
       }
 
+      if (!maSV) {
+        try {
+          maSV = await BduIdentityService.resolveVerifiedMssv(token);
+        } catch {}
+      }
+
       const profileData = await BduService.getProfile(token, idsv, maSV);
       try {
-        const verifiedMssv = await BduIdentityService.resolveVerifiedMssv(token);
+        const verifiedMssv = maSV || await BduIdentityService.resolveVerifiedMssv(token);
         await IdentityPresentationService.recordProfile(verifiedMssv, profileData);
       } catch (profileSyncError) {
         console.warn('[IdentityPresentation] Không thể lưu ảnh hồ sơ:', profileSyncError.message);
@@ -502,12 +511,221 @@ export const ApiController = {
         mssv,
         req.body?.selectedTitleIds
       );
+      CommunityRealtime.publishIdentityChanged(mssv);
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({
         result: false,
         message: err.message || 'Không thể cập nhật danh hiệu hiển thị.'
       });
+    }
+  },
+
+  async updateMyEquippedFrame(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityPresentationService.updateEquippedFrame(mssv, req.body?.frameId);
+      CommunityRealtime.publishIdentityChanged(mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Update equipped frame error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể cập nhật khung hiển thị.'
+      });
+    }
+  },
+
+  async requireIdentityAdmin(req, res, next) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      req.identityAdminMssv = actor;
+      return next();
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không có quyền quản trị.' });
+    }
+  },
+
+  async getAdminIdentityItems(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await IdentityAdminService.listItems({
+        type: req.query.type,
+        includeInactive: req.query.includeInactive === 'true'
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải catalog quyền hiển thị.' });
+    }
+  },
+
+  async createAdminIdentityItem(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityAdminService.createItem({ ...req.body, actorMssv: actor });
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      console.error('Create identity item error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tạo item mới.' });
+    }
+  },
+
+  async updateAdminIdentityItem(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityAdminService.updateItem({ ...req.body, id: req.params.id, actorMssv: actor });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Update identity item error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể cập nhật item.' });
+    }
+  },
+
+  async deleteAdminIdentityItem(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityAdminService.deleteItem({ id: req.params.id, actorMssv: actor, reason: req.body?.reason });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Delete identity item error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể xóa item.' });
+    }
+  },
+
+  async getAdminIdentityGrants(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await IdentityAdminService.listGrants(req.params.mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải grant.' });
+    }
+  },
+
+  async createAdminIdentityGrant(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await IdentityAdminService.grant({
+        ...req.body,
+        actorMssv: actor
+      });
+      CommunityRealtime.publishIdentityChanged(data.mssv);
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      console.error('Create identity grant error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể cấp quyền hiển thị.' });
+    }
+  },
+
+  async revokeAdminIdentityGrant(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await IdentityAdminService.revoke({
+        grantId: req.params.grantId,
+        actorMssv: actor,
+        reason: req.body?.reason
+      });
+      CommunityRealtime.publishIdentityChanged(data.mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Revoke identity grant error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể thu hồi quyền hiển thị.' });
+    }
+  },
+
+  async getAdminIdentityAudit(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await IdentityAdminService.listAudit({ mssv: req.query.mssv, limit: req.query.limit });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải audit log.' });
+    }
+  },
+
+  async grantAdminSystemRole(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityAdminService.grantRole({ ...req.body, actorMssv: actor });
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể cấp role quản trị.' });
+    }
+  },
+
+  async revokeAdminSystemRole(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await IdentityAdminService.revokeRole({
+        mssv: req.params.mssv,
+        role: req.params.role,
+        actorMssv: actor
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể thu hồi role quản trị.' });
+    }
+  },
+
+  async getAdminAvatars(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await AvatarOverrideService.list({ search: req.query.search, limit: req.query.limit });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải danh sách avatar.' });
+    }
+  },
+
+  async getAdminAvatar(req, res) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await IdentityAdminService.requireRole(actor);
+      const data = await AvatarOverrideService.getByMssv(req.params.mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải avatar sinh viên.' });
+    }
+  },
+
+  async uploadAdminAvatar(req, res) {
+    try {
+      const actor = req.identityAdminMssv || await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await AvatarOverrideService.upload({
+        mssv: req.params.mssv,
+        actorMssv: actor,
+        file: req.file
+      });
+      CommunityRealtime.publishIdentityChanged(data.mssv, {
+        avatarUrl: data.resolved_url,
+        avatarSource: data.source
+      });
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      console.error('Upload avatar override error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể cập nhật ảnh đại diện.' });
+    }
+  },
+
+  async deleteAdminAvatar(req, res) {
+    try {
+      const actor = req.identityAdminMssv || await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await AvatarOverrideService.remove({ mssv: req.params.mssv, actorMssv: actor });
+      CommunityRealtime.publishIdentityChanged(data.mssv, {
+        avatarUrl: data.resolved_url,
+        avatarSource: data.source
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Delete avatar override error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể gỡ ảnh đại diện.' });
     }
   },
 
@@ -527,7 +745,7 @@ export const ApiController = {
       res.setHeader('Vary', 'Authorization');
       let viewerMssv = null;
       const filter = String(req.query.filter || 'all').trim().toLowerCase();
-      const validFilters = ['all', 'mine', 'anon', 'pinned', 'announcement', 'material'];
+      const validFilters = ['all', 'mine', 'anon', 'pinned', 'announcement', 'material', 'poll', 'discussion'];
       if (!validFilters.includes(filter)) {
         return res.status(400).json({ result: false, message: 'Bộ lọc bài viết không hợp lệ.' });
       }
@@ -539,6 +757,9 @@ export const ApiController = {
         } catch {}
       }
       const { scope, scopeId, limit, offset, category, hasAttachments, isPinned } = req.query;
+      if (scope === 'clan' && !viewerMssv) {
+        return res.status(401).json({ result: false, message: 'Vui lòng đăng nhập để xem bài viết CLB.' });
+      }
       const data = await CommunityService.getPosts({
         scope,
         scopeId,
@@ -575,6 +796,9 @@ export const ApiController = {
       if (!post) {
         return res.status(404).json({ result: false, message: 'Không tìm thấy bài viết.' });
       }
+      if (post.scope === 'clan' && !viewerMssv) {
+        return res.status(401).json({ result: false, message: 'Vui lòng đăng nhập để xem bài viết CLB.' });
+      }
       return res.json({ result: true, data: post });
     } catch (err) {
       console.error('Get community post error:', err.message);
@@ -602,6 +826,7 @@ export const ApiController = {
         isPinned,
         poll
       });
+      CommunityRealtime.publishPostCreated(post);
       return res.status(201).json({ result: true, data: post });
     } catch (err) {
       console.error('Create community post error:', err.message);
@@ -616,6 +841,7 @@ export const ApiController = {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const data = await CommunityService.deletePost(req.params.id, mssv);
+      CommunityRealtime.publishPostDeleted(data);
       return res.json({ result: true, data });
     } catch (err) {
       console.error('Delete community post error:', err.message);
@@ -642,13 +868,15 @@ export const ApiController = {
 
   async getClanDocuments(req, res) {
     try {
+      const viewerMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       res.setHeader('Cache-Control', 'private, no-store');
       const { type, search, limit, offset } = req.query;
       const data = await CommunityService.getClanDocuments(req.params.id, {
         type,
         search,
         limit,
-        offset
+        offset,
+        viewerMssv
       });
       return res.json({ result: true, data });
     } catch (err) {
@@ -682,6 +910,7 @@ export const ApiController = {
       const authHeader = req.headers.authorization;
       const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
       const data = await CommunityService.toggleLike(req.params.id, mssv);
+      CommunityRealtime.publishPostLikeChanged({ postId: req.params.id, likeCount: data.like_count });
       return res.json({ result: true, data });
     } catch (err) {
       console.error('Toggle like error:', err.message);
@@ -725,6 +954,16 @@ export const ApiController = {
         parentId,
         isAnonymous
       });
+      const post = await CommunityService.getPostById(req.params.id, mssv);
+      CommunityRealtime.publishCommentChanged({
+        type: 'created',
+        postId: req.params.id,
+        commentId: comment?.id,
+        parentId: comment?.parent_id,
+        commentCount: comment?.comment_count,
+        scope: post?.scope,
+        scopeId: post?.scope_id
+      });
       return res.status(201).json({ result: true, data: comment });
     } catch (err) {
       console.error('Add comment error:', err.message);
@@ -732,6 +971,56 @@ export const ApiController = {
         result: false,
         message: err.message || 'Không thể thêm bình luận.'
       });
+    }
+  },
+
+  async editCommunityPostComment(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const comment = await CommunityService.editComment({
+        postId: req.params.id,
+        commentId: req.params.commentId,
+        requesterMssv: mssv,
+        content: req.body?.content
+      });
+      const post = await CommunityService.getPostById(req.params.id, mssv);
+      CommunityRealtime.publishCommentChanged({
+        type: 'updated',
+        postId: req.params.id,
+        commentId: comment?.id,
+        parentId: comment?.parent_id,
+        scope: post?.scope,
+        scopeId: post?.scope_id
+      });
+      return res.json({ result: true, data: comment });
+    } catch (err) {
+      console.error('Edit comment error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể sửa bình luận.' });
+    }
+  },
+
+  async deleteCommunityPostComment(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await CommunityService.deleteComment({
+        postId: req.params.id,
+        commentId: req.params.commentId,
+        requesterMssv: mssv,
+        reason: req.body?.reason
+      });
+      const post = await CommunityService.getPostById(req.params.id, mssv);
+      CommunityRealtime.publishCommentChanged({
+        type: 'deleted',
+        postId: req.params.id,
+        commentId: req.params.commentId,
+        commentCount: data.comment_count,
+        scope: post?.scope,
+        scopeId: post?.scope_id
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Delete comment error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể xóa bình luận.' });
     }
   },
 

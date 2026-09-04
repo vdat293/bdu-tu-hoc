@@ -1789,6 +1789,26 @@
 
             </div>
           </div>
+
+          <div id="identity-admin-panel" class="identity-admin-panel hidden" aria-live="polite">
+            <div class="identity-admin-panel-header">
+              <div>
+                <span class="forum-widget-eyebrow">QUẢN TRỊ HIỂN THỊ</span>
+                <h3>Cấp khung & name tag</h3>
+              </div>
+              <div class="identity-admin-header-actions">
+                <span id="identity-admin-status" class="identity-admin-status"></span>
+                <a id="identity-admin-open-link" class="identity-admin-open-link" href="/admin-tool">Mở Admin Tool →</a>
+              </div>
+            </div>
+            <div class="identity-admin-form">
+              <input id="identity-admin-mssv" class="form-input" inputmode="text" maxlength="32" placeholder="MSSV người nhận">
+              <select id="identity-admin-item" class="form-input"><option value="">Đang tải item...</option></select>
+              <input id="identity-admin-reason" class="form-input" maxlength="500" placeholder="Lý do cấp quyền">
+              <button id="identity-admin-grant" class="btn btn-primary" type="button">Cấp quyền</button>
+            </div>
+            <div id="identity-admin-grants" class="identity-admin-grants"></div>
+          </div>
         </section>
 
       </main>
