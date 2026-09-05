@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 *.log
 temp/
+output/wordfmt-tests/
 outside-src/
 .env
 .env.*

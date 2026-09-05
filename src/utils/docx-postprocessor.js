@@ -638,7 +638,7 @@ export function replaceStraightDoubleQuotes(xml) {
   return { xml: output, replacements };
 }
 
-export function processDocumentXml(documentXml) {
+export function processDocumentXml(documentXml, profile = {}) {
   const stats = {
     headingParagraphs: 0,
     headingRuns: 0,
@@ -657,7 +657,15 @@ export function processDocumentXml(documentXml) {
     if (isHeading) stats.headingParagraphs += 1;
     if (isBody) stats.bodyParagraphs += 1;
 
-    return paragraphXml.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, runXml => {
+    let formatted = paragraphXml;
+    if (isHeading) {
+      const level = Number(styleId.at(-1));
+      const cfg = profile.headings?.[level === 1 ? 'chapter' : `level${level}`] || {};
+      const left = Math.round((cfg.number_position_cm ?? (level === 3 ? 1.27 : level === 4 ? 2.54 : 0)) * 1440 / 2.54);
+      formatted = formatted.replace(/(<w:pPr\b[^>]*>)([\s\S]*?)(<\/w:pPr>)/, (_, open, content, close) =>
+        `${open}${content.replace(/<w:ind\b[^>]*\/>/g, '')}<w:ind w:left="${left}" w:right="0" w:firstLine="0"/>${close}`);
+    }
+    return formatted.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, runXml => {
       if (isHeading) stats.headingRuns += 1;
       if (isBody) stats.bodyRunsNormalized += 1;
       return patchRun(runXml, {
@@ -759,7 +767,7 @@ function patchStyle(stylesXml, styleId, runProperties, paragraphProperties = [])
   return { xml, patched };
 }
 
-export function processStylesXml(stylesXml) {
+export function processStylesXml(stylesXml, profile = {}) {
   let xml = stylesXml;
   let headingStyles = 0;
   let bodyStyles = 0;
@@ -807,13 +815,21 @@ export function processStylesXml(stylesXml) {
     WFCoverDate: { run: [font, { name: 'b', xml: '<w:b/>' }, { name: 'bCs', xml: '<w:bCs/>' }, { name: 'sz', xml: '<w:sz w:val="28"/>' }, { name: 'szCs', xml: '<w:szCs w:val="28"/>' }], paragraph: [{ name: 'jc', xml: '<w:jc w:val="center"/>' }] },
     WFFrontMatterTitle: { run: [font, black, { name: 'b', xml: '<w:b/>' }, { name: 'bCs', xml: '<w:bCs/>' }, { name: 'sz', xml: '<w:sz w:val="36"/>' }, { name: 'szCs', xml: '<w:szCs w:val="36"/>' }], paragraph: [{ name: 'pageBreakBefore', xml: '<w:pageBreakBefore/>' }, { name: 'jc', xml: '<w:jc w:val="center"/>' }] },
     TableofFigures: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
-    TOC1: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
-    TOC2: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
-    TOC3: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
-    TOC4: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] }
+    TOC1: { run: [font, black, { name: 'b', xml: '<w:b w:val="1"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
+    TOC2: { run: [font, black, { name: 'b', xml: '<w:b w:val="1"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
+    TOC3: { run: [font, black, { name: 'b', xml: '<w:b w:val="0"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
+    TOC4: { run: [font, black, { name: 'b', xml: '<w:b w:val="0"/>' }, { name: 'i', xml: '<w:i w:val="1"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] }
   };
 
   for (const [styleId, rule] of Object.entries(styleRules)) {
+    if (HEADING_STYLE_IDS.has(styleId)) {
+      const level = Number(styleId.at(-1));
+      const config = profile.headings?.[level === 1 ? 'chapter' : `level${level}`] || {};
+      const left = Math.round((config.number_position_cm ?? (level === 3 ? 1.27 : level === 4 ? 2.54 : 0)) * 1440 / 2.54);
+      rule.paragraph.push({ name: 'ind', xml: `<w:ind w:left="${left}" w:right="0" w:firstLine="0"/>` });
+      rule.paragraph.push({ name: 'keepNext', xml: '<w:keepNext/>' });
+      rule.paragraph.push({ name: 'keepLines', xml: '<w:keepLines/>' });
+    }
     const result = patchStyle(xml, styleId, rule.run, rule.paragraph);
     xml = result.xml;
     if (!result.patched) continue;
@@ -1049,11 +1065,8 @@ export function normalizeFrontMatter(documentXml, documentMode = 'digital_docume
     let frontMatterReordered = false;
     let bindingPagesInserted = 0;
     let decorativeDrawingsRemoved = 0;
-    for (let index = 0; index < children.length; index += 1) {
-      if (frontMatterKey(children[index]) !== 'thanks' || !/<w:drawing\b/.test(children[index])) continue;
-      children[index] = children[index].replace(/<w:r\b[^>]*>[\s\S]*?<w:drawing\b[\s\S]*?<\/w:drawing>[\s\S]*?<\/w:r>/g, '');
-      decorativeDrawingsRemoved += 1;
-    }
+    // The acknowledgement frame is intentional artwork. Moving front matter
+    // must retain its drawing, anchor and any text in the same run.
     const headingIndex = children.findIndex(child => getParagraphStyleId(child) === 'WFHeading1');
     const searchEnd = headingIndex >= 0 ? headingIndex : children.length;
     const starts = [];
@@ -1137,10 +1150,25 @@ export function normalizeSectionProperties(documentXml, documentMode = 'digital_
 }
 
 function centerTable(tableXml) {
+  // Table formatting uses no colored fill, including headers from the DLL.
+  tableXml = tableXml.replace(/<w:shd\b[^>]*\/>/g, '<w:shd w:val="clear" w:fill="auto"/>');
+  tableXml = tableXml.replace(/<w:tcBorders\b[^>]*>[\s\S]*?<\/w:tcBorders>/g, '');
+  tableXml = tableXml.replace(/<w:tblCellSpacing\b[^>]*(?:\/>|>[\s\S]*?<\/w:tblCellSpacing>)/g, '');
+  tableXml = tableXml.replace(/<w:tblOverlap\b[^>]*(?:\/>|>[\s\S]*?<\/w:tblOverlap>)/g, '');
+  if (/<w:tblBorders\b/.test(tableXml)) {
+    tableXml = tableXml.replace(/<w:tblBorders\b[^>]*>[\s\S]*?<\/w:tblBorders>/g,
+      borders => borders.replace(/w:sz="\d+"/g, 'w:sz="4"'));
+  } else {
+    const borders = '<w:tblBorders>' + ['top','left','bottom','right','insideH','insideV'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join('') + '</w:tblBorders>';
+    if (/<w:tblPr\b[^>]*>/.test(tableXml)) {
+      tableXml = tableXml.replace(/<\/w:tblPr>/, `${borders}</w:tblPr>`);
+    }
+  }
   const alignment = '<w:jc w:val="center"/>';
   if (/<w:tblPr\b[^>]*>/.test(tableXml)) {
-    if (/<w:jc\b[^>]*\/>/.test(tableXml)) return tableXml.replace(/<w:jc\b[^>]*\/>/, alignment);
-    return tableXml.replace(/<w:tblPr\b([^>]*)>/, `<w:tblPr$1>${alignment}`);
+    return tableXml.replace(/<w:tblPr\b[^>]*>[\s\S]*?<\/w:tblPr>/, props =>
+      /<w:jc\b[^>]*\/>/.test(props) ? props.replace(/<w:jc\b[^>]*\/>/, alignment)
+        : props.replace('</w:tblPr>', `${alignment}</w:tblPr>`));
   }
   return tableXml.replace(/^(<w:tbl\b[^>]*>)/, `$1<w:tblPr>${alignment}</w:tblPr>`);
 }
@@ -1163,6 +1191,7 @@ export function normalizeTablesAndDrawings(documentXml) {
     drawingParagraphsCentered += 1;
     let normalized = setParagraphAlignment(paragraphXml, 'center');
     normalized = normalized.replace(/<wp:anchor\b[^>]*>[\s\S]*?<\/wp:anchor>/g, anchorXml => {
+      if (/WordFmt Acknowledgement Frame|prst="foldedCorner"/.test(anchorXml)) return anchorXml;
       const withoutWrap = anchorXml.replace(/<wp:wrap(?:None|Square|Tight|Through|TopAndBottom)\b[^>]*(?:\/>|>[\s\S]*?<\/wp:wrap(?:None|Square|Tight|Through|TopAndBottom)>)/g, '');
       anchoredImagesWrapped += 1;
       // CT_Anchor requires wrap to come after extent/effectExtent. Inserting it
@@ -1368,7 +1397,7 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
   documentXml = hyperlinkResult.xml;
   Object.assign(stats, hyperlinkResult.stats);
 
-  const documentResult = processDocumentXml(documentXml);
+  const documentResult = processDocumentXml(documentXml, options.profile);
   documentXml = documentResult.xml;
   Object.assign(stats, documentResult.stats);
 
@@ -1406,7 +1435,7 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
   stats.hyperlinkRelationshipsRemoved = relationshipResult.relationshipsRemoved;
   stats.remainingReferenceHyperlinks = stripReferenceHyperlinks(documentXml).stats.hyperlinksRemoved;
 
-  const stylesResult = processStylesXml(sourceStylesXml);
+  const stylesResult = processStylesXml(sourceStylesXml, options.profile);
   sourceStylesXml = stylesResult.xml;
   Object.assign(stats, stylesResult.stats);
 

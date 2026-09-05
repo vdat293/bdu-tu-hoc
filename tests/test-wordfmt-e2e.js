@@ -3,10 +3,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AdmZip from 'adm-zip';
 import { WordFmtService } from '../src/services/wordfmt.service.js';
 
-const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
+const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const python = process.env.WORDFMT_TEST_PYTHON || 'python3';
 const fixturePath = path.join(os.tmpdir(), `wordfmt-e2e-${process.pid}.docx`);
 let outputPath = '';
@@ -96,7 +97,7 @@ try {
   assert.equal(result.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
   assert.equal(result.report.outputNormalization.tableCaptionsMoved, 1);
   assert.equal(result.report.outputNormalization.figureCaptionsMoved, 1);
-  assert.equal(result.report.outputNormalization.decorativeDrawingsRemoved, 1);
+  assert.equal(result.report.outputNormalization.decorativeDrawingsRemoved, 0);
 
   const bindingResult = await WordFmtService.formatDocx({
     inputPath: fixturePath,

@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { AsyncQueue } from '../utils/async-queue.js';
+import { analyzeDocxStructure, formatStructuredDocx } from '../utils/docx-structure.js';
 import {
   normalizeFormattedDocx,
   normalizeSourceLists
@@ -110,6 +111,17 @@ export const WordFmtService = {
       ...(runtimeProfile.document_modes || {}),
       default: documentMode === 'binding_package' ? 'binding_package' : 'digital_document'
     };
+    const structure = analyzeDocxStructure(inputPath);
+    if (structure.requiresStructuredFormatting) {
+      return wordFmtQueue.enqueue(async () => {
+        const result = formatStructuredDocx(inputPath, outputPath, {
+          profile: runtimeProfile, instructor, student, studentId, topic, className,
+          documentTitle, institution, faculty, course, location, month, year,
+          documentMode, frontMatter
+        }, structure);
+        return { ...result, outputFile: path.basename(outputPath), stdout: '' };
+      });
+    }
     fs.writeFileSync(runtimeProfilePath, JSON.stringify(runtimeProfile, null, 2));
 
     let sourceListNormalization;
@@ -192,7 +204,8 @@ export const WordFmtService = {
               sourcePath: preparedInputPath,
               location: runtimeProfile.cover.location,
               month,
-              year
+              year,
+              profile: runtimeProfile
             });
             reportData = {
               ...(reportData || {}),
@@ -230,6 +243,18 @@ export const WordFmtService = {
    * Quick check DOCX for style compliance
    */
   async checkDocx(inputPath, profile = 'tieu_luan.json') {
+    const structure = analyzeDocxStructure(inputPath);
+    if (structure.requiresStructuredFormatting) {
+      const mismatches = structure.records.filter(r => ['chapter', 'heading'].includes(r.role)
+        && r.styleId !== `WFHeading${r.level}`);
+      return {
+        output: [`Nhận diện ${structure.chapters.length} chương thực; bảo vệ ${structure.summary.protectedIndexParagraphs} đoạn mục lục.`,
+          `${structure.summary.chapterSummariesPreserved} đoạn giới thiệu chương được giữ là nội dung.`,
+          ...mismatches.map(r=>`STYLE_MISMATCH: ${r.displayText} → WFHeading${r.level}`), ...structure.warnings].join('\n'),
+        exitCode: mismatches.length || structure.warnings.length ? 1 : 0,
+        structure: structure.summary
+      };
+    }
     const profilePath = path.join(PROFILES_DIR, profile);
     const args = [DLL_PATH, 'check', inputPath, '--profile', profilePath];
 
@@ -265,7 +290,11 @@ export const WordFmtService = {
         const filePath = path.join(TEMP_DIR, file);
         const stats = fs.statSync(filePath);
         if (now - stats.mtimeMs > maxAge) {
-          fs.unlinkSync(filePath);
+          if (stats.isDirectory()) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(filePath);
+          }
         }
       }
     } catch (err) {

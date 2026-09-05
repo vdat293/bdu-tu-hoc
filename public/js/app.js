@@ -2341,6 +2341,7 @@ function initWordFmtTool() {
         if (diagContainer) {
           const normalization = res.report?.outputNormalization || {};
           const compliance = normalization.compliance || {};
+          const structure = res.report?.structure;
           const checks = [
             ['Khổ giấy A4 hướng dọc', compliance.a4Portrait],
             ['Lề trên 2cm, dưới 2cm, trái 3cm, phải 2cm', compliance.margins],
@@ -2351,6 +2352,10 @@ function initWordFmtTool() {
             ['Đã chuẩn hóa en dash/em dash thành dấu -', compliance.longDashesNormalized],
             ['Bảng nằm trong chiều rộng trang A4 dọc', compliance.wideTablesFitPortrait]
           ];
+          if (structure) checks.push(
+            ['Số chương thực được bảo toàn', compliance.headingStructure],
+            ['Thụt lề Heading 3/4 theo mẫu đã chọn', compliance.headingIndentation]
+          );
           const checkLines = checks.map(([label, passed]) => (
             `<div class="diag-line ${passed ? 'diag-pass' : 'diag-warn'}">${passed ? 'Đạt' : 'Cảnh báo'}: ${label}</div>`
           )).join('');
@@ -2360,7 +2365,15 @@ function initWordFmtTool() {
             normalization.frontMatterReordered ? 'Đã sắp lại Lời cảm ơn trước Mục lục' : '',
             normalization.headersNormalized ? `Đã chuẩn hóa ${normalization.headersNormalized} header theo section` : ''
           ].filter(Boolean).map(text => `<div class="diag-line diag-info">Đã sửa: ${text}</div>`).join('');
-          diagContainer.innerHTML = `${checkLines}${changeLines}<div class="diag-line diag-info">File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>`;
+          const structureLines = structure ? [
+            `Nhận diện ${Number(structure.chapterCount)} chương thực; ${Number(structure.protectedIndexParagraphs)} đoạn mục lục được bảo vệ.`,
+            structure.hasProposal ? 'Đề cương: giữ nguyên nội dung và định dạng nguồn; không tính vào số chương.' : '',
+            structure.hasIntroduction ? 'Mở đầu được xử lý riêng, không đánh số chương.' : '',
+            structure.hasParts ? 'Giữ tiêu đề PHẦN NỘI DUNG; các chương bên trong dùng hệ Heading 1–4.' : '',
+            structure.chapterSummariesPreserved ? `Giữ ${Number(structure.chapterSummariesPreserved)} đoạn giới thiệu chương là nội dung thường.` : '',
+            'Mức thụt lề theo ảnh mẫu là quy ước trình bày đã chọn.'
+          ].filter(Boolean).map(text => `<div class="diag-line diag-info">${text}</div>`).join('') : '';
+          diagContainer.innerHTML = `${structureLines}${checkLines}${changeLines}<div class="diag-line diag-info">File size: ${(res.fileSize / 1024).toFixed(1)} KB</div>`;
         }
       } catch (err) {
         progressSession.fail(err.message);
