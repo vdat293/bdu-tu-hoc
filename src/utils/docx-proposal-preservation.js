@@ -1,18 +1,23 @@
 // Keep the proposal as one contiguous OOXML block, including internal blanks,
 // nested tables, drawings, fields and breaks. Only its masthead is editable.
-export function captureProposalBlock({$,body,records}) {
+export function captureProposalBlock({$,body,records}, options = {}) {
   const title=records.find(r=>r.role==='proposal_title');
   if(!title)return null;
   const top=e=>{while(e.parent && e.parent!==body[0])e=e.parent;return e;};
-  const nodes=body.children().toArray(), first=top(title.element), start=nodes.indexOf(first);
+  const first=top((options.skipProposal && title.startElement) || title.element);
+  const nodes=body.children().toArray(), start=nodes.indexOf(first);
+  if(start===-1)return null;
   const next=records.find(r=>r.index>title.index && r.region!=='proposal' && !r.insideTable && !r.inIndex);
-  let end=next?nodes.indexOf(top(next.element)):nodes.length-1;
+  let end=next?nodes.indexOf(top(next.element)):nodes.length;
+  if(end===-1)end=nodes.length;
   // The blank separator before the next review belongs to pagination, not to
   // proposal content. All interior blank paragraphs are preserved verbatim.
-  while(end>start+1) {
-    const n=$(nodes[end-1]);
-    if(n[0].name!=='w:p' || n.find('w\\:t').text().trim() || n.find('w\\:drawing,w\\:pict,w\\:object').length)break;
-    end--;
+  if(!options.skipProposal) {
+    while(end>start+1) {
+      const n=$(nodes[end-1]);
+      if(n[0].name!=='w:p' || n.find('w\\:t').text().trim() || n.find('w\\:drawing,w\\:pict,w\\:object').length)break;
+      end--;
+    }
   }
   const block=nodes.slice(start,end), xml=block.map(e=>$.xml(e)).join('').replace(/&#x([0-9a-f]+);/gi,(m,n)=>Number.parseInt(n,16)>127?String.fromCodePoint(Number.parseInt(n,16)):m);
   let effective=null;

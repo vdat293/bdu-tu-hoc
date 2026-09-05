@@ -9,7 +9,7 @@ function properties(n, name) {
   return p;
 }
 function set(p, name, xml) { children(p, name).remove(); p.append(xml); }
-export function repairDataTable($, table, width = 9071) {
+export function repairDataTable($, table, width = 9071) {
   const t = $(table), rows = children(t, 'tr'), grid = children(t, 'tblGrid');
   const columns = children(grid, 'gridCol');
   const count = columns.length || Math.max(...rows.toArray().map(r => children($(r), 'tc').length));
@@ -110,19 +110,27 @@ export function normalizeStructuredCaptions($, records, warnings) {
   const counters=new Map(), mappings=new Map();let changed=0,moved=0;
   const captions=records.filter(r=>/_caption$/.test(r.role) && r.chapter!=null);
   for(const rec of captions) {
-    const p=$(rec.element), match=text(p).match(/^(\s*)(Hình|Bảng)\s+(\d+(?:[.\-]\d+)*)\s*[.:]?\s*/iu);
+    const p=$(rec.element), rawText=text(p);
+    const match=rawText.match(/^(\s*)(Hình|Bảng)(?:\s+(\d+(?:[.\-]\d+)*)[.:–—-]\s*|\s*[:.\-–—-]\s*|\s+(\d+(?:[.\-]\d+)*)\s*$|\s*$)/iu);
     if(!match)continue;
     const kind=rec.role==='figure_caption'?'Hình':'Bảng', key=`${kind}:${rec.chapter}`;
     const ordinal=(counters.get(key)||0)+1;counters.set(key,ordinal);
     const label=`${kind} ${rec.chapter}-${ordinal}`;
-    const old=`${kind} ${match[3]}`;
-    if(!mappings.has(old))mappings.set(old,[]);
-    mappings.get(old).push({chapter:rec.chapter,label});
+    const oldNumber=match[3]||match[4];
+    if(oldNumber) {
+      const old=`${kind} ${oldNumber}`;
+      if(!mappings.has(old))mappings.set(old,[]);
+      mappings.get(old).push({chapter:rec.chapter,label});
+    }
     // Caption labels are regenerated; description runs and bookmarks survive.
     // Remove old number fields before replacing the cached visible prefix.
     p.find(`${tag('fldChar')},${tag('instrText')}`).remove();
     p.find(tag('fldSimple')).each((_,e)=>$(e).replaceWith($(e).contents()));
     replaceVisibleRange($,p,0,match[0].length,'');
+    const placeholder = kind === 'Bảng' ? '[Nhập tên bảng]' : '[Nhập tên hình]';
+    if (!text(p).trim()) {
+      p.append(`<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="26"/><w:szCs w:val="26"/><w:b w:val="0"/><w:i/><w:color w:val="000000"/></w:rPr><w:t>${placeholder}</w:t></w:r>`);
+    }
     const labelXml=`<w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>${kind} ${rec.chapter}-</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> SEQ ${kind==='Hình'?'Hinh':'Bang'} ${ordinal===1?'\\r 1':'\\n'} \\* ARABIC </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>${ordinal}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t xml:space="preserve">: </w:t></w:r>`;
     p.find(tag('r')).each((_,e)=>{
       const rp=properties($(e),'rPr');
@@ -134,18 +142,22 @@ export function normalizeStructuredCaptions($, records, warnings) {
     while(anchor.next()[0]?.name==='w:bookmarkStart')anchor=anchor.next();
     anchor.after(labelXml);
     const pp=properties(p,'pPr');
+    set(pp,'pStyle',`<w:pStyle w:val="${kind==='Bảng'?'WFTableCaption':'WFFigureCaption'}"/>`);
     set(pp,'ind','<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
     set(pp,'jc','<w:jc w:val="center"/>');
     set(pp,'keepLines','<w:keepLines/>');
     set(pp,'keepNext',`<w:keepNext w:val="${kind==='Bảng'?1:0}"/>`);
+    rec.displayText = `${kind} ${rec.chapter}-${ordinal}: ${text(p).trim()}`;
+    rec.text = rec.displayText;
     const adjacent=direction=>{let n=p[direction]();while(n[0]?.name==='w:p'&&!text(n).trim()&&!n.find('w\\:drawing,w\\:pict').length)n=n[direction]();return n;};
+    const isTbl=n=>n[0]?.name==='w:tbl';
+    const isFig=n=>n.find('w\\:drawing,w\\:pict').length>0;
     const prev=adjacent('prev'),next=adjacent('next');
-    const object=n=>n[0]?.name==='w:tbl'||n.find('w\\:drawing,w\\:pict').length>0;
-    if(kind==='Bảng'&&next[0]?.name!=='w:tbl'&&prev[0]?.name==='w:tbl'){prev.before(p);moved++;}
-    if(kind==='Hình'&&!object(prev)&&object(next)){next.after(p);moved++;}
+    if(kind==='Bảng'&&!isTbl(next)&&isTbl(prev)){prev.before(p);moved++;}
+    if(kind==='Hình'&&!isFig(prev)&&isFig(next)){next.after(p);moved++;}
     if(kind==='Hình'){
       const obj=adjacent('prev');
-      if(obj[0]?.name==='w:p'&&object(obj))set(properties(obj,'pPr'),'keepNext','<w:keepNext/>');
+      if(obj[0]?.name==='w:p'&&isFig(obj))set(properties(obj,'pPr'),'keepNext','<w:keepNext/>');
       if(obj[0]?.name==='w:tbl')children(obj,'tr').last().find(tag('p')).each((_,e)=>set(properties($(e),'pPr'),'keepNext','<w:keepNext/>'));
     }
     changed++;

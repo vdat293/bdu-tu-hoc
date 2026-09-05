@@ -64,6 +64,7 @@ export const WordFmtService = {
     className = '',
     documentTitle = 'TIỂU LUẬN MÔN HỌC',
     institution = '',
+    institute = '',
     faculty = '',
     course = '',
     location = '',
@@ -72,7 +73,9 @@ export const WordFmtService = {
     documentMode = 'digital_document',
     documentType = 'tieu_luan',
     frontMatter = 'cover,comments,thanks',
-    profile = 'tieu_luan.json'
+    profile = 'tieu_luan.json',
+    onlyExistingCaptions = false,
+    skipProposal = false
   }) {
     if (!['tieu_luan', 'do_an_tot_nghiep'].includes(documentType)) {
       throw new Error('Loại tài liệu không hợp lệ.');
@@ -113,6 +116,7 @@ export const WordFmtService = {
     }
     runtimeProfile.cover = { ...(runtimeProfile.cover || {}) };
     if (institution.trim()) runtimeProfile.cover.institution = institution.trim();
+    if (institute.trim()) runtimeProfile.cover.institute = institute.trim();
     if (faculty.trim()) runtimeProfile.cover.faculty = faculty.trim();
     if (course.trim()) runtimeProfile.cover.course = course.trim();
     if (location.trim()) runtimeProfile.cover.location = location.trim();
@@ -121,12 +125,13 @@ export const WordFmtService = {
       default: documentMode === 'binding_package' ? 'binding_package' : 'digital_document'
     };
     const structure = analyzeDocxStructure(inputPath);
-    if (documentType === 'do_an_tot_nghiep' || structure.requiresStructuredFormatting) {
+    if (documentType === 'do_an_tot_nghiep' || documentType === 'tieu_luan' || structure.requiresStructuredFormatting || onlyExistingCaptions || skipProposal) {
       return wordFmtQueue.enqueue(async () => {
         const result = formatStructuredDocx(inputPath, outputPath, {
           profile: runtimeProfile, instructor, student, studentId, topic, className,
-          documentTitle, institution, faculty, course, location, month, year,
-          documentMode, documentType, frontMatter
+          documentTitle, institution, institute, faculty, course, location, month, year,
+          documentMode, documentType, frontMatter,
+          onlyExistingCaptions, skipProposal
         }, structure);
         return { ...result, outputFile: path.basename(outputPath), stdout: '' };
       });

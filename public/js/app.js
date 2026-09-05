@@ -2343,6 +2343,9 @@ function initWordFmtTool() {
       if (document.getElementById('wf-include-thanks')?.checked) frontSections.push('thanks');
       const frontMatter = frontSections.join(',');
 
+      const onlyExistingCaptions = document.getElementById('wf-only-existing-captions')?.checked ? 'true' : 'false';
+      const skipProposal = document.getElementById('wf-skip-proposal')?.checked ? 'true' : 'false';
+
       const formData = new FormData();
       formData.append('document', AppState.selectedFile);
       formData.append('instructor', instructor);
@@ -2360,6 +2363,8 @@ function initWordFmtTool() {
       if (month) formData.append('month', month);
       if (year) formData.append('year', year);
       formData.append('frontMatter', frontMatter);
+      formData.append('onlyExistingCaptions', onlyExistingCaptions);
+      formData.append('skipProposal', skipProposal);
 
       setButtonLoading(btnStart, true);
       const progressSession = createProgressSession();

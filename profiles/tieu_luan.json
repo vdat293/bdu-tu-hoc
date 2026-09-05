@@ -113,25 +113,33 @@
   },
   "cover": {
     "institution": "TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG",
+    "institute": "VIỆN TRÍ TUỆ NHÂN TẠO VÀ CHUYỂN ĐỔI SỐ",
     "faculty": "KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO",
     "document_type": "TIỂU LUẬN MÔN HỌC",
     "course": "TÊN MÔN HỌC",
     "location": "Thành phố Hồ Chí Minh",
     "page_border": {
-      "style": "single",
-      "color_hex": "000000",
-      "size_eighth_points": 8,
-      "space_pt": 18
+      "style": "twistedLines1",
+      "color_hex": "auto",
+      "size_eighth_points": 18,
+      "source": "Word art border twistedLines1 matching BDU cover standard"
     },
     "styles": {
       "institution_size_pt": 15,
-      "document_type_size_pt": 24,
-      "label_size_pt": 16,
+      "institute_size_pt": 15,
+      "faculty_size_pt": 15,
+      "document_type_size_pt": 16,
       "topic_size_pt": 20,
       "metadata_size_pt": 14,
       "date_size_pt": 14,
-      "metadata_space_before_pt": 110,
-      "date_space_before_pt": 130
+      "metadata_space_before_pt": 90,
+      "date_space_before_pt": 160
+    },
+    "margins_cm": {
+      "top": 2,
+      "bottom": 2,
+      "left": 2,
+      "right": 2
     }
   },
   "header_footer": {

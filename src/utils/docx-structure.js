@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { prepareGraduation, isolateProposalStyles } from './docx-graduation.js';
+import { prepareGraduation, prepareCourseworkCover, isolateProposalStyles } from './docx-graduation.js';
 import {captureProposalBlock, markProposalBlock, restoreProposalBlock} from './docx-proposal-preservation.js';
 import { repairDataTable, normalizeStructuredCaptions, ensureAcknowledgementFrame } from './docx-layout.js';
 import AdmZip from 'adm-zip';
@@ -189,8 +189,10 @@ export function analyzeDocxStructure(inputPath) {
       // Manual captions need a title separator; established caption styles or
       // SEQ fields also supply evidence when that separator is absent.
       const captionEvidence = captionStyle || /\bSEQ\b/i.test(p.find(tag('instrText')).text())
+        || /^(Hình|Bảng)\s*:\s*\S/iu.test(text)
+        || /^(Hình|Bảng)\s*:\s*$/iu.test(text)
         || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*[.:]\s+\S/iu.test(text);
-      if (rec.role === 'body' && captionEvidence && /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*\s*[.:]?\s+\S/iu.test(text)) {
+      if (rec.role === 'body' && captionEvidence && (/^(Hình|Bảng)\s*:/iu.test(text) || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*\s*[.:]?\s+\S/iu.test(text))) {
         rec.role = /^Hình/iu.test(text) ? 'figure_caption' : 'table_caption';
       }
     }
@@ -207,7 +209,7 @@ export function analyzeDocxStructure(inputPath) {
     const previous = $(rec.element).prev();
     // A proposal's institutional/signature masthead is part of the proposal,
     // even when it is a table immediately before the title.
-    if (previous[0]?.name === 'w:tbl' && /TRUONG/.test(keyOf(textOf(previous))) && /CONG HOA/.test(keyOf(textOf(previous)))) rec.startElement = previous[0];
+    if (previous[0]?.name === 'w:tbl' && (/TRUONG|BO GIAO DUC|KHOA|VIEN|CONG HOA|QUOC HIEU/iu.test(keyOf(textOf(previous))))) rec.startElement = previous[0];
   }
   const documentType = records.find(r => r.role === 'cover' && /^(ĐỒ ÁN|KHÓA LUẬN|TIỂU LUẬN)/iu.test(r.text))?.text;
   return { archive, $, body, records, chapters, warnings, hasProposal, hasIntroduction, hasParts, automaticHeadings,
@@ -300,20 +302,199 @@ function applyParagraphFormat($, p, rec, profile) {
   }
 }
 
+export function ensureMissingCaptionPlaceholders($, body, records, warnings = []) {
+  let placeholdersAdded = 0;
+  const processedVisuals = new Set();
+
+  const isMeaningful = (el) => {
+    if (!el || !el.name) return false;
+    if (el.name === 'w:tbl') return true;
+    if (el.name === 'w:p') {
+      const p = $(el);
+      if (p.find('w\\:drawing, w\\:pict').length > 0) return true;
+      if (p.find('w\\:sectPr').length > 0) return true;
+      return textOf(p).trim().length > 0;
+    }
+    return false;
+  };
+
+  const getPrevMeaningful = (el) => {
+    let cur = $(el).prev();
+    while (cur.length) {
+      if (isMeaningful(cur[0])) return cur;
+      cur = cur.prev();
+    }
+    return null;
+  };
+
+  const getNextMeaningful = (el) => {
+    let cur = $(el).next();
+    while (cur.length) {
+      if (isMeaningful(cur[0])) return cur;
+      cur = cur.next();
+    }
+    return null;
+  };
+
+  const getCaptionInfo = (node) => {
+    if (!node || node.name !== 'w:p') return null;
+    const p = $(node);
+    const text = textOf(p).trim();
+    const match = text.match(/^(\s*)(Hình|Bảng)(?:\s+(\d+(?:[.\-]\d+)*)\s*[:.\-–—]\s*|\s*[:.\-–—]\s*|\s+(\d+(?:[.\-]\d+)*)\s*$|\s*$)/iu);
+    if (!match) return null;
+    const kind = /^Hình/iu.test(match[2]) ? 'Hình' : 'Bảng';
+    const oldNumber = match[3] || match[4] || null;
+    const rawTitle = text.slice(match[0].length).trim();
+    const isEmptyMarker = !rawTitle;
+    return { kind, oldNumber, rawTitle, isEmptyMarker, element: node, p };
+  };
+
+  let currentChapter = null;
+  for (const child of body.children().toArray()) {
+    if (child.name === 'w:p') {
+      const p = $(child);
+      const text = textOf(p).trim();
+      const rec = records.find(r => r.element === child);
+      if (rec?.role === 'chapter' || /^CHƯƠNG\s+\d+/iu.test(text)) {
+        const numMatch = text.match(/^CHƯƠNG\s+(\d+)/iu);
+        if (numMatch) currentChapter = Number(numMatch[1]);
+        else if (rec?.chapter) currentChapter = rec.chapter;
+      } else if (rec?.chapter != null) {
+        currentChapter = rec.chapter;
+      }
+    }
+
+    if (!currentChapter || currentChapter <= 0) continue;
+
+    if (child.name === 'w:tbl') {
+      const table = child;
+      if (processedVisuals.has(table)) continue;
+      processedVisuals.add(table);
+
+      const rec = records.find(r => r.insideTable && $(r.element).parents(tag('tbl')).toArray().includes(table));
+      if (rec && ['cover', 'proposal', 'front'].includes(rec.region)) continue;
+
+      const prev = getPrevMeaningful(table);
+      const next = getNextMeaningful(table);
+      const prevCap = prev ? getCaptionInfo(prev[0]) : null;
+      const nextCap = next ? getCaptionInfo(next[0]) : null;
+
+      if ((prevCap && prevCap.kind === 'Bảng') || (nextCap && nextCap.kind === 'Bảng')) {
+        const existingCap = (prevCap && prevCap.kind === 'Bảng') ? prevCap : nextCap;
+        if (existingCap.isEmptyMarker) {
+          existingCap.p.find(tag('t')).first().text('Bảng: [Nhập tên bảng]');
+        }
+        if (nextCap && nextCap.kind === 'Bảng' && (!prevCap || prevCap.kind !== 'Bảng')) {
+          $(table).before(nextCap.p);
+        }
+        continue;
+      }
+
+      const placeholder = '[Nhập tên bảng]';
+      const captionXml = `<w:p><w:pPr><w:pStyle w:val="WFTableCaption"/><w:jc w:val="center"/><w:keepNext w:val="1"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="26"/><w:b/><w:i/></w:rPr><w:t xml:space="preserve">Bảng: ${placeholder}</w:t></w:r></w:p>`;
+      const captionEl = $(captionXml);
+      $(table).before(captionEl);
+
+      const tableRecIndex = records.findIndex(r => r.insideTable && $(r.element).parents(tag('tbl')).toArray().includes(table));
+      const insertAt = tableRecIndex >= 0 ? tableRecIndex : records.length;
+      records.splice(insertAt, 0, {
+        element: captionEl[0],
+        text: `Bảng: ${placeholder}`,
+        styleId: 'WFTableCaption',
+        region: 'body',
+        role: 'table_caption',
+        chapter: currentChapter,
+        part: null,
+        inIndex: false,
+        insideTable: false
+      });
+
+      placeholdersAdded++;
+      warnings.push(`Đã thêm caption giữ chỗ "Bảng: ${placeholder}"; hãy nhập tên phù hợp hoặc xóa dòng caption nếu không cần.`);
+    }
+
+    if (child.name === 'w:p') {
+      const p = $(child);
+      if (p.find('w\\:drawing, w\\:pict').length > 0) {
+        if (processedVisuals.has(child)) continue;
+        processedVisuals.add(child);
+
+        const rec = records.find(r => r.element === child);
+        if (rec && ['cover', 'proposal', 'front'].includes(rec.region)) continue;
+
+        const prev = getPrevMeaningful(child);
+        const next = getNextMeaningful(child);
+        const prevCap = prev ? getCaptionInfo(prev[0]) : null;
+        const nextCap = next ? getCaptionInfo(next[0]) : null;
+
+        if ((prevCap && prevCap.kind === 'Hình') || (nextCap && nextCap.kind === 'Hình')) {
+          const existingCap = (nextCap && nextCap.kind === 'Hình') ? nextCap : prevCap;
+          if (existingCap.isEmptyMarker) {
+            existingCap.p.find(tag('t')).first().text('Hình: [Nhập tên hình]');
+          }
+          if (prevCap && prevCap.kind === 'Hình' && (!nextCap || nextCap.kind !== 'Hình')) {
+            $(child).after(prevCap.p);
+          }
+          continue;
+        }
+
+        const placeholder = '[Nhập tên hình]';
+        const captionXml = `<w:p><w:pPr><w:pStyle w:val="WFFigureCaption"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="26"/><w:b/><w:i/></w:rPr><w:t xml:space="preserve">Hình: ${placeholder}</w:t></w:r></w:p>`;
+        const captionEl = $(captionXml);
+        $(child).after(captionEl);
+
+        const pRecIndex = records.findIndex(r => r.element === child);
+        const insertAt = pRecIndex >= 0 ? pRecIndex + 1 : records.length;
+        records.splice(insertAt, 0, {
+          element: captionEl[0],
+          text: `Hình: ${placeholder}`,
+          styleId: 'WFFigureCaption',
+          region: 'body',
+          role: 'figure_caption',
+          chapter: currentChapter,
+          part: null,
+          inIndex: false,
+          insideTable: false
+        });
+
+        placeholdersAdded++;
+        warnings.push(`Đã thêm caption giữ chỗ "Hình: ${placeholder}"; hãy nhập tên phù hợp hoặc xóa dòng caption nếu không cần.`);
+      }
+    }
+  }
+
+  return placeholdersAdded;
+}
+
 export function formatStructuredDocx(inputPath, outputPath, options, analysis = analyzeDocxStructure(inputPath)) {
   const graduation = options.documentType === 'do_an_tot_nghiep';
-  const originalProposalSection=graduation?captureProposalBlock(analysis)?.sectionXml:'';
+  const shouldSkipProposal = Boolean(options.skipProposal);
+  const preserveProposal = graduation || shouldSkipProposal;
+  const originalProposalSection = preserveProposal ? captureProposalBlock(analysis, options)?.sectionXml : '';
   let graduationReport = {};
   if (graduation) {
     graduationReport = prepareGraduation(analysis, options);
     const warnings = analysis.warnings;
     analysis = analyzeDocxStructure(analysis.archive);
     analysis.warnings.push(...warnings);
+  } else {
+    const coversAdded = prepareCourseworkCover(analysis, options);
+    if (coversAdded || analysis.records.some(r => r.region === 'cover' && r.text)) {
+      const warnings = analysis.warnings;
+      analysis = analyzeDocxStructure(analysis.archive);
+      analysis.warnings.push(...warnings);
+    }
   }
   const { archive, $, body, records } = analysis;
-  if(graduation)graduationReport.proposalStylesIsolated=isolateProposalStyles(analysis);
-  const proposalBlock=graduation?captureProposalBlock(analysis):null;
-  if(proposalBlock)markProposalBlock(analysis,proposalBlock);
+  if(preserveProposal) {
+    const isolated = isolateProposalStyles(analysis);
+    if(graduation) graduationReport.proposalStylesIsolated = isolated;
+  }
+  const proposalBlock = preserveProposal ? captureProposalBlock(analysis, options) : null;
+  if(proposalBlock) markProposalBlock(analysis, proposalBlock);
+  if(shouldSkipProposal && !analysis.hasProposal) {
+    analysis.warnings.push('Tùy chọn "Bỏ qua định dạng đề cương" được bật nhưng tài liệu không có phần đề cương.');
+  }
   $(tag('document')).attr('xmlns:r', R);
   const profile = options.profile || {};
   const originalNumbering = archive.readAsText('word/numbering.xml');
@@ -321,7 +502,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const preserved = new Set(records.filter(r => r.region==='proposal' || ['cover','embedded'].includes(r.role)).map(r => r.element));
   // Keep complete proposal tables through every shared normalization pass.
   // Restoring serialized subtrees also protects merged cells, drawings and links.
-  const protectedTables = graduation ? body.children(tag('tbl')).toArray().filter(e =>
+  const protectedTables = preserveProposal ? body.children(tag('tbl')).toArray().filter(e =>
     records.some(r => r.region==='proposal' && $(r.element).parents(tag('tbl')).toArray().includes(e))
   ).map(e => ({element:e, xml:xmlOf($,e)})) : [];
   const generatedIndexes = new Set();
@@ -339,6 +520,24 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
         p.before(replacement); generatedIndexes.add(id); restoredIndexes++;
       }
       p.remove(); continue;
+    }
+    if (rec.role === 'front_title') {
+      const key = keyOf(rec.text);
+      if (/^(?:DANH MUC|MUC LUC) BANG\b/iu.test(key) && !generatedIndexes.has('tables')) {
+        const next = p.next();
+        if (!next.find(tag('instrText')).filter((_, e) => /TOC\b/i.test($(e).text())).length) {
+          p.after(fieldParagraph('TOC \\c "Bang" \\h'));
+          generatedIndexes.add('tables');
+          restoredIndexes++;
+        }
+      } else if (/^(?:DANH MUC|MUC LUC) HINH\b/iu.test(key) && !generatedIndexes.has('figures')) {
+        const next = p.next();
+        if (!next.find(tag('instrText')).filter((_, e) => /TOC\b/i.test($(e).text())).length) {
+          p.after(fieldParagraph('TOC \\c "Hinh" \\h'));
+          generatedIndexes.add('figures');
+          restoredIndexes++;
+        }
+      }
     }
     if (preserved.has(rec.element) || rec.insideTable || (graduation && rec.styleId==='WFGraduationForm')) continue;
     applyParagraphFormat($, p, rec, profile);
@@ -366,7 +565,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   // way to deterministic spacing on the actual cover text.
   let coverTopic = false, coverMetadata = false;
   for(const rec of records.filter(r=>r.role==='cover' && !r.insideTable)) {
-    if(graduation)continue; // Dedicated cover layout owns logo, fields and spacing.
+    if(graduation || rec.styleId==='WFCoverStart' || rec.styleId==='WFGraduationCover')continue; // Dedicated cover layout owns logo, fields and spacing.
     const p=$(rec.element), key=keyOf(rec.text);
     if(!rec.text && !p.find(`${tag('drawing')},${tag('pict')}`).length) {p.remove();continue;}
     let size=14,bold=false,italic=false,before=0,align='center';
@@ -420,7 +619,11 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     }
     archive.updateFile('word/styles.xml',Buffer.from(styles.xml()));
   }
+  const placeholdersAdded = options.onlyExistingCaptions
+    ? 0
+    : ensureMissingCaptionPlaceholders($, body, records, analysis.warnings);
   const captionStats = normalizeStructuredCaptions($, records, analysis.warnings);
+  captionStats.placeholdersAdded = placeholdersAdded;
   // Remove empty TOC content controls, while preserving controls with other data.
   body.find(tag('sdt')).each((_, e) => { if (!$(e).find(tag('p')).length && !$(e).find(tag('tbl')).length) $(e).remove(); });
   // Every logical section gets independent header relationships. sectPr belongs
@@ -454,7 +657,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const requested = new Set((options.frontMatter || '').split(',').map(s=>s.trim()));
   const hasCover = records.some(r=>r.role==='cover' && r.text);
   const coverLine = (text,size,before=0,bold=false) => `<w:p><w:pPr><w:spacing w:before="${before*20}" w:after="120"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b w:val="${bold?1:0}"/><w:sz w:val="${size*2}"/></w:rPr><w:t>${esc(text)}</w:t></w:r></w:p>`;
-  if (requested.has('cover') && !hasCover) {
+  if (requested.has('cover') && !hasCover && !records.some(r=>r.role==='cover')) {
     body.prepend(coverLine(options.institution || profile.cover?.institution || '',15,0,true)
       + coverLine(options.faculty || profile.cover?.faculty || '',15,0,true)
       + coverLine('---oOo---',15) + coverLine(options.documentTitle || 'TIỂU LUẬN MÔN HỌC',24,70,true)
@@ -551,19 +754,32 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   };
   let bodyStarted = false;
   const firstNumberedSection = starts.findIndex(s=>s.role!=='cover');
+  let coverSectionCount = 0;
   for (let i=0; i<starts.length; i++) {
     const s = starts[i]; if(s.isFirstChapter) bodyStarted = true;
     const h = addPart(`wfStructureHeader${i}.xml`,'header', `<w:hdr xmlns:w="${W}">${s.role==='cover'?'<w:p/>':hfParagraph(title,s.title)}</w:hdr>`);
     const f = addPart(`wfStructureFooter${i}.xml`,'footer', `<w:ftr xmlns:w="${W}">${s.role==='cover'?'<w:p/>':hfParagraph(`GVHD: ${options.instructor}`,`SVTH: ${options.student}`,true)}</w:ftr>`);
-    const margins = (graduation && s.role==='cover' && profile.cover?.margins_cm) || profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
+    const margins = (s.role==='cover' && profile.cover?.margins_cm) || profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
     let geometry = `<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="${cm(margins.top)}" w:right="${cm(margins.right)}" w:bottom="${cm(margins.bottom)}" w:left="${cm(margins.left)}" w:header="567" w:footer="567" w:gutter="0"/>`;
     if(s.role==='proposal_title' && proposalGeometry) {
       const pg = parse(proposalGeometry); geometry = pg(tag('pgSz')).toArray().concat(pg(tag('pgMar')).toArray()).map(e=>pg.xml(e)).join('') || geometry;
     }
-    const border=graduation ? profile.cover?.page_border : null;
-    const coverBorder=border ? '<w:pgBorders w:offsetFrom="page" w:zOrder="front" w:display="allPages">'+['top','left','bottom','right'].map(side=>`<w:${side} w:val="${esc(border.style)}" w:sz="${border.size_eighth_points}" w:space="${['top','bottom'].includes(side)?border.top_bottom_space_pt:border.left_right_space_pt}" w:color="${esc(border.color_hex)}"/>`).join('')+'</w:pgBorders>' : '<w:pgBorders w:offsetFrom="page">'+['top','left','bottom','right'].map(side=>`<w:${side} w:val="single" w:sz="8" w:space="18" w:color="000000"/>`).join('')+'</w:pgBorders>';
-    let section = `<w:sectPr><w:headerReference w:type="default" r:id="${h}"/><w:headerReference w:type="even" r:id="${h}"/><w:headerReference w:type="first" r:id="${h}"/><w:footerReference w:type="default" r:id="${f}"/><w:footerReference w:type="even" r:id="${f}"/><w:footerReference w:type="first" r:id="${f}"/><w:type w:val="nextPage"/>${geometry}${s.role==='cover' && textOf($(s.node)).trim()?coverBorder:''}<w:pgNumType w:fmt="${bodyStarted?'decimal':'lowerRoman'}"${s.isFirstChapter || i===firstNumberedSection ? ' w:start="1"':''}/></w:sectPr>`;
-    if(graduation && s.role==='proposal_title' && originalProposalSection) section=normalizeWordprocessingPropertyOrder(originalProposalSection).xml;
+    let coverBorder = '';
+    const isCoverSection = s.role === 'cover' && textOf($(s.node)).trim();
+    if (isCoverSection) {
+      const border = profile.cover?.page_border;
+      if (graduation || border?.style === 'twistedLines1') {
+        coverBorder = '<w:pgBorders w:display="allPages" w:offsetFrom="page">'
+          + ['top','left','bottom','right'].map(side => `<w:${side} w:val="twistedLines1" w:sz="18" w:space="31" w:color="auto"/>`).join('')
+          + '</w:pgBorders>';
+        coverSectionCount++;
+      } else {
+        const spaceFor = side => border?.space_pt ?? (['top','bottom'].includes(side) ? border?.top_bottom_space_pt : border?.left_right_space_pt) ?? 18;
+        coverBorder = border ? '<w:pgBorders w:offsetFrom="page" w:zOrder="front" w:display="allPages">'+['top','left','bottom','right'].map(side=>`<w:${side} w:val="${esc(border.style || 'single')}" w:sz="${border.size_eighth_points || 8}" w:space="${spaceFor(side)}" w:color="${esc(border.color_hex || '000000')}"/>`).join('')+'</w:pgBorders>' : '<w:pgBorders w:offsetFrom="page">'+['top','left','bottom','right'].map(side=>`<w:${side} w:val="single" w:sz="8" w:space="18" w:color="000000"/>`).join('')+'</w:pgBorders>';
+      }
+    }
+    let section = `<w:sectPr><w:headerReference w:type="default" r:id="${h}"/><w:headerReference w:type="even" r:id="${h}"/><w:headerReference w:type="first" r:id="${h}"/><w:footerReference w:type="default" r:id="${f}"/><w:footerReference w:type="even" r:id="${f}"/><w:footerReference w:type="first" r:id="${f}"/><w:type w:val="nextPage"/>${geometry}${coverBorder}<w:pgNumType w:fmt="${bodyStarted?'decimal':'lowerRoman'}"${s.isFirstChapter || i===firstNumberedSection ? ' w:start="1"':''}/>${isCoverSection ? '<w:titlePg/>' : ''}</w:sectPr>`;
+    if(preserveProposal && s.role==='proposal_title' && originalProposalSection) section=normalizeWordprocessingPropertyOrder(originalProposalSection).xml;
     if (i === starts.length-1) body.append(section);
     else $(starts[i+1].node).before(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/>${section}</w:pPr></w:p>`);
   }
@@ -592,9 +808,9 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   archive.writeZip(outputPath);
   const verified = analyzeDocxStructure(outputPath);
   const chapterStructure = JSON.stringify(verified.chapters.map(r=>r.number)) === JSON.stringify(analysis.chapters.map(r=>r.number));
-  const proposalPreserved = JSON.stringify(verified.records.filter(r=>r.region==='proposal'&&!r.inIndex&&r.text).map(r=>r.text)) === JSON.stringify(originalProposal);
-  const proposalTablesPreserved = protectedTables.every(entry=>documentXml.includes(entry.xml));
-  const proposalBlockPreserved=!proposalBlock || documentXml.includes(proposalBlock.xml);
+  const proposalPreserved = !preserveProposal || JSON.stringify(verified.records.filter(r=>r.region==='proposal'&&!r.inIndex&&r.text).map(r=>r.text)) === JSON.stringify(originalProposal);
+  const proposalTablesPreserved = !preserveProposal || protectedTables.every(entry=>documentXml.includes(entry.xml));
+  const proposalBlockPreserved = !proposalBlock || documentXml.includes(proposalBlock.xml);
   if(!chapterStructure || !proposalPreserved || !proposalTablesPreserved || !proposalBlockPreserved) throw new Error('Kiểm tra sau định dạng phát hiện thay đổi cấu trúc chương hoặc nội dung đề cương.');
   const $out=verified.$, sections=$out(tag('sectPr')).toArray();
   const expectedMargins=profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
@@ -606,14 +822,15 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   });
   return { success:true, outputPath, fileSize:fs.statSync(outputPath).size,
     report: { appliedProfile:{profileId:profile.profile_id,sourceRevision:profile.source_revision},
-      structure:{...analysis.summary,engine:'ooxml-structure-v1',proposalPolicy:'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
+      structure:{...analysis.summary,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
         enDashesReplaced:dashReplacements, hyperlinksRemoved:hyperlinks.stats.hyperlinksRemoved, frontMatterReordered, bindingPagesInserted,
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,
           smartQuotesPreserved:true,referenceHyperlinksRemoved:stripReferenceHyperlinks(documentXml).stats.hyperlinksRemoved===0,
           longDashesNormalized:!verified.records.some(r=>!['cover','proposal'].includes(r.region)&&/[–—]/.test(r.text)),
-          wideTablesFitPortrait:wideTablesDetected===0,headingStructure:chapterStructure,headingIndentation,proposalPreserved,proposalTablesPreserved,proposalBlockPreserved },
+          wideTablesFitPortrait:wideTablesDetected===0,headingStructure:chapterStructure,headingIndentation,
+          proposalPreserved,proposalTablesPreserved,proposalBlockPreserved,proposalSkipped:shouldSkipProposal },
         tablesCentered, drawingParagraphsCentered, wideTablesDetected, tablesResized, acknowledgementFramesAdded, ...captionStats,
         warnings:analysis.warnings } } };
 }

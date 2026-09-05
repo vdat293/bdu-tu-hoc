@@ -42,12 +42,236 @@ export function isolateProposalStyles({$, records, archive}) {
   return copies.size;
 }
 
+export function formatProposalSignatures(analysis, options = {}, {from, end} = {}) {
+  const {$, body} = analysis;
+  const location = options.location || options.profile?.cover?.location || 'Thành phố Hồ Chí Minh';
+  const children = body.children().toArray();
+  const candidates = (from !== undefined && end !== undefined) ? children.slice(from, end) : children;
+
+  const sigTable = candidates.find(e => {
+    if (e.name !== 'w:tbl') return false;
+    const t = key(text($, e));
+    const isMainProposal = /TEN DE TAI/.test(t) && /THOI GIAN THUC HIEN/.test(t);
+    if (isMainProposal) return false;
+    const hasRole = /VIEN TRUONG|TRUONG KHOA|TRUONG BO MON|CAN BO HUONG DAN|GV HUONG DAN|GIANG VIEN HUONG DAN|CBHD|NGUOI HUONG DAN/.test(t);
+    const hasInstruction = /KY.*HO TEN/.test(t);
+    return hasRole || hasInstruction;
+  });
+
+  let sigParagraphs = [];
+  if (!sigTable) {
+    const pCandidates = candidates.filter(e => e.name === 'w:p');
+    const sigIndex = pCandidates.findIndex(e => {
+      const t = key(text($, e));
+      return /VIEN TRUONG|TRUONG KHOA|TRUONG BO MON/.test(t) || ((/HUONG DAN/.test(t)) && /KY.*HO TEN/.test(t));
+    });
+    if (sigIndex !== -1) {
+      sigParagraphs = pCandidates.slice(sigIndex);
+    }
+  }
+
+  if (!sigTable && !sigParagraphs.length) return 0;
+
+  if (sigTable && $(sigTable).find(tag('tr')).length === 3
+      && $(sigTable).find(tag('tblW')).attr('w:w') === '9071'
+      && $(sigTable).find(tag('gridCol')).eq(0).attr('w:w') === '4050'
+      && $(sigTable).find(tag('gridCol')).eq(1).attr('w:w') === '5021') {
+    return 0;
+  }
+
+  function parseCell(tc) {
+    let date = '';
+    let role = '';
+    let instruction = '';
+    let name = '';
+    const drawings = [];
+
+    const paras = $(tc).find(tag('p')).toArray();
+    for (const pNode of paras) {
+      const hasDrawing = $(pNode).find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length > 0;
+      if (hasDrawing) {
+        drawings.push($.xml(pNode));
+        continue;
+      }
+      const raw = $(pNode).text().trim();
+      if (!raw) continue;
+      const k = key(raw);
+      if (/^(?:.*,\s*)?NGAY[\s\S]*THANG[\s\S]*NAM/i.test(k) || /^(?:THANH PHO|TINH|TP\b|BINH DUONG|HA NOI|HO CHI MINH)/i.test(k)) {
+        date = raw;
+      } else if (/^(?:VIEN TRUONG|TRUONG KHOA|TRUONG BO MON|PHONG DAO TAO|BAN GIAM HIEU|(?:GIANG VIEN|GV|CAN BO|CBHD|NGUOI) HUONG DAN|(?:GIANG VIEN|GV) PHAN BIEN|SINH VIEN THUC HIEN|SVTH)$/i.test(k)) {
+        role = raw;
+      } else if (/KY.*HO TEN/i.test(k)) {
+        if (!role && /(?:VIEN TRUONG|TRUONG KHOA|TRUONG BO MON|(?:GIANG VIEN|GV|CAN BO|CBHD|NGUOI) HUONG DAN)/i.test(k)) {
+          const parts = raw.split(/\s*\(|\s*\[/);
+          role = parts[0].trim();
+          instruction = '(' + (parts[1] || 'Ký tên và ghi rõ họ tên').replace(/\)[\s\S]*$/, ')').trim();
+        } else {
+          instruction = raw;
+        }
+      } else if (!name && !/^[.\s…_\-]+$/.test(raw)) {
+        name = raw;
+      }
+    }
+    return { date, role, instruction, name, drawings };
+  }
+
+  let left = { date: '', role: '', instruction: '', name: '', drawings: [] };
+  let right = { date: '', role: '', instruction: '', name: '', drawings: [] };
+
+  if (sigTable) {
+    const rows = $(sigTable).find(tag('tr')).toArray();
+    if (rows.length === 1) {
+      const rowCells = $(rows[0]).find(tag('tc')).toArray();
+      if (rowCells.length === 1) {
+        left = parseCell(rowCells[0]);
+      } else {
+        left = parseCell(rowCells[0]);
+        right = parseCell(rowCells[1]);
+      }
+    } else {
+      for (const tr of rows) {
+        const rowCells = $(tr).find(tag('tc')).toArray();
+        if (rowCells[0]) {
+          const c0 = parseCell(rowCells[0]);
+          if (c0.date && !left.date) left.date = c0.date;
+          if (c0.role && !left.role) left.role = c0.role;
+          if (c0.instruction && !left.instruction) left.instruction = c0.instruction;
+          if (c0.name && !left.name) left.name = c0.name;
+          if (c0.drawings.length) left.drawings.push(...c0.drawings);
+        }
+        if (rowCells[1]) {
+          const c1 = parseCell(rowCells[1]);
+          if (c1.date && !right.date) right.date = c1.date;
+          if (c1.role && !right.role) right.role = c1.role;
+          if (c1.instruction && !right.instruction) right.instruction = c1.instruction;
+          if (c1.name && !right.name) right.name = c1.name;
+          if (c1.drawings.length) right.drawings.push(...c1.drawings);
+        }
+      }
+    }
+  } else if (sigParagraphs.length) {
+    for (const pNode of sigParagraphs) {
+      const raw = $(pNode).text().trim();
+      if (!raw) continue;
+      const k = key(raw);
+      if (/^(?:.*,\s*)?NGAY[\s\S]*THANG[\s\S]*NAM/i.test(k) || /^(?:THANH PHO|TINH|TP\b|BINH DUONG|HA NOI|HO CHI MINH)/i.test(k)) {
+        right.date = raw;
+      } else if (/VIEN TRUONG|TRUONG KHOA|TRUONG BO MON/.test(k) && /HUONG DAN/.test(k)) {
+        const parts = raw.split(/\t|\s{4,}/);
+        if (parts[0]) left.role = parts[0].trim();
+        if (parts[1]) right.role = parts[1].trim();
+      } else if (/VIEN TRUONG|TRUONG KHOA|TRUONG BO MON/.test(k)) {
+        left.role = raw;
+      } else if (/HUONG DAN/.test(k)) {
+        right.role = raw;
+      } else if (/KY.*HO TEN/.test(k)) {
+        left.instruction = raw;
+        right.instruction = raw;
+      } else if (!left.name) {
+        const parts = raw.split(/\t|\s{4,}/);
+        left.name = parts[0]?.trim() || '';
+        if (parts[1]) right.name = parts[1].trim();
+      } else if (!right.name) {
+        right.name = raw;
+      }
+    }
+  }
+
+  if (left && right && (left.date || /HUONG DAN/.test(key(left.role))) && /VIEN TRUONG|TRUONG KHOA|TRUONG BO MON/.test(key(right.role))) {
+    const tmp = left; left = right; right = tmp;
+  }
+
+  let dateText = right.date || left.date || `${location}, ngày … tháng … năm …`;
+  if (/ng[aà]y[\s._…-]+th[aá]ng[\s._…-]+n[aă]m/i.test(dateText)) {
+    const cityMatch = dateText.match(/^([^,]+),/);
+    const city = cityMatch ? cityMatch[1].trim() : location;
+    dateText = `${city}, ngày … tháng … năm …`;
+  }
+
+  const leftRole = (left.role || 'VIỆN TRƯỞNG').toUpperCase();
+  const rightRole = (right.role || 'GV HƯỚNG DẪN').toUpperCase();
+  const leftInstruction = '(Ký tên và ghi rõ họ tên)';
+  const rightInstruction = '(Ký tên và ghi rõ họ tên)';
+  const leftName = (left.name || '').toUpperCase();
+  let rightName = (right.name || '').toUpperCase();
+  if (!rightName && options.instructor) {
+    rightName = options.instructor.replace(/^(?:ThS|TS|PGS|GS|Ths|Ts)\.?\s*/i, '').toUpperCase();
+  }
+
+  const dateCell = `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="80" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t xml:space="preserve">${esc(dateText)}</w:t></w:r></w:p>`;
+  const blankCell = `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:p>`;
+  const roleP = title => `<w:p><w:pPr><w:jc w:val="center"/><w:keepNext/><w:spacing w:before="60" w:after="40" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t>${esc(title)}</w:t></w:r></w:p>`;
+  const subP = sub => `<w:p><w:pPr><w:jc w:val="center"/><w:keepNext/><w:spacing w:before="0" w:after="100" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${esc(sub)}</w:t></w:r></w:p>`;
+  const sigSpace = drawings => drawings.length > 0
+    ? drawings.join('')
+    : `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="800" w:lineRule="exact"/></w:pPr></w:p>`;
+  const nameP = name => name
+    ? `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="100" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t>${esc(name)}</w:t></w:r></w:p>`
+    : `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:p>`;
+
+  const formattedTable = $(`<w:tbl>`
+    + `<w:tblPr>`
+      + `<w:tblW w:w="9071" w:type="dxa"/>`
+      + `<w:jc w:val="center"/>`
+      + `<w:tblBorders>`
+        + ['top','left','bottom','right','insideH','insideV'].map(n => `<w:${n} w:val="nil"/>`).join('')
+      + `</w:tblBorders>`
+      + `<w:tblLayout w:type="fixed"/>`
+    + `</w:tblPr>`
+    + `<w:tblGrid>`
+      + `<w:gridCol w:w="4050"/>`
+      + `<w:gridCol w:w="5021"/>`
+    + `</w:tblGrid>`
+    + `<w:tr>`
+      + `<w:tc><w:tcPr><w:tcW w:w="4050" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${blankCell}</w:tc>`
+      + `<w:tc><w:tcPr><w:tcW w:w="5021" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${dateCell}</w:tc>`
+    + `</w:tr>`
+    + `<w:tr>`
+      + `<w:tc><w:tcPr><w:tcW w:w="4050" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${roleP(leftRole)}${subP(leftInstruction)}${sigSpace(left.drawings)}</w:tc>`
+      + `<w:tc><w:tcPr><w:tcW w:w="5021" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${roleP(rightRole)}${subP(rightInstruction)}${sigSpace(right.drawings)}</w:tc>`
+    + `</w:tr>`
+    + `<w:tr>`
+      + `<w:tc><w:tcPr><w:tcW w:w="4050" w:type="dxa"/><w:vAlign w:val="bottom"/></w:tcPr>${nameP(leftName)}</w:tc>`
+      + `<w:tc><w:tcPr><w:tcW w:w="5021" w:type="dxa"/><w:vAlign w:val="bottom"/></w:tcPr>${nameP(rightName)}</w:tc>`
+    + `</w:tr>`
+    + `</w:tbl>`);
+
+
+  if (sigTable) {
+    $(sigTable).replaceWith(formattedTable);
+  } else if (sigParagraphs.length) {
+    $(sigParagraphs[0]).replaceWith(formattedTable);
+    for (let i = 1; i < sigParagraphs.length; i++) $(sigParagraphs[i]).remove();
+  }
+
+  const prevNodes = formattedTable.prevAll().toArray();
+  let blankCount = 0;
+  for (const prev of prevNodes) {
+    if (prev.name === 'w:tbl') break;
+    if (prev.name === 'w:p') {
+      const pText = $(prev).text().trim();
+      const hasDrawing = $(prev).find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length > 0;
+      if (!pText && !hasDrawing) {
+        blankCount++;
+        if (blankCount > 1) $(prev).remove();
+        else {
+          $(prev).html('<w:pPr><w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/></w:pPr>');
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  return 1;
+}
+
 export function prepareGraduation(analysis, options) {
   const {$, body, records, archive} = analysis;
   const institution = options.institution || options.profile?.cover?.institution || 'TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG';
   const faculty = options.faculty || options.profile?.cover?.faculty || '';
   const location = options.location || options.profile?.cover?.location || 'Thành phố Hồ Chí Minh';
-  const report = {templateRevision:'graduation-2026-09-05-v4',coversAdded:0, reviewPagesAdded:0, signaturesAdded:0, proposalMastheadsFormatted:0,unboxedProposalParagraphsRemoved:0};
+  const report = {templateRevision:'graduation-2026-09-05-v7',coversAdded:0, reviewPagesAdded:0, signaturesAdded:0, proposalMastheadsFormatted:0, proposalSignaturesFormatted:0, unboxedProposalParagraphsRemoved:0};
   const top = e => {while(e.parent && e.parent!==body[0])e=e.parent;return e;};
   const firstContent = records.find(r=>['proposal_title','front_title','intro_title','part_title','chapter','major_title'].includes(r.role));
   const boundary = firstContent && (firstContent.startElement || top(firstContent.element));
@@ -60,10 +284,9 @@ export function prepareGraduation(analysis, options) {
   if(covers.length>2) throw new Error('Phát hiện hơn hai bìa đồ án; cần kiểm tra các bìa trước khi định dạng.');
   if(!covers.length) {
     const cover = $(p(institution,{size:15,bold:true,style:'WFCoverStart'})+p(faculty,{size:15,bold:true})
-      +p('ĐỒ ÁN TỐT NGHIỆP',{size:24,bold:true,before:60})+p('Tên đề tài',{size:16,italic:true,before:20})
-      +p(options.topic || 'TÊN ĐỀ TÀI',{size:20,bold:true})
-      +p(`Người hướng dẫn: ${options.instructor}`,{before:60})+p(`Sinh viên thực hiện: ${options.student}`)
-      +(options.studentId?p(`Mã số sinh viên: ${options.studentId}`):'')+(options.className?p(`Lớp: ${options.className}`):'')
+      +p('ĐỒ ÁN TỐT NGHIỆP',{size:16,bold:true,before:60})
+      +p((options.topic || 'TÊN ĐỀ TÀI').toUpperCase(),{size:20,bold:true})
+      +p(`GVHD: ${options.instructor}`,{before:60})+p(`SVTH: ${options.student}${(options.studentId?' – '+options.studentId:'')}${(options.className?' – '+options.className:'')}`)
       +p(`${location}, tháng ${options.month || '…'} năm ${options.year || '…'}`,{before:70,bold:true}));
     body.prepend(cover);covers=[cover[0]];report.coversAdded++;
   }
@@ -78,32 +301,36 @@ export function prepareGraduation(analysis, options) {
     covers.push(copy[0]);report.coversAdded++;
   }
   formatGraduationCovers(analysis,covers,boundary,options);
-  for(const r of records.filter(r=>r.role==='proposal_title')) {
-    const masthead=$(table([
-      p(institution,{size:12})+p(faculty,{size:12,bold:true,underline:true}),
-      p('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',{size:12})+p('Độc lập - Tự do - Hạnh phúc',{size:12,underline:true})
-    ],[4050,5021]));
-    if(r.startElement)$(r.startElement).replaceWith(masthead);else $(r.element).before(masthead);
-    // The user's authoritative proposal is the boxed form immediately below
-    // the title. Some uploads also contain a prose copy before that form.
-    // Remove that redundant prefix; never extract or rebuild the boxed content.
-    const children=body.children().toArray(), from=children.indexOf(top(r.element))+1;
-    const next=records.find(n=>n.index>r.index && n.role==='front_title');
-    const end=next?children.indexOf(top(next.element)):children.length;
-    const candidates=children.slice(from,end);
-    const frameIndex=candidates.findIndex(e=>e.name==='w:tbl' && /TEN DE TAI/.test(key(text($,e)))
-      && /THOI GIAN THUC HIEN/.test(key(text($,e))) && /CAN BO HUONG DAN|CBHD/.test(key(text($,e))));
-    if(frameIndex>0) {
-      const prefix=candidates.slice(0,frameIndex), combined=key(prefix.map(e=>text($,e)).join(' '));
-      const duplicate=/^TEN DE TAI/.test(combined) && /CAN BO HUONG DAN|CBHD/.test(combined)
-        && /THOI GIAN THUC HIEN/.test(combined);
-      if(duplicate && prefix.every(e=>e.name==='w:p' && !$(e).find('w\\:drawing,w\\:pict,w\\:object,w\\:sectPr').length)) {
-        for(const e of prefix)$(e).remove();
-        report.unboxedProposalParagraphsRemoved+=prefix.length;
+  if (!options.skipProposal) {
+    for(const r of records.filter(r=>r.role==='proposal_title')) {
+      const masthead=$(table([
+        p(institution,{size:12})+p(faculty,{size:12,bold:true,underline:true}),
+        p('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',{size:12})+p('Độc lập - Tự do - Hạnh phúc',{size:12,underline:true})
+      ],[4050,5021]));
+      if(r.startElement)$(r.startElement).replaceWith(masthead);else $(r.element).before(masthead);
+      // The user's authoritative proposal is the boxed form immediately below
+      // the title. Some uploads also contain a prose copy before that form.
+      // Remove that redundant prefix; never extract or rebuild the boxed content.
+      const children=body.children().toArray(), from=children.indexOf(top(r.element))+1;
+      const next=records.find(n=>n.index>r.index && n.role==='front_title');
+      const end=next?children.indexOf(top(next.element)):children.length;
+      const candidates=children.slice(from,end);
+      const frameIndex=candidates.findIndex(e=>e.name==='w:tbl' && /TEN DE TAI/.test(key(text($,e)))
+        && /THOI GIAN THUC HIEN/.test(key(text($,e))) && /CAN BO HUONG DAN|CBHD/.test(key(text($,e))));
+      if(frameIndex>0) {
+        const prefix=candidates.slice(0,frameIndex), combined=key(prefix.map(e=>text($,e)).join(' '));
+        const duplicate=/^TEN DE TAI/.test(combined) && /CAN BO HUONG DAN|CBHD/.test(combined)
+          && /THOI GIAN THUC HIEN/.test(combined);
+        if(duplicate && prefix.every(e=>e.name==='w:p' && !$(e).find('w\\:drawing,w\\:pict,w\\:object,w\\:sectPr').length)) {
+          for(const e of prefix)$(e).remove();
+          report.unboxedProposalParagraphsRemoved+=prefix.length;
+        }
       }
+      report.proposalMastheadsFormatted++;
+      report.proposalSignaturesFormatted += formatProposalSignatures(analysis, { ...options, location }, { from, end });
     }
-    report.proposalMastheadsFormatted++;
   }
+
   if(!analysis.hasProposal) analysis.warnings.push('Tài liệu chưa có đề cương; không tự tạo nội dung đề cương.');
 
   const titles=records.filter(r=>r.role==='front_title' && /^NHAN XET/.test(key(r.text)));
@@ -201,4 +428,50 @@ export function prepareGraduation(analysis, options) {
   for(const block of reviewBlocks)$(anchor).before(block);
   archive.updateFile('word/document.xml',Buffer.from($.xml()));
   return report;
+}
+
+export function prepareCourseworkCover(analysis, options) {
+  const { $, body, records, archive } = analysis;
+  const requested = new Set((options.frontMatter ?? 'cover').split(',').map(s => s.trim()));
+  const coverRecords = records.filter(r => r.region === 'cover' && !r.insideTable && r.text);
+
+  let covers = coverRecords.filter(r => /^TRUONG\b/.test(key(r.text))).map(r => top(r.element));
+  covers = [...new Set(covers)];
+
+  if (!covers.length) {
+    if (!requested.has('cover')) return 0;
+  }
+
+  const institution = options.institution || options.profile?.cover?.institution || 'TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG';
+  const faculty = options.faculty || options.profile?.cover?.faculty || '';
+  const location = options.location || options.profile?.cover?.location || 'Thành phố Hồ Chí Minh';
+  const defaultDocType = 'TIỂU LUẬN MÔN HỌC';
+  const docType = (options.documentTitle || options.profile?.cover?.document_type || defaultDocType).trim().toUpperCase();
+  const top = e => { while (e.parent && e.parent !== body[0]) e = e.parent; return e; };
+  const firstContent = records.find(r => ['proposal_title', 'front_title', 'intro_title', 'part_title', 'chapter', 'major_title'].includes(r.role));
+  const boundary = firstContent && (firstContent.startElement || top(firstContent.element));
+
+  let coversAdded = 0;
+  if (!covers.length) {
+    const cover = $(p(institution, { size: 15, bold: true, style: 'WFCoverStart' }) + p(faculty, { size: 15, bold: true })
+      + p(docType, { size: 16, bold: true, before: 60 })
+      + p((options.topic || 'TÊN ĐỀ TÀI'), { size: 20, bold: true })
+      + p(`GVHD: ${options.instructor}`, { before: 60 }) + p(`SVTH: ${options.student}${(options.studentId ? ' – ' + options.studentId : '')}${(options.className ? ' – ' + options.className : '')}`)
+      + p(`${location}, tháng ${options.month || '…'} năm ${options.year || '…'}`, { before: 70, bold: true }));
+    body.prepend(cover);
+    covers = [cover[0]];
+    coversAdded = 1;
+  } else if (covers.length > 1) {
+    const children = body.children().toArray();
+    const c1Index = children.indexOf(covers[1]);
+    const bIndex = boundary ? children.indexOf(boundary) : children.length;
+    if (c1Index >= 0 && c1Index < bIndex) {
+      children.slice(c1Index, bIndex).forEach(node => $(node).remove());
+    }
+    covers = [covers[0]];
+  }
+
+  formatGraduationCovers(analysis, covers, boundary, options);
+  archive.updateFile('word/document.xml', Buffer.from($.xml()));
+  return coversAdded;
 }

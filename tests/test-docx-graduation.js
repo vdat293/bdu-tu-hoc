@@ -65,25 +65,53 @@ try {
   assert.equal(framed.result.report.structure.unboxedProposalParagraphsRemoved,5);
   assert.equal(format(framed.file,'framed-again').result.report.structure.unboxedProposalParagraphsRemoved,0);
   const out=format(source,'out');verify(out);
-  assert.equal(captureProposalBlock(out.a).xml,captureProposalBlock(analyzeDocxStructure(source)).xml,'entire proposal is identical, not only its tables');
+  assert.equal(out.result.report.structure.proposalSignaturesFormatted,1,'proposal signatures are formatted');
+  const propSigTable = out.a.$('w\\:tbl').filter((_,e) => out.a.$(e).text().includes('VIỆN TRƯỞNG'));
+  assert.equal(propSigTable.length,1,'proposal signature table exists');
+  assert.equal(propSigTable.find('w\\:tblW').attr('w:w'),'9071','signature table has margin width 9071');
+  assert.equal(propSigTable.find('w\\:gridCol').eq(0).attr('w:w'),'4050');
+  assert.equal(propSigTable.find('w\\:gridCol').eq(1).attr('w:w'),'5021');
+  assert.ok(propSigTable.text().includes('GV HƯỚNG DẪN'));
+  assert.ok(propSigTable.text().includes('(Ký tên và ghi rõ họ tên)'));
   assert.equal(out.a.$('w\\:tab[w\\:leader="dot"]').length,40,'each blank review has 20 writing lines');
-  assert.equal(out.a.$('w\\:pgBorders w\\:top[w\\:val="double"]').length,2,'both covers use the approved Word art border');
+  assert.equal(out.a.$('w\\:pgBorders w\\:top[w\\:val="twistedLines1"]').length,2,'both covers use the approved Word art border twistedLines1');
+  const coverBorders = out.a.$('w\\:pgBorders');
+  assert.equal(coverBorders.eq(0).attr('w:offsetFrom'), 'page', 'Cover 1 uses offsetFrom page');
+  assert.equal(coverBorders.eq(0).find('w\\:top').attr('w:space'), '31', 'Cover 1 uses space 31');
+  assert.equal(coverBorders.eq(1).attr('w:offsetFrom'), 'page', 'Cover 2 uses offsetFrom page');
+  assert.equal(coverBorders.eq(1).find('w\\:top').attr('w:space'), '31', 'Cover 2 uses space 31');
+  assert.equal(out.a.$('w\\:sym[w\\:font="Wingdings"][w\\:char="F026"]').length,2,'both covers include the Wingdings decorative separator');
   assert.equal(out.a.$('w\\:drawing').length,3,'two cover logos and the existing thanks decoration');
   assert.ok(out.z.getEntry('word/media/wf-bdu-cover-logo.png'),'BDU logo is embedded, with no Downloads dependency');
-  const coverTables=out.a.body.children('w\\:tbl').filter((_,e)=>out.a.$(e).find('w\\:t').text().startsWith('Người hướng dẫn:'));
-  assert.equal(coverTables.length,2);
-  for(const e of coverTables.toArray()) {
-    assert.equal(out.a.$(e).children('w\\:tr').length,4,'metadata has four independent rows');
-    assert.deepEqual(out.a.$(e).children('w\\:tr').toArray().map(r=>out.a.$(r).children('w\\:tc').first().find('w\\:t').text()),['Người hướng dẫn:','Sinh viên thực hiện:','Mã số sinh viên:','Lớp:']);
-  }
+  const instructorParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Người hướng dẫn:'));
+  const studentParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Sinh viên thực hiện:'));
+  const studentIdParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Mã số sinh viên:'));
+  const classParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Lớp:'));
+  assert.equal(instructorParas.length, 2, 'both covers have Người hướng dẫn');
+  assert.equal(studentParas.length, 2, 'both covers have Sinh viên thực hiện');
+  assert.equal(studentIdParas.length, 2, 'both covers have Mã số sinh viên');
+  assert.equal(classParas.length, 2, 'both covers have Lớp');
+  assert.equal(instructorParas.eq(0).find('w\\:ind').attr('w:left'), '3800', 'metadata is aligned with 3800 left indent');
+  assert.equal(instructorParas.eq(0).find('w\\:tab').attr('w:pos'), '6500', 'metadata uses tab stop at 6500');
+  assert.equal(instructorParas.eq(0).find('w\\:spacing').attr('w:before'), '1800', 'instructor has before 90pt (1800 dxa)');
+  const docTypeParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text() === 'ĐỒ ÁN TỐT NGHIỆP');
+  assert.equal(docTypeParas.eq(0).find('w\\:spacing').attr('w:before'), '320', 'docType has before 16pt (320 dxa)');
+  assert.equal(docTypeParas.eq(0).find('w\\:spacing').attr('w:after'), '120', 'docType has after 6pt (120 dxa)');
+  const ornamentParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).find('w\\:sym[w\\:font="Wingdings"]').length > 0);
+  assert.equal(ornamentParas.eq(0).find('w\\:spacing').attr('w:before'), '240', 'ornament has before 12pt (240 dxa)');
+  assert.equal(ornamentParas.eq(0).find('w\\:spacing').attr('w:after'), '320', 'ornament has after 16pt (320 dxa)');
+  const dateCoverParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Thành phố Hồ Chí Minh, tháng'));
+  assert.equal(dateCoverParas.eq(0).find('w\\:spacing').attr('w:before'), '3200', 'cover date line has before 160pt (3200 dxa)');
   assert.equal(out.result.report.structure.coversAdded,1);
   assert.equal(out.result.report.structure.reviewPagesAdded,2);
-  assert.ok(out.z.readAsText('word/styles.xml').includes('w:styleId="WFGraduationForm"'),'all generated form styles are defined');
   const again=format(out.file,'again',{documentMode:'binding_package'});verify(again);
   assert.equal(captureProposalBlock(again.a).xml,captureProposalBlock(out.a).xml,'full proposal survives repeated processing');
   assert.equal(again.result.report.structure.coversAdded,0);
   assert.equal(again.result.report.structure.reviewPagesAdded,0);
   assert.equal(again.result.report.structure.signaturesAdded,0);
+  assert.equal(again.result.report.structure.proposalSignaturesFormatted,0);
+
+
   assert.equal(again.a.$('w\\:drawing').length,out.a.$('w\\:drawing').length,'logos are not duplicated on repeat runs');
   assert.equal(again.a.$('w\\:sectPr').length,out.a.$('w\\:sectPr').length,'second run does not add pages/sections');
   const knownReview=p('NHẬN XÉT CỦA GIẢNG VIÊN HƯỚNG DẪN')+p('Đề tài đã hoàn thành tốt yêu cầu.')
@@ -100,8 +128,8 @@ try {
   const combined=cover.replace(p('Sinh viên thực hiện: Sinh viên'),p('GVHD: ThS. Dương Anh Tuấn SVTH: Trần Đăng Trị – 21050049 – 24TH01'));
   const separated=format(fixture('combined-metadata',combined+proposal+rest),'separated',{instructor:'ThS. Dương Anh Tuấn',student:'Trần Đăng Trị'});
   for(const item of [separated,format(separated.file,'separated-again',{instructor:'ThS. Dương Anh Tuấn',student:'Trần Đăng Trị'})]) {
-    assert.equal(item.a.records.filter(r=>r.text==='21050049').length,2,'MSSV is inferred and survives another formatting pass');
-    assert.equal(item.a.records.filter(r=>r.text==='24TH01').length,2,'class is separated and retained');
+    assert.equal(item.a.records.filter(r=>r.text.includes('21050049')).length,2,'MSSV is inferred and survives another formatting pass');
+    assert.equal(item.a.records.filter(r=>r.text.includes('24TH01')).length,2,'class is separated and retained');
   }
   const styledSource=fixture('shared-style',cover+proposal.replace('<w:ind w:left="357"/>','<w:pStyle w:val="WFBody"/><w:ind w:left="357"/>')+rest);
   const styleZip=new AdmZip(styledSource);

@@ -200,6 +200,7 @@ export const ApiController = {
         className,
         documentTitle,
         institution,
+        institute,
         faculty,
         course,
         location,
@@ -208,7 +209,9 @@ export const ApiController = {
         documentMode,
         documentType,
         frontMatter,
-        profile
+        profile,
+        onlyExistingCaptions,
+        skipProposal
       } = req.body;
       const inputPath = req.file.path;
 
@@ -221,6 +224,7 @@ export const ApiController = {
         className,
         documentTitle,
         institution,
+        institute,
         faculty,
         course,
         location,
@@ -229,7 +233,9 @@ export const ApiController = {
         documentMode,
         documentType,
         frontMatter,
-        profile
+        profile,
+        onlyExistingCaptions: onlyExistingCaptions === 'true' || onlyExistingCaptions === true,
+        skipProposal: skipProposal === 'true' || skipProposal === true
       });
 
       // Cleanup uploaded temp file

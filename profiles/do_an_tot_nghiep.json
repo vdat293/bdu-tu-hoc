@@ -113,22 +113,22 @@
   },
   "cover": {
     "institution": "TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG",
+    "institute": "VIỆN TRÍ TUỆ NHÂN TẠO VÀ CHUYỂN ĐỔI SỐ",
     "faculty": "KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO",
     "document_type": "ĐỒ ÁN TỐT NGHIỆP",
     "course": "",
     "location": "Thành phố Hồ Chí Minh",
     "page_border": {
-      "style": "double",
-      "color_hex": "000080",
-      "size_eighth_points": 12,
-      "top_bottom_space_pt": 18,
-      "left_right_space_pt": 18,
-      "source": "Visible navy double border matching the user-approved cover"
+      "style": "twistedLines1",
+      "color_hex": "auto",
+      "size_eighth_points": 18,
+      "source": "Word art border twistedLines1 matching user-approved sample 21050049"
     },
     "styles": {
       "institution_size_pt": 15,
-      "document_type_size_pt": 24,
-      "label_size_pt": 16,
+      "institute_size_pt": 15,
+      "faculty_size_pt": 15,
+      "document_type_size_pt": 16,
       "topic_size_pt": 20,
       "metadata_size_pt": 14,
       "date_size_pt": 14,
