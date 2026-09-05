@@ -7,7 +7,7 @@ const realtime = fs.readFileSync(new URL('../src/services/community-realtime.ser
 const identityService = fs.readFileSync(new URL('../src/services/identity-presentation.service.js', import.meta.url), 'utf8');
 const adminService = fs.readFileSync(new URL('../src/services/identity-admin.service.js', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../migrations/016_community_identity_entitlements.sql', import.meta.url), 'utf8');
-const appJs = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const appJs = `${fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8')}\n${fs.readFileSync(new URL('../public/js/features/community.js', import.meta.url), 'utf8')}`;
 const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 
 assert.match(routes, /comments\/:commentId.*ApiController\.editCommunityPostComment/);

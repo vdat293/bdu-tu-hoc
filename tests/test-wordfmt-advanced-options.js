@@ -192,7 +192,7 @@ console.log('--- Testing Option 3: UI and Form Submission ---');
   assert.equal(chkProposal.attr('checked'), undefined, 'Checkbox #wf-skip-proposal phải unchecked mặc định');
 
   // Kiểm tra app.js
-  const appJs = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  const appJs = `${fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8')}\n${fs.readFileSync(new URL('../public/js/features/automation.js', import.meta.url), 'utf8')}`;
   assert.ok(appJs.includes("document.getElementById('wf-only-existing-captions')?.checked"), 'app.js phải đọc #wf-only-existing-captions');
   assert.ok(appJs.includes("document.getElementById('wf-skip-proposal')?.checked"), 'app.js phải đọc #wf-skip-proposal');
   assert.ok(appJs.includes("formData.append('onlyExistingCaptions', onlyExistingCaptions)"), 'app.js phải append onlyExistingCaptions vào FormData');

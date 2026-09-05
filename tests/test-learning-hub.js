@@ -73,7 +73,7 @@ assert.equal(html.includes('Kho Tài Liệu Theo Học Kỳ'), false);
 assert.equal(html.includes('<h2 class="section-title">Kho Tài Liệu</h2>'), true);
 assert.equal(html.includes('aria-modal="true"'), true);
 
-const appJs = fs.readFileSync('public/js/app.js', 'utf8');
+const appJs = `${fs.readFileSync('public/js/app.js', 'utf8')}\n${fs.readFileSync('public/js/features/learning.js', 'utf8')}`;
 assert.match(appJs, /learning-semester-group/);
 assert.match(appJs, /tài liệu<\/span>/);
 assert.match(appJs, /bài viết<\/span>/);

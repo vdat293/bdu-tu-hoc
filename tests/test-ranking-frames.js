@@ -78,7 +78,9 @@ assert.equal(styleCss.includes('@keyframes itachi-mangekyo-aperture'), true, 'It
 console.log('✅ PASS: Bảng mã phong cách CSS đã sẵn sàng hiệu ứng hào quang động & ruy băng.');
 
 // 4. Kiểm tra logic xử lý trong app.js
-const appJs = fs.readFileSync('public/js/app.js', 'utf8');
+const appJsCore = fs.readFileSync('public/js/app.js', 'utf8');
+const featureJs = fs.readFileSync('public/js/features/community.js', 'utf8');
+const appJs = `${appJsCore}\n${featureJs}`;
 assert.equal(appJs.includes('getAcademicAvatarFrame'), true, 'app.js phải chứa hàm logic xác định khung getAcademicAvatarFrame');
 assert.equal(appJs.includes('prepareFrameCinematic'), true, 'app.js phải dựng theme và particle riêng theo từng phạm vi xếp hạng');
 assert.equal(appJs.includes('prefers-reduced-motion: reduce'), true, 'Hiệu ứng phải tôn trọng cài đặt giảm chuyển động');
@@ -220,7 +222,9 @@ const sandbox = {
   Blob
 };
 vm.createContext(sandbox);
-vm.runInContext(appJs, sandbox);
+vm.runInContext(appJsCore, sandbox);
+const featureForVm = featureJs.replace('export function initialize', 'function initialize');
+vm.runInContext(`(function(){\n${featureForVm}\n})();\nObject.assign(globalThis, window);`, sandbox);
 
 vm.runInContext(`
   const authorized = ['21050008', '21050011', '21050044', '22050068', '22050090', '22050101'];

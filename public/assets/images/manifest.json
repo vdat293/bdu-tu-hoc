@@ -1,0 +1,209 @@
+{
+  "generatedAt": "2026-09-05T15:02:24.138Z",
+  "assets": [
+    {
+      "input": "logo-hao-quang-transparent.png",
+      "width": 1254,
+      "height": 1254,
+      "variants": [
+        {
+          "src": "assets/images/logo-hao-quang-256.webp",
+          "width": 256,
+          "bytes": 23484
+        },
+        {
+          "src": "assets/images/logo-hao-quang-512.webp",
+          "width": 512,
+          "bytes": 56564
+        }
+      ]
+    },
+    {
+      "input": "logo-bdu-eng.png",
+      "width": 1770,
+      "height": 1000,
+      "variants": [
+        {
+          "src": "assets/images/logo-bdu-eng-512.webp",
+          "width": 512,
+          "bytes": 27662
+        },
+        {
+          "src": "assets/images/logo-bdu-eng-1024.webp",
+          "width": 1024,
+          "bytes": 63686
+        }
+      ]
+    },
+    {
+      "input": "gojo-six-eyes-awakening.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/gojo-six-eyes-awakening-256.webp",
+          "width": 256,
+          "bytes": 36750
+        },
+        {
+          "src": "assets/images/gojo-six-eyes-awakening-512.webp",
+          "width": 512,
+          "bytes": 117906
+        }
+      ]
+    },
+    {
+      "input": "gojo-six-eyes-closed-v2.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/gojo-six-eyes-closed-v2-256.webp",
+          "width": 256,
+          "bytes": 36976
+        },
+        {
+          "src": "assets/images/gojo-six-eyes-closed-v2-512.webp",
+          "width": 512,
+          "bytes": 118886
+        }
+      ]
+    },
+    {
+      "input": "gojo-six-eyes-half-v2.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/gojo-six-eyes-half-v2-256.webp",
+          "width": 256,
+          "bytes": 37260
+        },
+        {
+          "src": "assets/images/gojo-six-eyes-half-v2-512.webp",
+          "width": 512,
+          "bytes": 119712
+        }
+      ]
+    },
+    {
+      "input": "itachi-sharingan-awakening.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/itachi-sharingan-awakening-256.webp",
+          "width": 256,
+          "bytes": 30644
+        },
+        {
+          "src": "assets/images/itachi-sharingan-awakening-512.webp",
+          "width": 512,
+          "bytes": 94552
+        }
+      ]
+    },
+    {
+      "input": "itachi-sharingan-closed-v2.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/itachi-sharingan-closed-v2-256.webp",
+          "width": 256,
+          "bytes": 32964
+        },
+        {
+          "src": "assets/images/itachi-sharingan-closed-v2-512.webp",
+          "width": 512,
+          "bytes": 102018
+        }
+      ]
+    },
+    {
+      "input": "itachi-sharingan-half-v2.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/itachi-sharingan-half-v2-256.webp",
+          "width": 256,
+          "bytes": 33466
+        },
+        {
+          "src": "assets/images/itachi-sharingan-half-v2-512.webp",
+          "width": 512,
+          "bytes": 103052
+        }
+      ]
+    },
+    {
+      "input": "frame-gojo-limitless-art.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/frame-gojo-limitless-art-256.webp",
+          "width": 256,
+          "bytes": 35768
+        },
+        {
+          "src": "assets/images/frame-gojo-limitless-art-512.webp",
+          "width": 512,
+          "bytes": 115050
+        }
+      ]
+    },
+    {
+      "input": "frame-itachi-genjutsu-art.png",
+      "width": 768,
+      "height": 768,
+      "variants": [
+        {
+          "src": "assets/images/frame-itachi-genjutsu-art-256.webp",
+          "width": 256,
+          "bytes": 30404
+        },
+        {
+          "src": "assets/images/frame-itachi-genjutsu-art-512.webp",
+          "width": 512,
+          "bytes": 95520
+        }
+      ]
+    },
+    {
+      "input": "chibi-gojo-signature.png",
+      "width": 640,
+      "height": 640,
+      "variants": [
+        {
+          "src": "assets/images/chibi-gojo-signature-256.webp",
+          "width": 256,
+          "bytes": 24744
+        },
+        {
+          "src": "assets/images/chibi-gojo-signature-512.webp",
+          "width": 512,
+          "bytes": 76002
+        }
+      ]
+    },
+    {
+      "input": "chibi-itachi-signature.png",
+      "width": 640,
+      "height": 640,
+      "variants": [
+        {
+          "src": "assets/images/chibi-itachi-signature-256.webp",
+          "width": 256,
+          "bytes": 21054
+        },
+        {
+          "src": "assets/images/chibi-itachi-signature-512.webp",
+          "width": 512,
+          "bytes": 59770
+        }
+      ]
+    }
+  ]
+}

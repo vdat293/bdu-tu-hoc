@@ -22,6 +22,44 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const avatarStorageDir = AvatarOverrideService.getStorageDir();
+const publicDir = path.join(__dirname, 'public');
+
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml'
+};
+
+// Serve build-generated Brotli sidecars before express.static. This keeps
+// compression out of the request path while preserving the normal fallback
+// for browsers without Brotli support.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (!/\bbr\b/i.test(req.headers['accept-encoding'] || '')) return next();
+  let pathname;
+  try { pathname = decodeURIComponent(new URL(req.originalUrl, 'http://localhost').pathname); } catch { return next(); }
+  const relative = pathname.replace(/^\/+/, '');
+  const sourcePath = path.resolve(publicDir, relative);
+  if (!sourcePath.startsWith(`${publicDir}${path.sep}`)) return next();
+  const type = contentTypes[path.extname(sourcePath).toLowerCase()];
+  if (!type) return next();
+  const compressedPath = `${sourcePath}.br`;
+  try {
+    if (!fs.existsSync(compressedPath)) return next();
+    res.setHeader('Content-Type', type);
+    res.setHeader('Content-Encoding', 'br');
+    res.setHeader('Vary', 'Accept-Encoding');
+    res.setHeader('Content-Length', fs.statSync(compressedPath).size);
+    res.setHeader(
+      'Cache-Control',
+      /[?&]v=[^&]+/.test(req.originalUrl || '')
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=86400, stale-while-revalidate=604800'
+    );
+    return res.sendFile(compressedPath);
+  } catch { return next(); }
+});
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, 'temp');
@@ -44,7 +82,19 @@ app.use('/media/avatars', express.static(avatarStorageDir, {
   }
 }));
 app.use('/media/avatars', (req, res) => res.status(404).json({ result: false, message: 'Không tìm thấy ảnh đại diện.' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(publicDir, {
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    if (path.extname(filePath).toLowerCase() === '.html') {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (/[?&]v=[^&]+/.test(res.req?.originalUrl || '')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    }
+  }
+}));
 
 // Dedicated server-side guarded administration surface. The page itself is
 // public static HTML; every data mutation is still protected by API roles.

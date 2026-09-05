@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
-const js = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+const js = `${fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8')}\n${fs.readFileSync(path.join(root, 'public/js/features/community.js'), 'utf8')}`;
 
 assert.match(html, /id="modal-clan-document-share"/, 'Thiếu modal chia sẻ tài liệu');
 assert.match(html, /id="clan-document-name"[^>]*required/, 'Tên tài liệu phải là trường bắt buộc');

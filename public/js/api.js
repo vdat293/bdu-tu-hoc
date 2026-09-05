@@ -51,13 +51,14 @@ const BduApi = {
   /**
    * Lấy danh sách điểm
    */
-  async getGrades(token) {
+  async getGrades(token, { signal } = {}) {
     const response = await fetch('/api/grades', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      signal
     });
 
     const data = await this.handleResponse(response, 'Không thể tải bảng điểm.');
@@ -67,13 +68,14 @@ const BduApi = {
   /**
    * Lấy snapshot xếp hạng của chính sinh viên đã được phiên BDU xác minh
    */
-  async getMyAcademicRanking(token) {
+  async getMyAcademicRanking(token, { signal } = {}) {
     const response = await fetch('/api/rankings/me', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
-      }
+      },
+      signal
     });
     const data = await this.handleResponse(response, 'Không thể tải dữ liệu xếp hạng.');
     return data.data;
@@ -87,7 +89,8 @@ const BduApi = {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
-      }
+      },
+      signal: options.signal
     });
     const data = await this.handleResponse(response, 'Chưa thể tải bảng xếp hạng.');
     return data.data;
@@ -96,7 +99,7 @@ const BduApi = {
   /**
    * Lấy lý lịch / thông tin sinh viên & ảnh thẻ
    */
-  async getProfile(token, idsv = '', maSV = '') {
+  async getProfile(token, idsv = '', maSV = '', { signal } = {}) {
     const query = new URLSearchParams();
     if (idsv) query.append('IDSV', idsv);
     if (maSV) query.append('MaSV', maSV);
@@ -108,7 +111,8 @@ const BduApi = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ token, idsv, maSV })
+      body: JSON.stringify({ token, idsv, maSV }),
+      signal
     });
 
     const data = await this.handleResponse(response, 'Không thể tải thông tin sinh viên.');
@@ -118,7 +122,7 @@ const BduApi = {
   /**
    * Lấy thời khóa biểu (hỗ trợ chọn mã học kỳ và token xác thực)
    */
-  async getSchedule(token = '', hocKy = null) {
+  async getSchedule(token = '', hocKy = null, { signal } = {}) {
     const query = new URLSearchParams();
     if (hocKy) query.append('hoc_ky', hocKy);
     const queryString = query.toString() ? `?${query.toString()}` : '';
@@ -129,7 +133,8 @@ const BduApi = {
     const response = await fetch(`/api/schedule${queryString}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ token, hoc_ky: hocKy })
+      body: JSON.stringify({ token, hoc_ky: hocKy }),
+      signal
     });
 
     const data = await this.handleResponse(response, 'Không thể tải thời khóa biểu.');
@@ -210,12 +215,13 @@ const BduApi = {
   /**
    * Lấy danh mục tài liệu & video tự học
    */
-  async getLearningResources(token) {
+  async getLearningResources(token, { signal } = {}) {
     const response = await fetch('/api/learning/resources', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
-      }
+      },
+      signal
     });
     const data = await this.handleResponse(response, 'Không thể tải danh mục tự học.');
     return data.data;
@@ -287,12 +293,13 @@ const BduApi = {
     return data.data;
   },
 
-  async getMyIdentityPresentation(token) {
+  async getMyIdentityPresentation(token, { signal } = {}) {
     const response = await fetch('/api/students/me/presentation', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
-      }
+      },
+      signal
     });
     const data = await this.handleResponse(response, 'Không thể tải danh hiệu hiển thị.');
     return data.data;
@@ -565,7 +572,7 @@ const BduApi = {
     return data.data || [];
   },
 
-  async getCommunityPosts(token, { scope = 'school', scopeId = null, filter = 'all', limit = 20, offset = 0 } = {}) {
+  async getCommunityPosts(token, { scope = 'school', scopeId = null, filter = 'all', limit = 20, offset = 0, signal } = {}) {
     const params = new URLSearchParams();
     if (scope) params.set('scope', scope);
     if (scopeId) params.set('scopeId', scopeId);
@@ -576,7 +583,7 @@ const BduApi = {
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(`/api/community/posts?${params.toString()}`, { headers });
+    const response = await fetch(`/api/community/posts?${params.toString()}`, { headers, signal });
     const data = await this.handleResponse(response, 'Không thể tải bài viết.');
     return data.data || { total: 0, posts: [] };
   },
@@ -740,3 +747,6 @@ const BduApi = {
     return data.data;
   }
 };
+
+// The core app and lazily imported feature modules share one API client.
+window.BduApi = BduApi;

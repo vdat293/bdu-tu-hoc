@@ -14,30 +14,42 @@
 
   class ShowcaseUI {
     constructor() {
-      this.reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      this.reduceMotion = window.BDUMotion?.effectiveMode === 'reduced'
+        || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
       this.commandIndex = -1;
       this.revealObserver = null;
       this.sidebarObserver = null;
       this.mutationObserver = null;
       this.commands = [];
+      this.dashboardEnhancementsReady = false;
     }
 
     init() {
       document.documentElement.classList.add('showcase-ready');
+      window.addEventListener('bdu:motionchange', () => {
+        this.reduceMotion = window.BDUMotion?.effectiveMode === 'reduced'
+          || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      });
       this.setupPointerSpotlight();
-      this.setupParallaxEnvironment();
-      this.setupCommandPalette();
-      this.setupRevealChoreography();
-      this.setupTiltCards(document);
-      this.setupRipples(document);
-      this.setupStatAnimations();
-      this.setupMobileSidebar();
-      this.setupNetworkBeacon();
-      this.setupScrollProgress();
-      this.setupRovingNavigation();
-      this.setupDynamicEnhancement();
-      this.enhanceCourseRows(document);
+      const activateDashboardEnhancements = () => {
+        if (this.dashboardEnhancementsReady || document.getElementById('dashboard-view')?.classList.contains('hidden')) return;
+        this.dashboardEnhancementsReady = true;
+        this.setupParallaxEnvironment();
+        this.setupCommandPalette();
+        this.setupRevealChoreography();
+        this.setupTiltCards(document.getElementById('dashboard-view') || document);
+        this.setupRipples(document.getElementById('dashboard-view') || document);
+        this.setupStatAnimations();
+        this.setupMobileSidebar();
+        this.setupNetworkBeacon();
+        this.setupScrollProgress();
+        this.setupRovingNavigation();
+        this.setupDynamicEnhancement();
+        this.enhanceCourseRows(document.getElementById('dashboard-view') || document);
+      };
+      window.addEventListener('bdu:dashboard-ready', activateDashboardEnhancements, { once: true });
+      activateDashboardEnhancements();
     }
 
     setupPointerSpotlight() {
@@ -45,6 +57,7 @@
       document.body.classList.add('has-fine-pointer');
       let frame = 0;
       window.addEventListener('pointermove', (event) => {
+        if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') return;
         if (frame) return;
         frame = requestAnimationFrame(() => {
           document.body.style.setProperty('--pointer-x', `${event.clientX}px`);
@@ -66,10 +79,10 @@
         <div class="parallax-layer parallax-orb parallax-orb-one" data-depth="22" data-scroll-depth="-0.08"></div>
         <div class="parallax-layer parallax-orb parallax-orb-two" data-depth="-16" data-scroll-depth="-0.045"></div>
         <div class="parallax-layer parallax-type" data-depth="-9" data-scroll-depth="-0.13">
-          <img src="assets/images/logo-bdu-eng.png" alt="">
+          <img src="assets/images/logo-bdu-eng-1024.webp" alt="" width="1024" height="578" loading="lazy" decoding="async">
         </div>
         <div class="parallax-layer parallax-rule" data-depth="14" data-scroll-depth="-0.18"></div>`;
-      dashboard.prepend(environment);
+      if (!dashboard.querySelector('.parallax-environment')) dashboard.prepend(environment);
 
       document.querySelectorAll('.tab-pane').forEach((pane, index) => {
         const sectionIndex = String(index + 1).padStart(2, '0');
@@ -86,6 +99,10 @@
       let frame = 0;
 
       const render = () => {
+        if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') {
+          frame = 0;
+          return;
+        }
         layers.forEach(layer => {
           const depth = Number(layer.dataset.depth || 0);
           const scrollDepth = Number(layer.dataset.scrollDepth || 0);
@@ -98,10 +115,12 @@
       };
 
       const requestRender = () => {
+        if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') return;
         if (!frame) frame = requestAnimationFrame(render);
       };
 
       window.addEventListener('pointermove', event => {
+        if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') return;
         pointerX = event.clientX / window.innerWidth - .5;
         pointerY = event.clientY / window.innerHeight - .5;
         requestRender();
@@ -115,6 +134,10 @@
         requestRender();
       }, { passive: true });
       render();
+      window.addEventListener('bdu:motionchange', () => {
+        if (window.BDUMotion?.effectiveMode === 'reduced') layers.forEach(layer => { layer.style.transform = ''; });
+        else requestRender();
+      });
     }
 
     setupCommandPalette() {
@@ -307,6 +330,7 @@
         card.dataset.tiltReady = 'true';
         card.classList.add('showcase-tilt');
         card.addEventListener('pointermove', event => {
+          if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') return;
           const bounds = card.getBoundingClientRect();
           const x = (event.clientX - bounds.left) / bounds.width - .5;
           const y = (event.clientY - bounds.top) / bounds.height - .5;
@@ -327,6 +351,7 @@
         button.dataset.rippleReady = 'true';
         button.classList.add('has-ripple');
         button.addEventListener('pointerdown', event => {
+          if (document.hidden || window.BDUMotion?.effectiveMode === 'reduced') return;
           const bounds = button.getBoundingClientRect();
           const ripple = document.createElement('span');
           ripple.className = 'showcase-ripple';
@@ -338,8 +363,10 @@
       });
     }
 
-    setupStatAnimations() {
-      document.querySelectorAll('.stat-card').forEach(card => {
+    setupStatAnimations(root = document) {
+      root.querySelectorAll?.('.stat-card').forEach(card => {
+        if (card.dataset.statAnimationReady) return;
+        card.dataset.statAnimationReady = 'true';
         const value = card.querySelector('.stat-value');
         if (!value) return;
         this.updateLoadingState(value);
@@ -356,7 +383,7 @@
     }
 
     animateNumericValue(element) {
-      if (this.reduceMotion || element.dataset.animating === 'true') return;
+      if (this.reduceMotion || !window.BDUMotion?.canAnimate?.() || element.dataset.animating === 'true') return;
       const raw = element.textContent.trim();
       if (element.dataset.animatedValue === raw) return;
       const match = raw.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/);
@@ -483,10 +510,15 @@
         if (scheduled || !mutations.some(mutation => mutation.addedNodes.length)) return;
         scheduled = true;
         requestAnimationFrame(() => {
-          this.observeRevealElements(dashboard);
-          this.setupTiltCards(dashboard);
-          this.setupRipples(dashboard);
-          this.enhanceCourseRows(dashboard);
+          const roots = mutations.flatMap(mutation => [...mutation.addedNodes])
+            .filter(node => node.nodeType === Node.ELEMENT_NODE);
+          roots.forEach(root => {
+            this.observeRevealElements(root);
+            this.setupTiltCards(root);
+            this.setupRipples(root);
+            this.setupStatAnimations(root);
+            this.enhanceCourseRows(root);
+          });
           scheduled = false;
         });
       });
@@ -494,9 +526,12 @@
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  const bootShowcase = () => {
+    if (window.BDUShowcase) return;
     const showcase = new ShowcaseUI();
     showcase.init();
     window.BDUShowcase = showcase;
-  });
+  };
+  if (!document.readyState || document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootShowcase, { once: true });
+  else bootShowcase();
 })();

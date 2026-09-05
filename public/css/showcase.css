@@ -55,6 +55,38 @@ body::after {
 
 body.has-fine-pointer { --spotlight-opacity: 1; }
 
+html[data-motion="reduced"] body::after,
+html.motion-paused body::after { display: none; }
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after,
+html.motion-paused *,
+html.motion-paused *::before,
+html.motion-paused *::after { animation-play-state: paused !important; }
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after { transition-duration: .01ms !important; }
+
+html[data-motion="reduced"] .reveal-ready,
+html[data-motion="reduced"] .showcase-tilt,
+html[data-motion="reduced"] .tab-pane { opacity: 1 !important; transform: none !important; }
+
+/* Tab panes start at opacity: 0 for the entrance animation. Reduced motion
+   must remove that animation without leaving the active pane on its first
+   frame. */
+html[data-motion="reduced"] .tab-pane { animation: none !important; }
+html[data-motion="reduced"] .hero-overall-rank-badge,
+html.motion-paused .hero-overall-rank-badge {
+  animation: none !important;
+  background-image: none;
+  color: var(--rank-color);
+  -webkit-text-fill-color: var(--rank-color);
+}
+
+#btn-motion-toggle[aria-pressed="true"] { color: #ef5b43; }
+
 :where(button, input, select, textarea, a, [tabindex]):focus-visible {
   outline: none;
   box-shadow: var(--showcase-ring) !important;
@@ -667,7 +699,8 @@ body.theme-light {
   right: -3%;
   bottom: -5%;
   width: clamp(34rem, 58vw, 68rem);
-  opacity: .022;
+  /* BDU is the primary identity layer; keep it readable behind the cards. */
+  opacity: .048;
   filter: saturate(1.4) contrast(1.08) blur(.7px);
 }
 .parallax-type img {
@@ -703,7 +736,7 @@ body.theme-light {
     linear-gradient(125deg, #171314 0%, #27171a 64%, #801522 100%);
   color: #fff;
 }
-.hero-profile > :not(.brand-watermark) { position: relative; z-index: 1; }
+.hero-profile > :not(.brand-watermark):not(.brand-watermark-wrap) { position: relative; z-index: 1; }
 .hero-profile::after {
   content: 'ACADEMIC RECORD';
   position: absolute;
@@ -768,7 +801,8 @@ body.theme-light {
   width: clamp(390px, 44vw, 680px);
   opacity: .115;
 }
-.section-header-box > :not(.brand-watermark) { position: relative; z-index: 1; }
+.section-header-box > :not(.brand-watermark):not(.brand-watermark-wrap) { position: relative; z-index: 1; }
+.brand-watermark-wrap { position: absolute; inset: 0; display: block; z-index: 0; pointer-events: none; }
 .section-header-box::before {
   content: attr(data-section-index);
   position: absolute;

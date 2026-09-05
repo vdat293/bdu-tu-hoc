@@ -7,21 +7,28 @@
   <title>BDU Tự Học - Cổng Tiện Ích & Tự Động Hóa Sinh Viên Đại Học Bình Dương</title>
   <meta name="description"
     content="Nền tảng tự học, tra cứu bảng điểm, xem lý lịch, thời khóa biểu, chuẩn hóa Word chuẩn viện và tự động hóa khảo sát dành riêng cho sinh viên BDU.">
-  <link rel="icon" type="image/png" href="assets/images/logo-hao-quang-transparent.png">
+  <link rel="icon" type="image/webp" href="assets/images/logo-hao-quang-256.webp">
+  <script>
+    try {
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const saved = localStorage.getItem('bdu_motion_mode');
+      document.documentElement.dataset.motion = reduced ? 'reduced' : (saved === 'full' || saved === 'balanced' ? saved : 'balanced');
+    } catch { document.documentElement.dataset.motion = 'balanced'; }
+  </script>
 
   <!-- Product typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet">
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preload" as="style" fetchpriority="low"
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" media="print" onload="this.media='all'"
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <noscript><link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/style.css?v=20260904-aidti-frame-v1">
-  <link rel="stylesheet" href="css/showcase.css?v=20260903-school-podium-frames">
+  <link rel="stylesheet" href="css/login.min.css?v=20260905-perf-v22" data-bdu-style="login">
+  <link rel="stylesheet" href="css/showcase.min.css?v=20260905-perf-v22">
 </head>
 
 <body class="theme-light">
@@ -43,7 +50,10 @@
         <section class="login-context" aria-label="Minh họa bảo mật tương tác">
           <div class="scene-brand">
             <span class="scene-brand-mark">
-              <img src="assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương">
+              <picture>
+                <source type="image/webp" srcset="assets/images/logo-hao-quang-256.webp 256w, assets/images/logo-hao-quang-512.webp 512w" sizes="48px">
+                <img src="assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương" width="1254" height="1254" fetchpriority="high" decoding="async">
+              </picture>
             </span>
             <span>Binh Duong University</span>
           </div>
@@ -92,7 +102,10 @@
         <div class="login-card glass-panel">
           <div class="login-header">
             <div class="university-badge">
-              <img class="university-wordmark" src="assets/images/logo-bdu-eng.png" alt="Binh Duong University">
+              <picture>
+                <source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="220px">
+                <img class="university-wordmark" src="assets/images/logo-bdu-eng.png" alt="Binh Duong University" width="1770" height="1000" fetchpriority="high" decoding="async">
+              </picture>
               <span class="badge-tag">BINH DUONG UNIVERSITY</span>
             </div>
             <h1 class="login-title">Chào mừng trở lại</h1>
@@ -162,7 +175,10 @@
       <div class="sidebar-header">
         <div class="sidebar-brand">
           <div class="brand-logo">
-            <img src="assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương">
+            <picture>
+              <source type="image/webp" srcset="assets/images/logo-hao-quang-256.webp 256w, assets/images/logo-hao-quang-512.webp 512w" sizes="64px">
+              <img src="assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương" width="1254" height="1254" loading="lazy" decoding="async">
+            </picture>
           </div>
           <div class="brand-meta">
             <span class="brand-title">Bình Dương University</span>
@@ -271,7 +287,10 @@
               <line x1="4" x2="20" y1="18" y2="18" />
             </svg>
           </button>
-          <img class="topbar-wordmark" src="assets/images/logo-bdu-eng.png" alt="Binh Duong University">
+          <picture>
+            <source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="88px">
+            <img class="topbar-wordmark" src="assets/images/logo-bdu-eng.png" alt="Binh Duong University" width="1770" height="1000" loading="lazy" decoding="async">
+          </picture>
           <div class="page-title-group">
             <h2 id="topbar-page-title" class="topbar-title">Bảng Điểm & GPA</h2>
             <span class="topbar-badge">Academic services · Binh Duong University</span>
@@ -308,6 +327,7 @@
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
             </svg>
           </button>
+          <button id="btn-motion-toggle" class="btn-icon" type="button" title="Giảm hiệu ứng chuyển động" aria-label="Giảm hiệu ứng chuyển động" aria-pressed="false">◌</button>
         </div>
       </header>
 
@@ -321,8 +341,8 @@
           <!-- Student Hero Header -->
           <div class="hero-section glass-panel">
             <div class="hero-profile">
-              <img class="brand-watermark hero-brand-watermark" src="assets/images/logo-bdu-eng.png" alt=""
-                aria-hidden="true">
+              <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark hero-brand-watermark" src="assets/images/logo-bdu-eng.png" alt=""
+                aria-hidden="true" loading="lazy" decoding="async"></picture>
               <div id="hero-avatar" class="hero-avatar">SV</div>
               <div class="hero-info">
                 <div class="hero-tags">
@@ -498,7 +518,7 @@
         <!-- ================================================================= -->
         <section id="tab-profile" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <h2 class="section-title">Lý Lịch & Hồ Sơ Sinh Viên</h2>
             <p class="section-desc">Thông tin học vụ cá nhân được đồng bộ từ cổng quản lý sinh viên BDU</p>
           </div>
@@ -508,8 +528,8 @@
             <div class="profile-hero-card glass-panel">
               <div class="hero-card-header">
                 <div class="bdu-badge-brand">
-                  <img class="bdu-badge-logo" src="assets/images/logo-hao-quang-transparent.png"
-                    alt="Logo Đại học Bình Dương">
+                  <picture><source type="image/webp" srcset="assets/images/logo-hao-quang-256.webp 256w, assets/images/logo-hao-quang-512.webp 512w" sizes="64px"><img class="bdu-badge-logo" src="assets/images/logo-hao-quang-transparent.png"
+                    alt="Logo Đại học Bình Dương" loading="lazy" decoding="async"></picture>
                   <span>TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG</span>
                   <span class="badge-pipe">|</span>
                   <span class="brand-sub">CỔNG QUẢN LÝ ĐÀO TẠO BDU</span>
@@ -523,7 +543,7 @@
               <div class="hero-card-body">
                 <div class="student-avatar-box">
                   <div class="avatar-ring">
-                    <img id="profile-student-photo" src="" alt="Ảnh sinh viên" class="student-avatar-img hidden">
+                    <img id="profile-student-photo" src="" alt="Ảnh sinh viên" class="student-avatar-img hidden" loading="lazy" decoding="async">
                     <div id="card-avatar" class="student-avatar-fallback">SV</div>
                   </div>
                   <div class="student-status-badge">
@@ -662,7 +682,7 @@
         <!-- ================================================================= -->
         <section id="tab-schedule" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="header-split">
               <div>
                 <h2 class="section-title">Thời Khóa Biểu Học Tập</h2>
@@ -693,9 +713,9 @@
         <!-- ================================================================= -->
         <!-- TAB 4: BẢNG XẾP HẠNG                                               -->
         <!-- ================================================================= -->
-        <section id="tab-leaderboard" class="tab-pane">
+        <template id="bdu-view-fragment-tab-leaderboard" data-view-fragment="tab-leaderboard"><section id="tab-leaderboard" class="tab-pane">
           <div class="section-header-box glass-panel leaderboard-header-box">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="header-split">
               <div>
                 <h2 class="section-title">Bảng Xếp Hạng Học Tập</h2>
@@ -777,14 +797,14 @@
               </div>
             </div>
           </section>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 5: CHUẨN HÓA WORD BDU (INTEGRATED WORDFMT ENGINE)              -->
         <!-- ================================================================= -->
-        <section id="tab-wordfmt" class="tab-pane">
+        <template id="bdu-view-fragment-tab-wordfmt" data-view-fragment="tab-wordfmt"><section id="tab-wordfmt" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="header-split">
               <div>
                 <h2 class="section-title">Chuẩn Hóa Văn Bản Word (BDU WordFmt)</h2>
@@ -972,7 +992,7 @@
                     <div class="document-sheet sheet-back"></div>
                     <div class="document-sheet sheet-middle"></div>
                     <div class="document-sheet sheet-front">
-                      <img class="document-brand" src="assets/images/logo-hao-quang-transparent.png" alt="">
+                      <picture><source type="image/webp" srcset="assets/images/logo-hao-quang-256.webp 256w, assets/images/logo-hao-quang-512.webp 512w" sizes="64px"><img class="document-brand" src="assets/images/logo-hao-quang-transparent.png" alt="" loading="lazy" decoding="async"></picture>
                       <span class="document-line line-title"></span>
                       <span class="document-line"></span>
                       <span class="document-line short"></span>
@@ -1034,14 +1054,14 @@
               </div>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 5: AUTO ĐÁNH GIÁ KHẢO SÁT                                      -->
         <!-- ================================================================= -->
-        <section id="tab-survey" class="tab-pane">
+        <template id="bdu-view-fragment-tab-survey" data-view-fragment="tab-survey"><section id="tab-survey" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="header-split">
               <div>
                 <h2 class="section-title">Tự Động Đánh Giá Khảo Sát Giảng Viên</h2>
@@ -1112,14 +1132,14 @@
               </div>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 6: AUTO BÀI TẬP TIẾNG ANH (MOODLE)                            -->
         <!-- ================================================================= -->
-        <section id="tab-english" class="tab-pane">
+        <template id="bdu-view-fragment-tab-english" data-view-fragment="tab-english"><section id="tab-english" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="header-split">
               <div>
                 <h2 class="section-title">Tự Động Bài Tập Tiếng Anh Moodle</h2>
@@ -1255,14 +1275,14 @@
               </table>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 7: AUTO ĐĂNG KÝ MÔN HỌC (COMING SOON PREVIEW)                 -->
         <!-- ================================================================= -->
-        <section id="tab-enrollment" class="tab-pane">
+        <template id="bdu-view-fragment-tab-enrollment" data-view-fragment="tab-enrollment"><section id="tab-enrollment" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <h2 class="section-title">Tự Động Đăng Ký Tín Chỉ & Môn Học</h2>
             <p class="section-desc">Hệ thống săn lớp học phần và đăng ký tín chỉ tự động đúng giờ mở cổng</p>
           </div>
@@ -1279,14 +1299,14 @@
               <div class="cs-feat-item">Thông báo kết quả đăng ký thành công ngay lập tức</div>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 7: GÓC TỰ HỌC SỐ & VIDEO                                      -->
         <!-- ================================================================= -->
-        <section id="tab-learning" class="tab-pane">
+        <template id="bdu-view-fragment-tab-learning" data-view-fragment="tab-learning"><section id="tab-learning" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <h2 class="section-title">Kho Tài Liệu</h2>
             <p class="section-desc">Tìm lại môn đã học theo từng học kỳ, xem tài liệu và trao đổi của sinh viên cùng mã môn.</p>
           </div>
@@ -1368,14 +1388,14 @@
               </form>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 8: CLB / NHÓM HỌC TẬP (CLAN & GUILD)                          -->
         <!-- ================================================================= -->
-        <section id="tab-clans" class="tab-pane">
+        <template id="bdu-view-fragment-tab-clans" data-view-fragment="tab-clans"><section id="tab-clans" class="tab-pane">
           <div class="section-header-box glass-panel">
-            <img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="clan-header-flex">
               <div>
                 <h2 class="section-title">CLB & Nhóm Học Tập BDU</h2>
@@ -1673,18 +1693,18 @@
               </div>
             </div>
           </div>
-        </section>
+        </section></template>
 
         <!-- ================================================================= -->
         <!-- TAB 11: BDU CONFESSION & DIỄN ĐÀN SINH VIÊN (FORUM STYLE)         -->
         <!-- ================================================================= -->
-        <section id="tab-confession" class="tab-pane">
+        <template id="bdu-view-fragment-tab-confession" data-view-fragment="tab-confession"><section id="tab-confession" class="tab-pane">
           <!-- Hero full-width như thiết kế ban đầu -->
           <div class="forum-hero-banner glass-panel">
             <button type="button" class="btn-hero-frame-customizer" onclick="openFramePreviewModal()" title="Mở bộ sưu tập khung vinh danh">
               Bộ Sưu Tập Khung
             </button>
-            <img class="brand-watermark hero-brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true">
+            <picture class="brand-watermark-wrap"><source type="image/webp" srcset="assets/images/logo-bdu-eng-512.webp 512w, assets/images/logo-bdu-eng-1024.webp 1024w" sizes="680px"><img class="brand-watermark hero-brand-watermark" src="assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" loading="lazy" decoding="async"></picture>
             <div class="forum-banner-bg"></div>
             <div id="frame-cinematic-backdrop" class="frame-cinematic-backdrop" aria-hidden="true"></div>
             <div class="forum-hero-content">
@@ -1843,7 +1863,7 @@
             </div>
           </div>
 
-        </section>
+        </section></template>
 
       </main>
     </div>
@@ -2270,9 +2290,12 @@
   </div>
 
   <!-- Scripts -->
-  <script src="js/api.js"></script>
-  <script src="js/app.js?v=20260904-aidti-frame-v1"></script>
-  <script src="js/interactions.js"></script>
+  <script src="js/motion-policy.js?v=20260905-perf-v22"></script>
+  <script src="js/core/resource-loader.js?v=20260905-perf-v22"></script>
+  <script src="js/core/view-fragment-loader.js?v=20260905-perf-v22"></script>
+  <script src="js/core/view-lifecycle.js?v=20260905-perf-v22"></script>
+  <script src="js/core/style-loader.js?v=20260905-perf-v22"></script>
+  <script src="js/login-bootstrap.js?v=20260905-perf-v22"></script>
 </body>
 
 </html>

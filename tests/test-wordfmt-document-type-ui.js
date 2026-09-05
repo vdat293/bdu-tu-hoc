@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {load} from 'cheerio';
 
 const html=load(fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));
-const js=fs.readFileSync(new URL('../public/js/app.js',import.meta.url),'utf8');
+const js=`${fs.readFileSync(new URL('../public/js/app.js',import.meta.url),'utf8')}\n${fs.readFileSync(new URL('../public/js/features/automation.js',import.meta.url),'utf8')}`;
 const ids=['wf-document-type','wf-doc-title','wf-include-cover','wf-include-comments','wf-cover-label','wf-comments-label','wf-document-type-hint','wf-document-mode','wf-binding-hint'];
 const elements=new Map(ids.map(id=>{
   assert.equal(html('#'+id).length,1,`control ${id} exists once`);

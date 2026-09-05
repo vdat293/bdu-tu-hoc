@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-const appJs = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const appJs = `${fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8')}\n${fs.readFileSync(new URL('../public/js/features/community.js', import.meta.url), 'utf8')}`;
 const styleCss = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
 const showcaseCss = fs.readFileSync(new URL('../public/css/showcase.css', import.meta.url), 'utf8');
 
@@ -35,7 +35,7 @@ assert.match(styleCss, /#tab-confession \.forum-post-card\s*\{[\s\S]*?background
 assert.match(styleCss, /#tab-confession \.forum-widget\s*\{[\s\S]*?background:\s*var\(--forum-surface\)/);
 assert.match(styleCss, /#tab-confession \.forum-sidebar-column\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*(?:14|-\d+)px;[\s\S]*?margin-top:\s*0;/, 'Sidebar desktop phải kích hoạt sticky mà không dịch vị trí ban đầu.');
 assert.doesNotMatch(styleCss, /#tab-confession \.classroom-card-thumb svg[\s\S]{0,120}display:\s*none/, 'Logo Drive trong thẻ tài liệu phải được hiển thị.');
-assert.match(showcaseCss, /\.parallax-type\s*\{[\s\S]*?opacity:\s*\.022/, 'Watermark nền phải đủ nhẹ để không xuyên qua nội dung.');
+assert.match(showcaseCss, /\.parallax-type\s*\{[\s\S]*?opacity:\s*\.048/, 'Watermark nền phải đủ rõ để nhận diện BDU mà không lấn nội dung.');
 assert.doesNotMatch(avatarSync, /renderForumFeed|applyCurrentUserPresentationToFeeds/, 'Đồng bộ avatar không được dựng lại feed và làm mất tương tác bình luận.');
 assert.equal((aidtiRenderer.match(/class="aidti-frame-art"/g) || []).length, 1, 'Khung AIDTI chỉ được giải mã/vẽ một lớp ảnh lớn.');
 assert.match(appJs, /profilePhotoRequestedFor !== mssv/, 'Yêu cầu ảnh hồ sơ phải được chống gọi lặp.');
