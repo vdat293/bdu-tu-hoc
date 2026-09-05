@@ -206,6 +206,7 @@ export const ApiController = {
         month,
         year,
         documentMode,
+        documentType,
         frontMatter,
         profile
       } = req.body;
@@ -226,6 +227,7 @@ export const ApiController = {
         month,
         year,
         documentMode,
+        documentType,
         frontMatter,
         profile
       });

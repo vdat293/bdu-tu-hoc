@@ -2137,6 +2137,42 @@ function initWordFmtTool() {
   const downloadBtn = document.getElementById('btn-download-docx');
   const diagContainer = document.getElementById('diag-items');
 
+  const documentTypeSelect = document.getElementById('wf-document-type');
+  const courseDefaults = {};
+  const syncDocumentType = () => {
+    const graduation = documentTypeSelect?.value === 'do_an_tot_nghiep';
+    const title = document.getElementById('wf-doc-title');
+    title.value = graduation ? 'ĐỒ ÁN TỐT NGHIỆP' : (courseDefaults.title || 'TIỂU LUẬN MÔN HỌC');
+    title.readOnly = graduation;
+    for (const name of ['cover', 'comments']) {
+      const checkbox = document.getElementById(`wf-include-${name}`);
+      checkbox.checked = graduation ? true : (courseDefaults[name] ?? true);
+      checkbox.disabled = graduation;
+    }
+    document.getElementById('wf-cover-label').textContent = graduation
+      ? 'Hai trang bìa: bìa chính và bìa phụ; chỉ thêm bìa còn thiếu.'
+      : 'Trang bìa: Khung viền chuẩn BDU, đề tài, GVHD, SVTH, Lớp, MSSV';
+    document.getElementById('wf-comments-label').textContent = graduation
+      ? 'Hai trang nhận xét: giảng viên hướng dẫn và giảng viên phản biện, có chỗ ký tên.'
+      : 'Nhận xét giảng viên: Trang có vùng trống để giảng viên ghi nhận xét';
+    document.getElementById('wf-document-type-hint').textContent = graduation
+      ? 'Chuẩn hóa đầu đề cương; giữ nguyên khung nội dung và ký duyệt. Bổ sung hai trang nhận xét theo mẫu đồ án.'
+      : 'Định dạng tiểu luận theo cấu hình hiện tại.';
+    document.getElementById('wf-document-mode').querySelector('[value="binding_package"]').textContent = graduation
+      ? 'Bản phục vụ đóng quyển (giữ hai trang bìa)'
+      : 'Bản phục vụ đóng quyển (thêm trang trắng và bản sao bìa)';
+    document.getElementById('wf-binding-hint').textContent = graduation
+      ? 'Đồ án có hai trang bìa ở cả hai chế độ xuất; không thêm trang trắng hoặc bìa trùng.'
+      : 'Khi chọn bản đóng quyển: in một mặt trên A4, dùng bìa cứng xanh dương và tờ bìa sau cùng màu.';
+  };
+  documentTypeSelect?.addEventListener('change', () => {
+    if (documentTypeSelect.value === 'do_an_tot_nghiep') {
+      courseDefaults.title = document.getElementById('wf-doc-title').value;
+      for (const name of ['cover', 'comments']) courseDefaults[name] = document.getElementById(`wf-include-${name}`).checked;
+    }
+    syncDocumentType();
+  });
+
   function createProgressSession() {
     const placeholder = statusCard?.querySelector('.status-placeholder-content');
     const progressFill = document.getElementById('wordfmt-progress-fill');
@@ -2320,6 +2356,7 @@ function initWordFmtTool() {
       if (course) formData.append('course', course);
       if (location) formData.append('location', location);
       formData.append('documentMode', documentMode);
+      formData.append('documentType', documentTypeSelect?.value || 'tieu_luan');
       if (month) formData.append('month', month);
       if (year) formData.append('year', year);
       formData.append('frontMatter', frontMatter);

@@ -12,7 +12,7 @@
     "db:dump": "node scripts/db-dump.js",
     "db:restore": "node scripts/db-restore.js",
     "rankings:sync": "node scripts/sync-rankings.js",
-    "test": "node tests/test-queue.js && node tests/test-docx-postprocessor.js && node tests/test-docx-structure.js && node tests/test-english-exercise.js && node tests/test-bdu-grades.js && node tests/test-bdu-schedule.js && node tests/test-learning-hub.js && node tests/test-achievements.js && node tests/test-identity-presentation.js && node tests/test-profile-service.js && node tests/test-academic-ranking.js && node tests/test-leaderboard-ui.js && node tests/test-session-toast.js && node tests/test-profile-render.js && node tests/test-grade-table-layout.js && node tests/test-no-mock-data.js && node tests/test-confession-ui.js && node tests/test-clan-document-share-ui.js && node tests/test-community-features.js && node tests/test-avatar-override.js && node tests/test-ranking-frames.js && node tests/test-admin-tool-flow.js && node tests/test-identity-catalog-crud.js && node tests/test-new-identity-titles.js",
+    "test": "node tests/test-queue.js && node tests/test-docx-postprocessor.js && node tests/test-docx-structure.js && node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js && node tests/test-english-exercise.js && node tests/test-bdu-grades.js && node tests/test-bdu-schedule.js && node tests/test-learning-hub.js && node tests/test-achievements.js && node tests/test-identity-presentation.js && node tests/test-profile-service.js && node tests/test-academic-ranking.js && node tests/test-leaderboard-ui.js && node tests/test-session-toast.js && node tests/test-profile-render.js && node tests/test-grade-table-layout.js && node tests/test-no-mock-data.js && node tests/test-confession-ui.js && node tests/test-clan-document-share-ui.js && node tests/test-community-features.js && node tests/test-avatar-override.js && node tests/test-ranking-frames.js && node tests/test-admin-tool-flow.js && node tests/test-identity-catalog-crud.js && node tests/test-new-identity-titles.js",
     "test:ranking-integration": "node tests/test-ranking-integration.js",
     "test:wordfmt-e2e": "node tests/test-wordfmt-e2e.js",
     "test:achievement-integration": "node tests/test-achievement-integration.js",
@@ -25,7 +25,8 @@
     "test:community": "node tests/test-community.js",
     "test:learning-interactions": "node tests/test-learning-interactions.js",
     "test:load": "node tests/test-server-load.js",
-    "test:wordfmt-structure": "node tests/test-docx-structure.js"
+    "test:wordfmt-structure": "node tests/test-docx-structure.js",
+    "test:wordfmt-graduation": "node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

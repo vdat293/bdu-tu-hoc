@@ -53,6 +53,7 @@ export const WordFmtService = {
    * @param {'digital_document'|'binding_package'} [params.documentMode]
    * @param {string} [params.frontMatter] - Comma separated front matter: cover,comments,thanks
    * @param {string} [params.profile] - Profile name (defaults to tieu_luan.json)
+   * @param {'tieu_luan'|'do_an_tot_nghiep'} [params.documentType] - Document family, independent of print mode
    */
   async formatDocx({
     inputPath,
@@ -69,9 +70,17 @@ export const WordFmtService = {
     month = '',
     year = '',
     documentMode = 'digital_document',
+    documentType = 'tieu_luan',
     frontMatter = 'cover,comments,thanks',
     profile = 'tieu_luan.json'
   }) {
+    if (!['tieu_luan', 'do_an_tot_nghiep'].includes(documentType)) {
+      throw new Error('Loại tài liệu không hợp lệ.');
+    }
+    if (documentType === 'do_an_tot_nghiep') {
+      profile = 'do_an_tot_nghiep.json';
+      documentTitle = 'ĐỒ ÁN TỐT NGHIỆP';
+    }
     if (!fs.existsSync(inputPath)) {
       throw new Error('Không tìm thấy file tải lên.');
     }
@@ -112,12 +121,12 @@ export const WordFmtService = {
       default: documentMode === 'binding_package' ? 'binding_package' : 'digital_document'
     };
     const structure = analyzeDocxStructure(inputPath);
-    if (structure.requiresStructuredFormatting) {
+    if (documentType === 'do_an_tot_nghiep' || structure.requiresStructuredFormatting) {
       return wordFmtQueue.enqueue(async () => {
         const result = formatStructuredDocx(inputPath, outputPath, {
           profile: runtimeProfile, instructor, student, studentId, topic, className,
           documentTitle, institution, faculty, course, location, month, year,
-          documentMode, frontMatter
+          documentMode, documentType, frontMatter
         }, structure);
         return { ...result, outputFile: path.basename(outputPath), stdout: '' };
       });

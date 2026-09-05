@@ -801,7 +801,7 @@
               <form id="form-wordfmt">
                 <!-- Dropzone -->
                 <div class="form-group">
-                  <label class="form-label">Chọn hoặc Kéo Thả File Tiểu Luận / Báo Cáo (.docx):</label>
+                  <label class="form-label">Chọn hoặc Kéo Thả File Tiểu Luận / Đồ Án (.docx):</label>
                   <div id="docx-dropzone" class="dropzone-box">
                     <input type="file" id="docx-file-input" accept=".docx" class="hidden-file-input">
                     <div class="dropzone-content">
@@ -818,6 +818,14 @@
                 </div>
 
                 <!-- Form Details -->
+                <div class="form-group">
+                  <label for="wf-document-type" class="form-label">Loại tài liệu:</label>
+                  <select id="wf-document-type" class="form-input">
+                    <option value="tieu_luan">Tiểu luận môn học</option>
+                    <option value="do_an_tot_nghiep">Đồ án tốt nghiệp</option>
+                  </select>
+                  <p id="wf-document-type-hint" class="dropzone-hint" aria-live="polite">Định dạng tiểu luận theo cấu hình hiện tại.</p>
+                </div>
                 <div class="form-row-2">
                   <div class="form-group">
                     <label for="wf-instructor" class="form-label">Giảng Viên Hướng Dẫn (GVHD): <span
@@ -861,7 +869,7 @@
                       <option value="digital_document" selected>Tài liệu số</option>
                       <option value="binding_package">Bản phục vụ đóng quyển (thêm trang trắng và bản sao bìa)</option>
                     </select>
-                    <p class="dropzone-hint">Khi chọn bản đóng quyển: in một mặt trên A4, dùng bìa cứng xanh dương và tờ bìa sau cùng màu.</p>
+                    <p id="wf-binding-hint" class="dropzone-hint">Khi chọn bản đóng quyển: in một mặt trên A4, dùng bìa cứng xanh dương và tờ bìa sau cùng màu.</p>
                   </div>
                   <div class="form-row-2">
                     <div class="form-group">
@@ -893,7 +901,7 @@
                       placeholder="Ví dụ: Xây dựng hệ thống tra cứu điểm BDU">
                   </div>
                   <div class="form-group">
-                    <label for="wf-doc-title" class="form-label">Loại Văn Bản / Tiêu Đề Bìa:</label>
+                    <label for="wf-doc-title" class="form-label">Tiêu Đề Bìa:</label>
                     <input type="text" id="wf-doc-title" class="form-input" placeholder="TIỂU LUẬN MÔN HỌC"
                       value="TIỂU LUẬN MÔN HỌC">
                   </div>
@@ -905,11 +913,11 @@
                   <div class="features-checklist">
                     <label class="feature-item">
                       <input type="checkbox" id="wf-include-cover" checked>
-                      <span><strong>Trang bìa:</strong> Khung viền chuẩn BDU, đề tài, GVHD, SVTH, Lớp, MSSV</span>
+                      <span id="wf-cover-label"><strong>Trang bìa:</strong> Khung viền chuẩn BDU, đề tài, GVHD, SVTH, Lớp, MSSV</span>
                     </label>
                     <label class="feature-item">
                       <input type="checkbox" id="wf-include-comments" checked>
-                      <span><strong>Nhận xét giảng viên:</strong> Trang có vùng trống để giảng viên ghi nhận xét</span>
+                      <span id="wf-comments-label"><strong>Nhận xét giảng viên:</strong> Trang có vùng trống để giảng viên ghi nhận xét</span>
                     </label>
                     <label class="feature-item">
                       <input type="checkbox" id="wf-include-thanks" checked>
