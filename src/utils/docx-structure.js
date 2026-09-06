@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { prepareGraduation, prepareCourseworkCover, isolateProposalStyles } from './docx-graduation.js';
+import { readCoverMetadata } from './docx-graduation-cover.js';
 import {captureProposalBlock, markProposalBlock, restoreProposalBlock} from './docx-proposal-preservation.js';
 import { repairDataTable, normalizeStructuredCaptions, ensureAcknowledgementFrame } from './docx-layout.js';
 import AdmZip from 'adm-zip';
@@ -23,6 +24,64 @@ const keyOf = s => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const cm = n => Math.round(n * 1440 / 2.54);
 
+function leadingPageBorderSections(archive, maxSections = 3) {
+  const documentXml = archive.readAsText('word/document.xml');
+  const sections = [...documentXml.matchAll(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/g)].map(match => match[0]);
+  return sections.slice(0, maxSections).flatMap((sectionXml, index) => {
+    const borders = sectionXml.match(/<w:pgBorders\b[\s\S]*?<\/w:pgBorders>/)?.[0] || '';
+    const visible = /<w:(?:top|left|bottom|right)\b[^>]*\bw:val="(?!(?:nil|none)")[^"]+"/i.test(borders);
+    return visible ? [index + 1] : [];
+  });
+}
+
+function replaceBorderedLeadingCoverPages(analysis, borderedSections) {
+  if (!borderedSections.length) return 0;
+  const { $, body, records, archive } = analysis;
+  const topNode = node => { let current = node; while (current.parent && current.parent !== body[0]) current = current.parent; return current; };
+  const firstContent = records.find(record => ['proposal_title', 'front_title', 'intro_title', 'part_title', 'chapter', 'major_title'].includes(record.role));
+  const boundary = firstContent && (firstContent.startElement || topNode(firstContent.element));
+  const children = body.children().toArray();
+  const end = boundary ? children.indexOf(boundary) : 0;
+  if (end <= 0) return 0;
+
+  // Page borders in the first three logical sections identify imported cover
+  // templates. Replace just this leading block; the semantic boundary and all
+  // proposal/front-matter content after it remain untouched.
+  children.slice(0, end).forEach(node => $(node).remove());
+  archive.updateFile('word/document.xml', Buffer.from($.xml()));
+  return borderedSections.length;
+}
+
+function metadataFromBorderedLeadingCoverPages(analysis, borderedSections) {
+  if (!borderedSections.length) return {};
+  const { $, body, records } = analysis;
+  const topNode = node => { let current = node; while (current.parent && current.parent !== body[0]) current = current.parent; return current; };
+  const firstContent = records.find(record => ['proposal_title', 'front_title', 'intro_title', 'part_title', 'chapter', 'major_title'].includes(record.role));
+  const boundary = firstContent && (firstContent.startElement || topNode(firstContent.element));
+  const children = body.children().toArray();
+  const end = boundary ? children.indexOf(boundary) : 0;
+  if (end <= 0) return {};
+  return readCoverMetadata(children.slice(0, end).map(node => textOf($(node))).join('\n'));
+}
+
+function indexPageDefinition(title) {
+  const normalized = keyOf(title);
+  if (normalized === 'MUC LUC') {
+    return {
+      kind: 'toc',
+      label: 'MỤC LỤC',
+      field: 'TOC \\t "WFIntroTitle,1,WFIntroHeading,2,WFPartTitle,1,WFMajorTitle,1,WFHeading1,1,WFHeading2,2,WFHeading3,3,WFHeading4,4" \\h'
+    };
+  }
+  if (/^(?:DANH MUC|MUC LUC) (?:CAC )?(?:HINH|HINH ANH|HINH VE)\b/.test(normalized)) {
+    return { kind: 'figures', label: 'DANH MỤC HÌNH ẢNH', field: 'TOC \\c "Hinh" \\h' };
+  }
+  if (/^(?:DANH MUC|MUC LUC) (?:CAC )?(?:BANG|BANG BIEU)\b/.test(normalized)) {
+    return { kind: 'tables', label: 'DANH MỤC BẢNG', field: 'TOC \\c "Bang" \\h' };
+  }
+  return null;
+}
+
 function prop(node, name, xml) {
   let pp = child(node, 'pPr');
   if (!pp.length) { node.prepend('<w:pPr/>'); pp = child(node, 'pPr'); }
@@ -35,6 +94,9 @@ function paragraph(text, id = 'WFBody') {
 }
 function fieldParagraph(code) {
   return `<w:p><w:pPr><w:pStyle w:val="WFBody"/></w:pPr><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r><w:r><w:instrText xml:space="preserve"> ${esc(code)} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Cập nhật mục lục trong Word.</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+}
+function fieldControl(code) {
+  return `<w:sdt><w:sdtContent>${fieldParagraph(code)}</w:sdtContent></w:sdt>`;
 }
 
 // Resolve numbering without converting it to text. The same source numbering
@@ -467,6 +529,22 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
 }
 
 export function formatStructuredDocx(inputPath, outputPath, options, analysis = analyzeDocxStructure(inputPath)) {
+  const leadingPageBordersDetected = leadingPageBorderSections(analysis.archive);
+  // The incoming border pages may be the only reliable source for these values
+  // when a previously exported graduation document is formatted again.
+  const borderedCoverMetadata = metadataFromBorderedLeadingCoverPages(analysis, leadingPageBordersDetected);
+  options = {
+    ...options,
+    instructor: options.instructor || borderedCoverMetadata.instructor,
+    student: options.student || borderedCoverMetadata.student,
+    studentId: options.studentId || borderedCoverMetadata.studentId,
+    className: options.className || borderedCoverMetadata.className
+  };
+  const borderedLeadingCoverPagesReplaced = replaceBorderedLeadingCoverPages(analysis, leadingPageBordersDetected);
+  if (borderedLeadingCoverPagesReplaced) {
+    analysis = analyzeDocxStructure(analysis.archive);
+    analysis.warnings.push(`Đã thay ${borderedLeadingCoverPagesReplaced} trang đầu có page border bằng bìa chuẩn của tool.`);
+  }
   const graduation = options.documentType === 'do_an_tot_nghiep';
   const shouldSkipProposal = Boolean(options.skipProposal);
   const preserveProposal = graduation || shouldSkipProposal;
@@ -516,28 +594,13 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       const table = /(?:Bang|Bảng|BNG|Table)/iu.test(code) || /^Bảng\s/iu.test(rec.text);
       const id = figure ? 'figures' : table ? 'tables' : rec.indexId ?? 'legacy-index';
       if (!generatedIndexes.has(id)) {
-        const replacement = fieldParagraph(figure ? 'TOC \\c "Hinh" \\h' : table ? 'TOC \\c "Bang" \\h' : tocCode);
+        // This is an existing index: retain its original field switches.
+        // In particular, lists based on a Vietnamese caption style (\t "HÌNH,1"
+        // or \t "BẢNG,1") are not equivalent to a SEQ-caption list (\c).
+        const replacement = fieldParagraph(code || tocCode);
         p.before(replacement); generatedIndexes.add(id); restoredIndexes++;
       }
       p.remove(); continue;
-    }
-    if (rec.role === 'front_title') {
-      const key = keyOf(rec.text);
-      if (/^(?:DANH MUC|MUC LUC) BANG\b/iu.test(key) && !generatedIndexes.has('tables')) {
-        const next = p.next();
-        if (!next.find(tag('instrText')).filter((_, e) => /TOC\b/i.test($(e).text())).length) {
-          p.after(fieldParagraph('TOC \\c "Bang" \\h'));
-          generatedIndexes.add('tables');
-          restoredIndexes++;
-        }
-      } else if (/^(?:DANH MUC|MUC LUC) HINH\b/iu.test(key) && !generatedIndexes.has('figures')) {
-        const next = p.next();
-        if (!next.find(tag('instrText')).filter((_, e) => /TOC\b/i.test($(e).text())).length) {
-          p.after(fieldParagraph('TOC \\c "Hinh" \\h'));
-          generatedIndexes.add('figures');
-          restoredIndexes++;
-        }
-      }
     }
     if (preserved.has(rec.element) || rec.insideTable || (graduation && rec.styleId==='WFGraduationForm')) continue;
     applyParagraphFormat($, p, rec, profile);
@@ -678,6 +741,50 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     $(target.node).before(nodes);
     starts.push({node:nodes[0],role:'front_title',title:label});
   }
+  // Rebuild only index pages already present in the source. Static lists and
+  // stale cached Word results both become one canonical tool-owned field;
+  // indexes absent from the input are never introduced.
+  const sourceStarts = [...starts];
+  const sourceChildren = body.children().toArray();
+  const replacements = new Map();
+  sourceStarts.forEach((start, index) => {
+    const definition = start.role === 'front_title' && indexPageDefinition(start.title);
+    if (!definition) return;
+    const startIndex = sourceChildren.indexOf(start.node);
+    if (startIndex < 0) return;
+    const currentKey = keyOf(start.title);
+    const nextIndex = sourceStarts.slice(index + 1)
+      .find(next => {
+        const nextIndexDefinition = next.role === 'front_title' && indexPageDefinition(next.title);
+        // Static TOC content can itself begin with “Mục lục …”, which the
+        // structural classifier labels as a front title. It belongs to the
+        // same block, not a new boundary.
+        return nextIndexDefinition || next.role !== 'front_title' || !keyOf(next.title).startsWith(currentKey);
+      });
+    const nextChildIndex = nextIndex ? sourceChildren.indexOf(nextIndex.node) : -1;
+    const entry = replacements.get(definition.kind) || { definition, blocks: [] };
+    entry.blocks.push({ start, nodes: sourceChildren.slice(startIndex, nextChildIndex >= 0 ? nextChildIndex : sourceChildren.length) });
+    replacements.set(definition.kind, entry);
+  });
+  const removedStartNodes = new Set();
+  const generatedIndexStarts = [];
+  for (const { definition, blocks } of replacements.values()) {
+    const first = blocks[0];
+    const replacement = $(paragraph(definition.label, 'WFFrontTitle') + fieldControl(definition.field));
+    $(first.start.node).before(replacement);
+    for (const block of blocks) {
+      removedStartNodes.add(block.start.node);
+      block.nodes.forEach(node => $(node).remove());
+    }
+    generatedIndexStarts.push({ node: replacement[0], role: 'front_title', title: definition.label });
+  }
+  if (removedStartNodes.size) {
+    for (let index = starts.length - 1; index >= 0; index -= 1) {
+      if (removedStartNodes.has(starts[index].node)) starts.splice(index, 1);
+    }
+    starts.push(...generatedIndexStarts);
+  }
+  const indexPagesRebuilt = generatedIndexStarts.length;
   // Move the entire thanks block, including tables and controls, before TOC.
   const thanks=starts.find(s=>keyOf(s.title)==='LOI CAM ON');
   const toc=starts.find(s=>keyOf(s.title)==='MUC LUC');
@@ -815,21 +922,29 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const $out=verified.$, sections=$out(tag('sectPr')).toArray();
   const expectedMargins=profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
   const a4Portrait=sections.every(s=>Number(child($out(s),'pgSz').attr('w:w'))===11906 && Number(child($out(s),'pgSz').attr('w:h'))===16838);
-  const margins=sections.every((s,i)=>Object.entries((graduation && starts[i]?.role==='cover' && profile.cover?.margins_cm) || expectedMargins).every(([k,v])=>Number(child($out(s),'pgMar').attr(`w:${k}`))===cm(v)));
+  const margins=sections.every((s,i)=>Object.entries((starts[i]?.role==='cover' && profile.cover?.margins_cm) || expectedMargins).every(([k,v])=>Number(child($out(s),'pgMar').attr(`w:${k}`))===cm(v)));
   const headingIndentation=verified.records.filter(r=>r.role==='heading' && r.level>=3).every(r=>{
     const ind=$out(r.element).find(tag('ind')).first();
     return Number(ind.attr('w:left'))-Number(ind.attr('w:hanging')||0)===cm(profile.headings?.[`level${r.level}`]?.number_position_cm ?? (r.level===3?1.27:2.54));
   });
+  const wordCompatibleAnchors=(documentXml.match(/<wp:anchor\b[^>]*>[\s\S]*?<\/wp:anchor>/g)||[]).every(anchor=>{
+    const wrap=anchor.search(/<wp:wrap(?:None|Square|Tight|Through|TopAndBottom)\b/);
+    const extent=anchor.search(/<wp:extent\b/);
+    const effectExtent=anchor.search(/<wp:effectExtent\b/);
+    return wrap<0 || (extent>=0 && wrap>extent && (effectExtent<0 || wrap>effectExtent));
+  });
+  const wordprocessingPropertyOrder=normalizeWordprocessingPropertyOrder(documentXml).xml===documentXml;
   return { success:true, outputPath, fileSize:fs.statSync(outputPath).size,
     report: { appliedProfile:{profileId:profile.profile_id,sourceRevision:profile.source_revision},
       structure:{...analysis.summary,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
+        indexPagesRebuilt, leadingPageBordersDetected, borderedLeadingCoverPagesReplaced, tableFontSizePt:13,
         enDashesReplaced:dashReplacements, hyperlinksRemoved:hyperlinks.stats.hyperlinksRemoved, frontMatterReordered, bindingPagesInserted,
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,
           smartQuotesPreserved:true,referenceHyperlinksRemoved:stripReferenceHyperlinks(documentXml).stats.hyperlinksRemoved===0,
           longDashesNormalized:!verified.records.some(r=>!['cover','proposal'].includes(r.region)&&/[–—]/.test(r.text)),
-          wideTablesFitPortrait:wideTablesDetected===0,headingStructure:chapterStructure,headingIndentation,
+          wideTablesFitPortrait:wideTablesDetected===0,wordCompatibleAnchors,wordprocessingPropertyOrder,headingStructure:chapterStructure,headingIndentation,
           proposalPreserved,proposalTablesPreserved,proposalBlockPreserved,proposalSkipped:shouldSkipProposal },
         tablesCentered, drawingParagraphsCentered, wideTablesDetected, tablesResized, acknowledgementFramesAdded, ...captionStats,
         warnings:analysis.warnings } } };

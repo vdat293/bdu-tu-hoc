@@ -7,6 +7,16 @@
 # repository. The WordFmt binary is already tracked at bin/wordfmt.
 FROM node:22-bookworm-slim AS node-runtime
 
+# Build JSX in an isolated stage. The runtime image receives only the
+# production dependency tree and the generated client artifact.
+FROM node:22-bookworm-slim AS frontend-build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY client ./client
+COPY vite.config.js ./
+RUN npm run build:client
+
 # .NET runtime base provides all native libraries required by WordFmt.
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runner
 WORKDIR /app
@@ -24,6 +34,7 @@ RUN npm ci --omit=dev
 
 # Copy application files, including the prebuilt bin/wordfmt binary.
 COPY . .
+COPY --from=frontend-build /app/dist/client ./dist/client
 
 # Fail during image build if either runtime is unavailable. The runtime image
 # intentionally has no SDK, so use --list-runtimes instead of --version.

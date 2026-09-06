@@ -65,6 +65,12 @@ try {
   assert.equal(framed.result.report.structure.unboxedProposalParagraphsRemoved,5);
   assert.equal(format(framed.file,'framed-again').result.report.structure.unboxedProposalParagraphsRemoved,0);
   const out=format(source,'out');verify(out);
+  const borderedLeadingCover = `${cover}<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1701"/><w:pgBorders w:offsetFrom="page"><w:top w:val="single" w:sz="8"/><w:left w:val="single" w:sz="8"/><w:bottom w:val="single" w:sz="8"/><w:right w:val="single" w:sz="8"/></w:pgBorders></w:sectPr></w:pPr></w:p>`;
+  const replacedBorderedCover=format(fixture('bordered-leading-cover',borderedLeadingCover+proposal+rest),'bordered-leading-cover');
+  verify(replacedBorderedCover);
+  assert.deepEqual(replacedBorderedCover.result.report.outputNormalization.leadingPageBordersDetected,[1]);
+  assert.equal(replacedBorderedCover.result.report.outputNormalization.borderedLeadingCoverPagesReplaced,1);
+  assert.equal(replacedBorderedCover.result.report.structure.coversAdded,2,'a bordered imported cover is replaced with two tool covers');
   assert.equal(out.result.report.structure.proposalSignaturesFormatted,1,'proposal signatures are formatted');
   const propSigTable = out.a.$('w\\:tbl').filter((_,e) => out.a.$(e).text().includes('VIỆN TRƯỞNG'));
   assert.equal(propSigTable.length,1,'proposal signature table exists');
@@ -106,7 +112,9 @@ try {
   assert.equal(out.result.report.structure.reviewPagesAdded,2);
   const again=format(out.file,'again',{documentMode:'binding_package'});verify(again);
   assert.equal(captureProposalBlock(again.a).xml,captureProposalBlock(out.a).xml,'full proposal survives repeated processing');
-  assert.equal(again.result.report.structure.coversAdded,0);
+  assert.deepEqual(again.result.report.outputNormalization.leadingPageBordersDetected,[1,2]);
+  assert.equal(again.result.report.outputNormalization.borderedLeadingCoverPagesReplaced,2);
+  assert.equal(again.result.report.structure.coversAdded,2);
   assert.equal(again.result.report.structure.reviewPagesAdded,0);
   assert.equal(again.result.report.structure.signaturesAdded,0);
   assert.equal(again.result.report.structure.proposalSignaturesFormatted,0);

@@ -72,13 +72,19 @@ export function repairDataTable($, table, width = 9071) {
         children(pp,'pBdr').remove();
         set(pp,'spacing','<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>');
         set(pp,'keepNext',`<w:keepNext w:val="${hasHeader&&rowIndex===0?1:0}"/>`);
+        // Every normalized data-table run uses 13 pt. Code tables retain their
+        // source font family/tabs but still follow the requested table size.
+        p.find(tag('r')).each((_,run)=>{
+          const rpr=properties($(run),'rPr');
+          set(rpr,'sz','<w:sz w:val="26"/>');
+          set(rpr,'szCs','<w:szCs w:val="26"/>');
+        });
         if(code)return; // Preserve monospaced code, tabs, and intentional spaces.
         set(pp,'jc',`<w:jc w:val="${hasHeader&&rowIndex===0?'center':'left'}"/>`);
         set(pp,'ind','<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
         p.find(tag('r')).each((_,run)=>{
           const rpr=properties($(run),'rPr');
           set(rpr,'rFonts','<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>');
-          set(rpr,'sz','<w:sz w:val="22"/>');set(rpr,'szCs','<w:szCs w:val="22"/>');
           if(hasHeader&&rowIndex===0)set(rpr,'b','<w:b/>');
         });
       });

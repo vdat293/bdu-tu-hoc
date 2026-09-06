@@ -35,8 +35,28 @@ function readAnswers() {
 function writeAnswers(answers) {
   ensureAnswerStore();
   const tempFile = `${ANSWERS_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tempFile, `${JSON.stringify(answers, null, 2)}\n`, 'utf8');
-  fs.renameSync(tempFile, ANSWERS_FILE);
+  const payload = `${JSON.stringify(answers, null, 2)}\n`;
+  fs.writeFileSync(tempFile, payload, 'utf8');
+  try {
+    fs.renameSync(tempFile, ANSWERS_FILE);
+  } catch (error) {
+    // Windows can reject replacing a file that a long-lived local dev process
+    // has opened for reading. Keep the atomic rename as the first choice, but
+    // fall back to a direct write so answer learning does not fail needlessly.
+    const replaceBlocked = process.platform === 'win32'
+      && ['EACCES', 'EBUSY', 'EPERM'].includes(error?.code);
+    if (!replaceBlocked) {
+      try { fs.unlinkSync(tempFile); } catch { /* best effort cleanup */ }
+      throw error;
+    }
+    try {
+      fs.writeFileSync(ANSWERS_FILE, payload, 'utf8');
+      fs.unlinkSync(tempFile);
+    } catch (fallbackError) {
+      try { fs.unlinkSync(tempFile); } catch { /* best effort cleanup */ }
+      throw fallbackError;
+    }
+  }
 }
 
 function saveAnswer(question, correctAnswer, source = 'manual') {

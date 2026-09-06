@@ -7,6 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "npm run db:migrate && node --watch server.js",
+    "dev:server": "node --watch server.js",
+    "dev:client": "vite --config vite.config.js",
+    "build:client": "vite build --config vite.config.js",
+    "preview:client": "vite preview --config vite.config.js",
+    "lint:frontend": "eslint client vite.config.js",
+    "test:frontend": "vitest run --config vitest.config.js",
+    "test:e2e": "npm run build:client && node tests/e2e-routing-smoke.js",
     "db:setup:dev": "node scripts/setup-dev-database.js",
     "db:migrate": "node scripts/migrate.js",
     "db:dump": "node scripts/db-dump.js",
@@ -29,14 +36,30 @@
     "test:wordfmt-graduation": "node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.2",
     "adm-zip": "^0.5.16",
     "axios": "^1.7.9",
+    "chart.js": "^4.5.0",
     "cheerio": "1.0.0",
     "express": "^4.19.2",
     "multer": "^2.2.0",
     "pg": "^8.23.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^6.30.1",
     "sharp": "^0.34.5",
     "tough-cookie": "^5.0.0",
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^5.0.2",
+    "eslint": "^9.35.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "jsdom": "^26.1.0",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
   }
 }

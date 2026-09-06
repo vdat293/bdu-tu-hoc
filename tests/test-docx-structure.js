@@ -11,7 +11,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'wordfmt-structure-test-'));
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p=(text,style='',extra='')=>`<w:p><w:pPr>${style?`<w:pStyle w:val="${style}"/>`:''}${extra}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const wideTable=text=>`<w:tbl><w:tblPr><w:tblW w:w="10160" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="10160"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="10160" w:type="dxa"/></w:tcPr>${p(text)}</w:tc></w:tr></w:tbl>`;
-const index=(lines)=>`<w:sdt><w:sdtContent><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> TOC \\o "1-4" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>${lines}<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:sdtContent></w:sdt>`;
+const index=(lines, code=' TOC \\o "1-4" ')=>`<w:sdt><w:sdtContent><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>${code}</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>${lines}<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:sdtContent></w:sdt>`;
 const sourceStyles=`<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr></w:pPr></w:style><w:style w:type="paragraph" w:styleId="CustomHeading2"><w:basedOn w:val="Heading2"/></w:style></w:styles>`;
 function fixture(name, body, numbering='') {
   const zip=new AdmZip();
@@ -50,6 +50,46 @@ try {
   assert.equal(after.$('w\\:tblW').first().attr('w:w'),'10160','proposal table geometry is preserved');
   const $styles=load(output.readAsText('word/styles.xml'),{xml:true});
   assert.equal($styles('w\\:style[w\\:styleId="Normal"] w\\:sz').attr('w:val'),'24','source Normal must not change proposal');
+  const automaticXml = output.readAsText('word/document.xml');
+  assert.doesNotMatch(automaticXml, /DANH MỤC HÌNH ẢNH|DANH MỤC BẢNG/,'missing front-matter indexes must not be created');
+  const existingFigureIndex=fixture(
+    'existing-figure-index',
+    p('DANH MỤC HÌNH ẢNH')
+      +index(p('Hình 1: Sơ đồ nguồn1'),' TOC \\h \\z \\t "HÌNH,1" ')
+      +p('CHƯƠNG 1: Nội dung')
+  );
+  const existingFigureOut=path.join(temp,'existing-figure-index-out.docx');
+  formatStructuredDocx(existingFigureIndex,existingFigureOut,options);
+  const existingFigureXml=new AdmZip(existingFigureOut).readAsText('word/document.xml');
+  assert.match(existingFigureXml,/TOC \\c &quot;Hinh&quot; \\h/,'an existing figure index is rebuilt with the tool field');
+  assert.equal((existingFigureXml.match(/DANH MỤC HÌNH ẢNH/g)||[]).length,1,'existing figure-index title is not duplicated');
+  assert.doesNotMatch(existingFigureXml,/DANH MỤC BẢNG/,'a missing table index is not added beside an existing figure index');
+  const existingStaticIndexes=fixture(
+    'existing-static-indexes',
+    p('MỤC LỤC')+p('Mục lục cũ phải được thay')
+      +p('DANH MỤC HÌNH ẢNH')+p('Danh mục hình cũ phải được thay')
+      +p('DANH MỤC BẢNG')+p('Danh mục bảng cũ phải được thay')
+      +p('CHƯƠNG 1: Nội dung')
+  );
+  const existingStaticOut=path.join(temp,'existing-static-indexes-out.docx');
+  formatStructuredDocx(existingStaticIndexes,existingStaticOut,options);
+  const existingStaticXml=new AdmZip(existingStaticOut).readAsText('word/document.xml');
+  assert.doesNotMatch(existingStaticXml,/Mục lục cũ|Danh mục hình cũ|Danh mục bảng cũ/,'stale static index content is removed');
+  assert.match(existingStaticXml,/TOC \\t &quot;WFIntroTitle,1/,'existing TOC is rebuilt with the tool field');
+  assert.match(existingStaticXml,/TOC \\c &quot;Hinh&quot; \\h/,'existing figure list is rebuilt with the tool field');
+  assert.match(existingStaticXml,/TOC \\c &quot;Bang&quot; \\h/,'existing table list is rebuilt with the tool field');
+  const alternateIndexNames=fixture(
+    'alternate-index-names',
+    p('MỤC LỤC HÌNH')+p('Nội dung hình cũ')
+      +p('MỤC LỤC BẢNG BIỂU')+p('Nội dung bảng cũ')
+      +p('CHƯƠNG 1: Nội dung')
+  );
+  const alternateIndexOut=path.join(temp,'alternate-index-names-out.docx');
+  formatStructuredDocx(alternateIndexNames,alternateIndexOut,options);
+  const alternateIndexXml=new AdmZip(alternateIndexOut).readAsText('word/document.xml');
+  assert.match(alternateIndexXml,/TOC \\c &quot;Hinh&quot; \\h/,'Mục lục hình is recognized as an existing figure index');
+  assert.match(alternateIndexXml,/TOC \\c &quot;Bang&quot; \\h/,'Mục lục bảng is recognized as an existing table index');
+  assert.doesNotMatch(alternateIndexXml,/Nội dung hình cũ|Nội dung bảng cũ/,'alternate stale index content is removed');
   const checked=await WordFmtService.checkDocx(source);
   assert.equal(checked.structure.chapterCount,2);
   assert.doesNotMatch(checked.output,/99\.1/);
@@ -79,7 +119,7 @@ try {
   formatStructuredDocx(result.outputPath,again,options);
   const second=new AdmZip(again), $$=load(second.readAsText('word/document.xml'),{xml:true});
   assert.equal($$('w\\:sectPr').length,$('w\\:sectPr').length,'no section duplication on second run');
-  assert.equal($$('w\\:instrText').filter((_,e)=>$$(e).text().includes('TOC')).length,1);
+  assert.equal($$('w\\:instrText').filter((_,e)=>$$(e).text().includes('TOC')).length,1,'không tự tạo danh mục khi chạy lại');
   assert.deepEqual(analyzeDocxStructure(again).chapters.map(r=>r.number),['1','2']);
   const binding=path.join(temp,'binding.docx');
   const bound=formatStructuredDocx(manual,binding,{...options,frontMatter:'cover',documentMode:'binding_package',topic:'Đề tài thử nghiệm'});
@@ -95,6 +135,7 @@ try {
   assert.equal(fitResult.report.outputNormalization.tablesResized,1);
   const f$=load(new AdmZip(fitted).readAsText('word/document.xml'),{xml:true});
   assert.ok(Number(f$('w\\:tblW').first().attr('w:w'))<=9071);
+  assert.ok(f$('w\\:tbl').first().find('w\\:rPr w\\:sz').toArray().every(e=>f$(e).attr('w:val')==='26'),'data-table text is 13 pt');
   assert.ok(f$('w\\:t').toArray().some(e=>f$(e).text()==='Nội dung bảng giữ nguyên'));
   assert.ok(f$('w\\:p').toArray().some(e=>f$(e).find('w\\:t').text()==='Bảng 1-1: Kết quả'));
   assert.ok(f$('w\\:p').toArray().some(e=>f$(e).find('w\\:t').text()==='Bảng 1-1 trình bày các kết quả.'),'prose reference follows caption');

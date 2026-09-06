@@ -74,7 +74,9 @@ export const WordFmtService = {
     documentType = 'tieu_luan',
     frontMatter = 'cover,comments,thanks',
     profile = 'tieu_luan.json',
-    onlyExistingCaptions = false,
+    // Safe default for uploaded academic documents. Callers can opt in to
+    // placeholder insertion explicitly when they are preparing a new draft.
+    onlyExistingCaptions = true,
     skipProposal = false
   }) {
     if (!['tieu_luan', 'do_an_tot_nghiep'].includes(documentType)) {

@@ -22,6 +22,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const avatarStorageDir = AvatarOverrideService.getStorageDir();
+const clientDistDir = path.join(__dirname, 'dist', 'client');
+const clientIndexPath = path.join(clientDistDir, 'index.html');
+const hasReactClientBuild = fs.existsSync(clientIndexPath);
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, 'temp');
@@ -44,7 +47,18 @@ app.use('/media/avatars', express.static(avatarStorageDir, {
   }
 }));
 app.use('/media/avatars', (req, res) => res.status(404).json({ result: false, message: 'Không tìm thấy ảnh đại diện.' }));
-app.use(express.static(path.join(__dirname, 'public')));
+// The React build has its own immutable namespace. Legacy public assets and
+// the standalone admin surface remain available during the migration.
+app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
+  immutable: true,
+  maxAge: '1y',
+  fallthrough: false,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // Dedicated server-side guarded administration surface. The page itself is
 // public static HTML; every data mutation is still protected by API roles.
@@ -60,7 +74,12 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ result: false, message: 'API Endpoint not found' });
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (!req.accepts('html')) {
+    return res.status(404).json({ result: false, message: 'Resource not found' });
+  }
+  const indexPath = hasReactClientBuild ? clientIndexPath : path.join(__dirname, 'public', 'index.html');
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(indexPath);
 });
 
 // Periodic temp file cleanup every 15 minutes
@@ -71,7 +90,10 @@ tempCleanupTimer.unref?.();
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled server error:', err);
+  if (err.status !== 404) console.error('Unhandled server error:', err);
+  if (err.status === 404) {
+    return res.status(404).json({ result: false, message: 'Resource not found' });
+  }
   const isUploadLimit = err?.code === 'LIMIT_FILE_SIZE';
   res.status(isUploadLimit ? 413 : (err.status || 500)).json({
     result: false,

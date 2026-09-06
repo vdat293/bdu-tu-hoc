@@ -43,8 +43,30 @@ Lớp enhancement được tách riêng tại `public/css/showcase.css` và `pub
 
 ## 🚀 Hướng Dẫn Chạy Cục Bộ (Local Development)
 
+### Frontend JSX và routing
+
+Frontend sinh viên mới nằm trong `client/`, build bằng Vite vào `dist/client/` và
+được Express phục vụ cùng origin. `public/admin-tool.html` vẫn là trang quản trị
+độc lập; các tài nguyên legacy được giữ để rollback/coexistence trong giai đoạn
+chuyển đổi.
+
+```bash
+npm run dev:server   # Express/API tại http://localhost:3000
+npm run dev:client   # Vite tại http://localhost:5173, proxy API/media/WS
+npm run build:client # production artifact dist/client
+npm run test:frontend
+npm run test:e2e
+npm run lint:frontend
+```
+
+Route sinh viên canonical gồm `/gpa`, `/info`, `/schedule`, `/leaderboard`,
+`/wordfmt`, `/survey`, `/english`, `/enrollment`, `/learning`, `/clans` và
+`/confession`, cùng `/learning/:courseCode` và `/clans/:clanId`. Bộ lọc GPA,
+lịch và leaderboard được giữ trong query string để deep link, refresh và
+Back/Forward phục hồi đúng trạng thái. Xem [baseline và hợp đồng hành vi](docs/frontend-migration-baseline.md).
+
 ### Yêu cầu môi trường:
-* **Node.js**: Phiên bản 18+ hoặc 20+
+* **Node.js**: Phiên bản 22.12+ (hoặc 20.19+ nếu môi trường chưa nâng được lên Node 22)
 * **.NET SDK / Runtime 8.0+**: Cho module WordFmt
 * **PostgreSQL 16+**: Lưu snapshot GPA và xếp hạng học tập
 

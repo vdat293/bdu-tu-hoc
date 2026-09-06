@@ -49,10 +49,10 @@ try {
   const stylesXml = archive.readAsText('word/styles.xml');
   const relationshipsXml = archive.readAsText('word/_rels/document.xml.rels');
   const headers = archive.getEntries()
-    .filter(entry => /^word\/wfHeader.*\.xml$/i.test(entry.entryName))
+    .filter(entry => /^word\/wfStructureHeader.*\.xml$/i.test(entry.entryName))
     .map(entry => archive.readAsText(entry.entryName));
   const footersXml = archive.getEntries()
-    .filter(entry => /^word\/wfFooter.*\.xml$/i.test(entry.entryName))
+    .filter(entry => /^word\/wfStructureFooter.*\.xml$/i.test(entry.entryName))
     .map(entry => archive.readAsText(entry.entryName))
     .join('');
 
@@ -65,13 +65,11 @@ try {
   assert.match(documentXml, /<w:i w:val="1"\/>[\s\S]*Tên sách cần in nghiêng/);
 
   const thanks = documentXml.indexOf('LỜI CẢM ƠN');
-  const toc = documentXml.indexOf('MỤC LỤC');
-  const figures = documentXml.indexOf('DANH MỤC HÌNH ẢNH');
-  const tables = documentXml.indexOf('DANH MỤC BẢNG');
   const chapter = documentXml.indexOf('CHƯƠNG 1. GIỚI THIỆU TỔNG QUAN');
-  assert.ok(thanks < toc && toc < figures && figures < tables && tables < chapter);
+  assert.ok(thanks < chapter);
+  assert.doesNotMatch(documentXml, /MỤC LỤC|DANH MỤC HÌNH ẢNH|DANH MỤC BẢNG/);
 
-  assert.match(documentXml, /Tên tiểu luận:/);
+  assert.match(documentXml, /Người hướng dẫn:/);
   assert.match(documentXml, /Sinh viên thực hiện:/);
   assert.match(documentXml, /Thành phố Hồ Chí Minh, tháng 9 năm 2026/);
   const bodyStyle = styleOf(stylesXml, 'WFBody');
@@ -82,22 +80,18 @@ try {
   assert.match(heading1Style, /<w:spacing w:before="240" w:after="480"/);
   assert.match(captionStyle, /<w:i(?:\s|\/|>)/);
   assert.match(captionStyle, /<w:b(?:\s|\/|>)/);
-  assert.match(documentXml, /TOC \\o "1-4"/);
-  assert.match(documentXml, /TOC \\c "Hinh"/);
-  assert.match(documentXml, /TOC \\c "Bang"/);
+  assert.doesNotMatch(documentXml, /TOC \\b/);
   assert.match(footersXml, /<w:instrText[^>]*> PAGE <\/w:instrText>/);
 
-  assert.ok(headers.some(xml => textOf(xml).includes('TIỂU LUẬN MÔN HỌCChương 1. Giới thiệu tổng quan')));
-  assert.ok(headers.some(xml => textOf(xml).includes('TIỂU LUẬN MÔN HỌCTài liệu tham khảo')));
+  assert.ok(headers.some(xml => textOf(xml).includes('TIỂU LUẬN MÔN HỌCCHƯƠNG 1. GIỚI THIỆU TỔNG QUAN')));
+  assert.ok(headers.some(xml => textOf(xml).includes('TIỂU LUẬN MÔN HỌCTÀI LIỆU THAM KHẢO')));
   assert.equal(result.report.outputNormalization.compliance.a4Portrait, true);
   assert.equal(result.report.outputNormalization.compliance.margins, true);
   assert.equal(result.report.outputNormalization.compliance.bodySpacing, true);
   assert.equal(result.report.outputNormalization.compliance.referenceHyperlinksRemoved, true);
   assert.equal(result.report.outputNormalization.compliance.wordCompatibleAnchors, true);
   assert.equal(result.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
-  assert.equal(result.report.outputNormalization.tableCaptionsMoved, 1);
-  assert.equal(result.report.outputNormalization.figureCaptionsMoved, 1);
-  assert.equal(result.report.outputNormalization.decorativeDrawingsRemoved, 0);
+  assert.equal(result.report.outputNormalization.captionPositionsCorrected, 2);
 
   const bindingResult = await WordFmtService.formatDocx({
     inputPath: fixturePath,

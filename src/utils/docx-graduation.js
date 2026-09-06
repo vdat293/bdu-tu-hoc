@@ -434,6 +434,7 @@ export function prepareCourseworkCover(analysis, options) {
   const { $, body, records, archive } = analysis;
   const requested = new Set((options.frontMatter ?? 'cover').split(',').map(s => s.trim()));
   const coverRecords = records.filter(r => r.region === 'cover' && !r.insideTable && r.text);
+  const top = e => { while (e.parent && e.parent !== body[0]) e = e.parent; return e; };
 
   let covers = coverRecords.filter(r => /^TRUONG\b/.test(key(r.text))).map(r => top(r.element));
   covers = [...new Set(covers)];
@@ -447,7 +448,6 @@ export function prepareCourseworkCover(analysis, options) {
   const location = options.location || options.profile?.cover?.location || 'Thành phố Hồ Chí Minh';
   const defaultDocType = 'TIỂU LUẬN MÔN HỌC';
   const docType = (options.documentTitle || options.profile?.cover?.document_type || defaultDocType).trim().toUpperCase();
-  const top = e => { while (e.parent && e.parent !== body[0]) e = e.parent; return e; };
   const firstContent = records.find(r => ['proposal_title', 'front_title', 'intro_title', 'part_title', 'chapter', 'major_title'].includes(r.role));
   const boundary = firstContent && (firstContent.startElement || top(firstContent.element));
 

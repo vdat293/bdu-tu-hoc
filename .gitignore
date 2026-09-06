@@ -7,6 +7,9 @@ outside-src/
 .env
 .env.*
 !.env.example
+.acc
 data/*.sql
 data/*.dump
 data/avatars/
+dist/
+.vite/
