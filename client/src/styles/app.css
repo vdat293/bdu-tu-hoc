@@ -50,7 +50,9 @@ body.theme-light .sidebar .nav-item.active {
 }
 
 @keyframes route-spinner-rotate {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .skeleton-block {
@@ -68,14 +70,42 @@ body.theme-light .sidebar .nav-item.active {
   min-width: 0;
 }
 
-.skeleton-line { width: 64%; height: 14px; }
-.skeleton-line.eyebrow { width: 110px; height: 12px; }
-.skeleton-line.title { width: min(360px, 86%); height: 30px; }
-.skeleton-line.heading { width: min(280px, 72%); height: 22px; }
-.skeleton-line.wide { width: min(560px, 96%); }
-.skeleton-line.medium { width: min(260px, 72%); }
-.skeleton-line.short { width: 42%; }
-.skeleton-line.value { width: 92px; height: 28px; }
+.skeleton-line {
+  width: 64%;
+  height: 14px;
+}
+
+.skeleton-line.eyebrow {
+  width: 110px;
+  height: 12px;
+}
+
+.skeleton-line.title {
+  width: min(360px, 86%);
+  height: 30px;
+}
+
+.skeleton-line.heading {
+  width: min(280px, 72%);
+  height: 22px;
+}
+
+.skeleton-line.wide {
+  width: min(560px, 96%);
+}
+
+.skeleton-line.medium {
+  width: min(260px, 72%);
+}
+
+.skeleton-line.short {
+  width: 42%;
+}
+
+.skeleton-line.value {
+  width: 92px;
+  height: 28px;
+}
 
 .skeleton-avatar {
   width: 68px;
@@ -116,21 +146,28 @@ body.theme-light .sidebar .nav-item.active {
   height: 36px;
 }
 
-.skeleton-control.search { margin-left: auto; width: 240px; }
+.skeleton-control.search {
+  margin-left: auto;
+  width: 240px;
+}
 
 .skeleton-table {
   display: grid;
   gap: 12px;
 }
 
-.skeleton-table.compact { margin-top: 20px; }
+.skeleton-table.compact {
+  margin-top: 20px;
+}
 
 .skeleton-table-row {
   width: 100%;
   height: 42px;
 }
 
-.skeleton-profile-copy { align-content: center; }
+.skeleton-profile-copy {
+  align-content: center;
+}
 
 .skeleton-chip-row {
   display: flex;
@@ -182,11 +219,15 @@ body.theme-light .sidebar .nav-item.active {
 }
 
 @keyframes route-skeleton-shimmer {
-  to { background-position: -200% 0; }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 760px) {
-  .skeleton-control.search { margin-left: 0; }
+  .skeleton-control.search {
+    margin-left: 0;
+  }
 
   .skeleton-avatar.profile {
     width: 96px;
@@ -195,6 +236,7 @@ body.theme-light .sidebar .nav-item.active {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .page-loading .spinner,
   .skeleton-block {
     animation: none;
@@ -225,7 +267,7 @@ body.theme-light .sidebar .nav-item.active {
   flex-direction: column;
 }
 
-.command-palette > input {
+.command-palette>input {
   padding: 16px 20px;
   background: rgba(255, 255, 255, 0.05);
   border: none;
@@ -274,13 +316,13 @@ body.theme-light .sidebar .nav-item.active {
 }
 
 .palette-results p,
-.command-palette > small {
+.command-palette>small {
   padding: 12px 18px;
   color: var(--text-muted);
   font-size: 0.8rem;
 }
 
-.command-palette > small {
+.command-palette>small {
   border-top: 1px solid var(--border-color);
 }
 
@@ -344,8 +386,17 @@ body.theme-light .sidebar .nav-item.active {
 }
 
 @keyframes pulseGreen {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
 }
 
 /* Quick search in topbar */
@@ -386,7 +437,7 @@ body.theme-light .sidebar .nav-item.active {
 /* The legacy showcase palette animates `.command-palette` with an `.is-open`
    class, while the React shell mounts `.palette-backdrop` directly. Restore
    the mounted dialog's visibility and positioning here. */
-.palette-backdrop > .command-palette {
+.palette-backdrop>.command-palette {
   position: relative;
   inset: auto;
   padding: 0;
@@ -442,53 +493,28 @@ body.theme-light .sidebar .nav-item.active:hover {
   padding: 12px 14px;
 }
 
-/* Confession hero: keep the identity treatment while giving the feed a
-   readable starting point on desktop and a short, centered stack on phones. */
-#tab-confession .forum-hero-banner {
-  min-height: 204px;
-  margin-bottom: 16px;
-  padding: 14px 22px;
+#tab-confession #cfs-hero-avatar-wrap {
+  overflow: visible;
 }
 
-#tab-confession .forum-hero-content {
-  display: grid;
-  grid-template-columns: 154px minmax(0, 1fr);
-  grid-template-areas:
-    "avatar name"
-    "avatar badges"
-    "avatar sub";
-  align-items: center;
-  column-gap: 22px;
-  padding: 10px 8px;
-  text-align: left;
+/* Keep the frame engine's family-specific artwork dimensions (250%, 188%,
+   and anime-specific values). The responsive shell scales the artwork
+   wrapper, so the animation transforms and individual apertures remain
+   intact instead of being replaced by one shared size. */
+#tab-confession #cfs-hero-avatar-wrap .avatar-frame-container,
+#tab-confession #cfs-hero-avatar-wrap .avatar-frame-artwork {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-#tab-confession .forum-hero-avatar-wrap {
-  appearance: none;
-  -webkit-appearance: none;
-  grid-area: avatar;
-  width: 138px;
-  height: 138px;
-  margin: 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
+#tab-confession #cfs-hero-avatar-wrap .avatar-frame-container {
+  z-index: 13;
 }
 
-#tab-confession .forum-hero-avatar {
-  width: 82px;
-  height: 82px;
-}
-
-/* Frame artwork was authored around a standalone 84px avatar. In the compact
-   hero its original 188–262% layers exceed the reserved column, so scale the
-   artwork and effect canvases as a group while keeping their artwork intact. */
-#tab-confession #cfs-hero-avatar-wrap .avatar-frame-overlay,
-#tab-confession #cfs-hero-avatar-wrap .anime-frame-art,
-#tab-confession #cfs-hero-avatar-wrap .aidti-frame-art {
-  width: 108%;
-  height: 108%;
+#tab-confession #cfs-hero-avatar-wrap .avatar-frame-artwork {
+  transform: scale(.68);
+  transform-origin: center;
 }
 
 #tab-confession #cfs-hero-avatar-wrap .frame-cinematic-layer {
@@ -511,8 +537,8 @@ body.theme-light .sidebar .nav-item.active:hover {
 }
 
 #tab-confession #cfs-hero-avatar-wrap .anime-awakening-stage {
-  width: 142px;
-  height: 142px;
+  width: 190px;
+  height: 190px;
 }
 
 #tab-confession #cfs-hero-avatar-wrap .anime-frame-character {
@@ -542,26 +568,6 @@ body.theme-light .sidebar .nav-item.active:hover {
   margin: -51px;
 }
 
-#tab-confession .forum-hero-username,
-#tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {
-  grid-area: name;
-  margin: 0;
-  text-align: left;
-}
-
-#tab-confession .forum-hero-username + .identity-title-hero {
-  grid-area: badges;
-  justify-content: flex-start;
-  min-height: 0;
-  margin: 5px 0 0;
-}
-
-#tab-confession .forum-hero-sub {
-  grid-area: sub;
-  margin: 5px 0 0;
-  text-align: left;
-}
-
 #tab-confession .btn-hero-frame-customizer {
   min-height: 36px;
   padding: 7px 12px;
@@ -572,7 +578,9 @@ body.theme-light .sidebar .nav-item.active:hover {
   line-height: 1;
 }
 
-.hero-frame-short-label { display: none; }
+.hero-frame-short-label {
+  display: none;
+}
 
 #tab-confession .quick-composer-row {
   width: 100%;
@@ -612,61 +620,12 @@ body.theme-light .sidebar .nav-item.active:hover {
 }
 
 @media (max-width: 700px) {
-  .hero-frame-label { display: none; }
-  .hero-frame-short-label { display: inline; }
-  #tab-confession .forum-hero-banner {
-    min-height: 214px;
-    padding: 12px 12px 16px;
+  .hero-frame-label {
+    display: none;
   }
 
-  #tab-confession .forum-hero-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    padding: 8px 6px 0;
-    text-align: center;
-  }
-
-  #tab-confession .forum-hero-avatar-wrap {
-    width: 138px;
-    height: 138px;
-    margin: 0 auto;
-  }
-
-  #tab-confession .forum-hero-avatar {
-    width: 72px;
-    height: 72px;
-  }
-
-  #tab-confession #cfs-hero-avatar-wrap .avatar-frame-overlay,
-  #tab-confession #cfs-hero-avatar-wrap .anime-frame-art,
-  #tab-confession #cfs-hero-avatar-wrap .aidti-frame-art {
-    width: 108%;
-    height: 108%;
-  }
-
-  #tab-confession #cfs-hero-avatar-wrap .anime-awakening-stage {
-    width: 136px;
-    height: 136px;
-  }
-
-  #tab-confession .forum-hero-username,
-  #tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {
-    margin-top: 8px;
-    text-align: center;
-    font-size: 18px;
-  }
-
-  #tab-confession .forum-hero-username + .identity-title-hero {
-    margin: 5px auto 0;
-    justify-content: center;
-  }
-
-  #tab-confession .forum-hero-sub {
-    margin: 5px auto 0;
-    font-size: 11.5px;
-    text-align: center;
+  .hero-frame-short-label {
+    display: inline;
   }
 
   #tab-confession .btn-hero-frame-customizer {
@@ -779,34 +738,46 @@ body.theme-light .sidebar .nav-item.active:hover {
   flex: 1 1 auto;
 }
 
-/* The Confession identity is intentionally a centered composition.  The
-   frames have their own visual weight, so the profile copy stays beneath it
-   rather than competing with it in a left-to-right header. */
+/* Confession identity layout: one centered flow for every frame family. The
+   frame artwork is absolutely positioned inside the reserved avatar block,
+   so only the block participates in document flow and the copy never needs a
+   frame-specific sibling margin. */
 #tab-confession .forum-hero-banner {
   min-height: 0;
   margin-bottom: 16px;
-  padding: 10px 18px 12px;
+  padding: 42px clamp(12px, 4vw, 40px) 12px;
 }
 
 #tab-confession .forum-hero-content {
+  --hero-avatar-size: clamp(118px, 11vw, 124px);
+  --hero-photo-size: clamp(74px, 6vw, 78px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 132px;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 clamp(0px, 6vw, 72px);
   text-align: center;
 }
 
 #tab-confession .forum-hero-avatar-wrap {
-  width: 124px;
-  height: 124px;
-  flex: 0 0 124px;
-  margin: 0 auto;
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--hero-avatar-size);
+  height: var(--hero-avatar-size);
+  flex: 0 0 var(--hero-avatar-size);
+  margin: 0 auto 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
 }
 
 #tab-confession .forum-hero-avatar {
-  width: 78px;
-  height: 78px;
+  width: var(--hero-photo-size);
+  height: var(--hero-photo-size);
 }
 
 #tab-confession #cfs-hero-avatar-wrap .frame-cinematic-layer {
@@ -823,8 +794,8 @@ body.theme-light .sidebar .nav-item.active:hover {
 }
 
 #tab-confession #cfs-hero-avatar-wrap .anime-awakening-stage {
-  width: 124px;
-  height: 124px;
+  width: 180px;
+  height: 180px;
 }
 
 #tab-confession #cfs-hero-avatar-wrap .anime-frame-character {
@@ -844,20 +815,26 @@ body.theme-light .sidebar .nav-item.active:hover {
   margin: -46px;
 }
 
-#tab-confession .forum-hero-username,
-#tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {
-  margin: 2px 0 0;
+#tab-confession .forum-hero-username {
+  margin: 0;
   text-align: center;
 }
 
-#tab-confession .forum-hero-username + .identity-title-hero {
+/* The legacy frame rule reserves a larger desktop/mobile overhang. Keep that
+   reservation local to the confession hero while retaining the shared frame
+   styles for posts, composer avatars, and picker previews. */
+#tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {
+  margin-top: 40px;
+}
+
+#tab-confession .forum-hero-username+.identity-title-hero {
   min-height: 0;
-  margin: 4px auto 0;
+  margin: 0 auto;
   justify-content: center;
 }
 
 #tab-confession .forum-hero-sub {
-  margin: 4px auto 0;
+  margin: 0 auto;
   text-align: center;
 }
 
@@ -922,7 +899,7 @@ body.theme-light .sidebar .nav-item.active:hover {
   background: var(--bg-card);
 }
 
-.identity-title-dialog-header > div,
+.identity-title-dialog-header>div,
 .frame-picker-heading-copy {
   min-width: 0;
 }
@@ -1184,32 +1161,19 @@ body.theme-dark .frame-equipped-state {
 
 @media (max-width: 700px) {
   #tab-confession .forum-hero-banner {
-    padding: 10px 12px 12px;
+    padding: 36px 12px 12px;
   }
 
   #tab-confession .forum-hero-content {
-    padding: 0 8px;
+    padding-inline: 0;
   }
 
   #tab-confession .forum-hero-avatar-wrap {
-    width: 118px;
-    height: 118px;
-    flex-basis: 118px;
+    margin-bottom: 10px;
   }
 
-  #tab-confession .forum-hero-avatar {
-    width: 74px;
-    height: 74px;
-  }
-
-  #tab-confession #cfs-hero-avatar-wrap .avatar-energy-ring {
-    width: 112px;
-    height: 112px;
-  }
-
-  #tab-confession .forum-hero-username,
   #tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {
-    margin-top: 2px;
+    margin-top: 39px;
   }
 
   .identity-dialog-backdrop {
@@ -1266,7 +1230,7 @@ body.theme-dark .frame-equipped-state {
     align-items: flex-start;
   }
 
-  .frame-picker-footer > span {
+  .frame-picker-footer>span {
     min-width: 0;
   }
 }

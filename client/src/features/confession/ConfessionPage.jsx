@@ -12,7 +12,7 @@ import {
 } from '../../api/community.js';
 import { getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
-import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import {
   AvatarContent,
@@ -20,11 +20,13 @@ import {
   getAutomaticFrame,
   getEquippedFrame,
   getFrameOptions,
+  getFrameCinematicMetadata,
   getIdentityName,
   getIdentityPhoto,
   getInitials,
   TitleBadges
 } from '../../components/identity/Identity.jsx';
+import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
@@ -75,9 +77,9 @@ function profilePhotoFrom(response) {
   const profile = Array.isArray(raw)
     ? raw[0]
     : raw?.ds_thong_tin_sinh_vien?.[0]
-      || raw?.thong_tin_sinh_vien?.[0]
-      || raw?.student
-      || raw;
+    || raw?.thong_tin_sinh_vien?.[0]
+    || raw?.student
+    || raw;
   return response?.student_image
     || raw?.student_image
     || profile?.student_image
@@ -237,9 +239,10 @@ function PostCommentsInline({ postId, token }) {
   const [newComment, setNewComment] = useState('');
   const client = useQueryClient();
   const { notify } = useToasts();
+  useRealtimeRoom(postId ? `post:${postId}` : null, Boolean(token));
 
   const commentsQuery = useQuery({
-    queryKey: ['post-comments', postId],
+    queryKey: ['post-comments', String(postId)],
     queryFn: ({ signal }) => getCommunityPostComments(token, postId, { signal }),
     enabled: Boolean(token && postId)
   });
@@ -248,7 +251,7 @@ function PostCommentsInline({ postId, token }) {
     mutationFn: () => addCommunityPostComment(token, postId, { content: newComment.trim() }),
     onSuccess: () => {
       setNewComment('');
-      client.invalidateQueries({ queryKey: ['post-comments', postId] });
+      client.invalidateQueries({ queryKey: ['post-comments', String(postId)] });
       client.invalidateQueries({ queryKey: ['confession'] });
       notify('Đã gửi bình luận.', 'success');
     },
@@ -348,6 +351,10 @@ export default function ConfessionPage() {
   const frameDialogRef = useRef(null);
   const frameCloseButtonRef = useRef(null);
   const frameOpenerRef = useRef(null);
+  const heroBannerRef = useRef(null);
+  const heroAvatarRef = useRef(null);
+  const frameAnnouncementRef = useRef(null);
+  const frameParticleFieldRef = useRef(null);
 
   const closeTitleCustomizer = useCallback(() => setShowTitleModal(false), []);
   const closeFramePicker = useCallback(() => setShowFrameModal(false), []);
@@ -385,6 +392,27 @@ export default function ConfessionPage() {
       }),
     enabled: Boolean(auth.token)
   });
+
+  useRealtimeRoom('forum', Boolean(auth.token));
+
+  useEffect(() => {
+    const onEvent = (event) => {
+      const detail = event.detail || {};
+      const data = detail.data || {};
+      const type = detail.type || '';
+      if (!type.startsWith('community.')) return;
+      const postKey = data.postId == null ? null : String(data.postId);
+      const commentKey = postKey ? ['post-comments', postKey] : null;
+      if (type.startsWith('community.comment.') && commentKey) {
+        client.invalidateQueries({ queryKey: commentKey });
+      }
+      if (data.scope === 'school' || data.scope === 'faculty' || data.scope === 'institute' || !data.scope) {
+        client.invalidateQueries({ queryKey: ['confession'] });
+      }
+    };
+    window.addEventListener('bdu:realtime', onEvent);
+    return () => window.removeEventListener('bdu:realtime', onEvent);
+  }, [client]);
 
   const presentationQuery = useQuery({
     queryKey: ['identity-presentation', auth.user?.mssv],
@@ -490,6 +518,14 @@ export default function ConfessionPage() {
   const equippedFrame = getEquippedFrame(presentation?.equipped_frame_id) || getAutomaticFrame(rankingQuery.data);
   const frameOptions = getFrameOptions(presentation?.frame_access);
   const identityUser = { ...auth.user, name: displayName, photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data) };
+  const frameCinematic = getFrameCinematicMetadata(equippedFrame);
+  useFrameCinematic({
+    frame: equippedFrame,
+    avatarRef: heroAvatarRef,
+    bannerRef: heroBannerRef,
+    announcementRef: frameAnnouncementRef,
+    particleFieldRef: frameParticleFieldRef
+  });
 
   const openTitleCustomizer = (event) => {
     titleOpenerRef.current = event?.currentTarget || null;
@@ -520,7 +556,7 @@ export default function ConfessionPage() {
   return (
     <section id="tab-confession" className="tab-pane active">
       {/* Hero Full-width Banner faithful to production */}
-      <div className="forum-hero-banner glass-panel">
+      <div ref={heroBannerRef} className="forum-hero-banner glass-panel">
         <button
           type="button"
           className="btn-hero-frame-customizer"
@@ -541,6 +577,7 @@ export default function ConfessionPage() {
             type="button"
             className={`forum-hero-avatar-wrap ${equippedFrame ? `has-frame-${equippedFrame.tier} has-frame-scope-${equippedFrame.scope} ${equippedFrame.family ? `has-frame-${equippedFrame.family}` : ''}` : ''}`.trim()}
             id="cfs-hero-avatar-wrap"
+            ref={heroAvatarRef}
             onClick={openFramePicker}
             title="Nhấn để xem các mẫu khung avatar vinh danh động"
             aria-label="Mở bộ sưu tập khung đại diện"
@@ -552,7 +589,7 @@ export default function ConfessionPage() {
               <div className="frame-light-beams">
                 <i></i><i></i><i></i><i></i>
               </div>
-              <div id="frame-particle-field" className="frame-particle-field"></div>
+              <div id="frame-particle-field" ref={frameParticleFieldRef} className="frame-particle-field"></div>
             </div>
             <div className="frame-signature-fx" aria-hidden="true">
               <i></i><i></i><i></i><i></i><i></i><i></i>
@@ -571,10 +608,10 @@ export default function ConfessionPage() {
             <div className="avatar-frame-sheen"></div>
           </button>
 
-          <div id="frame-unlock-announcement" className="frame-unlock-announcement" aria-hidden="true">
-            <span className="frame-unlock-kicker">VINH DANH HỌC THUẬT</span>
-            <strong id="frame-unlock-title">KHUNG HUYỀN THOẠI</strong>
-            <span id="frame-unlock-rank">TOP 1 TOÀN TRƯỜNG</span>
+          <div ref={frameAnnouncementRef} id="frame-unlock-announcement" className="frame-unlock-announcement" aria-hidden="true">
+            <span className="frame-unlock-kicker">{frameCinematic ? `${frameCinematic.theme.rarity} • VINH DANH HỌC THUẬT` : 'VINH DANH HỌC THUẬT'}</span>
+            <strong id="frame-unlock-title">{equippedFrame?.title || 'KHUNG HUYỀN THOẠI'}</strong>
+            <span id="frame-unlock-rank">{frameCinematic?.rankLabel || 'TOP 1 TOÀN TRƯỜNG'}</span>
           </div>
 
           <h3 id="cfs-hero-username" className="forum-hero-username">{displayName}</h3>
@@ -755,22 +792,22 @@ export default function ConfessionPage() {
 
                     <div className="forum-post-bottom-bar">
                       <div className="forum-actions-left">
-                      <button
-                        type="button"
-                        className={`forum-action-btn btn-toggle-like ${isLiked ? 'liked' : ''}`}
-                        onClick={() => like.mutate(post.id)}
-                        disabled={like.isPending}
-                      >
-                        <span>{isLiked ? 'Đã thích' : 'Thích'}</span>
-                      </button>
+                        <button
+                          type="button"
+                          className={`forum-action-btn btn-toggle-like ${isLiked ? 'liked' : ''}`}
+                          onClick={() => like.mutate(post.id)}
+                          disabled={like.isPending}
+                        >
+                          <span>{isLiked ? 'Đã thích' : 'Thích'}</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        className={`forum-action-btn btn-toggle-comments ${showCommentThread ? 'active' : ''}`}
-                        onClick={() => toggleComments(post.id)}
-                      >
-                        <span>Bình luận</span>
-                      </button>
+                        <button
+                          type="button"
+                          className={`forum-action-btn btn-toggle-comments ${showCommentThread ? 'active' : ''}`}
+                          onClick={() => toggleComments(post.id)}
+                        >
+                          <span>Bình luận</span>
+                        </button>
                       </div>
                       <div className="forum-counts-right">
                         <span className="like-count-num">{post.like_count || 0}</span> lượt thích • <span className="comment-count-num">{post.comment_count || 0}</span> bình luận

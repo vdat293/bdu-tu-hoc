@@ -569,6 +569,18 @@ export const LearningService = {
       }, cleanMssv);
       return (await enrichCourseIdentities([comment]))[0];
     });
+  },
+
+  async getCoursePostRealtimeMetadata(mssv, courseCode, postId) {
+    requireDatabase();
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    const accessible = await findAccessibleCoursePost(cleanMssv, courseCode, postId);
+    return {
+      courseCode: accessible.course.normalized_code,
+      postId: accessible.postId,
+      likeCount: Number(accessible.post.like_count || 0),
+      commentCount: Number(accessible.post.comment_count || 0)
+    };
   }
 };
 

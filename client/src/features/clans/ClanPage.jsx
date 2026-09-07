@@ -21,7 +21,7 @@ import {
   getCommunityPostComments,
   addCommunityPostComment
 } from '../../api/community.js';
-import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
@@ -124,9 +124,10 @@ function ClanCommentsInline({ postId, token }) {
   const [newComment, setNewComment] = useState('');
   const client = useQueryClient();
   const { notify } = useToasts();
+  useRealtimeRoom(postId ? `post:${postId}` : null, Boolean(token));
 
   const commentsQuery = useQuery({
-    queryKey: ['clan-post-comments', postId],
+    queryKey: ['clan-post-comments', String(postId)],
     queryFn: ({ signal }) => getCommunityPostComments(token, postId, { signal }),
     enabled: Boolean(token && postId)
   });
@@ -135,7 +136,7 @@ function ClanCommentsInline({ postId, token }) {
     mutationFn: () => addCommunityPostComment(token, postId, { content: newComment.trim() }),
     onSuccess: () => {
       setNewComment('');
-      client.invalidateQueries({ queryKey: ['clan-post-comments', postId] });
+      client.invalidateQueries({ queryKey: ['clan-post-comments', String(postId)] });
       notify('Đã gửi trao đổi.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
@@ -249,6 +250,7 @@ export default function ClanPage() {
   const isJoined = Boolean(clan?.is_joined);
   const isLeader = clan?.my_role === 'leader';
   const queryBase = useMemo(() => ['clan', auth.user?.mssv, clanId], [auth.user?.mssv, clanId]);
+  useRealtimeRoom(isJoined ? `clan:${clanId}` : null, Boolean(auth.token && isJoined));
 
   const postsQuery = useQuery({
     queryKey: [...queryBase, 'posts'],
@@ -283,8 +285,11 @@ export default function ClanPage() {
     const onEvent = (event) => {
       const detail = event.detail || {};
       const data = detail.data || {};
-      if (detail.type?.startsWith('community.') && String(data.scopeId) === String(clanId)) {
+      if (detail.type?.startsWith('community.') && data.scope === 'clan' && String(data.scopeId) === String(clanId)) {
         client.invalidateQueries({ queryKey: [...queryBase, 'posts'] });
+        if (detail.type.startsWith('community.comment.') && data.postId != null) {
+          client.invalidateQueries({ queryKey: ['clan-post-comments', String(data.postId)] });
+        }
       }
     };
     window.addEventListener('bdu:realtime', onEvent);
@@ -473,10 +478,10 @@ export default function ClanPage() {
     clan.my_role === 'leader'
       ? '👑 Bang Chủ'
       : clan.my_role === 'vice_leader'
-      ? 'Phó Bang'
-      : clan.my_role === 'elder'
-      ? 'Trưởng Lão'
-      : 'Thành viên';
+        ? 'Phó Bang'
+        : clan.my_role === 'elder'
+          ? 'Trưởng Lão'
+          : 'Thành viên';
 
   return (
     <section id="tab-clans" className="tab-pane active">

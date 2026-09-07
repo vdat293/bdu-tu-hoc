@@ -431,6 +431,11 @@ export const ApiController = {
         req.params.courseCode,
         req.body || {}
       );
+      CommunityRealtime.publishCoursePostCreated({
+        postId: post.id,
+        courseCode: req.params.courseCode,
+        category: post.kind || 'request'
+      });
       return res.status(201).json({ result: true, data: post });
     } catch (err) {
       return res.status(err.status || 500).json({
@@ -444,6 +449,10 @@ export const ApiController = {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const data = await LearningService.deleteCoursePost(mssv, req.params.courseCode, req.params.postId);
+      CommunityRealtime.publishCoursePostDeleted({
+        postId: req.params.postId,
+        courseCode: req.params.courseCode
+      });
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({
@@ -457,6 +466,11 @@ export const ApiController = {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const data = await LearningService.toggleCoursePostLike(mssv, req.params.courseCode, req.params.postId);
+      CommunityRealtime.publishCoursePostLikeChanged({
+        postId: req.params.postId,
+        courseCode: req.params.courseCode,
+        likeCount: data.like_count
+      });
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({
@@ -490,6 +504,19 @@ export const ApiController = {
         req.params.postId,
         req.body || {}
       );
+      const metadata = await LearningService.getCoursePostRealtimeMetadata(
+        mssv,
+        req.params.courseCode,
+        req.params.postId
+      );
+      CommunityRealtime.publishCourseCommentChanged({
+        type: 'created',
+        postId: metadata.postId,
+        commentId: data?.id,
+        parentId: data?.parent_id,
+        commentCount: metadata.commentCount,
+        courseCode: metadata.courseCode
+      });
       return res.status(201).json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({
@@ -919,7 +946,13 @@ export const ApiController = {
       const authHeader = req.headers.authorization;
       const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
       const data = await CommunityService.toggleLike(req.params.id, mssv);
-      CommunityRealtime.publishPostLikeChanged({ postId: req.params.id, likeCount: data.like_count });
+      const post = await CommunityService.getPostById(req.params.id, mssv);
+      CommunityRealtime.publishPostLikeChanged({
+        postId: req.params.id,
+        likeCount: data.like_count,
+        scope: post?.scope,
+        scopeId: post?.scope_id
+      });
       return res.json({ result: true, data });
     } catch (err) {
       console.error('Toggle like error:', err.message);

@@ -1,7 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useRef } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getEquippedFrame } from '../../client/src/components/identity/Identity.jsx';
+import { useFrameCinematic } from '../../client/src/components/identity/useFrameCinematic.js';
 import ConfessionPage from '../../client/src/features/confession/ConfessionPage.jsx';
 
 const presentation = {
@@ -20,6 +23,7 @@ const presentation = {
 
 vi.mock('../../client/src/app/providers.jsx', () => ({
   useAuth: () => ({ token: 'test-token', user: { name: 'Sinh viên kiểm thử', mssv: 'TEST0001', idsv: '1' } }),
+  useRealtimeRoom: () => {},
   useToasts: () => ({ notify: vi.fn() })
 }));
 
@@ -51,6 +55,22 @@ function renderPage() {
         <ConfessionPage />
       </QueryClientProvider>
     </MemoryRouter>
+  );
+}
+
+function CinematicHarness({ frame }) {
+  const avatarRef = useRef(null);
+  const bannerRef = useRef(null);
+  const announcementRef = useRef(null);
+  const particleFieldRef = useRef(null);
+  useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef, particleFieldRef });
+  return (
+    <div ref={bannerRef}>
+      <div ref={avatarRef}>
+        <div ref={particleFieldRef} />
+      </div>
+      <div ref={announcementRef} />
+    </div>
   );
 }
 
@@ -91,5 +111,24 @@ describe('Confession identity dialogs', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Bộ Sưu Tập Khung Avatar Vinh Danh/ })).not.toBeInTheDocument());
     expect(opener).toHaveFocus();
+  });
+
+  it('cleans up the intro-only cinematic state and replays it when the frame changes', () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(<CinematicHarness frame={getEquippedFrame('anime-gojo')} />);
+      const avatar = container.firstElementChild?.firstElementChild;
+      expect(avatar).toHaveClass('frame-intro-burst', 'frame-effect-gojo-limitless-awaken');
+      expect(avatar).not.toHaveClass('frame-cinematic-complete');
+
+      act(() => vi.advanceTimersByTime(2800));
+      expect(avatar).not.toHaveClass('frame-intro-burst', 'frame-cinematic-complete', 'frame-effect-gojo-limitless-awaken');
+
+      rerender(<CinematicHarness frame={getEquippedFrame('anime-itachi')} />);
+      expect(avatar).toHaveClass('frame-intro-burst', 'frame-effect-itachi-crow-genjutsu');
+      expect(avatar).not.toHaveClass('frame-cinematic-complete');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -17,9 +17,19 @@ const queryClient = new QueryClient({
 
 const AuthContext = createContext(null);
 const ToastContext = createContext(null);
+const RealtimeContext = createContext(null);
 
 export function useAuth() { return useContext(AuthContext); }
 export function useToasts() { return useContext(ToastContext); }
+
+export function useRealtimeRoom(room, enabled = true) {
+  const realtime = useContext(RealtimeContext);
+  useEffect(() => {
+    if (!realtime || !enabled || !room) return undefined;
+    realtime.subscribe(room);
+    return () => realtime.unsubscribe(room);
+  }, [enabled, realtime, room]);
+}
 
 function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -40,6 +50,7 @@ function ToastProvider({ children }) {
 function AuthProvider({ children }) {
   const client = useQueryClient();
   const { notify } = useToasts();
+  const [realtime, setRealtime] = useState(null);
   const [state, setState] = useState(() => {
     const stored = readStoredSession();
     if (!stored?.token || stored.expired || stored.invalid) return { status: 'initializing', token: null, user: null, expiresAt: null };
@@ -48,9 +59,13 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     if (state.status !== 'authenticated' || !state.token) return undefined;
-    const realtime = new CommunityRealtime({ token: state.token, onEvent: (event) => window.dispatchEvent(new CustomEvent('bdu:realtime', { detail: event })) });
-    realtime.connect();
-    return () => realtime.close();
+    const instance = new CommunityRealtime({ token: state.token, onEvent: (event) => window.dispatchEvent(new CustomEvent('bdu:realtime', { detail: event })) });
+    setRealtime(instance);
+    instance.connect();
+    return () => {
+      instance.close();
+      setRealtime((current) => current === instance ? null : current);
+    };
   }, [state.status, state.token]);
 
   const logout = useCallback(({ message = 'Đã đăng xuất tài khoản.', expired = false, broadcast = true } = {}) => {
@@ -99,7 +114,7 @@ function AuthProvider({ children }) {
   }, [client, notify]);
 
   const value = useMemo(() => ({ ...state, login, logout }), [state, login, logout]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}><RealtimeContext.Provider value={realtime}>{children}</RealtimeContext.Provider></AuthContext.Provider>;
 }
 
 function storageForSession(remember) { return remember ? window.localStorage : window.sessionStorage; }

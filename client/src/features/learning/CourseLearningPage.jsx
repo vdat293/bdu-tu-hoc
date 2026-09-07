@@ -10,7 +10,7 @@ import {
   addCoursePostComment,
   getLearningResources
 } from '../../api/community.js';
-import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import {
   AvatarContent,
   TitleBadges,
@@ -214,9 +214,10 @@ function CommentsInline({ postId, courseCode, token, user }) {
   const [newComment, setNewComment] = useState('');
   const client = useQueryClient();
   const { notify } = useToasts();
+  useRealtimeRoom(postId ? `post:${postId}` : null, Boolean(token && courseCode));
 
   const commentsQuery = useQuery({
-    queryKey: ['post-comments', courseCode, postId],
+    queryKey: ['post-comments', courseCode, String(postId)],
     queryFn: ({ signal }) => getCoursePostComments(token, courseCode, postId, { signal }),
     enabled: Boolean(token && courseCode && postId)
   });
@@ -225,7 +226,7 @@ function CommentsInline({ postId, courseCode, token, user }) {
     mutationFn: () => addCoursePostComment(token, courseCode, postId, { content: newComment.trim() }),
     onSuccess: () => {
       setNewComment('');
-      client.invalidateQueries({ queryKey: ['post-comments', courseCode, postId] });
+      client.invalidateQueries({ queryKey: ['post-comments', courseCode, String(postId)] });
       notify('Đã gửi phản hồi thảo luận.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
@@ -353,22 +354,26 @@ export default function CourseLearningPage() {
   const isStudying = Boolean(activeCourse?.is_studying);
   const semesters = activeCourse?.semesters || [];
   const semesterLabel = semesters[0]?.name || (isStudying ? 'Đang theo học' : 'Học phần đã hoàn thành');
+  const normalizedCourseCode = String(courseCode || '').trim().toUpperCase().replace(/\s+/g, '');
+  useRealtimeRoom(normalizedCourseCode ? `course:${normalizedCourseCode}` : null, Boolean(auth.token && courseCode));
 
   // Realtime updates
   useEffect(() => {
     const onEvent = (event) => {
       const detail = event.detail || {};
       const data = detail.data || {};
-      if (
-        detail.type?.startsWith('community.post.') &&
-        (!data.scopeId || String(data.scopeId) === String(courseCode))
-      ) {
+      const type = detail.type || '';
+      const eventCourseCode = String(data.courseCode || data.scopeId || '').trim().toUpperCase().replace(/\s+/g, '');
+      if (type.startsWith('community.') && data.scope === 'course' && eventCourseCode === normalizedCourseCode) {
         client.invalidateQueries({ queryKey: ['course-posts', auth.user?.mssv, courseCode] });
+        if (type.startsWith('community.comment.') && data.postId != null) {
+          client.invalidateQueries({ queryKey: ['post-comments', courseCode, String(data.postId)] });
+        }
       }
     };
     window.addEventListener('bdu:realtime', onEvent);
     return () => window.removeEventListener('bdu:realtime', onEvent);
-  }, [auth.user?.mssv, client, courseCode]);
+  }, [auth.user?.mssv, client, courseCode, normalizedCourseCode]);
 
   const create = useMutation({
     mutationFn: () =>

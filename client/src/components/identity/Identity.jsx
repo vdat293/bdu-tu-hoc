@@ -84,32 +84,60 @@ export function TitleBadges({ titles = [], className = '' }) {
 }
 
 const FRAME_DEFINITIONS = {
-  'truong-1': { tier: 'top-1', scope: 'truong', title: 'Thiên Cực Đế Tinh BDU', src: '/assets/frames/frame-truong-top-1.svg' },
-  'truong-2': { tier: 'top-2', scope: 'truong', title: 'Song Nguyệt Tinh Vân BDU', src: '/assets/frames/frame-truong-top-2.svg' },
-  'truong-3': { tier: 'top-3', scope: 'truong', title: 'Tam Tinh Xích Quang BDU', src: '/assets/frames/frame-truong-top-3.svg' },
-  'truong-top': { tier: 'top-6-10', scope: 'truong', title: 'Kinh Tuyến Tinh Tú BDU', src: '/assets/frames/frame-truong-top.svg' },
-  'vien-1': { tier: 'top-2', scope: 'vien', title: 'Bạch Kim Sapphire Viện Trưởng', src: '/assets/frames/frame-vien-top-1.svg' },
-  'vien-top': { tier: 'top-2', scope: 'vien', title: 'Băng Tinh Lam Vũ Sapphire', src: '/assets/frames/frame-vien-top.svg' },
-  'khoa-1': { tier: 'top-4-5', scope: 'khoa', title: 'Quán Quân Khoa', src: '/assets/frames/frame-khoa-top-1.svg' },
-  'khoa-2': { tier: 'top-4-5', scope: 'khoa', title: 'Á Quân Khoa', src: '/assets/frames/frame-khoa-top.svg' },
-  'khoa-3': { tier: 'top-4-5', scope: 'khoa', title: 'Quý Quân Khoa', src: '/assets/frames/frame-khoa-top.svg' },
-  'khoa-top': { tier: 'top-4-5', scope: 'khoa', title: 'Tinh Anh Khoa', src: '/assets/frames/frame-khoa-top.svg' },
-  'khoa-th-1': { tier: 'top-1', scope: 'khoa', title: 'Quantum Compiler Crown', family: 'khoa-th', src: '/assets/frames/frame-khoa-th-top-1.svg' },
-  'khoa-th-2': { tier: 'top-2', scope: 'khoa', title: 'Dual-Core Synapse', family: 'khoa-th', src: '/assets/frames/frame-khoa-th-top-2.svg' },
-  'khoa-th-3': { tier: 'top-3', scope: 'khoa', title: 'Ternary Data Stack', family: 'khoa-th', src: '/assets/frames/frame-khoa-th-top-3.svg' },
-  'khoa-th-top': { tier: 'top-6-10', scope: 'khoa', title: 'Protocol Bracket', family: 'khoa-th', src: '/assets/frames/frame-khoa-th-top-4-10.svg' },
-  'lop-1': { tier: 'top-3', scope: 'lop', title: 'Quán Quân Lớp', src: '/assets/frames/frame-lop-top-1.svg' },
-  'lop-top': { tier: 'top-3', scope: 'lop', title: 'Tinh Anh Lớp', src: '/assets/frames/frame-lop-top.svg' },
-  'aidti-bdu': { tier: 'aidti-bdu', scope: 'aidti', title: 'AIDTI', family: 'aidti-bdu', src: '/assets/images/frame-aidti-bdu-chibi-v2.png' },
+  'truong-1': { tier: 'top-1', scope: 'truong', title: 'Thiên Cực Đế Tinh BDU', introEffect: 'constellation-forge', themeKey: 'truong-1', rank: 1, src: '/assets/frames/frame-truong-top-1.svg' },
+  'truong-2': { tier: 'top-2', scope: 'truong', title: 'Song Nguyệt Tinh Vân BDU', introEffect: 'binary-eclipse', themeKey: 'truong-2', rank: 2, src: '/assets/frames/frame-truong-top-2.svg' },
+  'truong-3': { tier: 'top-3', scope: 'truong', title: 'Tam Tinh Xích Quang BDU', introEffect: 'triad-supernova', themeKey: 'truong-3', rank: 3, src: '/assets/frames/frame-truong-top-3.svg' },
+  'truong-top': { tier: 'top-6-10', scope: 'truong', title: 'Kinh Tuyến Tinh Tú BDU', introEffect: 'orbit-lock', themeKey: 'truong', rank: 6, src: '/assets/frames/frame-truong-top.svg' },
+  'vien-1': { tier: 'top-2', scope: 'vien', title: 'Bạch Kim Sapphire Viện Trưởng', introEffect: 'crystal-wings', themeKey: 'vien', rank: 1, src: '/assets/frames/frame-vien-top-1.svg' },
+  'vien-top': { tier: 'top-2', scope: 'vien', title: 'Băng Tinh Lam Vũ Sapphire', introEffect: 'elite-pulse', themeKey: 'vien', rank: 2, src: '/assets/frames/frame-vien-top.svg' },
+  'khoa-1': { tier: 'top-4-5', scope: 'khoa', title: 'Quán Quân Khoa', introEffect: 'mecha-assemble', themeKey: 'khoa', rank: 1, src: '/assets/frames/frame-khoa-top-1.svg' },
+  'khoa-2': { tier: 'top-4-5', scope: 'khoa', title: 'Á Quân Khoa', introEffect: 'runner-up-dual', themeKey: 'khoa', rank: 2, src: '/assets/frames/frame-khoa-top.svg' },
+  'khoa-3': { tier: 'top-4-5', scope: 'khoa', title: 'Quý Quân Khoa', introEffect: 'blade-cross', themeKey: 'khoa', rank: 3, src: '/assets/frames/frame-khoa-top.svg' },
+  'khoa-top': { tier: 'top-4-5', scope: 'khoa', title: 'Tinh Anh Khoa', introEffect: 'elite-pulse', themeKey: 'khoa', rank: 6, src: '/assets/frames/frame-khoa-top.svg' },
+  'khoa-th-1': { tier: 'top-1', scope: 'khoa', title: 'Quantum Compiler Crown', family: 'khoa-th', introEffect: 'th-quantum-compile', themeKey: 'khoa-th-1', rank: 1, src: '/assets/frames/frame-khoa-th-top-1.svg' },
+  'khoa-th-2': { tier: 'top-2', scope: 'khoa', title: 'Dual-Core Synapse', family: 'khoa-th', introEffect: 'th-dual-synapse', themeKey: 'khoa-th-2', rank: 2, src: '/assets/frames/frame-khoa-th-top-2.svg' },
+  'khoa-th-3': { tier: 'top-3', scope: 'khoa', title: 'Ternary Data Stack', family: 'khoa-th', introEffect: 'th-ternary-boot', themeKey: 'khoa-th-3', rank: 3, src: '/assets/frames/frame-khoa-th-top-3.svg' },
+  'khoa-th-top': { tier: 'top-6-10', scope: 'khoa', title: 'Protocol Bracket', family: 'khoa-th', introEffect: 'th-protocol-lock', themeKey: 'khoa-th-4-10', rank: 6, src: '/assets/frames/frame-khoa-th-top-4-10.svg' },
+  'lop-1': { tier: 'top-3', scope: 'lop', title: 'Quán Quân Lớp', introEffect: 'phoenix-rise', themeKey: 'lop', rank: 1, src: '/assets/frames/frame-lop-top-1.svg' },
+  'lop-top': { tier: 'top-3', scope: 'lop', title: 'Tinh Anh Lớp', introEffect: 'runner-up-dual', themeKey: 'lop', rank: 2, src: '/assets/frames/frame-lop-top.svg' },
+  'aidti-bdu': { tier: 'aidti-bdu', scope: 'aidti', title: 'AIDTI', family: 'aidti-bdu', introEffect: 'aidti-data-awaken', themeKey: 'aidti-bdu', rank: 0, src: '/assets/images/frame-aidti-bdu-chibi-v2.png' },
   'anime-gojo': {
-    tier: 'anime-gojo', scope: 'anime', title: 'Thiên Thượng Thiên Hạ', family: 'anime-gojo', src: '/assets/images/frame-gojo-limitless-art.png',
+    tier: 'anime-gojo', scope: 'anime', title: 'Thiên Thượng Thiên Hạ', family: 'anime-gojo', introEffect: 'gojo-limitless-awaken', themeKey: 'anime-gojo', rank: 0, src: '/assets/images/frame-gojo-limitless-art.png',
     character: '/assets/images/chibi-gojo-signature.png', characterSide: 'left', eye: '/assets/images/gojo-six-eyes-awakening.png', eyeClosed: '/assets/images/gojo-six-eyes-closed-v2.png', eyeHalf: '/assets/images/gojo-six-eyes-half-v2.png'
   },
   'anime-itachi': {
-    tier: 'anime-itachi', scope: 'anime', title: 'Ảo Nguyệt Hắc Viêm', family: 'anime-itachi', src: '/assets/images/frame-itachi-genjutsu-art.png',
+    tier: 'anime-itachi', scope: 'anime', title: 'Ảo Nguyệt Hắc Viêm', family: 'anime-itachi', introEffect: 'itachi-crow-genjutsu', themeKey: 'anime-itachi', rank: 0, src: '/assets/images/frame-itachi-genjutsu-art.png',
     character: '/assets/images/chibi-itachi-signature.png', characterSide: 'right', eye: '/assets/images/itachi-sharingan-awakening.png', eyeClosed: '/assets/images/itachi-sharingan-closed-v2.png', eyeHalf: '/assets/images/itachi-sharingan-half-v2.png'
   }
 };
+
+export const FRAME_CINEMATIC_THEMES = {
+  'truong-1': { primary: '#22d3ee', secondary: '#8b5cf6', highlight: '#fef3c7', rgb: '34, 211, 238', rarity: 'SOVEREIGN' },
+  'truong-2': { primary: '#60a5fa', secondary: '#6366f1', highlight: '#f8fafc', rgb: '96, 165, 250', rarity: 'CELESTIAL' },
+  'truong-3': { primary: '#fb7185', secondary: '#c026d3', highlight: '#ffe4e6', rgb: '251, 113, 133', rarity: 'ASTRAL' },
+  truong: { primary: '#22d3ee', secondary: '#8b5cf6', highlight: '#f8fafc', rgb: '34, 211, 238', rarity: 'LEGENDARY' },
+  vien: { primary: '#38bdf8', secondary: '#6366f1', highlight: '#e0f2fe', rgb: '56, 189, 248', rarity: 'MYTHIC' },
+  khoa: { primary: '#34d399', secondary: '#14b8a6', highlight: '#d1fae5', rgb: '52, 211, 153', rarity: 'EPIC' },
+  'khoa-th-1': { primary: '#00e5ff', secondary: '#8b5cf6', highlight: '#ffd166', rgb: '0, 229, 255', rarity: 'QUANTUM PRIME' },
+  'khoa-th-2': { primary: '#64d8ff', secondary: '#315ef5', highlight: '#e6eef7', rgb: '100, 216, 255', rarity: 'DUAL CORE' },
+  'khoa-th-3': { primary: '#ff9f43', secondary: '#6d5dfb', highlight: '#d9e2ec', rgb: '255, 159, 67', rarity: 'TERNARY' },
+  'khoa-th-4-10': { primary: '#22d3ee', secondary: '#475569', highlight: '#cbd5e1', rgb: '34, 211, 238', rarity: 'PROTOCOL' },
+  lop: { primary: '#fb923c', secondary: '#ef4444', highlight: '#ffedd5', rgb: '251, 146, 60', rarity: 'ELITE' },
+  'anime-gojo': { primary: '#67e8f9', secondary: '#8b5cf6', highlight: '#f0f9ff', rgb: '103, 232, 249', rarity: 'LIMITLESS' },
+  'anime-itachi': { primary: '#ef4444', secondary: '#0a0a0f', highlight: '#fecaca', rgb: '239, 68, 68', rarity: 'GENJUTSU' },
+  'aidti-bdu': { primary: '#ef233c', secondary: '#2563eb', highlight: '#ffffff', rgb: '239, 35, 60', rarity: 'AIDTI SIGNATURE' }
+};
+
+export function getFrameCinematicMetadata(frame) {
+  if (!frame) return null;
+  const theme = FRAME_CINEMATIC_THEMES[frame.themeKey || frame.scope] || FRAME_CINEMATIC_THEMES.truong;
+  return {
+    ...frame,
+    theme,
+    introEffect: frame.introEffect || 'elite-pulse',
+    rankLabel: frame.rank > 0 ? `#${frame.rank} ${String(frame.scope || '').toUpperCase()}` : frame.scope === 'aidti' ? 'TRUNG TÂM CHUYỂN ĐỔI SỐ' : 'SIGNATURE'
+  };
+}
 
 export function getEquippedFrame(frameId) {
   const key = String(frameId || '').replace(/^frame:/, '').trim();
@@ -152,18 +180,18 @@ export function getAutomaticFrame(ranking) {
 export function FrameArtwork({ frame }) {
   if (!frame) return null;
   if (frame.family === 'aidti-bdu') {
-    return <div className="aidti-frame-stage" aria-label={frame.title}>
+    return <div className="avatar-frame-artwork"><div className="aidti-frame-stage" aria-label={frame.title}>
       <span className="aidti-circuit-ring" aria-hidden="true" />
       <span className="aidti-data-scan" aria-hidden="true" />
       <img className="aidti-frame-art" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" />
       <span className="aidti-node aidti-node-a" aria-hidden="true" />
       <span className="aidti-node aidti-node-b" aria-hidden="true" />
       <span className="aidti-node aidti-node-c" aria-hidden="true" />
-    </div>;
+    </div></div>;
   }
   if (frame.family?.startsWith('anime-')) {
     const version = frame.family === 'anime-itachi' ? 'itachi' : 'gojo';
-    return <>
+    return <div className="avatar-frame-artwork">
       <div className="anime-frame-art-stack" aria-label={frame.title}>
         <img className="anime-frame-art anime-art-base" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" />
         <img className="anime-frame-art anime-art-fragment anime-art-fragment-a" src={frame.src} alt="" aria-hidden="true" />
@@ -178,9 +206,9 @@ export function FrameArtwork({ frame }) {
         <span className="anime-eye-burst" />
         <span className="anime-awakening-pressure" />
       </div>
-    </>;
+    </div>;
   }
-  return <img className="avatar-frame-overlay" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" />;
+  return <div className="avatar-frame-artwork"><img className="avatar-frame-overlay" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" /></div>;
 }
 
 export function IdentitySummary({ user, presentation }) {
