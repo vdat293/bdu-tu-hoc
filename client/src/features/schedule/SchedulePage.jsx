@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { getSchedule } from '../../api/academics.js';
 import { useAuth } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 function normalize(data) {
   return data?.data || data || { semesters: [], items: [] };
@@ -96,7 +97,19 @@ export default function SchedulePage() {
       </div>
 
       <div id="schedule-grid" className="schedule-grid">
-        {items.length === 0 ? (
+        {schedule.isLoading ? (
+          [1, 2, 3].map((card) => (
+            <div className="schedule-card glass-panel schedule-skeleton-card" key={card} aria-hidden="true">
+              <div className="skeleton-copy">
+                <SkeletonBlock className="skeleton-line eyebrow" />
+                <SkeletonBlock className="skeleton-line heading" />
+                <SkeletonBlock className="skeleton-line wide" />
+                <SkeletonBlock className="skeleton-line medium" />
+              </div>
+              <SkeletonBlock className="skeleton-line short" />
+            </div>
+          ))
+        ) : items.length === 0 ? (
           <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
             <div className="empty-monogram">TKB</div>
             <h4 style={{ color: 'var(--text-main)', fontSize: '16px', marginBottom: '6px' }}>

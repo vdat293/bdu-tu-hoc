@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -12,6 +13,7 @@ import {
 import { getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import {
   AvatarContent,
   FrameArtwork,
@@ -84,6 +86,68 @@ function profilePhotoFrom(response) {
     || profile?.image
     || profile?.anh_the
     || '';
+}
+
+function focusableElements(container) {
+  if (!container) return [];
+  return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => element.getAttribute('aria-hidden') !== 'true');
+}
+
+/* These pickers are rendered in a portal because the page shell is scrollable.
+   Keeping them at document.body makes fixed positioning truly viewport-relative
+   and prevents a scrolled Confession feed from taking the dialog with it. */
+function useViewportDialog(isOpen, onClose, dialogRef, initialFocusRef, returnFocusRef) {
+  const restoreFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    restoreFocusRef.current = returnFocusRef.current || (typeof document.activeElement?.focus === 'function' ? document.activeElement : null);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      (initialFocusRef.current || focusableElements(dialogRef.current)[0] || dialogRef.current)?.focus();
+    }, 0);
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = focusableElements(dialogRef.current);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus();
+    };
+  }, [dialogRef, initialFocusRef, isOpen, returnFocusRef]);
 }
 
 function AttachmentRenderer({ attachment }) {
@@ -278,6 +342,22 @@ export default function ConfessionPage() {
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
   const [titleSelection, setTitleSelection] = useState([]);
+  const titleDialogRef = useRef(null);
+  const titleCloseButtonRef = useRef(null);
+  const titleOpenerRef = useRef(null);
+  const frameDialogRef = useRef(null);
+  const frameCloseButtonRef = useRef(null);
+  const frameOpenerRef = useRef(null);
+
+  const closeTitleCustomizer = useCallback(() => setShowTitleModal(false), []);
+  const closeFramePicker = useCallback(() => setShowFrameModal(false), []);
+  const openFramePicker = useCallback((event) => {
+    frameOpenerRef.current = event?.currentTarget || null;
+    setShowFrameModal(true);
+  }, []);
+
+  useViewportDialog(showTitleModal, closeTitleCustomizer, titleDialogRef, titleCloseButtonRef, titleOpenerRef);
+  useViewportDialog(showFrameModal, closeFramePicker, frameDialogRef, frameCloseButtonRef, frameOpenerRef);
 
   // Composer draft
   const [draft, setDraft] = useState({
@@ -332,7 +412,7 @@ export default function ConfessionPage() {
     onSuccess: (nextPresentation) => {
       client.setQueryData(['identity-presentation', auth.user?.mssv], nextPresentation);
       client.invalidateQueries({ queryKey: ['confession'] });
-      setShowTitleModal(false);
+      closeTitleCustomizer();
       notify('Đã cập nhật danh hiệu hiển thị.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
@@ -342,7 +422,7 @@ export default function ConfessionPage() {
     mutationFn: (frameId) => updateMyEquippedFrame(auth.token, frameId),
     onSuccess: (nextPresentation) => {
       client.setQueryData(['identity-presentation', auth.user?.mssv], nextPresentation);
-      setShowFrameModal(false);
+      closeFramePicker();
       notify('Đã cập nhật khung đại diện.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
@@ -411,7 +491,8 @@ export default function ConfessionPage() {
   const frameOptions = getFrameOptions(presentation?.frame_access);
   const identityUser = { ...auth.user, name: displayName, photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data) };
 
-  const openTitleCustomizer = () => {
+  const openTitleCustomizer = (event) => {
+    titleOpenerRef.current = event?.currentTarget || null;
     setTitleSelection(presentation?.selected_title_ids || presentation?.selected_titles?.map((title) => title.id) || []);
     setShowTitleModal(true);
   };
@@ -443,21 +524,26 @@ export default function ConfessionPage() {
         <button
           type="button"
           className="btn-hero-frame-customizer"
-          onClick={() => setShowFrameModal(true)}
+          onClick={openFramePicker}
           title="Mở bộ sưu tập khung vinh danh"
+          aria-label="Mở bộ sưu tập khung vinh danh"
         >
-          Bộ Sưu Tập Khung
+          <span className="hero-frame-icon" aria-hidden="true">✦</span>
+          <span className="hero-frame-label">Bộ Sưu Tập Khung</span>
+          <span className="hero-frame-short-label" aria-hidden="true">Khung</span>
         </button>
         <img className="brand-watermark hero-brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
         <div className="forum-banner-bg"></div>
         <div id="frame-cinematic-backdrop" className="frame-cinematic-backdrop" aria-hidden="true"></div>
 
         <div className="forum-hero-content">
-          <div
+          <button
+            type="button"
             className={`forum-hero-avatar-wrap ${equippedFrame ? `has-frame-${equippedFrame.tier} has-frame-scope-${equippedFrame.scope} ${equippedFrame.family ? `has-frame-${equippedFrame.family}` : ''}` : ''}`.trim()}
             id="cfs-hero-avatar-wrap"
-            onClick={() => setShowFrameModal(true)}
+            onClick={openFramePicker}
             title="Nhấn để xem các mẫu khung avatar vinh danh động"
+            aria-label="Mở bộ sưu tập khung đại diện"
           >
             <div className="frame-cinematic-layer" aria-hidden="true">
               <div className="frame-portal-glow"></div>
@@ -483,7 +569,7 @@ export default function ConfessionPage() {
             </div>
             <div id="cfs-hero-frame-container" className="avatar-frame-container"><FrameArtwork frame={equippedFrame} /></div>
             <div className="avatar-frame-sheen"></div>
-          </div>
+          </button>
 
           <div id="frame-unlock-announcement" className="frame-unlock-announcement" aria-hidden="true">
             <span className="frame-unlock-kicker">VINH DANH HỌC THUẬT</span>
@@ -507,12 +593,13 @@ export default function ConfessionPage() {
         <div className="forum-main-column">
           {/* Quick Composer Trigger ("Bạn đang nghĩ gì? Chia sẻ ngay...") */}
           <div className="forum-quick-composer glass-panel">
-            <div
+            <button
+              type="button"
               className="quick-composer-row"
               id="quick-composer-trigger"
               title="Nhấn để tạo bài viết / Confession mới"
               onClick={() => openComposer('content', true)}
-              style={{ cursor: 'pointer' }}
+              aria-label="Tạo bài viết hoặc confession mới"
             >
               <div id="cfs-composer-avatar" className="quick-composer-avatar">
                 <AvatarContent user={identityUser} presentation={presentation} alt={`Ảnh của ${displayName}`} />
@@ -520,7 +607,7 @@ export default function ConfessionPage() {
               <div className="quick-composer-fake-input">
                 <span id="cfs-composer-placeholder-text">{displayName} ơi, bạn đang nghĩ gì thế?</span>
               </div>
-            </div>
+            </button>
 
             <div className="quick-composer-tags">
               <button
@@ -557,6 +644,7 @@ export default function ConfessionPage() {
                 type="button"
                 className={`forum-filter-pill ${filter === 'all' ? 'active' : ''}`}
                 onClick={() => updateFilter('all')}
+                aria-pressed={filter === 'all'}
               >
                 Tất cả bài đăng
               </button>
@@ -564,6 +652,7 @@ export default function ConfessionPage() {
                 type="button"
                 className={`forum-filter-pill ${filter === 'mine' ? 'active' : ''}`}
                 onClick={() => updateFilter('mine')}
+                aria-pressed={filter === 'mine'}
               >
                 Bài của tôi
               </button>
@@ -571,6 +660,7 @@ export default function ConfessionPage() {
                 type="button"
                 className={`forum-filter-pill ${filter === 'anon' ? 'active' : ''}`}
                 onClick={() => updateFilter('anon')}
+                aria-pressed={filter === 'anon'}
               >
                 Confession ẩn danh
               </button>
@@ -584,10 +674,22 @@ export default function ConfessionPage() {
           {/* Posts Feed Stream */}
           <div id="confession-feed-stream" className="forum-posts-stream">
             {query.isLoading ? (
-              <div className="loading-spinner-box glass-panel" style={{ textAlign: 'center', padding: '40px' }}>
-                <div className="spinner"></div>
-                <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Đang tải bảng tin diễn đàn...</p>
-              </div>
+              [1, 2, 3].map((post) => (
+                <article className="forum-post-card glass-panel skeleton-forum-post" key={post} aria-hidden="true">
+                  <div className="forum-post-header">
+                    <SkeletonBlock className="skeleton-avatar" />
+                    <div className="skeleton-copy">
+                      <SkeletonBlock className="skeleton-line heading" />
+                      <SkeletonBlock className="skeleton-line short" />
+                    </div>
+                  </div>
+                  <div className="skeleton-copy skeleton-forum-post-copy">
+                    <SkeletonBlock className="skeleton-line wide" />
+                    <SkeletonBlock className="skeleton-line wide" />
+                    <SkeletonBlock className="skeleton-line medium" />
+                  </div>
+                </article>
+              ))
             ) : posts.length === 0 ? (
               <div className="empty-state-box glass-panel" style={{ textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
                 <span style={{ fontSize: '36px', display: 'block', marginBottom: '10px' }}>💬</span>
@@ -786,44 +888,71 @@ export default function ConfessionPage() {
         </div>
       </div>
 
-      {showTitleModal && (
-        <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setShowTitleModal(false); }}>
-          <section className="identity-title-dialog glass-panel" role="dialog" aria-modal="true" aria-labelledby="title-customizer-heading">
+      {showTitleModal && createPortal(
+        <div className="modal-backdrop identity-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeTitleCustomizer(); }}>
+          <section
+            ref={titleDialogRef}
+            className="identity-title-dialog glass-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="title-customizer-heading"
+            aria-describedby="title-customizer-description"
+            tabIndex={-1}
+          >
             <header className="identity-title-dialog-header">
               <div>
                 <span className="identity-title-eyebrow">HỒ SƠ CÁ NHÂN</span>
                 <h3 id="title-customizer-heading">Chọn danh hiệu hiển thị</h3>
-                <p>Danh hiệu sẽ xuất hiện ở banner, hồ sơ và các bài đăng của bạn.</p>
+                <p id="title-customizer-description">Danh hiệu sẽ xuất hiện ở banner, hồ sơ và các bài đăng của bạn.</p>
               </div>
-              <button type="button" className="fb-modal-close-btn" title="Đóng" onClick={() => setShowTitleModal(false)}>✕</button>
+              <button ref={titleCloseButtonRef} type="button" className="identity-dialog-close" title="Đóng" aria-label="Đóng chọn danh hiệu" onClick={closeTitleCustomizer}>✕</button>
             </header>
             <div className="identity-title-selection-meta">
-              <span>Đã chọn <strong>{titleSelection.length}/{presentation?.max_titles || 4}</strong> danh hiệu</span>
-              <span>Tối đa {presentation?.max_titles || 4}</span>
+              <span aria-live="polite">Đã chọn <strong>{titleSelection.length}/{presentation?.max_titles || 4}</strong> danh hiệu</span>
+              <button
+                type="button"
+                className="identity-title-clear"
+                onClick={() => setTitleSelection([])}
+                disabled={!titleSelection.length || saveTitles.isPending}
+              >
+                Bỏ chọn tất cả
+              </button>
             </div>
-            <div className="identity-title-options">
-              {(presentation?.available_titles || []).map((title) => {
+            <div className="identity-title-options" role="group" aria-label="Danh sách danh hiệu có thể hiển thị">
+              {(presentation?.available_titles || []).length ? (presentation.available_titles || []).map((title) => {
                 const checked = titleSelection.includes(title.id);
+                const inputId = `identity-title-${String(title.id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                const detailId = `${inputId}-detail`;
                 return (
-                  <label className={`identity-title-option ${checked ? 'is-selected' : ''}`} key={title.id}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleTitle(title.id)} />
+                  <label className={`identity-title-option ${checked ? 'is-selected' : ''}`} htmlFor={inputId} key={title.id}>
+                    <input
+                      id={inputId}
+                      className="identity-title-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleTitle(title.id)}
+                      aria-describedby={detailId}
+                    />
                     <span className="identity-title-option-copy">
                       <TitleBadges titles={[title]} />
-                      <small>{title.detail || 'Danh hiệu của sinh viên BDU'}</small>
+                      <small id={detailId}>{title.detail || 'Danh hiệu của sinh viên BDU'}</small>
                     </span>
-                    <span className="identity-title-check" aria-hidden="true">✓</span>
+                    <span className="identity-title-option-status" aria-hidden="true">{checked ? 'Đang hiển thị' : 'Chọn hiển thị'}</span>
                   </label>
                 );
-              })}
+              }) : (
+                <p className="identity-title-empty-state">Bạn chưa có danh hiệu nào có thể hiển thị.</p>
+              )}
             </div>
             <footer className="identity-title-dialog-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowTitleModal(false)}>Hủy</button>
+              <button type="button" className="btn btn-secondary" onClick={closeTitleCustomizer}>Hủy</button>
               <button type="button" className="btn btn-primary" onClick={() => saveTitles.mutate(titleSelection)} disabled={saveTitles.isPending}>
                 {saveTitles.isPending ? 'Đang lưu...' : 'Lưu danh hiệu'}
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Facebook Style Create Confession Modal */}
@@ -1001,18 +1130,27 @@ export default function ConfessionPage() {
       )}
 
       {/* Modal: Frame Collection Preview */}
-      {showFrameModal && (
-        <div id="modal-frame-preview" className="modal-backdrop" onClick={(e) => { if (e.target.id === 'modal-frame-preview') setShowFrameModal(false); }}>
-          <section className="glass-panel frame-picker-modal-window" role="dialog" aria-modal="true" aria-labelledby="frame-picker-heading">
-            <div className="fb-modal-header">
-              <div>
-                <h3 id="frame-picker-heading" className="fb-modal-title">Bộ Sưu Tập Khung Avatar Vinh Danh</h3>
-                <p>Chỉ hiển thị các khung đã được hệ thống mở khóa cho bạn.</p>
+      {showFrameModal && createPortal(
+        <div id="modal-frame-preview" className="modal-backdrop identity-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeFramePicker(); }}>
+          <section
+            ref={frameDialogRef}
+            className="glass-panel frame-picker-modal-window"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="frame-picker-heading"
+            aria-describedby="frame-picker-description"
+            tabIndex={-1}
+          >
+            <header className="frame-picker-header">
+              <div className="frame-picker-heading-copy">
+                <h3 id="frame-picker-heading" className="frame-picker-title" aria-label="Bộ Sưu Tập Khung Avatar Vinh Danh">
+                  <span className="frame-picker-title-full" aria-hidden="true">Bộ Sưu Tập Khung Avatar Vinh Danh</span>
+                  <span className="frame-picker-title-short" aria-hidden="true">Khung đại diện</span>
+                </h3>
+                <p id="frame-picker-description">Chỉ hiển thị các khung đã được hệ thống mở khóa cho bạn.</p>
               </div>
-              <button type="button" className="fb-modal-close-btn" onClick={() => setShowFrameModal(false)} title="Đóng">
-                ✕
-              </button>
-            </div>
+              <button ref={frameCloseButtonRef} type="button" className="identity-dialog-close" onClick={closeFramePicker} title="Đóng" aria-label="Đóng bộ sưu tập khung">✕</button>
+            </header>
 
             <div className="frame-picker-body">
               <p className="frame-picker-desc">MSSV: <strong>{auth.user?.mssv || '---'}</strong> · khung theo thành tích thật luôn sẵn sàng.</p>
@@ -1022,12 +1160,22 @@ export default function ConfessionPage() {
                   <div className="frame-option-info">
                     <span className="frame-tag tier-member">TỰ ĐỘNG</span>
                     <h4>Khung theo thành tích thật</h4>
-                    <p>Tự chọn khung cao nhất từ bảng xếp hạng của bạn.</p>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => equipFrame.mutate('real')} disabled={equipFrame.isPending}>Dùng tự động</button>
+                    <p>{presentation?.equipped_frame_id ? 'Dùng khung cao nhất từ bảng xếp hạng của bạn.' : 'Đang dùng khung cao nhất từ bảng xếp hạng của bạn.'}</p>
+                    <div className="frame-option-action-row">
+                      {!presentation?.equipped_frame_id && <span className="frame-equipped-state">Đang trang bị</span>}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm frame-option-action"
+                        onClick={() => equipFrame.mutate('real')}
+                        disabled={equipFrame.isPending || !presentation?.equipped_frame_id}
+                      >
+                        {!presentation?.equipped_frame_id ? 'Đang dùng tự động' : 'Dùng tự động'}
+                      </button>
+                    </div>
                   </div>
                 </article>
                 {frameOptions.map((frame) => {
-                  const isActive = Boolean(presentation?.equipped_frame_id === `frame:${frame.key}` || (!presentation?.equipped_frame_id && equippedFrame?.key === frame.key));
+                  const isActive = presentation?.equipped_frame_id === `frame:${frame.key}`;
                   return (
                     <article className={`frame-option-card is-unlocked ${isActive ? 'is-active' : ''}`} key={frame.key}>
                       <div className="frame-mini-preview">
@@ -1040,25 +1188,35 @@ export default function ConfessionPage() {
                       <div className="frame-option-info">
                         <span className={`frame-tag tier-${frame.tier}`}>{frame.scope === 'anime' ? 'SIGNATURE' : 'ĐÃ MỞ KHÓA'}</span>
                         <h4>{frame.title}</h4>
-                        <p>{isActive ? 'Đang trang bị' : 'Có thể trang bị ngay.'}</p>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => equipFrame.mutate(frame.key)} disabled={equipFrame.isPending || isActive}>
-                          {isActive ? 'Đang dùng' : 'Trang bị'}
-                        </button>
+                        <p>{isActive ? 'Khung này đang hiển thị trên hồ sơ và bài đăng của bạn.' : 'Có thể trang bị ngay.'}</p>
+                        <div className="frame-option-action-row">
+                          {isActive && <span className="frame-equipped-state">Đang trang bị</span>}
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm frame-option-action"
+                            onClick={() => equipFrame.mutate(frame.key)}
+                            disabled={equipFrame.isPending || isActive}
+                          >
+                            {isActive ? 'Đang dùng' : 'Trang bị'}
+                          </button>
+                        </div>
                       </div>
                     </article>
                   );
                 })}
               </div>
+              {!frameOptions.length && <p className="frame-picker-empty">Bạn chưa mở khóa khung riêng nào. Khung tự động sẽ cập nhật theo thành tích của bạn.</p>}
             </div>
 
-            <div className="fb-modal-footer">
+            <footer className="frame-picker-footer">
               <span>Thành tích mới sẽ tự mở khóa khung tương ứng.</span>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFrameModal(false)}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={closeFramePicker}>
                 Đóng
               </button>
-            </div>
+            </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );

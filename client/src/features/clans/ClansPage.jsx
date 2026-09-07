@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createClan, getClans, joinClan } from '../../api/community.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 export default function ClansPage() {
   const auth = useAuth();
@@ -136,10 +137,28 @@ export default function ClansPage() {
         {/* Clans Grid */}
         <div id="clans-list-grid" className="clans-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
           {query.isLoading ? (
-            <div className="loading-spinner-box glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
-              <div className="spinner"></div>
-              <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Đang tải danh sách CLB / Nhóm...</p>
-            </div>
+            [1, 2, 3].map((card) => (
+              <div
+                className="clan-card glass-panel skeleton-clan-card"
+                key={card}
+                aria-hidden="true"
+                style={{
+                  padding: '20px',
+                  borderRadius: 'var(--radius-lg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: '1px solid var(--border-color)',
+                  background: 'rgba(255, 255, 255, 0.03)'
+                }}
+              >
+                <SkeletonBlock className="skeleton-line eyebrow" />
+                <SkeletonBlock className="skeleton-line heading" />
+                <SkeletonBlock className="skeleton-line wide" />
+                <SkeletonBlock className="skeleton-line medium" />
+                <SkeletonBlock className="skeleton-line short" />
+              </div>
+            ))
           ) : filtered.length === 0 ? (
             <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
               <span style={{ fontSize: '36px', display: 'block', marginBottom: '10px' }}>👥</span>

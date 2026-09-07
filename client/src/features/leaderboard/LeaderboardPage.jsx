@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { getAcademicLeaderboard } from '../../api/academics.js';
 import { useAuth } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 const scopes = [
   { id: 'class', label: 'Lớp' },
@@ -119,9 +120,31 @@ export default function LeaderboardPage() {
         </div>
 
         {query.isLoading ? (
-          <div id="leaderboard-loading" className="leaderboard-message">
-            <span className="leaderboard-loading-dot"></span>
-            Đang tải bảng xếp hạng...
+          <div id="leaderboard-table-wrap" className="leaderboard-table-wrap" aria-busy="true" aria-label="Đang tải bảng xếp hạng">
+            <div className="leaderboard-table-scroll">
+              <table className="leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>Hạng</th>
+                    <th>Sinh viên</th>
+                    <th>Phạm vi</th>
+                    <th className="leaderboard-value-heading">Thành tích</th>
+                    {metric !== 'credits' && <th className="leaderboard-credit-heading">Tín chỉ</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5].map((row) => (
+                    <tr key={row} aria-hidden="true">
+                      <td><SkeletonBlock className="skeleton-line short" /></td>
+                      <td><SkeletonBlock className="skeleton-line heading" /></td>
+                      <td><SkeletonBlock className="skeleton-line medium" /></td>
+                      <td><SkeletonBlock className="skeleton-line short" /></td>
+                      {metric !== 'credits' && <td><SkeletonBlock className="skeleton-line short" /></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : parsed.items.length === 0 ? (
           <div id="leaderboard-empty" className="leaderboard-message">

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getLearningResources } from '../../api/community.js';
 import { useAuth } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 function getLearningCourseSemesters(course) {
   if (Array.isArray(course.semesters) && course.semesters.length) {
@@ -147,9 +148,25 @@ export default function LearningPage() {
 
         {/* Content list */}
         {query.isLoading ? (
-          <div className="loading-spinner-box glass-panel" style={{ textAlign: 'center', padding: '40px', marginTop: '20px' }}>
-            <div className="spinner"></div>
-            <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Đang tải danh sách học phần...</p>
+          <div className="learning-semester-list" style={{ marginTop: '20px' }} aria-busy="true" aria-label="Đang tải danh sách học phần">
+            <div className="learning-semester-group glass-panel">
+              <div className="learning-semester-heading learning-skeleton-heading" aria-hidden="true">
+                <div className="skeleton-copy">
+                  <SkeletonBlock className="skeleton-line eyebrow" />
+                  <SkeletonBlock className="skeleton-line heading" />
+                </div>
+              </div>
+              <div className="learning-courses-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px', padding: '16px' }} aria-hidden="true">
+                {[1, 2, 3].map((card) => (
+                  <article className="learning-course-card learning-skeleton-card" key={card}>
+                    <SkeletonBlock className="skeleton-line medium" />
+                    <SkeletonBlock className="skeleton-line heading" />
+                    <SkeletonBlock className="skeleton-line wide" />
+                    <SkeletonBlock className="skeleton-line short" />
+                  </article>
+                ))}
+              </div>
+            </div>
           </div>
         ) : semesterGroups.length === 0 ? (
           <div className="learning-empty glass-panel" style={{ textAlign: 'center', padding: '48px 24px', marginTop: '20px' }}>

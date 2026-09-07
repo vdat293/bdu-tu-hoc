@@ -2,8 +2,8 @@ export function Spinner({ label = 'Đang tải…', className = '' }) {
   return <span className={`spinner ${className}`} aria-hidden="true" />;
 }
 
-export function RouteSpinner() {
-  return <div className="route-loading" role="status" aria-live="polite" aria-busy="true"><Spinner /> <span>Đang mở trang…</span></div>;
+export function SkeletonBlock({ className = '' }) {
+  return <span className={`skeleton-block ${className}`} aria-hidden="true" />;
 }
 
 export function PageSpinner({ label = 'Đang tải dữ liệu…' }) {

@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireAuth from '../features/auth/RequireAuth.jsx';
 import AuthLayout from '../layouts/AuthLayout.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
-import { RouteSpinner } from '../components/feedback/Loading.jsx';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage.jsx'));
 const GpaPage = lazy(() => import('../features/gpa/GpaPage.jsx'));
@@ -21,7 +20,7 @@ const ClanPage = lazy(() => import('../features/clans/ClanPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
-function Lazy({ children }) { return <Suspense fallback={<RouteSpinner />}>{children}</Suspense>; }
+function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
 
 export default function AppRoutes() {
   return <Routes>

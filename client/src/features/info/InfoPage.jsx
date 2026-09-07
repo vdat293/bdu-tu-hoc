@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getProfile } from '../../api/academics.js';
 import { getMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 function profileRecord(response) {
   const raw = response?.data || response;
@@ -16,6 +17,43 @@ function field(profile, keys, fallback = '---') {
 function getInitials(name) {
   const parts = String(name || 'SV').trim().split(/\s+/);
   return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+}
+
+function InfoPageSkeleton() {
+  return (
+    <section id="tab-profile" className="tab-pane active" role="status" aria-label="Đang tải hồ sơ sinh viên">
+      <div className="section-header-box glass-panel">
+        <div className="skeleton-copy">
+          <SkeletonBlock className="skeleton-line heading" />
+          <SkeletonBlock className="skeleton-line wide" />
+        </div>
+      </div>
+      <div className="bdu-profile-bento-grid">
+        <div className="profile-hero-card glass-panel">
+          <div className="hero-card-body">
+            <SkeletonBlock className="skeleton-avatar profile" />
+            <div className="skeleton-copy skeleton-profile-copy">
+              <SkeletonBlock className="skeleton-line title" />
+              <SkeletonBlock className="skeleton-line medium" />
+              <div className="skeleton-chip-row">
+                {[1, 2, 3].map((chip) => <SkeletonBlock className="skeleton-chip" key={chip} />)}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="profile-sub-grid">
+          {[1, 2].map((card) => (
+            <div className="sub-bento-card glass-panel" key={card}>
+              <SkeletonBlock className="skeleton-line heading" />
+              <div className="skeleton-table compact">
+                {[1, 2, 3, 4].map((row) => <SkeletonBlock className="skeleton-table-row" key={row} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function InfoPage() {
@@ -54,6 +92,8 @@ export default function InfoPage() {
       notify(`Đã sao chép MSSV: ${mssv}`, 'success');
     }
   };
+
+  if (profile.isLoading) return <InfoPageSkeleton />;
 
   return (
     <section id="tab-profile" className="tab-pane active">

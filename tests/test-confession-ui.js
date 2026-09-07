@@ -15,6 +15,7 @@ const aidtiRenderer = appJs.match(/if \(frameInfo\.frameFamily === 'aidti-bdu'\)
 const aidtiEnergyRule = styleCss.match(/\.has-frame-aidti-bdu \.avatar-energy-ring\s*\{[^}]*\}/)?.[0] || '';
 const aidtiArtRule = styleCss.match(/\.aidti-frame-art\s*\{[^}]*\}/)?.[0] || '';
 const aidtiRuneRule = styleCss.match(/\.frame-effect-aidti-data-awaken \.frame-rune-ring\s*\{[^}]*\}/)?.[0] || '';
+const miniAvatarImageRule = styleCss.match(/\.mini-avatar-circle img\s*\{[^}]*\}/)?.[0] || '';
 
 assert.ok(confessionSection, 'Phải tìm thấy khu vực Confession.');
 assert.doesNotMatch(confessionSection, /<svg\b|widget-icon|platform-icon/, 'Confession phải dùng giao diện text-first, không có icon trang trí.');
@@ -44,5 +45,8 @@ assert.match(styleCss, /#tab-confession \.forum-post-card\s*\{[\s\S]*?content-vi
 assert.match(aidtiEnergyRule, /animation:\s*none/, 'Khung AIDTI phải đứng yên sau intro.');
 assert.match(aidtiArtRule, /animation:\s*none/, 'Ảnh AIDTI lớn không được repaint vô hạn.');
 assert.match(aidtiRuneRule, /animation:\s*none/, 'Vòng dữ liệu AIDTI không được quay vô hạn.');
+assert.match(miniAvatarImageRule, /width:\s*100%/, 'Ảnh xem trước khung phải bị giới hạn theo ô avatar.');
+assert.match(miniAvatarImageRule, /height:\s*100%/, 'Ảnh xem trước khung phải bị giới hạn theo ô avatar.');
+assert.match(miniAvatarImageRule, /object-fit:\s*cover/, 'Ảnh xem trước khung phải được cắt gọn trong vòng tròn.');
 
 console.log('✓ Confession dùng modal xóa tùy biến, giao diện text-first và surface dễ đọc.');

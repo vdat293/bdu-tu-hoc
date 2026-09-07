@@ -13010,6 +13010,7 @@ h3,
   width: 42px;
   height: 42px;
   border-radius: 50%;
+  overflow: hidden;
   background: linear-gradient(135deg, #f97316, #c2410c);
   display: flex;
   align-items: center;
@@ -13018,6 +13019,16 @@ h3,
   position: relative;
   z-index: 2;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.mini-avatar-circle img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
 }
 
 .mini-avatar-wrap .avatar-frame-overlay {

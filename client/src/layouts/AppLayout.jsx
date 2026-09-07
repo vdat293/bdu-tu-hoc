@@ -126,7 +126,10 @@ export default function AppLayout() {
         event.preventDefault();
         setPaletteOpen(true);
       }
-      if (event.key === 'Escape') setPaletteOpen(false);
+      if (event.key === 'Escape') {
+        setPaletteOpen(false);
+        setSidebarOpen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -162,7 +165,7 @@ export default function AppLayout() {
           </div>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav id="primary-navigation" className="sidebar-nav">
           {navGroups.map((group) => (
             <div className="nav-group" key={group.title}>
               <div className="nav-group-title">{group.title}</div>
@@ -225,6 +228,9 @@ export default function AppLayout() {
               id="btn-toggle-sidebar"
               className="btn-icon mobile-only"
               title="Menu"
+              aria-label="Mở menu điều hướng"
+              aria-controls="primary-navigation"
+              aria-expanded={sidebarOpen}
               onClick={() => setSidebarOpen(true)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -245,7 +251,7 @@ export default function AppLayout() {
               <span className="status-dot-green"></span> HỆ THỐNG SẴN SÀNG
             </span>
 
-            <button type="button" className="topbar-search-trigger" onClick={() => setPaletteOpen(true)} title="Tìm kiếm nhanh">
+            <button type="button" className="topbar-search-trigger" onClick={() => setPaletteOpen(true)} title="Tìm kiếm nhanh" aria-label="Tìm kiếm nhanh">
               <span>Tìm nhanh...</span>
               <kbd>Ctrl K</kbd>
             </button>

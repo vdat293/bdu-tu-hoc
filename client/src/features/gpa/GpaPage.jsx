@@ -4,11 +4,13 @@ import { useSearchParams } from 'react-router-dom';
 import { getGrades } from '../../api/academics.js';
 import { getMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth } from '../../app/providers.jsx';
+import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import GpaTrendChart from './GpaTrendChart.jsx';
 import GradeDistChart from './GradeDistChart.jsx';
 import {
   buildGradesCsv,
   formatScore,
+  getCourseResult,
   getSemesters,
   latestSummary
 } from './grades.js';
@@ -35,6 +37,56 @@ function getGradeLetterClass(letter) {
 function getInitials(name) {
   const parts = String(name || 'SV').trim().split(/\s+/);
   return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+}
+
+function GpaPageSkeleton() {
+  return (
+    <section id="tab-grades" className="tab-pane active" role="status" aria-label="Đang tải bảng điểm">
+      <div className="hero-section glass-panel">
+        <div className="hero-profile">
+          <SkeletonBlock className="skeleton-avatar" />
+          <div className="skeleton-copy skeleton-hero-copy">
+            <SkeletonBlock className="skeleton-line eyebrow" />
+            <SkeletonBlock className="skeleton-line title" />
+            <SkeletonBlock className="skeleton-line wide" />
+          </div>
+        </div>
+        <div className="stats-grid">
+          {[1, 2, 3, 4].map((stat) => (
+            <div className="stat-card" key={stat}>
+              <SkeletonBlock className="skeleton-stat-icon" />
+              <div className="skeleton-copy">
+                <SkeletonBlock className="skeleton-line" />
+                <SkeletonBlock className="skeleton-line value" />
+                <SkeletonBlock className="skeleton-line short" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="analytics-grid">
+        {[1, 2].map((chart) => (
+          <div className="chart-card glass-panel" key={chart}>
+            <div className="skeleton-copy">
+              <SkeletonBlock className="skeleton-line heading" />
+              <SkeletonBlock className="skeleton-line wide" />
+              <SkeletonBlock className="skeleton-chart" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="gradebook-section glass-panel">
+        <div className="skeleton-toolbar">
+          <SkeletonBlock className="skeleton-control" />
+          <SkeletonBlock className="skeleton-control" />
+          <SkeletonBlock className="skeleton-control search" />
+        </div>
+        <div className="skeleton-table">
+          {[1, 2, 3, 4].map((row) => <SkeletonBlock className="skeleton-table-row" key={row} />)}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function extractComponentDetailList(course) {
@@ -111,9 +163,9 @@ export default function GpaPage() {
         let courses = sem.ds_diem_mon_hoc || [];
 
         if (status === 'PASS') {
-          courses = courses.filter((c) => c.ket_qua == 1 || (c.diem_tk_chu && String(c.diem_tk_chu).toUpperCase() !== 'F'));
+          courses = courses.filter((c) => getCourseResult(c).status === 'passed');
         } else if (status === 'FAIL') {
-          courses = courses.filter((c) => c.ket_qua == 0 || (c.diem_tk_chu && String(c.diem_tk_chu).toUpperCase() === 'F'));
+          courses = courses.filter((c) => getCourseResult(c).status === 'failed');
         }
 
         if (queryText) {
@@ -125,22 +177,27 @@ export default function GpaPage() {
           });
         }
 
-        const semCredits = courses.reduce((sum, c) => sum + (parseInt(c.so_tin_chi, 10) || 0), 0);
+        const semCredits = courses.reduce((sum, c) => sum + (Number(c.so_tin_chi) || 0), 0);
+        const hasReportedCredits = sem.so_tin_chi_dat_hk !== undefined && sem.so_tin_chi_dat_hk !== null && String(sem.so_tin_chi_dat_hk).trim() !== '';
+        const reportedCredits = Number(sem.so_tin_chi_dat_hk);
         return {
           ...sem,
           courses,
-          credits: sem.so_tin_chi_dat_hk || semCredits
+          credits: hasReportedCredits && Number.isFinite(reportedCredits) ? reportedCredits : semCredits,
+          visibleCredits: semCredits
         };
       })
       .filter((sem) => sem.courses.length > 0 || (semester === 'ALL' && !queryText && status === 'ALL'));
   }, [semesters, semester, status, queryText]);
 
   const totalVisibleCourses = filteredSemesters.reduce((sum, s) => sum + s.courses.length, 0);
-  const totalVisibleCredits = filteredSemesters.reduce((sum, s) => sum + s.credits, 0);
+  const totalVisibleCredits = filteredSemesters.reduce((sum, s) => sum + s.visibleCredits, 0);
 
   const courseComponents = useMemo(() => {
     return selectedCourse ? extractComponentDetailList(selectedCourse) : [];
   }, [selectedCourse]);
+
+  if (grades.isLoading) return <GpaPageSkeleton />;
 
   return (
     <section id="tab-grades" className="tab-pane active">
@@ -322,7 +379,7 @@ export default function GpaPage() {
               id="btn-export-csv"
               className="btn-action-sm"
               title="Xuất file CSV"
-              onClick={() => downloadCsv(buildGradesCsv(semesters, { semester, status }), `BDU_BangDiem_${userMssv}.csv`)}
+              onClick={() => downloadCsv(buildGradesCsv(semesters, { semester, status, query: queryText }), `BDU_BangDiem_${userMssv}.csv`)}
               disabled={!semesters.length}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -385,7 +442,7 @@ export default function GpaPage() {
                         </tr>
                       ) : (
                         sem.courses.map((c, idx) => {
-                          const passed = c.ket_qua == 1 || (c.diem_tk_chu && String(c.diem_tk_chu).toUpperCase() !== 'F');
+                          const result = getCourseResult(c);
                           return (
                             <tr
                               key={`${c.ma_mon}-${idx}`}
@@ -404,12 +461,14 @@ export default function GpaPage() {
                               <td><strong>{formatScore(c.diem_tk_so)}</strong></td>
                               <td><span className={`grade-pill ${getGradeLetterClass(c.diem_tk_chu)}`}>{c.diem_tk_chu || '--'}</span></td>
                               <td>
-                                {passed ? (
+                                {result.status === 'passed' ? (
                                   <span className="tag tag-active">Đạt</span>
-                                ) : (
+                                ) : result.status === 'failed' ? (
                                   <span className="tag" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>
                                     Chưa đạt
                                   </span>
+                                ) : (
+                                  <span className="tag tag-neutral">Chưa có điểm</span>
                                 )}
                               </td>
                             </tr>
