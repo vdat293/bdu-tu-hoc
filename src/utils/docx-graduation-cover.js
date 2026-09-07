@@ -41,19 +41,25 @@ function defaultLogo(archive,id) {
     let n=0;while(rels('Relationship').toArray().some(e=>rels(e).attr('Id')===relId))relId=`wfGraduationLogo${++n}`;
     rels('Relationships').append(`<Relationship Id="${relId}" Type="${R}/image" Target="media/wf-bdu-cover-logo.png"/>`);
     archive.updateFile('word/_rels/document.xml.rels',Buffer.from(rels.xml()));
-    archive.addFile('word/media/wf-bdu-cover-logo.png',fs.readFileSync(new URL('../../assets/wordfmt/bdu-cover-logo.png',import.meta.url)));
+    let logoBuf;
+    try {
+      logoBuf = fs.readFileSync(new URL('../../public/assets/images/logo-hao-quang-transparent.png', import.meta.url));
+    } catch {
+      logoBuf = fs.readFileSync(new URL('../../assets/wordfmt/bdu-cover-logo.png', import.meta.url));
+    }
+    archive.addFile('word/media/wf-bdu-cover-logo.png', logoBuf);
   }
   const types=load(archive.readAsText('[Content_Types].xml'),{xml:true});
   if(!types('Default').toArray().some(e=>types(e).attr('Extension')==='png')) {
     types('Types').append('<Default Extension="png" ContentType="image/png"/>');
     archive.updateFile('[Content_Types].xml',Buffer.from(types.xml()));
   }
-  return `<w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="1482495" cy="1440000"/><wp:docPr id="${id}" name="Logo Đại học Bình Dương"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Logo BDU"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="${R}" r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1482495" cy="1440000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>`;
+  return `<w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="1260000" cy="1260000"/><wp:docPr id="${id}" name="Logo Đại học Bình Dương"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Logo BDU"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="${R}" r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1260000" cy="1260000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>`;
 }
 
 function formatInstructor(raw) {
   if (!raw) return '……………………';
-  let clean = raw.replace(/^(?:GVHD|NGƯỜI HƯỚNG DẪN|GIẢNG VIÊN HƯỚNG DẪN)\s*:\s*/i, '').trim();
+  let clean = String(raw).split(/[\r\n]+/)[0].replace(/^(?:GVHD|NGƯỜI HƯỚNG DẪN|GIẢNG VIÊN HƯỚNG DẪN)\s*:\s*/i, '').trim();
   const m = clean.match(/^((?:PGS\.|GS\.|TS\.|ThS\.|Th\.S\.|ThS|TS|CN\.|KTS\.|Thạc sĩ|Tiến sĩ)\s*)+(.*)$/i);
   if (m) {
     const prefix = m[1].trim();
@@ -65,17 +71,19 @@ function formatInstructor(raw) {
 
 function formatStudentName(raw) {
   if (!raw) return '……………………';
-  return raw.replace(/^(?:SVTH|SINH VIÊN THỰC HIỆN)\s*:\s*/i, '').trim().toUpperCase();
+  return String(raw).split(/[\r\n]+/)[0].replace(/^(?:SVTH|SINH VIÊN THỰC HIỆN)\s*:\s*/i, '').trim().toUpperCase();
 }
 
 function formatStudentId(raw) {
   if (!raw) return '……………………';
-  return raw.replace(/^(?:MSSV|MÃ SỐ SINH VIÊN|MÃ SỐ SV)\s*:\s*/i, '').trim();
+  return String(raw).split(/[\r\n]+/)[0].replace(/^(?:MSSV|MÃ SỐ SINH VIÊN|MÃ SỐ SV)\s*:\s*/i, '').trim();
 }
 
 function formatClassName(raw) {
   if (!raw) return '……………………';
-  return raw.replace(/^(?:LỚP|LỚP SINH HOẠT)\s*:\s*/i, '').trim().toUpperCase();
+  let clean = String(raw).split(/[\r\n]+/)[0].replace(/^(?:LỚP|LỚP SINH HOẠT)\s*:\s*/i, '').trim();
+  clean = clean.replace(/\s*(?:[-–—]\s*)?(?:THÀNH PHỐ|TP\.?|THÁNG\b|NĂM\b).*$/iu, '').trim();
+  return (clean || '……………………').toUpperCase();
 }
 
 export function formatGraduationCovers(analysis,covers,boundary,options) {
@@ -129,34 +137,62 @@ export function formatGraduationCovers(analysis,covers,boundary,options) {
     const topicLines=lines.slice(titleIndex+1).filter(s=>!metadataLines.includes(s) && s!==date && !/^TEN (DE TAI|TIEU LUAN)/.test(key(s)));
     const topic=(options.topic || topicLines.join(' ') || 'TÊN ĐỀ TÀI').trim();
 
-    const drawings=paras.flatMap(e=>$(e).find(`${tag('drawing')},${tag('pict')}`).toArray()).map(e=>$.xml(e));
-    if(!drawings.length && /BINH DUONG/.test(key(institution)))drawings.push(defaultLogo(archive,++id));
+    const drawings = [];
+    if (/BINH DUONG/.test(key(institution))) {
+      drawings.push(defaultLogo(archive, ++id));
+    } else {
+      const existing = paras.flatMap(e=>$(e).find(`${tag('drawing')},${tag('pict')}`).toArray()).map(e=>$.xml(e));
+      if (existing.length) drawings.push(...existing);
+      else drawings.push(defaultLogo(archive, ++id));
+    }
 
     const org=[institution,...(institute?[institute]:[]),faculty];
 
+    const topicWordsCount = topic.trim().split(/\s+/).filter(Boolean).length;
+    const topicSize = topicWordsCount > 12 ? 17 : 20;
     const linesAt=(s,size,width)=>Math.max(1,Math.ceil(s.length*size*0.53/width));
-    const topicLinesCount=linesAt(topic,20,482);
+    const topicLinesCount=Math.max(linesAt(topic,topicSize,482), Math.ceil(topicWordsCount / 9));
 
-    const ornament=`<w:p><w:pPr><w:pStyle w:val="WFGraduationCover"/><w:ind w:firstLine="0"/><w:jc w:val="center"/><w:spacing w:before="240" w:after="320"/><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F097"/></w:r><w:r><w:rPr><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F026"/></w:r><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F096"/></w:r></w:p>`;
+    const ornament=`<w:p><w:pPr><w:pStyle w:val="WFGraduationCover"/><w:ind w:firstLine="0"/><w:jc w:val="center"/><w:spacing w:before="120" w:after="160"/><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F097"/></w:r><w:r><w:rPr><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F026"/></w:r><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="32"/></w:rPr><w:sym w:font="Wingdings" w:char="F096"/></w:r></w:p>`;
     const logoXml=drawings.map(d=>paragraph(`<w:r>${d}</w:r>`,{raw:true,before:0,after:6})).join('');
     const defaultDocType = options.documentType === 'do_an_tot_nghiep' ? 'ĐỒ ÁN TỐT NGHIỆP' : 'TIỂU LUẬN MÔN HỌC';
     const docType = (options.documentTitle || options.profile?.cover?.document_type || defaultDocType).trim().toUpperCase();
-    const docTypeTitle=paragraph(docType,{size:16,bold:true,before:16,after:6});
-    const topicXml=paragraph(topic,{size:20,bold:true,before:24,after:0});
+    const docTypeTitle=paragraph(docType,{size:16,bold:true,before:12,after:6});
+    const topicBeforePt = Math.max(12, 20 - Math.max(0, topicLinesCount - 2) * 3);
+    const topicXml=paragraph(topic,{size:topicSize,bold:true,before:topicBeforePt,after:0});
 
-    const extraTopicLines = Math.max(0, topicLinesCount - 3);
-    const metaGap = Math.max(50, (options.metaGap ?? 90) - extraTopicLines * 10);
-    const dateGap = Math.max(100, (options.dateGap ?? 160) - extraTopicLines * 16);
+    // 1. Dynamic horizontal layout for metadata block
+    const maxValLength = Math.max(
+      ...metadataRows.map(r => String(r.value || '').length)
+    );
+    const approxValueWidth = Math.round(maxValLength * 130);
+    const labelWidth = 2300; // dxa for "Sinh viên thực hiện:" + clean space
+    const totalBlockWidth = labelWidth + approxValueWidth;
+    const printableWidth = 9638; // A4 11906 - 1134*2
+
+    const metaLeftIndent = Math.max(1800, Math.min(3400, Math.round((printableWidth - totalBlockWidth) / 2)));
+    const metaTabPos = metaLeftIndent + labelWidth;
+    const metaHanging = metaTabPos - metaLeftIndent;
+
+    // 2. Dynamic vertical gaps for cover page
+    const topicHeightPt = topicLinesCount * (topicSize + 3) + topicBeforePt;
+    const fixedContentPt = 69 + 28 + 105 + 37 + 65 + 16; // org, ornament, logo, docTitle, metadata, date = 320pt
+    const targetCoverHeightPt = 665; // Anchors date cleanly near bottom border, safely within printable height (728.5pt)
+    const availableGapsPt = Math.max(70, targetCoverHeightPt - (fixedContentPt + topicHeightPt));
+
+    const metaGap = options.metaGap ?? Math.min(118, Math.max(30, Math.round(availableGapsPt * 0.365)));
+    const dateGap = options.dateGap ?? Math.max(50, availableGapsPt - metaGap);
 
     const metadataXml = metadataRows.map((row, idx) => {
       const isFirst = idx === 0;
+      const isLast = idx === metadataRows.length - 1;
       const beforePt = isFirst ? metaGap : 3;
       return `<w:p><w:pPr>`
         + `<w:pStyle w:val="WFGraduationCover"/>`
-        + `<w:keepNext w:val="1"/><w:keepLines/>`
+        + `${isLast ? '' : '<w:keepNext w:val="1"/>'}<w:keepLines/>`
         + `<w:spacing w:before="${Math.round(beforePt * 20)}" w:after="0" w:line="280" w:lineRule="auto"/>`
-        + `<w:ind w:left="3800" w:firstLine="0"/><w:jc w:val="left"/>`
-        + `<w:tabs><w:tab w:val="left" w:pos="6500"/></w:tabs>`
+        + `<w:ind w:left="${metaTabPos}" w:hanging="${metaHanging}" w:firstLine="0"/><w:jc w:val="left"/>`
+        + `<w:tabs><w:tab w:val="left" w:pos="${metaTabPos}"/></w:tabs>`
         + `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>`
         + `</w:pPr>`
         + `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>${esc(row.label)}</w:t></w:r>`

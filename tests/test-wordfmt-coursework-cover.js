@@ -68,20 +68,20 @@ try {
   // Verify document type title is TIỂU LUẬN MÔN HỌC
   const tlTitle = $tl('w\\:p').filter((_, el) => $tl(el).text().trim() === 'TIỂU LUẬN MÔN HỌC');
   assert.equal(tlTitle.length, 1, 'Bìa tiểu luận phải có tiêu đề TIỂU LUẬN MÔN HỌC');
-  assert.equal(tlTitle.find('w\\:spacing').attr('w:before'), '320', 'Tiêu đề có before 16pt (320 dxa)');
+  assert.equal(tlTitle.find('w\\:spacing').attr('w:before'), '240', 'Tiêu đề có before 12pt (240 dxa)');
   assert.equal(tlTitle.find('w\\:spacing').attr('w:after'), '120', 'Tiêu đề có after 6pt (120 dxa)');
 
   // Verify metadata fields with proper indents & tab stops
   const instructorP = $tl('w\\:p').filter((_, el) => $tl(el).text().includes('Người hướng dẫn:'));
   assert.equal(instructorP.length, 1, 'Bìa tiểu luận có dòng Người hướng dẫn');
-  assert.equal(instructorP.find('w\\:ind').attr('w:left'), '3800', 'Metadata có left indent 3800');
-  assert.equal(instructorP.find('w\\:tab').attr('w:pos'), '6500', 'Metadata có tab stop 6500');
-  assert.equal(instructorP.find('w\\:spacing').attr('w:before'), '1800', 'Người hướng dẫn có before 90pt (1800 dxa)');
+  assert.ok(instructorP.find('w\\:ind').attr('w:left'), 'Metadata có dynamic left indent');
+  assert.equal(instructorP.find('w\\:tab').attr('w:pos'), instructorP.find('w\\:ind').attr('w:left'), 'Metadata có tab stop khớp left indent');
+  assert.ok(Number(instructorP.find('w\\:spacing').attr('w:before')) > 0, 'Người hướng dẫn có dynamic before gap');
 
   // Verify date line
   const dateP = $tl('w\\:p').filter((_, el) => $tl(el).text().includes('Thành phố Hồ Chí Minh, tháng'));
   assert.equal(dateP.length, 1, 'Bìa tiểu luận có dòng ngày tháng');
-  assert.equal(dateP.find('w\\:spacing').attr('w:before'), '3200', 'Dòng ngày tháng có before 160pt (3200 dxa)');
+  assert.ok(Number(dateP.find('w\\:spacing').attr('w:before')) > 0, 'Dòng ngày tháng có dynamic before gap');
 
   // 2. Compare with do_an_tot_nghiep which must have 2 covers
   const srcGrad = fixture('source-grad', p('ĐỀ CƯƠNG ĐỒ ÁN TỐT NGHIỆP') + p('Nội dung đề cương') + bodyContent);

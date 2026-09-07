@@ -87,6 +87,23 @@ export default function WordFmtPage() {
       return;
     }
 
+    const studentWords = student.trim().split(/\s+/).filter(Boolean).length;
+    const topicWords = topic.trim().split(/\s+/).filter(Boolean).length;
+
+    let warningMsg = '';
+    if (studentWords > 6 && topicWords > 40) {
+      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ) và tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+    } else if (studentWords > 6) {
+      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+    } else if (topicWords > 40) {
+      warningMsg = `Tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+    }
+
+    if (warningMsg) {
+      const proceed = window.confirm(warningMsg);
+      if (!proceed) return;
+    }
+
     const body = new FormData();
     body.append('document', file);
     const frontMatter = [
@@ -243,6 +260,11 @@ export default function WordFmtPage() {
                   onChange={(e) => setStudent(e.target.value)}
                   required
                 />
+                {student.trim().split(/\s+/).filter(Boolean).length > 6 && (
+                  <p className="dropzone-hint" style={{ color: '#f59e0b', marginTop: '4px' }}>
+                    ⚠️ Tên sinh viên dài hơn 6 từ ({student.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -380,6 +402,11 @@ export default function WordFmtPage() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                 />
+                {topic.trim().split(/\s+/).filter(Boolean).length > 40 && (
+                  <p className="dropzone-hint" style={{ color: '#f59e0b', marginTop: '4px' }}>
+                    ⚠️ Tên đề tài dài hơn 40 từ ({topic.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label htmlFor="wf-doc-title" className="form-label">Tiêu Đề Bìa:</label>

@@ -33,7 +33,7 @@
     "test:learning-interactions": "node tests/test-learning-interactions.js",
     "test:load": "node tests/test-server-load.js",
     "test:wordfmt-structure": "node tests/test-docx-structure.js",
-    "test:wordfmt-graduation": "node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js"
+    "test:wordfmt-graduation": "node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js && node tests/test-wordfmt-cover-customizations.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",

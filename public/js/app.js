@@ -2337,6 +2337,23 @@ function initWordFmtTool() {
       const month = document.getElementById('wf-month')?.value.trim() || '';
       const year = document.getElementById('wf-year')?.value.trim() || '';
 
+      const studentWords = student.trim().split(/\s+/).filter(Boolean).length;
+      const topicWords = topic.trim().split(/\s+/).filter(Boolean).length;
+
+      let warningMsg = '';
+      if (studentWords > 6 && topicWords > 40) {
+        warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ) và tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      } else if (studentWords > 6) {
+        warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      } else if (topicWords > 40) {
+        warningMsg = `Tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      }
+
+      if (warningMsg) {
+        const proceed = window.confirm(warningMsg);
+        if (!proceed) return;
+      }
+
       const frontSections = [];
       if (document.getElementById('wf-include-cover')?.checked) frontSections.push('cover');
       if (document.getElementById('wf-include-comments')?.checked) frontSections.push('comments');
