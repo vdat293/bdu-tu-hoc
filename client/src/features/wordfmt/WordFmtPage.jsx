@@ -2,6 +2,164 @@ import { useEffect, useRef, useState } from 'react';
 import { formatDocx } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
+import '../../styles/wordfmt-status.css';
+
+const WORD_FMT_STAGES = [
+  { title: 'Kiểm tra tệp', inProgress: 'Đang kiểm tra tệp DOCX', description: 'Đang ước tính khả năng đọc tệp và mức độ tương thích.' },
+  { title: 'Xác định số chương', inProgress: 'Đang xác định số chương', description: 'Đang nhận diện cấu trúc tiêu đề trong tài liệu.' },
+  { title: 'Nhận diện bảng & hình', inProgress: 'Đang nhận diện bảng & hình', description: 'Đang rà soát các đối tượng và chú thích có trong tài liệu.' },
+  { title: 'Rà soát bìa/front-matter', inProgress: 'Đang rà soát bìa/front-matter', description: 'Đang đối chiếu các tùy chọn phần đầu tài liệu đã chọn.' },
+  { title: 'Áp dụng định dạng', inProgress: 'Đang áp dụng định dạng', description: 'Đang xử lý các quy tắc định dạng theo cấu hình hiện tại.' },
+  { title: 'Hoàn thiện', inProgress: 'Đang hoàn thiện tài liệu', description: 'Đang chuẩn bị tài liệu đầu ra và các thành phần liên quan.' },
+  { title: 'Kiểm tra kết quả', inProgress: 'Đang kiểm tra kết quả', description: 'Đang chờ xác thực cuối cùng trước khi trả tài liệu cho bạn.' }
+];
+
+const SAFE_ERROR_MESSAGE = 'Không thể hoàn tất việc định dạng file. Vui lòng kiểm tra file DOCX hoặc kết nối rồi thử lại.';
+
+function asRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function asCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count >= 0 ? count : null;
+}
+
+function reportWarnings(structure, outputNormalization) {
+  const sources = [structure?.warnings, outputNormalization?.warnings];
+  return [...new Set(sources.flatMap((warnings) => Array.isArray(warnings) ? warnings : [])
+    .filter((warning) => typeof warning === 'string' && warning.trim()))];
+}
+
+function requestedOptions(choices) {
+  if (!asRecord(choices)) return [];
+  return [
+    choices.includeCover && 'bìa',
+    choices.includeComments && 'nhận xét',
+    choices.includeThanks && 'lời cảm ơn',
+    choices.onlyExistingCaptions && 'chỉ chú thích Bảng/Hình sẵn có',
+    choices.skipProposal && 'giữ nguyên đề cương'
+  ].filter(Boolean);
+}
+
+export function buildCompletionCards(result, choices) {
+  const report = asRecord(result?.report);
+  const structure = asRecord(report?.structure);
+  const outputNormalization = asRecord(report?.outputNormalization);
+  const compliance = asRecord(outputNormalization?.compliance);
+  const cards = [];
+
+  const chapterCount = asCount(structure?.chapterCount);
+  if (chapterCount !== null) {
+    cards.push({
+      tone: 'info',
+      title: 'Cấu trúc tài liệu',
+      description: `Đã nhận diện ${chapterCount} chương trong tài liệu.`
+    });
+  }
+
+  const captionsRenumbered = asCount(outputNormalization?.captionsRenumbered);
+  if (captionsRenumbered !== null) {
+    cards.push({
+      tone: 'info',
+      title: 'Bảng & hình',
+      description: captionsRenumbered
+        ? `Đã chuẩn hóa ${captionsRenumbered} chú thích Bảng/Hình.`
+        : 'Không có chú thích Bảng/Hình nào được chuẩn hóa.'
+    });
+  }
+
+  const tablesResized = asCount(outputNormalization?.tablesResized);
+  if (tablesResized !== null) {
+    cards.push({
+      tone: 'info',
+      title: 'Bảng dữ liệu',
+      description: tablesResized
+        ? `Đã điều chỉnh ${tablesResized} bảng theo khổ trang.`
+        : 'Không có bảng dữ liệu nào được điều chỉnh.'
+    });
+  }
+
+  const coversAdded = asCount(structure?.coversAdded);
+  if (coversAdded !== null) {
+    cards.push({
+      tone: 'info',
+      title: 'Trang bìa',
+      description: coversAdded
+        ? `Đã thêm ${coversAdded} trang bìa theo cấu trúc tài liệu.`
+        : 'Không có trang bìa nào được thêm.'
+    });
+  }
+
+  if (outputNormalization?.frontMatterReordered === true) {
+    cards.push({
+      tone: 'info',
+      title: 'Phần đầu tài liệu',
+      description: 'Đã sắp xếp lại thứ tự phần đầu tài liệu.'
+    });
+  }
+
+  if (compliance?.proposalSkipped === true) {
+    cards.push({
+      tone: 'info',
+      title: 'Đề cương',
+      description: 'Đề cương được giữ nguyên theo tùy chọn đã chọn.'
+    });
+  }
+
+  const verifiedChecks = [
+    compliance?.a4Portrait === true && 'khổ A4',
+    compliance?.margins === true && 'lề trang',
+    compliance?.headingStructure === true && 'cấu trúc tiêu đề'
+  ].filter(Boolean);
+  if (verifiedChecks.length) {
+    cards.push({
+      tone: 'success',
+      title: 'Kiểm tra đầu ra',
+      description: `Đã xác thực: ${verifiedChecks.join(', ')}.`
+    });
+  }
+
+  const warnings = reportWarnings(structure, outputNormalization);
+  if (warnings.length) {
+    cards.push({
+      tone: 'warning',
+      title: 'Lưu ý cần xem lại',
+      description: `Báo cáo đầu ra có ${warnings.length} lưu ý. Hãy mở tài liệu đã tải xuống để kiểm tra các vị trí liên quan.`
+    });
+  } else if (report && (structure || outputNormalization)) {
+    cards.push({
+      tone: 'success',
+      title: 'Lưu ý',
+      description: 'Báo cáo đầu ra không ghi nhận lưu ý cần xem lại.'
+    });
+  }
+
+  const options = requestedOptions(choices);
+  if (options.length) {
+    cards.push({
+      tone: 'muted',
+      title: 'Tùy chọn đã gửi',
+      description: options.join(' · ')
+    });
+  }
+
+  return cards;
+}
+
+function getSafeDownloadUrl(result) {
+  const candidate = typeof result?.downloadUrl === 'string' ? result.downloadUrl.trim() : '';
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate, window.location.origin);
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    const isRelativePath = candidate.startsWith('/') && !candidate.startsWith('//');
+    if (url.origin !== window.location.origin && !isRelativePath) return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}
 
 export default function WordFmtPage() {
   const auth = useAuth();
@@ -43,8 +201,8 @@ export default function WordFmtPage() {
 
   useEffect(() => {
     if (run.status === 'success') notify('Chuẩn hóa văn bản thành công!', 'success');
-    if (run.status === 'error') notify(run.error?.message || 'Định dạng file thất bại.', 'error');
-  }, [notify, run.status, run.error]);
+    if (run.status === 'error') notify(SAFE_ERROR_MESSAGE, 'error');
+  }, [notify, run.status]);
 
   const selectFile = (candidate) => {
     if (!candidate) return;
@@ -134,11 +292,23 @@ export default function WordFmtPage() {
     body.append('onlyExistingCaptions', onlyExistingCaptions);
     body.append('skipProposal', skipProposal);
 
-    startToolRun('wordfmt', () => formatDocx(auth.token, body));
+    startToolRun('wordfmt', () => formatDocx(auth.token, body), {
+      stageCount: WORD_FMT_STAGES.length,
+      summaryChoices: { includeCover, includeComments, includeThanks, onlyExistingCaptions, skipProposal }
+    });
   };
 
   const isRunning = run.status === 'running';
-  const isSuccess = run.status === 'success' && run.result;
+  const isSuccess = run.status === 'success';
+  const isError = run.status === 'error';
+  const progress = Math.min(100, Math.max(0, Number.isFinite(run.progress) ? run.progress : 0));
+  const stageIndex = Math.min(
+    WORD_FMT_STAGES.length - 1,
+    Math.max(0, Number.isFinite(run.stageIndex) ? run.stageIndex : 0)
+  );
+  const activeStage = WORD_FMT_STAGES[stageIndex];
+  const downloadUrl = isSuccess ? getSafeDownloadUrl(run.result) : null;
+  const completionCards = isSuccess ? buildCompletionCards(run.result, run.summaryChoices) : [];
 
   return (
     <section id="tab-wordfmt" className="tab-pane active">
@@ -513,98 +683,117 @@ export default function WordFmtPage() {
         </div>
 
         {/* Right: Result & Diagnostics */}
-        <div className="wordfmt-result-column">
-          <div id="wordfmt-status-card" className={`wordfmt-card glass-panel result-placeholder${isRunning ? ' is-processing' : ''}`}>
-            {!isRunning && !isSuccess && (
-              <div className="status-placeholder-content">
+        <div className="wf-status-column">
+          <div id="wordfmt-status-card" className={`glass-panel wf-status-card${isRunning ? ' wf-status-card--running' : ''}${isError ? ' wf-status-card--error' : ''}`}>
+            {!isRunning && !isSuccess && !isError && (
+              <div className="wf-status-empty">
                 <h3>Sẵn sàng định dạng văn bản</h3>
                 <p>Chọn file `.docx` và điền thông tin bên trái để bắt đầu quy trình chuẩn hóa.</p>
               </div>
             )}
 
             {isRunning && (
-              <div id="wordfmt-progress-box" className="wordfmt-progress-box" aria-live="polite">
-                <div className="document-processing-scene" aria-hidden="true">
-                  <div className="document-orbit orbit-one"></div>
-                  <div className="document-orbit orbit-two"></div>
-                  <div className="document-sheet sheet-back"></div>
-                  <div className="document-sheet sheet-middle"></div>
-                  <div className="document-sheet sheet-front">
-                    <img className="document-brand" src="/assets/images/logo-hao-quang-transparent.png" alt="" />
-                    <span className="document-line line-title"></span>
-                    <span className="document-line"></span>
-                    <span className="document-line short"></span>
-                    <span className="document-line"></span>
-                    <span className="document-line medium"></span>
-                    <span className="document-scan"></span>
+              <div id="wordfmt-progress-box" className="wf-run" aria-live="polite">
+                <div className="wf-run-scene" aria-hidden="true">
+                  <div className="wf-run-orbit wf-run-orbit--one"></div>
+                  <div className="wf-run-orbit wf-run-orbit--two"></div>
+                  <div className="wf-run-sheet wf-run-sheet--back"></div>
+                  <div className="wf-run-sheet wf-run-sheet--middle"></div>
+                  <div className="wf-run-sheet wf-run-sheet--front">
+                    <img className="wf-run-brand" src="/assets/images/logo-hao-quang-transparent.png" alt="" />
+                    <span className="wf-run-line wf-run-line--title"></span>
+                    <span className="wf-run-line"></span>
+                    <span className="wf-run-line wf-run-line--short"></span>
+                    <span className="wf-run-line"></span>
+                    <span className="wf-run-line wf-run-line--medium"></span>
+                    <span className="wf-run-scan"></span>
                   </div>
                 </div>
 
-                <div className="progress-content">
-                  <p className="progress-eyebrow">WordFmt Processing Engine</p>
-                  <h3 id="wordfmt-progress-title" className="progress-title">Đang kiểm tra tài liệu</h3>
-                  <p id="wordfmt-progress-desc" className="progress-desc">
-                    Xác thực cấu trúc và khả năng tương thích của file DOCX.
+                <div className="wf-run-content">
+                  <p className="wf-run-eyebrow">WordFmt · Tiến độ ước tính</p>
+                  <h3 id="wordfmt-progress-title" className="wf-run-title">{activeStage.inProgress}</h3>
+                  <p id="wordfmt-progress-desc" className="wf-run-description">
+                    {activeStage.description}
                   </p>
 
-                  <div className="progress-rail" role="progressbar" aria-label="Tiến độ chuẩn hóa" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-                    <span id="wordfmt-progress-fill" className="progress-fill" style={{ width: '50%' }}></span>
+                  <div className="wf-run-meter" role="progressbar" aria-label="Tiến độ chuẩn hóa (ước tính)" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}>
+                    <span id="wordfmt-progress-fill" className="wf-run-meter-fill" style={{ width: `${progress}%` }}></span>
                   </div>
-                  <div className="progress-meta">
-                    <strong id="wordfmt-progress-percent">Đang xử lý</strong>
-                    <span id="wordfmt-progress-time">Engine C#</span>
+                  <div className="wf-run-meta">
+                    <strong id="wordfmt-progress-percent">{progress}% · Tiến độ ước tính</strong>
+                    <span id="wordfmt-progress-time">Kết quả sẽ trả sau tối thiểu 10 giây</span>
                   </div>
-
-                  <ol className="processing-stages">
-                    <li data-stage="0" className="active"><span>01</span>Kiểm tra tài liệu</li>
-                    <li data-stage="1" className="active"><span>02</span>Phân tích cấu trúc</li>
-                    <li data-stage="2"><span>03</span>Áp dụng định dạng</li>
-                    <li data-stage="3"><span>04</span>Xác minh kết quả</li>
-                  </ol>
                 </div>
+
+                <ol className="wf-run-stages">
+                  {WORD_FMT_STAGES.map((stage, index) => (
+                    <li
+                      key={stage.title}
+                      data-stage={index}
+                      className={`${index < stageIndex ? 'wf-run-stage--complete' : ''}${index === stageIndex ? ' wf-run-stage--active' : ''}`}
+                      aria-current={index === stageIndex ? 'step' : undefined}
+                    >
+                      <span>{String(index + 1).padStart(2, '0')}</span>{stage.title}
+                    </li>
+                  ))}
+                </ol>
               </div>
             )}
 
             {isSuccess && (
-              <div id="wordfmt-success-box" className="wordfmt-success-box">
-                <div className="success-header">
-                  <div className="success-badge">ĐỊNH DẠNG HOÀN TẤT</div>
-                  <h3 className="success-title">Văn bản đã được chuẩn hóa 100%!</h3>
-                  <p className="success-desc">Đã xử lý cấu trúc Heading, Mục lục, Bìa và Header/Footer chuẩn BDU.</p>
+              <div id="wordfmt-success-box" className="wf-status-success">
+                <div className="wf-status-success-header">
+                  <div className="wf-status-badge">ĐỊNH DẠNG HOÀN TẤT</div>
+                  <h3 className="wf-status-title">Văn bản đã được chuẩn hóa 100%!</h3>
+                  <p className="wf-status-description">Các mục dưới đây chỉ hiển thị thông tin được báo cáo từ tài liệu đầu ra.</p>
                 </div>
 
-                <a
-                  id="btn-download-docx"
-                  href={run.result?.downloadUrl || '#'}
-                  className="btn btn-success btn-block btn-lg"
-                  download
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" x2="12" y1="15" y2="3" />
-                  </svg>
-                  <span>Tải Về File DOCX Đã Chuẩn Hóa</span>
-                </a>
-
-                {run.result?.report && (
-                  <div id="wordfmt-diagnostics-box" className="diagnostics-box" style={{ marginTop: '16px' }}>
-                    <h4 className="diag-title">Báo Cáo Kiểm Tra (WordFmt Diagnostics):</h4>
-                    <div id="diag-items" className="diag-items">
-                      {Array.isArray(run.result.report) ? (
-                        run.result.report.map((item, idx) => (
-                          <div key={idx} className="diag-item" style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '13px' }}>
-                            {typeof item === 'string' ? item : JSON.stringify(item)}
-                          </div>
-                        ))
-                      ) : (
-                        <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap' }}>
-                          {JSON.stringify(run.result.report, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  </div>
+                {downloadUrl ? (
+                  <a
+                    id="btn-download-docx"
+                    href={downloadUrl}
+                    className="btn btn-success btn-block btn-lg"
+                    download
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" x2="12" y1="15" y2="3" />
+                    </svg>
+                    <span>Tải Về File DOCX Đã Chuẩn Hóa</span>
+                  </a>
+                ) : (
+                  <p className="wf-status-download-unavailable" role="status">
+                    Tài liệu đã hoàn tất nhưng liên kết tải xuống chưa khả dụng. Vui lòng thử lại.
+                  </p>
                 )}
+
+                <div id="wordfmt-completion-summary" className="wf-status-summary" aria-label="Tóm tắt kết quả">
+                  {completionCards.length ? completionCards.map((card) => (
+                    <article key={`${card.title}-${card.description}`} className={`wf-status-summary-card wf-status-summary-card--${card.tone}`}>
+                      <h4>{card.title}</h4>
+                      <p>{card.description}</p>
+                    </article>
+                  )) : (
+                    <article className="wf-status-summary-card wf-status-summary-card--muted">
+                      <h4>Tài liệu đầu ra</h4>
+                      <p>Tài liệu đã sẵn sàng để tải xuống. Báo cáo không cung cấp thêm chi tiết để hiển thị.</p>
+                    </article>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isError && (
+              <div id="wordfmt-error-box" className="wf-status-error" role="alert">
+                <div className="wf-status-error-icon" aria-hidden="true">!</div>
+                <div>
+                  <p className="wf-status-eyebrow">WORD_FMT · CẦN THỬ LẠI</p>
+                  <h3 className="wf-status-title">Chưa thể hoàn tất chuẩn hóa</h3>
+                  <p className="wf-status-error-description">{SAFE_ERROR_MESSAGE}</p>
+                  <p className="wf-status-error-hint">File gốc của bạn không bị thay đổi. Kiểm tra lại file DOCX hoặc kết nối rồi bấm bắt đầu để thử lại.</p>
+                </div>
               </div>
             )}
           </div>

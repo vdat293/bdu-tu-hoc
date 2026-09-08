@@ -1230,7 +1230,7 @@ body.theme-dark .frame-equipped-state {
     align-items: flex-start;
   }
 
-  .frame-picker-footer>span {
+.frame-picker-footer>span {
     min-width: 0;
   }
 }

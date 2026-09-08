@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  formatDocx: vi.fn().mockResolvedValue({ downloadUrl: '/api/wordfmt/download/test.docx' })
+  formatDocx: vi.fn().mockResolvedValue({ downloadUrl: '/api/wordfmt/download/test.docx' }),
+  toolRun: null
 }));
 
 vi.mock('../../client/src/api/tools.js', () => ({ formatDocx: mocks.formatDocx }));
@@ -11,14 +12,20 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
   useToasts: () => ({ notify: vi.fn() })
 }));
 vi.mock('../../client/src/services/tool-runs.js', () => ({
-  getToolRun: () => null,
+  getToolRun: () => mocks.toolRun,
   startToolRun: (_name, task) => task(),
-  subscribeToolRun: () => () => {}
+  subscribeToolRun: (_name, listener) => {
+    listener(mocks.toolRun);
+    return () => {};
+  }
 }));
 
 import WordFmtPage from '../../client/src/features/wordfmt/WordFmtPage.jsx';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  mocks.toolRun = null;
+});
 
 describe('WordFmtPage', () => {
   it('submits the API field names and a front-matter selection that matches the form', async () => {
@@ -62,5 +69,62 @@ describe('WordFmtPage', () => {
     expect(screen.getByLabelText(/Tiêu Đề Bìa/i)).toHaveValue('TIỂU LUẬN MÔN HỌC');
     expect(screen.getByLabelText(/Nhận xét giảng viên/i)).not.toBeChecked();
     expect(screen.getByLabelText(/Nhận xét giảng viên/i)).not.toBeDisabled();
+  });
+
+  it('keeps the success state visible without creating a broken download link', () => {
+    mocks.toolRun = { status: 'success', result: { report: { pages: 3 } } };
+    render(<WordFmtPage />);
+
+    expect(screen.getByText(/Văn bản đã được chuẩn hóa 100%/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Tải Về File DOCX/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/liên kết tải xuống chưa khả dụng/i);
+  });
+
+  it('does not expose backend error details in the error card', () => {
+    mocks.toolRun = { status: 'error', error: new Error('SECRET backend stderr: stack trace') };
+    render(<WordFmtPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/Không thể hoàn tất việc định dạng file/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/SECRET backend stderr/i);
+  });
+
+  it('keeps the start control locked and reports an estimated active stage while a run is pending', () => {
+    mocks.toolRun = { status: 'running', progress: 52, stageIndex: 2, stageCount: 7 };
+    render(<WordFmtPage />);
+
+    expect(screen.getByRole('button', { name: /Đang chuẩn hóa/i })).toBeDisabled();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '52');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '100');
+    expect(screen.getByText(/Đang nhận diện bảng & hình/i)).toBeInTheDocument();
+    expect(document.querySelector('.wf-run')).toBeInTheDocument();
+    expect(document.querySelectorAll('.wf-run-stages li')).toHaveLength(7);
+    expect(document.querySelector('.wordfmt-progress-box')).toBeNull();
+    expect(document.querySelector('.processing-stages')).toBeNull();
+  });
+
+  it('shows only concise completion cards derived from known report fields', () => {
+    mocks.toolRun = {
+      status: 'success',
+      summaryChoices: { includeCover: true, onlyExistingCaptions: true },
+      result: {
+        report: {
+          structure: { chapterCount: 2, warnings: ['SECRET diagnostic payload'] },
+          outputNormalization: {
+            captionsRenumbered: 3,
+            compliance: { a4Portrait: true, margins: true }
+          },
+          arbitraryBackendBlob: { trace: 'SECRET raw trace' }
+        }
+      }
+    };
+    render(<WordFmtPage />);
+
+    const summary = screen.getByLabelText(/Tóm tắt kết quả/i);
+    expect(summary).toHaveTextContent('Đã nhận diện 2 chương');
+    expect(summary).toHaveTextContent('Đã chuẩn hóa 3 chú thích Bảng/Hình');
+    expect(summary).toHaveTextContent('Báo cáo đầu ra có 1 lưu ý');
+    expect(summary).toHaveTextContent('Tùy chọn đã gửi');
+    expect(summary).not.toHaveTextContent(/SECRET diagnostic|SECRET raw trace|arbitraryBackendBlob/i);
+    expect(screen.queryByText(/WordFmt Diagnostics/i)).not.toBeInTheDocument();
   });
 });

@@ -1,0 +1,380 @@
+/*
+ * WordFmt status panel
+ *
+ * This stylesheet is deliberately self-contained.  It does not reuse the
+ * historic `progress-*`, `document-*`, or `processing-stages` selectors from
+ * showcase.css, so the panel cannot inherit an unrelated grid, padding, or
+ * breakpoint rule.
+ */
+
+#tab-wordfmt .wf-status-column {
+  position: sticky;
+  top: 104px;
+  align-self: start;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+#tab-wordfmt .wf-status-card {
+  display: grid;
+  min-height: 610px;
+  overflow: clip;
+  padding: 0;
+  border: 1px solid rgba(74, 85, 104, .18);
+  border-radius: 20px;
+  background: #fffdf9;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, .09);
+}
+
+#tab-wordfmt .wf-status-card--running {
+  border-color: rgba(56, 189, 248, .34);
+  background: #111827;
+  box-shadow: 0 24px 58px rgba(15, 23, 42, .22);
+}
+
+#tab-wordfmt .wf-status-card--error {
+  border-color: rgba(248, 113, 113, .35);
+}
+
+#tab-wordfmt .wf-status-empty {
+  display: grid;
+  place-content: center;
+  gap: 9px;
+  min-height: 360px;
+  padding: 32px;
+  text-align: center;
+}
+
+#tab-wordfmt .wf-status-empty h3,
+#tab-wordfmt .wf-status-empty p,
+#tab-wordfmt .wf-status-title,
+#tab-wordfmt .wf-status-description,
+#tab-wordfmt .wf-status-error-description,
+#tab-wordfmt .wf-status-error-hint {
+  margin: 0;
+}
+
+#tab-wordfmt .wf-status-empty p,
+#tab-wordfmt .wf-status-description,
+#tab-wordfmt .wf-status-error-hint {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* Running state: the document, active copy, and all stages are separate grid
+ * areas.  No child is ever forced into a fixed-height row. */
+#tab-wordfmt .wf-run {
+  display: grid;
+  grid-template-areas:
+    "scene content"
+    "stages stages";
+  grid-template-columns: minmax(126px, .44fr) minmax(0, 1fr);
+  gap: 20px;
+  align-content: center;
+  min-height: 610px;
+  box-sizing: border-box;
+  padding: 26px;
+  color: #e5edf8;
+  background:
+    radial-gradient(circle at 95% 0%, rgba(34, 211, 238, .16), transparent 30%),
+    radial-gradient(circle at 10% 100%, rgba(59, 130, 246, .13), transparent 34%),
+    linear-gradient(145deg, #121a2a 0%, #101827 53%, #111827 100%);
+}
+
+#tab-wordfmt .wf-run-scene {
+  grid-area: scene;
+  position: relative;
+  display: grid;
+  min-height: 154px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, .16);
+  border-radius: 16px;
+  background: linear-gradient(155deg, rgba(30, 41, 59, .82), rgba(15, 23, 42, .3));
+}
+
+#tab-wordfmt .wf-run-orbit {
+  position: absolute;
+  border: 1px dashed rgba(125, 211, 252, .28);
+  border-radius: 50%;
+  animation: wf-run-orbit 10s linear infinite;
+}
+
+#tab-wordfmt .wf-run-orbit--one { width: 118px; height: 118px; }
+#tab-wordfmt .wf-run-orbit--two { width: 82px; height: 82px; animation-direction: reverse; animation-duration: 7s; }
+
+#tab-wordfmt .wf-run-sheet {
+  position: absolute;
+  width: 82px;
+  height: 112px;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ffffff, #e0f2fe);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, .35);
+}
+
+#tab-wordfmt .wf-run-sheet--back { opacity: .24; transform: translate(-15px, 9px) rotate(-13deg); }
+#tab-wordfmt .wf-run-sheet--middle { opacity: .48; transform: translate(13px, 5px) rotate(10deg); }
+#tab-wordfmt .wf-run-sheet--front { z-index: 1; box-sizing: border-box; padding: 15px 11px; overflow: hidden; transform: rotate(-3deg); }
+
+#tab-wordfmt .wf-run-brand {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+}
+
+#tab-wordfmt .wf-run-line {
+  display: block;
+  height: 4px;
+  margin: 7px 0;
+  border-radius: 999px;
+  background: #c7d7fb;
+}
+
+#tab-wordfmt .wf-run-line--title { width: 70%; height: 6px; background: #8298dd; }
+#tab-wordfmt .wf-run-line--short { width: 54%; }
+#tab-wordfmt .wf-run-line--medium { width: 80%; }
+
+#tab-wordfmt .wf-run-scan {
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 23%;
+  height: 3px;
+  background: #38bdf8;
+  box-shadow: 0 0 14px 3px rgba(56, 189, 248, .72);
+  animation: wf-run-scan 2.1s ease-in-out infinite;
+}
+
+#tab-wordfmt .wf-run-content {
+  grid-area: content;
+  min-width: 0;
+  align-self: center;
+}
+
+#tab-wordfmt .wf-run-eyebrow,
+#tab-wordfmt .wf-status-eyebrow {
+  margin: 0 0 7px;
+  color: #7dd3fc;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+#tab-wordfmt .wf-run-title,
+#tab-wordfmt .wf-status-title {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.08rem, 2vw, 1.38rem);
+  line-height: 1.22;
+}
+
+#tab-wordfmt .wf-run-description {
+  min-height: 0;
+  margin: 9px 0 17px;
+  color: rgba(226, 232, 240, .72);
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+#tab-wordfmt .wf-run-meter {
+  height: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, .3);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .72);
+}
+
+#tab-wordfmt .wf-run-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #22d3ee 57%, #34d399);
+  box-shadow: 0 0 14px rgba(34, 211, 238, .56);
+  transition: width .2s linear;
+}
+
+#tab-wordfmt .wf-run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 9px;
+  color: rgba(226, 232, 240, .6);
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+#tab-wordfmt .wf-run-meta strong { color: #f8fafc; }
+
+#tab-wordfmt .wf-run-stages {
+  grid-area: stages;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#tab-wordfmt .wf-run-stages li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 11px;
+  background: rgba(15, 23, 42, .28);
+  color: rgba(226, 232, 240, .56);
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+#tab-wordfmt .wf-run-stages li span {
+  display: grid;
+  flex: 0 0 25px;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: .6rem;
+  font-weight: 900;
+}
+
+#tab-wordfmt .wf-run-stages li.wf-run-stage--complete {
+  border-color: rgba(52, 211, 153, .24);
+  color: #a7f3d0;
+  background: rgba(6, 95, 70, .12);
+}
+
+#tab-wordfmt .wf-run-stages li.wf-run-stage--active {
+  border-color: rgba(56, 189, 248, .64);
+  color: #f8fafc;
+  background: rgba(14, 116, 144, .22);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, .1);
+}
+
+#tab-wordfmt .wf-status-success,
+#tab-wordfmt .wf-status-error {
+  align-self: center;
+  padding: clamp(26px, 4vw, 44px);
+}
+
+#tab-wordfmt .wf-status-success-header { margin-bottom: 22px; }
+
+#tab-wordfmt .wf-status-badge {
+  display: inline-flex;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border: 1px solid rgba(5, 150, 105, .34);
+  border-radius: 999px;
+  color: #059669;
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+#tab-wordfmt .wf-status-success .wf-status-title { color: var(--text-main); }
+#tab-wordfmt .wf-status-description { margin-top: 9px; font-size: .86rem; }
+
+#tab-wordfmt .wf-status-download-unavailable {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(251, 191, 36, .3);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, .08);
+  color: var(--text-muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+
+#tab-wordfmt .wf-status-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+#tab-wordfmt .wf-status-summary-card {
+  padding: 13px 14px;
+  border: 1px solid var(--border-color);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface, #fff) 86%, transparent);
+  text-align: left;
+}
+
+#tab-wordfmt .wf-status-summary-card h4,
+#tab-wordfmt .wf-status-summary-card p { margin: 0; }
+#tab-wordfmt .wf-status-summary-card h4 { color: var(--text-main); font-size: .8rem; }
+#tab-wordfmt .wf-status-summary-card p { margin-top: 4px; color: var(--text-muted); font-size: .78rem; line-height: 1.45; }
+#tab-wordfmt .wf-status-summary-card--success { border-left-color: #34d399; }
+#tab-wordfmt .wf-status-summary-card--info { border-left-color: #60a5fa; }
+#tab-wordfmt .wf-status-summary-card--warning { border-left-color: #fbbf24; background: color-mix(in srgb, #fbbf24 8%, var(--surface, #fff)); }
+#tab-wordfmt .wf-status-summary-card--muted { border-left-color: #94a3b8; }
+
+#tab-wordfmt .wf-status-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#tab-wordfmt .wf-status-error-icon {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, .45);
+  border-radius: 50%;
+  background: rgba(248, 113, 113, .12);
+  color: #dc2626;
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+#tab-wordfmt .wf-status-error .wf-status-title { color: var(--text-main); }
+#tab-wordfmt .wf-status-error-description { margin: 10px 0; color: #dc2626; line-height: 1.5; }
+#tab-wordfmt .wf-status-error-hint { font-size: .8rem; }
+
+@keyframes wf-run-orbit { to { transform: rotate(1turn); } }
+@keyframes wf-run-scan { 0%, 100% { top: 21%; opacity: .48; } 50% { top: 77%; opacity: 1; } }
+
+@container (max-width: 460px) {
+  #tab-wordfmt .wf-run {
+    grid-template-areas:
+      "scene"
+      "content"
+      "stages";
+    grid-template-columns: 1fr;
+  }
+
+  #tab-wordfmt .wf-run-scene { min-height: 170px; }
+  #tab-wordfmt .wf-run-stages { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 992px) {
+  #tab-wordfmt .wf-status-column { position: static; }
+}
+
+@media (max-width: 520px) {
+  #tab-wordfmt .wf-status-card,
+  #tab-wordfmt .wf-run { min-height: 0; }
+  #tab-wordfmt .wf-run,
+  #tab-wordfmt .wf-status-success,
+  #tab-wordfmt .wf-status-error { padding: 22px 18px; }
+  #tab-wordfmt .wf-run-meta { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tab-wordfmt .wf-run-orbit,
+  #tab-wordfmt .wf-run-scan { animation: none; }
+  #tab-wordfmt .wf-run-meter-fill { transition: none; }
+}
