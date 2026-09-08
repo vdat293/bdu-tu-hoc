@@ -4,6 +4,71 @@
  */
 
 const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
+const DEFAULT_PROFILE_TIMEOUT_MS = 20_000;
+
+function profileTimeoutSignal() {
+  const configured = Number.parseInt(process.env.BDU_PROFILE_TIMEOUT_MS || '', 10);
+  const timeoutMs = Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_PROFILE_TIMEOUT_MS;
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
+
+function invalidSessionError() {
+  const error = new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  error.status = 401;
+  error.code = 'AUTH_INVALID';
+  return error;
+}
+
+// A response from the upstream portal is the only authority that can tell us a
+// BDU token is invalid. In particular, do not turn a DNS/TLS failure, a BDU
+// 5xx, or a HTML maintenance page into a 401: callers would log the student
+// out even though retrying later is the correct action.
+function profileUnavailableError(message = 'Dịch vụ BDU tạm thời không phản hồi. Vui lòng thử lại.') {
+  const error = new Error(message);
+  error.status = 503;
+  error.code = 'AUTH_UNAVAILABLE';
+  error.retryable = true;
+  return error;
+}
+
+async function fetchProfilePayload(url, options) {
+  let response;
+  try {
+    response = await fetch(url, { ...options, signal: profileTimeoutSignal() });
+  } catch (cause) {
+    const error = profileUnavailableError();
+    error.cause = cause;
+    throw error;
+  }
+
+  const status = Number(response?.status);
+  // Some existing unit-test doubles do not include a status. A real Fetch
+  // Response always does, so treat an omitted status as the successful shape
+  // these backwards-compatible doubles intend.
+  const effectiveStatus = Number.isFinite(status) && status > 0 ? status : 200;
+  if (effectiveStatus === 400 || effectiveStatus === 401) throw invalidSessionError();
+  if (effectiveStatus < 200 || effectiveStatus >= 300) throw profileUnavailableError();
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (cause) {
+    const error = profileUnavailableError('Dịch vụ BDU trả về dữ liệu không hợp lệ. Vui lòng thử lại.');
+    error.cause = cause;
+    throw error;
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw profileUnavailableError('Dịch vụ BDU trả về dữ liệu không hợp lệ. Vui lòng thử lại.');
+  }
+  if (data.code === 400 || data.code === 401) throw invalidSessionError();
+  if (data.result === false) {
+    throw profileUnavailableError(data.message || 'Dịch vụ BDU tạm thời không phản hồi. Vui lòng thử lại.');
+  }
+  return data;
+}
 
 function normalizeStudentImageValue(value) {
   const raw = String(value || '').trim();
@@ -209,7 +274,7 @@ export const BduService = {
     // the same endpoint as the official profile page; older sessions fall back
     // to the current-user endpoint, which does not require IDSV.
     const [profileRes, imageBase64] = await Promise.all([
-      fetch(profileUrl, {
+      fetchProfilePayload(profileUrl, {
         method: profileMethod,
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
@@ -218,19 +283,11 @@ export const BduService = {
           ...(profileMethod === 'POST' ? { 'Content-Type': 'text/plain' } : {})
         },
         ...(profileMethod === 'POST' ? { body: '' } : {})
-      }).then(r => r.json()).catch(err => ({ result: false, message: err.message })),
+      }),
       maSV ? this.getStudentImage(token, maSV) : Promise.resolve(null)
     ]);
 
     const data = profileRes || {};
-
-    if (!data.result && data.code !== 200) {
-      if (data.code === 401 || data.code === 400) {
-        const err = new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        err.status = 401;
-        throw err;
-      }
-    }
 
     // Attach student photo if fetched or found in payload
     const finalImage = imageBase64 || findStudentImage(data);

@@ -156,6 +156,41 @@ Vì Compose chỉ bind cổng ứng dụng vào `127.0.0.1`, nó mặc định t
 nhận kết nối trực tiếp. Nếu frontend dùng origin khác, khai báo origin HTTPS chính
 xác trong `WS_ALLOWED_ORIGINS`, cách nhau bằng dấu phẩy.
 
+### Nginx + TLS/WSS trên VPS
+
+Production React phải được build trong image (`docker compose up -d --build`) và
+được phục vụ cùng một HTTPS origin; client khi đó tự dùng
+`wss://<host>/ws/community`. Sao chép
+[`deploy/nginx/bdu-hub.conf.example`](deploy/nginx/bdu-hub.conf.example), thay
+`hub.example.edu.vn` và đường dẫn certificate, rồi kiểm tra/reload Nginx:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Giữ `WS_TRUST_PROXY=true` chỉ vì Compose bind Node tại `127.0.0.1`; không expose
+port 3000 ra Internet. Template bắt buộc HTTP/1.1 Upgrade, các header public
+host/proto, tắt buffering, và timeout 90 giây (heartbeat server là 30 giây).
+Nếu frontend nằm ở một origin khác, đặt `WS_ALLOWED_ORIGINS=https://frontend.example.edu.vn`;
+không dùng `*`.
+
+Sau deploy, xác nhận WSS qua proxy (thay token thật, không lưu token vào shell history):
+
+```bash
+npx wscat -c wss://hub.example.edu.vn/ws/community -H 'Origin: https://hub.example.edu.vn'
+# rồi gửi: {"type":"auth","token":"<token>"}
+```
+
+Giữ phiên mở hơn 90 giây để kiểm tra heartbeat, sau đó `docker compose restart
+bdu-hub`: trình duyệt phải reconnect theo jitter, nhận `auth.ok`, và refetch các
+query React đang mở. `AUTH_UNAVAILABLE`/close 1013 nghĩa là BDU tạm thời không
+trả lời (quá `BDU_PROFILE_TIMEOUT_MS`, mặc định 20 giây) và sẽ retry; chỉ
+`AUTH_INVALID` mới đăng xuất phiên.
+
+Kết quả xác minh của một token opaque khôi phục sau restart chỉ được cache
+`BDU_RESTORED_TOKEN_TTL_MS` (mặc định 5 phút); đăng nhập mới luôn giữ hạn
+`expires_in` do BDU cấp.
+
 Sau khi app lên, chạy đồng bộ bảng xếp hạng lần đầu:
 
 ```bash

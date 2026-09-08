@@ -25,7 +25,7 @@ export const ApiController = {
     try {
       const { username, password } = req.body;
       const data = await BduService.login(username, password);
-      BduIdentityService.register(data.token, data.mssv);
+      BduIdentityService.register(data.token, data.mssv, { expiresIn: data.expires_in });
       StudentService.recordLogin(data.mssv, data.name).catch((err) => {
         console.error('[StudentService] Lỗi cập nhật trạng thái đăng nhập:', err.message);
       });
@@ -136,6 +136,44 @@ export const ApiController = {
           ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
           : 'Chưa thể tải bảng xếp hạng lúc này. Vui lòng thử lại sau.';
       return res.status(status).json({ result: false, code: 'LEADERBOARD_LOAD_FAILED', message });
+    }
+  },
+
+  async getAcademicRankingStatus(req, res) {
+    try {
+      // Chỉ phiên BDU hợp lệ mới xem được tình trạng snapshot. Không trả raw
+      // error_message hoặc metadata vì có thể chứa chi tiết vận hành nội bộ.
+      await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const status = await AcademicRankingService.getStatus();
+      const latest = status.latestRun;
+      return res.json({
+        result: true,
+        data: {
+          configured: status.configured,
+          sync_enabled: process.env.RANKING_SYNC_ENABLED !== 'false',
+          sync_hour: Number.parseInt(process.env.RANKING_SYNC_HOUR || '3', 10),
+          latest_run: latest ? {
+            status: latest.status,
+            trigger_source: latest.trigger_source,
+            started_at: latest.started_at,
+            completed_at: latest.completed_at,
+            target_nkhk: latest.target_nkhk,
+            current_activity_nkhk: latest.current_activity_nkhk,
+            cohorts: latest.cohorts,
+            student_count: latest.student_count,
+            excluded_no_recent_activity_count: latest.excluded_no_recent_activity_count,
+            has_warnings: Array.isArray(latest.metadata?.warnings) && latest.metadata.warnings.length > 0
+          } : null
+        }
+      });
+    } catch (err) {
+      const status = err.status === 401 ? 401 : 500;
+      console.error('Academic ranking status error:', err.message);
+      return res.status(status).json({
+        result: false,
+        code: status === 401 ? 'RANKING_STATUS_UNAUTHORIZED' : 'RANKING_STATUS_UNAVAILABLE',
+        message: status === 401 ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' : 'Chưa thể kiểm tra trạng thái đồng bộ lúc này.'
+      });
     }
   },
 

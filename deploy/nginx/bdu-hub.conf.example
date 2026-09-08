@@ -1,0 +1,51 @@
+# Place this file in an Nginx `http {}` include (for example
+# /etc/nginx/conf.d/bdu-hub.conf). `map` is not valid inside `server {}`.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name hub.example.edu.vn;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name hub.example.edu.vn;
+
+    # Replace with the certificates provisioned for this exact public hostname.
+    ssl_certificate     /etc/letsencrypt/live/hub.example.edu.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hub.example.edu.vn/privkey.pem;
+
+    # Exact match keeps WebSocket-specific proxy settings from accidentally
+    # being overridden by an SPA/static location below.
+    location = /ws/community {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # The app pings every 30 seconds. Keep the proxy idle windows safely
+        # above that interval so an otherwise healthy WSS connection survives.
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}

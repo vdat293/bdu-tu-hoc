@@ -6,6 +6,22 @@ import { normalizeCourseCode } from './learning.service.js';
 
 const WS_PATH = '/ws/community';
 const MAX_PAYLOAD = 16 * 1024;
+const WS_OPEN = 1;
+const DEFAULT_AUTH_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_BUFFERED_BYTES = 512 * 1024;
+
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function authTimeoutMs() {
+  return positiveInteger(process.env.WS_AUTH_TIMEOUT_MS, DEFAULT_AUTH_TIMEOUT_MS);
+}
+
+function maxBufferedBytes() {
+  return positiveInteger(process.env.WS_MAX_BUFFERED_BYTES, DEFAULT_MAX_BUFFERED_BYTES);
+}
 
 function firstHeaderValue(value) {
   return String(Array.isArray(value) ? value[0] : value || '')
@@ -81,15 +97,32 @@ function isAllowedOrigin(request) {
 }
 
 function jsonSend(ws, payload) {
-  if (ws.readyState === 1) ws.send(JSON.stringify(payload));
+  if (!ws || ws.readyState !== WS_OPEN) return false;
+  // A slow client can otherwise make each broadcast retain more memory until
+  // the VPS is killed. Its next reconnect will receive a recovery refetch.
+  if (ws.bufferedAmount > maxBufferedBytes()) {
+    try { ws.terminate(); } catch {}
+    return false;
+  }
+  try {
+    ws.send(JSON.stringify(payload));
+    return true;
+  } catch {
+    try { ws.terminate(); } catch {}
+    return false;
+  }
 }
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();
 }
 
-function postRoom(postId) {
-  return `post:${String(postId)}`;
+function communityPostRoom(postId) {
+  return `community-post:${String(postId)}`;
+}
+
+function coursePostRoom(postId) {
+  return `course-post:${String(postId)}`;
 }
 
 function clanRoom(clanId) {
@@ -134,20 +167,28 @@ class CommunityRealtimeGateway {
         return;
       }
 
-      this.wss.handleUpgrade(request, socket, head, (ws) => {
-        this.wss.emit('connection', ws, request);
-      });
+      try {
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          this.wss.emit('connection', ws, request);
+        });
+      } catch {
+        socket.destroy();
+      }
     });
 
     this.wss.on('connection', (ws) => this.handleConnection(ws));
     this.heartbeat = setInterval(() => {
       for (const client of this.clients) {
         if (client.isAlive === false) {
-          client.ws.terminate();
+          try { client.ws.terminate(); } catch {}
           continue;
         }
         client.isAlive = false;
-        client.ws.ping();
+        try {
+          client.ws.ping();
+        } catch {
+          try { client.ws.terminate(); } catch {}
+        }
       }
     }, 30_000);
     this.heartbeat.unref?.();
@@ -159,30 +200,54 @@ class CommunityRealtimeGateway {
       ws,
       mssv: null,
       authenticated: false,
+      authenticating: false,
+      detached: false,
+      generation: 0,
       rooms: new Set(),
+      requestedRooms: new Set(),
       isAlive: true,
       authTimer: setTimeout(() => {
-        if (!client.authenticated) ws.close(1008, 'Thiếu xác thực socket');
-      }, 10_000)
+        // A process restart makes restored sessions re-verify against BDU.
+        // Never sever a socket merely because that verification is still in
+        // flight; BDU can be slower than an arbitrary local timeout.
+        if (!client.detached && !client.authenticated && !client.authenticating) {
+          try { ws.close(1008, 'Thiếu xác thực socket'); } catch {}
+        }
+      }, authTimeoutMs())
     };
     this.clients.add(client);
     ws.on('pong', () => { client.isAlive = true; });
-    ws.on('message', (raw) => this.handleMessage(client, raw).catch((error) => {
-      jsonSend(ws, {
-        type: 'error',
-        code: error?.status === 401 ? 'AUTH_INVALID' : 'INTERNAL_ERROR',
-        message: error.message
-      });
-      if (error?.status === 401) ws.close(1008, 'Phiên không hợp lệ');
-    }));
+    ws.on('message', (raw) => this.handleMessage(client, raw).catch((error) => this.handleMessageError(client, error)));
     ws.on('close', () => this.removeClient(client));
     ws.on('error', () => this.removeClient(client));
     jsonSend(ws, { type: 'hello', protocol: 1, requiresAuthMessage: true });
   }
 
+  isClientAttached(client) {
+    return Boolean(client && !client.detached && this.clients.has(client) && client.ws.readyState === WS_OPEN);
+  }
+
+  handleMessageError(client, error) {
+    if (!this.isClientAttached(client)) return;
+    const isInvalidAuth = error?.status === 401 || error?.code === 'AUTH_INVALID';
+    const isUnavailable = error?.retryable || error?.status >= 500 || error?.code === 'AUTH_UNAVAILABLE';
+    jsonSend(client.ws, {
+      type: 'error',
+      code: isInvalidAuth ? 'AUTH_INVALID' : (isUnavailable ? 'AUTH_UNAVAILABLE' : 'INTERNAL_ERROR'),
+      message: error?.message || 'Lỗi xử lý socket.'
+    });
+    if (isInvalidAuth) {
+      try { client.ws.close(1008, 'Phiên không hợp lệ'); } catch {}
+    } else if (isUnavailable) {
+      // 1013 explicitly tells browsers/proxies that reconnecting later is OK.
+      try { client.ws.close(1013, 'Xác thực tạm thời không khả dụng'); } catch {}
+    }
+  }
+
   async handleMessage(client, raw) {
+    if (!this.isClientAttached(client)) return;
     if (raw.length > MAX_PAYLOAD) {
-      client.ws.close(1009, 'Payload quá lớn');
+      try { client.ws.close(1009, 'Payload quá lớn'); } catch {}
       return;
     }
     let message;
@@ -194,18 +259,29 @@ class CommunityRealtimeGateway {
     }
 
     if (message.type === 'auth') {
-      if (client.authenticated) return;
+      if (client.authenticated || client.authenticating) return;
       const token = String(message.token || '').trim();
       if (!token) {
         const error = new Error('Thiếu mã xác thực socket.');
         error.status = 401;
         throw error;
       }
-      client.mssv = normalizeMssv(await BduIdentityService.resolveVerifiedMssv(`Bearer ${token}`));
-      client.authenticated = true;
-      clearTimeout(client.authTimer);
-      await this.join(client, 'forum');
-      jsonSend(client.ws, { type: 'auth.ok', mssv: client.mssv, rooms: [...client.rooms] });
+      const generation = client.generation;
+      client.authenticating = true;
+      try {
+        const mssv = normalizeMssv(await BduIdentityService.resolveVerifiedMssv(`Bearer ${token}`));
+        // The socket may have closed while the external BDU lookup was in
+        // flight. Do not resurrect it or leave a stale room subscriber.
+        if (!this.isClientAttached(client) || client.generation !== generation) return;
+        client.mssv = mssv;
+        client.authenticated = true;
+        clearTimeout(client.authTimer);
+        this.join(client, 'forum');
+        if (!this.isClientAttached(client) || client.generation !== generation) return;
+        jsonSend(client.ws, { type: 'auth.ok', mssv: client.mssv, rooms: [...client.rooms] });
+      } finally {
+        if (client.generation === generation) client.authenticating = false;
+      }
       return;
     }
 
@@ -215,16 +291,22 @@ class CommunityRealtimeGateway {
     }
     if (message.type === 'subscribe') {
       const room = String(message.room || '').trim();
+      client.requestedRooms.add(room);
       if (await this.canJoin(client, room)) {
-        await this.join(client, room);
-        jsonSend(client.ws, { type: 'subscribed', room });
+        // `unsubscribe` may arrive while canJoin is waiting on PostgreSQL.
+        // Honor the newest client intent rather than adding a ghost room.
+        if (!this.isClientAttached(client) || !client.requestedRooms.has(room)) return;
+        this.join(client, room);
+        if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'subscribed', room });
       } else {
-        jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', room, message: 'Không có quyền theo dõi room này.' });
+        if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', room, message: 'Không có quyền theo dõi room này.' });
       }
       return;
     }
     if (message.type === 'unsubscribe') {
-      this.leave(client, String(message.room || '').trim());
+      const room = String(message.room || '').trim();
+      client.requestedRooms.delete(room);
+      this.leave(client, room);
       return;
     }
     if (message.type === 'ping') jsonSend(client.ws, { type: 'pong', at: new Date().toISOString() });
@@ -232,26 +314,30 @@ class CommunityRealtimeGateway {
 
   async canJoin(client, room) {
     if (room === 'forum') return true;
-    const postMatch = room.match(/^post:(\d+)$/);
-    if (postMatch) {
+    const communityPostMatch = room.match(/^community-post:(\d+)$/);
+    if (communityPostMatch) {
       const result = await query(`
         SELECT scope, scope_id
         FROM community_posts
         WHERE id = $1 AND deleted_at IS NULL
-        UNION ALL
-        SELECT 'course' AS scope, courses.normalized_code AS scope_id
+      `,
+        [communityPostMatch[1]]
+      );
+      if (!result.rowCount) return false;
+      const post = result.rows[0];
+      if (post.scope !== 'clan') return true;
+      return this.isClanMember(client.mssv, post.scope_id);
+    }
+    const coursePostMatch = room.match(/^course-post:(\d+)$/);
+    if (coursePostMatch) {
+      const result = await query(`
+        SELECT courses.normalized_code AS course_code
         FROM course_posts
         JOIN courses ON courses.id = course_posts.course_id
         WHERE course_posts.id = $1
         LIMIT 1
-      `,
-        [postMatch[1]]
-      );
-      if (!result.rowCount) return false;
-      const post = result.rows[0];
-      if (post.scope === 'course') return this.isCourseMember(client.mssv, post.scope_id);
-      if (post.scope !== 'clan') return true;
-      return this.isClanMember(client.mssv, post.scope_id);
+      `, [coursePostMatch[1]]);
+      return result.rowCount > 0 && this.isCourseMember(client.mssv, result.rows[0].course_code);
     }
     const clanMatch = room.match(/^clan:(\d+)$/);
     if (clanMatch) return this.isClanMember(client.mssv, clanMatch[1]);
@@ -287,11 +373,13 @@ class CommunityRealtimeGateway {
     return result.rowCount > 0;
   }
 
-  async join(client, room) {
-    if (!room || client.rooms.has(room)) return;
+  join(client, room) {
+    if (!room || !this.isClientAttached(client)) return false;
+    if (client.rooms.has(room)) return true;
     client.rooms.add(room);
     if (!this.rooms.has(room)) this.rooms.set(room, new Set());
     this.rooms.get(room).add(client);
+    return true;
   }
 
   leave(client, room) {
@@ -303,9 +391,12 @@ class CommunityRealtimeGateway {
   }
 
   removeClient(client) {
-    if (!this.clients.has(client)) return;
+    if (!client || client.detached) return;
+    client.detached = true;
+    client.generation += 1;
     clearTimeout(client.authTimer);
     for (const room of [...client.rooms]) this.leave(client, room);
+    client.requestedRooms.clear();
     this.clients.delete(client);
   }
 
@@ -341,7 +432,7 @@ class CommunityRealtimeGateway {
   }
 
   publishCommentChanged({ type, postId, commentId, parentId = null, commentCount = null, scope = 'school', scopeId = null }) {
-    const rooms = [postRoom(postId)];
+    const rooms = [communityPostRoom(postId)];
     rooms.push(scopeRoom(scope, scopeId));
     this.emitToRooms(rooms, `community.comment.${type}`, {
       postId: String(postId), commentId: commentId ? String(commentId) : null,
@@ -354,7 +445,7 @@ class CommunityRealtimeGateway {
   }
 
   publishPostLikeChanged({ postId, likeCount, scope = 'school', scopeId = null }) {
-    this.emitToRooms([postRoom(postId), scopeRoom(scope, scopeId)], 'community.reaction.updated', {
+    this.emitToRooms([communityPostRoom(postId), scopeRoom(scope, scopeId)], 'community.reaction.updated', {
       postId: String(postId), likeCount: Number(likeCount || 0), scope, scopeId: scopeId || null,
       courseCode: scope === 'course' ? normalizeCourseCode(scopeId) : null
     });
@@ -377,7 +468,7 @@ class CommunityRealtimeGateway {
 
   publishCoursePostLikeChanged({ postId, courseCode, likeCount }) {
     const normalizedCode = normalizeCourseCode(courseCode);
-    this.emitToRooms([postRoom(postId), courseRoom(normalizedCode)], 'community.reaction.updated', {
+    this.emitToRooms([coursePostRoom(postId), courseRoom(normalizedCode)], 'community.reaction.updated', {
       postId: String(postId), likeCount: Number(likeCount || 0), scope: 'course',
       scopeId: normalizedCode, courseCode: normalizedCode
     });
@@ -385,7 +476,7 @@ class CommunityRealtimeGateway {
 
   publishCourseCommentChanged({ type, postId, commentId, parentId = null, commentCount = null, courseCode }) {
     const normalizedCode = normalizeCourseCode(courseCode);
-    this.emitToRooms([postRoom(postId), courseRoom(normalizedCode)], `community.comment.${type}`, {
+    this.emitToRooms([coursePostRoom(postId), courseRoom(normalizedCode)], `community.comment.${type}`, {
       postId: String(postId), commentId: commentId ? String(commentId) : null,
       parentId: parentId ? String(parentId) : null,
       commentCount: commentCount === null ? null : Number(commentCount),
@@ -417,9 +508,10 @@ class CommunityRealtimeGateway {
   close() {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;
-    for (const client of this.clients) client.ws.close(1001, 'Server đang dừng');
-    this.clients.clear();
-    this.rooms.clear();
+    for (const client of [...this.clients]) {
+      this.removeClient(client);
+      try { client.ws.close(1001, 'Server đang dừng'); } catch {}
+    }
     this.wss?.close();
     this.wss = null;
   }
@@ -427,5 +519,6 @@ class CommunityRealtimeGateway {
 
 export const CommunityRealtime = new CommunityRealtimeGateway();
 export const CommunityRealtimeInternals = {
-  WS_PATH, postRoom, clanRoom, courseRoom, scopeRoom, isAllowedOrigin, trustsProxyHeaders
+  WS_PATH, communityPostRoom, coursePostRoom, clanRoom, courseRoom, scopeRoom,
+  isAllowedOrigin, trustsProxyHeaders, authTimeoutMs, maxBufferedBytes
 };

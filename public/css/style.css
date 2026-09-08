@@ -1146,6 +1146,52 @@ textarea {
   text-align: center;
 }
 
+.leaderboard-error {
+  color: #b42318;
+  flex-direction: column;
+}
+
+.leaderboard-error strong {
+  color: inherit;
+}
+
+.leaderboard-retry {
+  background: var(--surface-solid, #fff);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  padding: 7px 12px;
+}
+
+.leaderboard-retry:hover {
+  background: color-mix(in srgb, currentColor 8%, var(--surface-solid, #fff));
+}
+
+.leaderboard-refreshing {
+  color: var(--bdu-red, #8c1515) !important;
+}
+
+.leaderboard-refresh-error {
+  align-items: center;
+  background: rgba(180, 35, 24, .08);
+  color: #9d2017;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: .78rem;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 16px;
+}
+
+body.theme-dark .leaderboard-error,
+body.theme-dark .leaderboard-refresh-error {
+  color: #ffb4ab;
+}
+
 .leaderboard-loading-dot {
   animation: leaderboard-pulse 1.1s ease-in-out infinite;
   background: var(--bdu-red, #8c1515);
@@ -16417,4 +16463,3 @@ body.theme-dark .learning-drive-icon.github-icon {
   padding: 8px 20px;
   font-weight: 800;
 }
-

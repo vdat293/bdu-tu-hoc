@@ -46,6 +46,7 @@ router.post('/login', ApiController.login);
 router.post('/grades', ApiController.getGrades);
 router.get('/rankings/me', ApiController.getMyAcademicRanking);
 router.get('/rankings/leaderboard', ApiController.getAcademicLeaderboard);
+router.get('/rankings/status', ApiController.getAcademicRankingStatus);
 router.post('/profile', ApiController.getProfile);
 router.get('/schedule', ApiController.getSchedule);
 router.post('/schedule', ApiController.getSchedule);

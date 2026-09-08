@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 import { BduService } from './bdu.service.js';
 
 const identities = new Map();
+const pendingResolutions = new Map();
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_RESTORED_TOKEN_TTL_MS = 5 * 60 * 1000;
 
 function normalizeMssv(value) {
   return String(value ?? '').trim().toUpperCase();
@@ -17,15 +19,40 @@ function tokenKey(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function tokenExpiresAt(token) {
+function restoredTokenTtlMs() {
+  const configured = Number.parseInt(process.env.BDU_RESTORED_TOKEN_TTL_MS || '', 10);
+  return Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_RESTORED_TOKEN_TTL_MS;
+}
+
+function earliestExpiry(...values) {
+  return Math.min(...values.filter((value) => Number.isFinite(value)));
+}
+
+function tokenExpiresAt(token, expiresIn, cacheTtlMs = null) {
+  const now = Date.now();
+  const expiresInSeconds = Number(expiresIn);
+  const expiresInAt = Number.isFinite(expiresInSeconds) && expiresInSeconds >= 0
+    ? now + (expiresInSeconds * 1000)
+    : null;
+  const cacheTtl = Number(cacheTtlMs);
+  const cacheExpiresAt = Number.isFinite(cacheTtl) && cacheTtl >= 0 ? now + cacheTtl : null;
   try {
     const payloadPart = token.split('.')[1];
-    if (!payloadPart) return Date.now() + DEFAULT_TTL_MS;
+    if (!payloadPart) return earliestExpiry(expiresInAt, cacheExpiresAt, now + DEFAULT_TTL_MS);
     const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
-    return Number.isFinite(payload.exp) ? payload.exp * 1000 : Date.now() + DEFAULT_TTL_MS;
+    const jwtExpiresAt = Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
+    return earliestExpiry(jwtExpiresAt, expiresInAt, cacheExpiresAt, now + DEFAULT_TTL_MS);
   } catch {
-    return Date.now() + DEFAULT_TTL_MS;
+    return earliestExpiry(expiresInAt, cacheExpiresAt, now + DEFAULT_TTL_MS);
   }
+}
+
+function unavailableIdentityError(message = 'Chưa thể xác minh phiên BDU lúc này. Vui lòng thử lại.') {
+  const error = new Error(message);
+  error.status = 503;
+  error.code = 'AUTH_UNAVAILABLE';
+  error.retryable = true;
+  return error;
 }
 
 function findMssv(payload, depth = 0) {
@@ -61,12 +88,12 @@ function cleanup() {
 }
 
 export const BduIdentityService = {
-  register(tokenValue, mssvValue) {
+  register(tokenValue, mssvValue, { expiresIn, cacheTtlMs } = {}) {
     const token = normalizeToken(tokenValue);
     const mssv = normalizeMssv(mssvValue);
     if (!token || !mssv) return;
     cleanup();
-    identities.set(tokenKey(token), { mssv, expiresAt: tokenExpiresAt(token) });
+    identities.set(tokenKey(token), { mssv, expiresAt: tokenExpiresAt(token, expiresIn, cacheTtlMs) });
   },
 
   async resolveVerifiedMssv(tokenValue) {
@@ -77,26 +104,52 @@ export const BduIdentityService = {
       throw error;
     }
     cleanup();
-    const cached = identities.get(tokenKey(token));
+    const key = tokenKey(token);
+    const cached = identities.get(key);
     if (cached) return cached.mssv;
+
+    // A reconnect storm after a deploy must not turn into dozens of identical
+    // BDU profile calls. Share one verification per opaque token and let all
+    // waiting sockets receive the same authoritative outcome.
+    const pending = pendingResolutions.get(key);
+    if (pending) return pending;
 
     // A restored browser session may outlive this process. Re-verify it against
     // BDU rather than trusting an MSSV supplied by the browser or JWT claims.
-    const profile = await BduService.getProfile(token);
-    const mssv = findMssv(profile);
-    if (!mssv) {
-      const error = new Error('Không xác minh được MSSV từ phiên BDU hiện tại.');
-      error.status = 401;
-      throw error;
+    const resolution = (async () => {
+      const profile = await BduService.getProfile(token);
+      const mssv = findMssv(profile);
+      // Missing identity data is not proof that credentials are bad. It occurs
+      // when BDU returns a degraded/partial payload during maintenance.
+      if (!mssv) throw unavailableIdentityError();
+      // `clear()` can run while a request is in flight (for example, logout).
+      // Do not let that old request put an opaque token back into the cache.
+      if (pendingResolutions.get(key) === resolution) {
+        // Restored opaque sessions have no authoritative expires_in available.
+        // Cache their BDU verification only briefly, never for the historical
+        // 24-hour fallback; JWT exp still wins if it is earlier.
+        this.register(token, mssv, { cacheTtlMs: restoredTokenTtlMs() });
+      }
+      return mssv;
+    })();
+    pendingResolutions.set(key, resolution);
+    try {
+      return await resolution;
+    } finally {
+      if (pendingResolutions.get(key) === resolution) pendingResolutions.delete(key);
     }
-    this.register(token, mssv);
-    return mssv;
   },
 
   clear(tokenValue) {
     const token = normalizeToken(tokenValue);
-    if (token) identities.delete(tokenKey(token));
+    if (token) {
+      const key = tokenKey(token);
+      identities.delete(key);
+      pendingResolutions.delete(key);
+    }
   }
 };
 
-export const BduIdentityInternals = { findMssv, normalizeMssv };
+export const BduIdentityInternals = {
+  findMssv, normalizeMssv, tokenExpiresAt, unavailableIdentityError, restoredTokenTtlMs
+};

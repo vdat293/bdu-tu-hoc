@@ -214,7 +214,7 @@ function CommentsInline({ postId, courseCode, token, user }) {
   const [newComment, setNewComment] = useState('');
   const client = useQueryClient();
   const { notify } = useToasts();
-  useRealtimeRoom(postId ? `post:${postId}` : null, Boolean(token && courseCode));
+  useRealtimeRoom(postId ? `course-post:${postId}` : null, Boolean(token && courseCode));
 
   const commentsQuery = useQuery({
     queryKey: ['post-comments', courseCode, String(postId)],

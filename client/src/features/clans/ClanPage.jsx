@@ -124,7 +124,7 @@ function ClanCommentsInline({ postId, token }) {
   const [newComment, setNewComment] = useState('');
   const client = useQueryClient();
   const { notify } = useToasts();
-  useRealtimeRoom(postId ? `post:${postId}` : null, Boolean(token));
+  useRealtimeRoom(postId ? `community-post:${postId}` : null, Boolean(token));
 
   const commentsQuery = useQuery({
     queryKey: ['clan-post-comments', String(postId)],

@@ -22,6 +22,31 @@ const RealtimeContext = createContext(null);
 export function useAuth() { return useContext(AuthContext); }
 export function useToasts() { return useContext(ToastContext); }
 
+// WebSocket events are deliberately lossy across a deploy, a proxy reload, or
+// a sleeping laptop. Once authentication succeeds again, stale active screens
+// must fetch their source of truth instead of waiting for an event that may
+// have happened while the connection was down.
+const REALTIME_RECOVERY_QUERY_ROOTS = new Set([
+  'clan', 'clan-post-comments', 'clans', 'confession', 'course-posts',
+  'identity-presentation', 'post-comments'
+]);
+
+export function isRealtimeRecoveryQuery(query) {
+  return Array.isArray(query?.queryKey) && REALTIME_RECOVERY_QUERY_ROOTS.has(query.queryKey[0]);
+}
+
+export function invalidateActiveQueriesAfterRealtimeRecovery(client) {
+  return client.invalidateQueries({
+    type: 'active',
+    refetchType: 'active',
+    predicate: isRealtimeRecoveryQuery
+  });
+}
+
+export function shouldRefetchAfterRealtimeRecovery(event) {
+  return event?.type === 'realtime.recovered' && event.data?.reconnected === true;
+}
+
 export function useRealtimeRoom(room, enabled = true) {
   const realtime = useContext(RealtimeContext);
   useEffect(() => {
@@ -59,14 +84,22 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     if (state.status !== 'authenticated' || !state.token) return undefined;
-    const instance = new CommunityRealtime({ token: state.token, onEvent: (event) => window.dispatchEvent(new CustomEvent('bdu:realtime', { detail: event })) });
+    const instance = new CommunityRealtime({
+      token: state.token,
+      onEvent: (event) => {
+        if (shouldRefetchAfterRealtimeRecovery(event)) {
+          invalidateActiveQueriesAfterRealtimeRecovery(client).catch(() => {});
+        }
+        window.dispatchEvent(new CustomEvent('bdu:realtime', { detail: event }));
+      }
+    });
     setRealtime(instance);
     instance.connect();
     return () => {
       instance.close();
       setRealtime((current) => current === instance ? null : current);
     };
-  }, [state.status, state.token]);
+  }, [client, state.status, state.token]);
 
   const logout = useCallback(({ message = 'Đã đăng xuất tài khoản.', expired = false, broadcast = true } = {}) => {
     clearStoredSession();
