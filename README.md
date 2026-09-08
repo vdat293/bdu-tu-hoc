@@ -149,6 +149,13 @@ Compose tự khởi động PostgreSQL, chạy migration trước khi chạy app
 liệu database trong volume `bdu-postgres-data`. Không cần mở port PostgreSQL ra
 Internet; chỉ expose port ứng dụng `3000`.
 
+Khi đặt Nginx/Caddy/Cloudflare ở phía trước container, proxy phải chuyển tiếp
+WebSocket Upgrade và host công khai trong `X-Forwarded-Host` (hoặc `Forwarded`).
+Vì Compose chỉ bind cổng ứng dụng vào `127.0.0.1`, nó mặc định tin các header này
+(`WS_TRUST_PROXY=true` khi biến để trống). Không đặt giá trị đó cho một Node server
+nhận kết nối trực tiếp. Nếu frontend dùng origin khác, khai báo origin HTTPS chính
+xác trong `WS_ALLOWED_ORIGINS`, cách nhau bằng dấu phẩy.
+
 Sau khi app lên, chạy đồng bộ bảng xếp hạng lần đầu:
 
 ```bash

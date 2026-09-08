@@ -7,6 +7,79 @@ import { normalizeCourseCode } from './learning.service.js';
 const WS_PATH = '/ws/community';
 const MAX_PAYLOAD = 16 * 1024;
 
+function firstHeaderValue(value) {
+  return String(Array.isArray(value) ? value[0] : value || '')
+    .split(',')[0]
+    .trim();
+}
+
+function getForwardedHost(request) {
+  const xForwardedHost = firstHeaderValue(request.headers['x-forwarded-host']);
+  if (xForwardedHost) return xForwardedHost;
+
+  const forwarded = firstHeaderValue(request.headers.forwarded);
+  const hostPart = forwarded.split(';').find((part) => part.trim().toLowerCase().startsWith('host='));
+  return hostPart ? hostPart.split('=').slice(1).join('=').trim().replace(/^"|"$/g, '') : '';
+}
+
+function normalizeHost(value, protocol) {
+  if (!value) return '';
+  try {
+    return new URL(`${protocol}//${value}`).host;
+  } catch {
+    return '';
+  }
+}
+
+function configuredOrigins() {
+  return String(process.env.WS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => {
+      try {
+        const parsed = new URL(origin);
+        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.origin : '';
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean);
+}
+
+function trustsProxyHeaders() {
+  return ['1', 'true', 'yes', 'on'].includes(String(process.env.WS_TRUST_PROXY || '').toLowerCase());
+}
+
+function isAllowedOrigin(request) {
+  const origin = firstHeaderValue(request.headers.origin);
+  // Non-browser clients may omit Origin. They are still required to authenticate
+  // with a bearer token before they can receive any room events.
+  if (!origin) return true;
+
+  let originUrl;
+  try {
+    originUrl = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(originUrl.protocol)) return false;
+
+  const allowedOrigins = configuredOrigins();
+  // An explicit allowlist is authoritative. This supports a frontend served
+  // from another origin without making a forged Host header meaningful.
+  if (allowedOrigins.length) return allowedOrigins.includes(originUrl.origin);
+
+  // Reverse proxies commonly replace Host with their upstream address while
+  // preserving the public host in X-Forwarded-Host or Forwarded. Only compare
+  // that value when deployment has explicitly marked the proxy as trusted.
+  const requestHosts = [normalizeHost(firstHeaderValue(request.headers.host), originUrl.protocol)];
+  if (trustsProxyHeaders()) {
+    requestHosts.push(normalizeHost(getForwardedHost(request), originUrl.protocol));
+  }
+  return requestHosts.filter(Boolean).includes(originUrl.host);
+}
+
 function jsonSend(ws, payload) {
   if (ws.readyState === 1) ws.send(JSON.stringify(payload));
 }
@@ -56,17 +129,9 @@ class CommunityRealtimeGateway {
         return;
       }
       if (url.pathname !== WS_PATH) return;
-      const origin = request.headers.origin;
-      if (origin) {
-        try {
-          if (new URL(origin).host !== url.host) {
-            socket.destroy();
-            return;
-          }
-        } catch {
-          socket.destroy();
-          return;
-        }
+      if (!isAllowedOrigin(request)) {
+        socket.destroy();
+        return;
       }
 
       this.wss.handleUpgrade(request, socket, head, (ws) => {
@@ -361,4 +426,6 @@ class CommunityRealtimeGateway {
 }
 
 export const CommunityRealtime = new CommunityRealtimeGateway();
-export const CommunityRealtimeInternals = { WS_PATH, postRoom, clanRoom, courseRoom, scopeRoom };
+export const CommunityRealtimeInternals = {
+  WS_PATH, postRoom, clanRoom, courseRoom, scopeRoom, isAllowedOrigin, trustsProxyHeaders
+};
