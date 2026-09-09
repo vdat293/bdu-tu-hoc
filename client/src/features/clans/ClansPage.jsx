@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createClan, getClans, joinClan } from '../../api/community.js';
+import { createClan, getClanQuiz, getClans, joinClan } from '../../api/community.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import ClanJoinQuizModal from './ClanJoinQuizModal.jsx';
 
 export default function ClansPage() {
   const auth = useAuth();
@@ -15,12 +17,24 @@ export default function ClansPage() {
   const filter = params.get('filter') === 'mine' ? 'mine' : 'all';
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [joinTarget, setJoinTarget] = useState(null);
+  const [joinResult, setJoinResult] = useState(null);
   const [draft, setDraft] = useState({ name: '', code: '', tag: '', description: '' });
+  const createDialogRef = useRef(null);
+  const createCloseRef = useRef(null);
+  const createOpenerRef = useRef(null);
+  useViewportDialog(showCreateModal, () => setShowCreateModal(false), createDialogRef, createCloseRef, createOpenerRef);
 
   const query = useQuery({
     queryKey: ['clans', auth.user?.mssv],
     queryFn: ({ signal }) => getClans(auth.token, { signal }),
     enabled: Boolean(auth.token)
+  });
+
+  const joinQuizQuery = useQuery({
+    queryKey: ['clan-quiz', joinTarget?.id],
+    queryFn: ({ signal }) => getClanQuiz(auth.token, joinTarget.id, { signal }),
+    enabled: Boolean(auth.token && joinTarget?.id)
   });
 
   const create = useMutation({
@@ -36,10 +50,11 @@ export default function ClansPage() {
   });
 
   const join = useMutation({
-    mutationFn: (clanId) => joinClan(auth.token, clanId),
-    onSuccess: () => {
+    mutationFn: ({ clanId, answers }) => joinClan(auth.token, clanId, null, answers),
+    onSuccess: (data) => {
+      setJoinResult(data);
       client.invalidateQueries({ queryKey: ['clans'] });
-      notify('Đã gửi yêu cầu tham gia CLB.', 'success');
+      notify(data?.status === 'approved' ? 'Đã tự động duyệt bạn vào CLB.' : 'Đã gửi yêu cầu tham gia CLB.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
   });
@@ -89,7 +104,7 @@ export default function ClansPage() {
             type="button"
             id="btn-open-create-clan"
             className="btn btn-primary btn-create-clan"
-            onClick={() => setShowCreateModal(true)}
+            onClick={(event) => { createOpenerRef.current = event.currentTarget; setShowCreateModal(true); }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -226,7 +241,7 @@ export default function ClansPage() {
                     <button
                       type="button"
                       className="btn btn-primary btn-sm"
-                      onClick={() => join.mutate(clan.id)}
+                      onClick={() => { setJoinResult(null); setJoinTarget(clan); }}
                       disabled={join.isPending}
                     >
                       Xin tham gia
@@ -239,16 +254,27 @@ export default function ClansPage() {
         </div>
       </div>
 
+      <ClanJoinQuizModal
+        open={Boolean(joinTarget)}
+        clanName={joinTarget?.name}
+        quiz={joinQuizQuery.data}
+        isLoading={joinQuizQuery.isLoading}
+        isPending={join.isPending}
+        result={joinResult}
+        onClose={() => { if (!join.isPending) setJoinTarget(null); }}
+        onSubmit={(answers) => join.mutate({ clanId: joinTarget.id, answers })}
+      />
+
       {/* Modal: Create Clan faithful to #modal-create-clan */}
       {showCreateModal && (
-        <div id="modal-create-clan" className="modal-backdrop" onClick={(e) => { if (e.target.id === 'modal-create-clan') setShowCreateModal(false); }}>
-          <div className="modal-dialog glass-panel" role="dialog" aria-modal="true" style={{ maxWidth: '540px', width: '92vw', margin: 'auto', padding: '24px', borderRadius: 'var(--radius-lg)' }}>
+        <ViewportModal id="modal-create-clan" title="Thành Lập CLB / Nhóm Học Tập Mới" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="clan-create-dialog">
             <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div className="modal-title-group">
                 <h3 className="modal-title" style={{ margin: 0, fontSize: '1.2rem' }}>Thành Lập CLB / Nhóm Học Tập Mới</h3>
                 <span className="modal-badge" style={{ fontSize: '11px', color: 'var(--bdu-light)' }}>GUILD</span>
               </div>
               <button
+                ref={createCloseRef}
                 type="button"
                 id="btn-close-create-clan"
                 className="modal-close-btn"
@@ -370,8 +396,7 @@ export default function ClansPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </ViewportModal>
       )}
     </section>
   );

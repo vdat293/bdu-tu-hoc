@@ -29,6 +29,7 @@
     "test:permission-rbac": "node tests/test-permission-rbac.js",
     "test:clan-feed-docs": "node tests/test-clan-feed-and-documents.js",
     "test:clan-polls": "node tests/test-clan-polls.js",
+    "test:clan-quiz": "node tests/test-clan-quiz.js",
     "test:community": "node tests/test-community.js && node tests/test-community-realtime-upgrade.js",
     "test:learning-interactions": "node tests/test-learning-interactions.js",
     "test:load": "node tests/test-server-load.js",

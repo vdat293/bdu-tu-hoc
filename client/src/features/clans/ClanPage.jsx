@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -19,9 +19,14 @@ import {
   updateClanMemberRole,
   voteClanPoll,
   getCommunityPostComments,
-  addCommunityPostComment
+  addCommunityPostComment,
+  getClanQuiz,
+  updateClanQuiz
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import ClanJoinQuizModal from './ClanJoinQuizModal.jsx';
+import { parseQuizText, QUIZ_IMPORT_SCHEMA } from './quiz.js';
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
@@ -228,6 +233,8 @@ export default function ClanPage() {
   const [docFilter, setDocFilter] = useState('all');
   const [docSearch, setDocSearch] = useState('');
   const [showComposer, setShowComposer] = useState(false);
+  const [showJoinQuiz, setShowJoinQuiz] = useState(false);
+  const [joinResult, setJoinResult] = useState(null);
   const [composerMode, setComposerMode] = useState('discussion'); // discussion or poll
   const [expandedComments, setExpandedComments] = useState({});
 
@@ -235,6 +242,15 @@ export default function ClanPage() {
   const [postDraft, setPostDraft] = useState({ title: '', content: '', url: '' });
   const [pollDraft, setPollDraft] = useState({ question: '', options: ['', ''] });
   const [clanDraft, setClanDraft] = useState({ name: '', description: '', tag: '' });
+  const [quizEnabled, setQuizEnabled] = useState(false);
+  const [quizMinCorrect, setQuizMinCorrect] = useState(0);
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [quizImportText, setQuizImportText] = useState('');
+  const [quizImportFormat, setQuizImportFormat] = useState('json');
+  const composerDialogRef = useRef(null);
+  const composerCloseRef = useRef(null);
+  const composerOpenerRef = useRef(null);
+  useViewportDialog(showComposer, () => setShowComposer(false), composerDialogRef, composerCloseRef, composerOpenerRef);
 
   const clans = useQuery({
     queryKey: ['clans', auth.user?.mssv],
@@ -250,6 +266,11 @@ export default function ClanPage() {
   const isJoined = Boolean(clan?.is_joined);
   const isLeader = clan?.my_role === 'leader';
   const queryBase = useMemo(() => ['clan', auth.user?.mssv, clanId], [auth.user?.mssv, clanId]);
+  const quizQuery = useQuery({
+    queryKey: [...queryBase, 'quiz'],
+    queryFn: ({ signal }) => getClanQuiz(auth.token, clanId, { signal }),
+    enabled: Boolean(auth.token && clanId && (showJoinQuiz || (isLeader && tab === 'settings')))
+  });
   useRealtimeRoom(isJoined ? `clan:${clanId}` : null, Boolean(auth.token && isJoined));
 
   const postsQuery = useQuery({
@@ -281,14 +302,22 @@ export default function ClanPage() {
     if (clan) setClanDraft({ name: clan.name || '', description: clan.description || '', tag: clan.tag || '' });
   }, [clan]);
 
+  useEffect(() => {
+    if (quizQuery.data) {
+      setQuizEnabled(Boolean(quizQuery.data.enabled));
+      setQuizMinCorrect(Number(quizQuery.data.min_correct || 0));
+    }
+  }, [quizQuery.data]);
+
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['clans'] });
     client.invalidateQueries({ queryKey: [...queryBase] });
   };
 
   const join = useMutation({
-    mutationFn: () => joinClan(auth.token, clanId),
-    onSuccess: () => {
+    mutationFn: ({ answers } = {}) => joinClan(auth.token, clanId, null, answers),
+    onSuccess: (data) => {
+      setJoinResult(data);
       notify('Đã gửi yêu cầu tham gia.', 'success');
       refresh();
     },
@@ -398,6 +427,21 @@ export default function ClanPage() {
     onError: (error) => notify(error.message, 'error')
   });
 
+  const saveQuiz = useMutation({
+    mutationFn: () => updateClanQuiz(auth.token, clanId, {
+      enabled: quizEnabled,
+      minCorrect: quizMinCorrect,
+      questions: quizQuestions
+    }),
+    onSuccess: (data) => {
+      quizQuery.refetch();
+      setQuizQuestions([]);
+      notify('Đã lưu cấu hình quiz gia nhập.', 'success');
+      if (data?.total) setQuizMinCorrect(Math.min(quizMinCorrect, data.total));
+    },
+    onError: (error) => notify(error.message, 'error')
+  });
+
   const destroy = useMutation({
     mutationFn: () => disbandClan(auth.token, clanId),
     onSuccess: () => {
@@ -421,7 +465,10 @@ export default function ClanPage() {
     return rawPosts;
   }, [rawPosts, feedFilter]);
 
-  const rawDocuments = Array.isArray(documentsQuery.data?.documents) ? documentsQuery.data.documents : [];
+  const rawDocuments = useMemo(
+    () => (Array.isArray(documentsQuery.data?.documents) ? documentsQuery.data.documents : []),
+    [documentsQuery.data]
+  );
   const documents = useMemo(() => {
     return rawDocuments.filter((doc) => {
       const matchType = docFilter === 'all' || doc.type === docFilter;
@@ -507,7 +554,7 @@ export default function ClanPage() {
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => join.mutate()}
+                  onClick={() => { setJoinResult(null); setShowJoinQuiz(true); }}
                   disabled={join.isPending}
                 >
                   Xin tham gia
@@ -606,8 +653,9 @@ export default function ClanPage() {
               <div
                 className="quick-composer-row"
                 id="clan-quick-composer-trigger"
-                onClick={() => {
+                onClick={(event) => {
                   setComposerMode('discussion');
+                  composerOpenerRef.current = event.currentTarget;
                   setShowComposer(true);
                 }}
                 style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
@@ -625,8 +673,9 @@ export default function ClanPage() {
                   type="button"
                   className="quick-tag-btn clan-tag-btn"
                   id="btn-clan-open-post-modal"
-                  onClick={() => {
+                  onClick={(event) => {
                     setComposerMode('discussion');
+                    composerOpenerRef.current = event.currentTarget;
                     setShowComposer(true);
                   }}
                 >
@@ -636,8 +685,9 @@ export default function ClanPage() {
                   type="button"
                   className="quick-tag-btn clan-tag-btn"
                   id="btn-clan-open-poll-modal"
-                  onClick={() => {
+                  onClick={(event) => {
                     setComposerMode('poll');
+                    composerOpenerRef.current = event.currentTarget;
                     setShowComposer(true);
                   }}
                 >
@@ -976,6 +1026,11 @@ export default function ClanPage() {
                       <div>
                         <strong style={{ display: 'block' }}>{req.full_name || req.mssv}</strong>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>MSSV: {req.mssv} · {formatRelativeTime(req.created_at)}</span>
+                        {req.quiz_score !== null && req.quiz_score !== undefined && (
+                          <span style={{ display: 'block', fontSize: '12px', color: req.quiz_passed ? '#86efac' : '#fbbf24' }}>
+                            Quiz: {req.quiz_score}/{req.quiz_total} câu đúng{req.quiz_passed ? ' · Đạt ngưỡng' : ' · Chờ duyệt thủ công'}
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button
@@ -1047,6 +1102,58 @@ export default function ClanPage() {
               </button>
             </form>
 
+            <form
+              className="clan-settings-box glass-panel clan-quiz-settings"
+              style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}
+              onSubmit={(e) => { e.preventDefault(); saveQuiz.mutate(); }}
+            >
+              <h3 style={{ margin: '0 0 8px 0' }}>🧠 Quiz xác minh gia nhập</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 16px 0' }}>
+                Khi bật, ứng viên phải trả lời hết câu hỏi. Đạt ngưỡng sẽ được tự động duyệt; dưới ngưỡng vẫn tạo yêu cầu để bạn duyệt thủ công.
+              </p>
+              <label className="quiz-toggle-row">
+                <input type="checkbox" checked={quizEnabled} onChange={(e) => setQuizEnabled(e.target.checked)} />
+                <span>Bật quiz trước khi gia nhập</span>
+              </label>
+              <div className="quiz-settings-grid">
+                <label className="form-label">Số câu đúng tối thiểu (0 = tự động duyệt mọi bài)
+                  <input className="form-input" type="number" min="0" max={quizQuestions.length || quizQuery.data?.total || 30} value={quizMinCorrect} onChange={(e) => setQuizMinCorrect(Number(e.target.value))} />
+                </label>
+                <label className="form-label">Import định dạng
+                  <select className="form-input" value={quizImportFormat} onChange={(e) => setQuizImportFormat(e.target.value)}>
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </label>
+              </div>
+              <label className="form-label">Dán schema câu hỏi
+                <textarea className="form-input quiz-import-textarea" rows={6} value={quizImportText} onChange={(e) => setQuizImportText(e.target.value)} placeholder={QUIZ_IMPORT_SCHEMA} />
+              </label>
+              <div className="quiz-import-actions">
+                <label className="btn btn-secondary btn-sm">
+                  Chọn file {quizImportFormat.toUpperCase()}
+                  <input type="file" accept={quizImportFormat === 'json' ? '.json,application/json' : '.csv,text/csv'} hidden onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) file.text().then(setQuizImportText).catch(() => notify('Không thể đọc file quiz.', 'error'));
+                  }}
+                  />
+                </label>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                  try {
+                    const parsed = parseQuizText(quizImportText, quizImportFormat);
+                    setQuizQuestions(parsed);
+                    setQuizMinCorrect((current) => Math.min(current, parsed.length));
+                    notify(`Đã nạp ${parsed.length} câu hỏi.`, 'success');
+                  } catch (error) { notify(error.message, 'error'); }
+                }}>Kiểm tra & nạp câu hỏi</button>
+              </div>
+              <p className="quiz-schema-help">{QUIZ_IMPORT_SCHEMA}</p>
+              <p className="quiz-question-count">Đang chuẩn bị {quizQuestions.length || quizQuery.data?.total || 0}/30 câu hỏi{quizQuery.data?.total && !quizQuestions.length ? ' (câu hỏi đã lưu chỉ hiển thị nội dung; import lại nếu cần chỉnh đáp án)' : ''}.</p>
+              <button type="submit" className="btn btn-primary" disabled={saveQuiz.isPending || quizQuery.isLoading}>
+                {saveQuiz.isPending ? 'Đang lưu...' : 'Lưu cấu hình quiz'}
+              </button>
+            </form>
+
             <div className="glass-panel" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
               <h4 style={{ color: '#ef4444', margin: '0 0 6px 0' }}>Vùng Nguy Hiểm: Giải Tán CLB</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 14px 0' }}>
@@ -1069,10 +1176,20 @@ export default function ClanPage() {
         )}
       </div>
 
+      <ClanJoinQuizModal
+        open={showJoinQuiz}
+        clanName={clan.name}
+        quiz={quizQuery.data}
+        isLoading={quizQuery.isLoading}
+        isPending={join.isPending}
+        result={joinResult}
+        onClose={() => { if (!join.isPending) setShowJoinQuiz(false); }}
+        onSubmit={(answers) => join.mutate({ answers })}
+      />
+
       {/* Modal: Facebook Style Composer Modal faithful to #modal-clan-post-composer */}
       {showComposer && (
-        <div id="modal-clan-post-composer" className="modal-backdrop" onClick={(e) => { if (e.target.id === 'modal-clan-post-composer') setShowComposer(false); }}>
-          <div className="modal-dialog fb-composer-dialog glass-panel" role="dialog" aria-modal="true" style={{ maxWidth: '560px', width: '92vw', margin: 'auto', padding: '24px', borderRadius: 'var(--radius-lg)' }}>
+        <ViewportModal id="modal-clan-post-composer" title="Tạo bài đăng trong CLB" onClose={() => setShowComposer(false)} dialogRef={composerDialogRef} className="fb-composer-dialog">
             <div className="fb-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
@@ -1091,10 +1208,12 @@ export default function ClanPage() {
                 </button>
               </div>
               <button
+                ref={composerCloseRef}
                 type="button"
                 id="btn-close-clan-composer-modal"
                 className="fb-modal-close-btn"
                 title="Đóng"
+                aria-label="Đóng hộp thoại tạo bài đăng"
                 onClick={() => setShowComposer(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
               >
@@ -1201,8 +1320,7 @@ export default function ClanPage() {
                 {createPost.isPending ? 'Đang đăng...' : composerMode === 'poll' ? 'Tạo Bình Chọn' : 'Đăng Bài'}
               </button>
             </div>
-          </div>
-        </div>
+        </ViewportModal>
       )}
     </section>
   );

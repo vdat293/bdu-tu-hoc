@@ -47,8 +47,19 @@ export async function createClan(token, clanData) {
   return unwrap(data, data);
 }
 
-export async function joinClan(token, clanId, message = null) {
-  return request(`/api/community/clans/${encodeURIComponent(clanId)}/join`, { method: 'POST', token, body: { message }, defaultMessage: 'Không thể gửi yêu cầu tham gia CLB.' });
+export async function joinClan(token, clanId, message = null, answers = undefined) {
+  const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/join`, { method: 'POST', token, body: { message, ...(Array.isArray(answers) ? { answers } : {}) }, defaultMessage: 'Không thể gửi yêu cầu tham gia CLB.' });
+  return unwrap(data, data);
+}
+
+export async function getClanQuiz(token, clanId, { signal } = {}) {
+  const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/quiz`, { token, signal, defaultMessage: 'Không thể tải quiz gia nhập CLB.' });
+  return unwrap(data, data);
+}
+
+export async function updateClanQuiz(token, clanId, config) {
+  const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/quiz`, { method: 'PUT', token, body: config, defaultMessage: 'Không thể lưu quiz gia nhập CLB.' });
+  return unwrap(data, data);
 }
 
 export async function leaveClan(token, clanId) {

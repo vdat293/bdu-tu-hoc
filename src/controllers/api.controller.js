@@ -15,6 +15,7 @@ import { IdentityPresentationService } from '../services/identity-presentation.s
 import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { AvatarOverrideService } from '../services/avatar-override.service.js';
 import { CommunityRealtime } from '../services/community-realtime.service.js';
+import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import path from 'path';
 import fs from 'fs';
@@ -1164,12 +1165,14 @@ export const ApiController = {
     try {
       const authHeader = req.headers.authorization;
       const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
-      const request = await StudentService.requestJoinClan(mssv, req.params.id, req.body?.message);
+      const result = await StudentService.requestJoinClan(mssv, req.params.id, req.body?.message, req.body?.answers);
       return res.json({
         result: true,
-        data: request,
-        status: 'pending',
-        message: 'Yêu cầu tham gia đã được gửi tới Trưởng CLB và đang chờ phê duyệt.'
+        data: result,
+        status: result.status,
+        message: result.status === 'approved'
+          ? 'Bạn đã vượt qua quiz và được tự động duyệt vào CLB.'
+          : 'Yêu cầu tham gia đã được gửi tới Trưởng CLB và đang chờ phê duyệt.'
       });
     } catch (err) {
       console.error('Join clan error:', err.message);
@@ -1297,6 +1300,27 @@ export const ApiController = {
         result: false,
         message: err.message || 'Không thể cập nhật thông tin CLB.'
       });
+    }
+  },
+
+  async getClanQuiz(req, res) {
+    try {
+      const quiz = await getClanQuiz(req.params.id);
+      return res.json({ result: true, data: quiz });
+    } catch (err) {
+      console.error('Get clan quiz error:', err.message);
+      return res.status(err.status || 500).json({ result: false, code: err.code, message: err.message || 'Không thể tải quiz CLB.' });
+    }
+  },
+
+  async updateClanQuiz(req, res) {
+    try {
+      const requesterMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const quiz = await saveClanQuiz(req.params.id, requesterMssv, req.body || {});
+      return res.json({ result: true, data: quiz });
+    } catch (err) {
+      console.error('Update clan quiz error:', err.message);
+      return res.status(err.status || 400).json({ result: false, code: err.code, message: err.message || 'Không thể lưu cấu hình quiz CLB.' });
     }
   },
 

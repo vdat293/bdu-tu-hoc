@@ -1,5 +1,6 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { PermissionService } from './permission.service.js';
+import { getQuizForSubmission, scoreQuizSubmission } from './clan-quiz.service.js';
 
 function normalizeMssv(mssv) {
   return String(mssv || '').trim().toUpperCase();
@@ -167,54 +168,72 @@ export const StudentService = {
   /**
    * Gửi yêu cầu xin tham gia Clan/CLB (trạng thái pending chờ Trưởng CLB duyệt)
    */
-  async requestJoinClan(mssv, clanId, message = null) {
+  async requestJoinClan(mssv, clanId, message = null, answers = undefined) {
     const cleanMssv = normalizeMssv(mssv);
     if (!cleanMssv || !clanId || !isDatabaseConfigured()) {
       throw new Error('Dữ liệu yêu cầu không hợp lệ.');
     }
-
-    // Đảm bảo sinh viên tồn tại trong bảng students
-    await query(`
-      INSERT INTO students (mssv, full_name, is_active)
-      VALUES ($1, '', FALSE)
-      ON CONFLICT (mssv) DO NOTHING;
-    `, [cleanMssv]);
-
-    // Kiểm tra CLB có tồn tại không
-    const clanRes = await query('SELECT id, name, leader_mssv FROM clans WHERE id = $1', [clanId]);
-    if (clanRes.rows.length === 0) {
-      const err = new Error('Không tìm thấy CLB.');
-      err.status = 404;
-      throw err;
-    }
-
-    // Kiểm tra xem đã là thành viên hay chưa
-    const memberRes = await query('SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2', [clanId, cleanMssv]);
-    if (memberRes.rows.length > 0) {
-      const err = new Error('Bạn đã là thành viên của CLB này rồi.');
-      err.status = 400;
-      throw err;
-    }
-
-    // Kiểm tra xem đã có yêu cầu pending hay chưa
-    const pendingRes = await query(
-      'SELECT id FROM clan_join_requests WHERE clan_id = $1 AND mssv = $2 AND status = $3',
-      [clanId, cleanMssv, 'pending']
-    );
-    if (pendingRes.rows.length > 0) {
-      const err = new Error('Bạn đã gửi yêu cầu tham gia CLB này và đang chờ Trưởng CLB phê duyệt.');
-      err.status = 400;
-      throw err;
-    }
-
     const cleanMessage = message ? String(message).trim().slice(0, 500) : null;
-    const insertSql = `
-      INSERT INTO clan_join_requests (clan_id, mssv, status, message, created_at, updated_at)
-      VALUES ($1, $2, 'pending', $3, NOW(), NOW())
-      RETURNING *;
-    `;
-    const result = await query(insertSql, [clanId, cleanMssv, cleanMessage]);
-    return result.rows[0];
+    try {
+      return await transaction(async (client) => {
+        // Khóa CLB trong cùng transaction với request để duplicate click/race
+        // không tạo được hai yêu cầu hoặc hai lần nộp quiz.
+        const clanRes = await client.query('SELECT id, name FROM clans WHERE id = $1 FOR UPDATE', [clanId]);
+        if (clanRes.rows.length === 0) throw Object.assign(new Error('Không tìm thấy CLB.'), { status: 404 });
+        await client.query(`
+          INSERT INTO students (mssv, full_name, is_active)
+          VALUES ($1, '', FALSE) ON CONFLICT (mssv) DO NOTHING;
+        `, [cleanMssv]);
+        const memberRes = await client.query('SELECT role FROM student_clans WHERE clan_id = $1 AND mssv = $2', [clanId, cleanMssv]);
+        if (memberRes.rows.length > 0) throw Object.assign(new Error('Bạn đã là thành viên của CLB này rồi.'), { status: 400 });
+
+        const quiz = await getQuizForSubmission(client, clanId);
+        let quizResult = null;
+        if (quiz) {
+          if (!Array.isArray(answers)) {
+            throw Object.assign(new Error('CLB này yêu cầu hoàn thành quiz trước khi gửi yêu cầu gia nhập.'), { status: 400, code: 'CLAN_QUIZ_REQUIRED' });
+          }
+          quizResult = scoreQuizSubmission(quiz, answers);
+        }
+
+        const requestResult = await client.query(`
+          INSERT INTO clan_join_requests (clan_id, mssv, status, message, created_at, updated_at)
+          VALUES ($1, $2, 'pending', $3, NOW(), NOW()) RETURNING *;
+        `, [clanId, cleanMssv, cleanMessage]);
+        const joinRequest = requestResult.rows[0];
+        if (!quiz) return { request: joinRequest, status: 'pending', quiz_result: null };
+
+        const submission = await client.query(`
+          INSERT INTO clan_quiz_submissions (quiz_id, clan_id, mssv, join_request_id, score, total, passed)
+          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;
+        `, [quiz.quiz_id, clanId, cleanMssv, joinRequest.id, quizResult.score, quizResult.total, quizResult.passed]);
+        for (const answer of quizResult.results) {
+          await client.query(`
+            INSERT INTO clan_quiz_submission_answers (submission_id, question_id, selected_index, is_correct)
+            VALUES ($1, $2, $3, $4)
+          `, [submission.rows[0].id, answer.question_id, answer.selected_index, answer.correct]);
+        }
+        if (quizResult.passed) {
+          await client.query(`
+            UPDATE clan_join_requests SET status = 'approved', reviewed_at = NOW(), updated_at = NOW() WHERE id = $1;
+            INSERT INTO student_clans (mssv, clan_id, role, joined_at)
+            VALUES ($1, $2, 'member', NOW()) ON CONFLICT (mssv, clan_id) DO NOTHING;
+          `, [cleanMssv, clanId]);
+        }
+        return {
+          request: { ...joinRequest, status: quizResult.passed ? 'approved' : 'pending' },
+          status: quizResult.passed ? 'approved' : 'pending',
+          quiz_result: quizResult
+        };
+      });
+    } catch (err) {
+      if (err.code === '23505' && err.constraint === 'clan_join_requests_pending_unique_idx') {
+        const duplicate = new Error('Bạn đã gửi yêu cầu tham gia CLB này và đang chờ Trưởng CLB phê duyệt.');
+        duplicate.status = 400;
+        throw duplicate;
+      }
+      throw err;
+    }
   },
 
   /**
@@ -263,12 +282,16 @@ export const StudentService = {
         cjr.status,
         cjr.message,
         cjr.created_at,
+        cqs.score AS quiz_score,
+        cqs.total AS quiz_total,
+        cqs.passed AS quiz_passed,
         s.full_name,
         COALESCE(sao.url_img, s.avatar_url) AS avatar_url
       FROM clan_join_requests cjr
       JOIN students s ON cjr.mssv = s.mssv
       LEFT JOIN student_avatar_overrides sao 
         ON sao.mssv = s.mssv AND sao.deleted_at IS NULL AND NULLIF(sao.url_img, '') IS NOT NULL
+      LEFT JOIN clan_quiz_submissions cqs ON cqs.join_request_id = cjr.id
       WHERE cjr.clan_id = $1 AND cjr.status = 'pending'
       ORDER BY cjr.created_at ASC;
     `;

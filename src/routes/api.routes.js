@@ -124,6 +124,8 @@ router.get('/community/clans/:id/members', ApiController.getClanMembers);
 router.patch('/community/clans/:id/members/:mssv/role', ApiController.updateClanMemberRole);
 router.delete('/community/clans/:id/members/:mssv', ApiController.kickClanMember);
 router.get('/community/clans/:id/documents', ApiController.getClanDocuments);
+router.get('/community/clans/:id/quiz', ApiController.getClanQuiz);
+router.put('/community/clans/:id/quiz', ApiController.updateClanQuiz);
 router.post('/community/polls/:pollId/vote', ApiController.voteClanPoll);
 
 // Health & Metrics check

@@ -114,6 +114,19 @@ describe('Confession identity dialogs', () => {
     expect(opener).toHaveFocus();
   });
 
+  it('portals the confession composer, locks body scroll, and restores its opener', async () => {
+    renderPage();
+    const opener = await screen.findByRole('button', { name: 'Tạo bài viết hoặc confession mới' });
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: 'Tạo bài viết' });
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạo bài viết' })).not.toBeInTheDocument());
+    expect(document.body.style.overflow).toBe('');
+    expect(opener).toHaveFocus();
+  });
+
   it('cleans up the intro-only cinematic state and replays it when the frame changes', () => {
     vi.useFakeTimers();
     try {

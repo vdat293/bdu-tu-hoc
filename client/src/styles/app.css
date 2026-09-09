@@ -765,6 +765,39 @@ body.theme-light .sidebar .nav-item.active:hover {
   flex: 1 1 auto;
 }
 
+/* CLB responsive controls and viewport-owned dialogs. */
+.clans-cards-grid,
+.clan-docs-grid { min-width: 0; }
+.clan-join-quiz-dialog { max-width: 620px; width: min(92vw, 620px); max-height: min(90vh, 760px); overflow-y: auto; }
+.clan-join-quiz-body { display: flex; flex-direction: column; gap: 14px; }
+.modal-subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+.quiz-progress { color: var(--bdu-light); font-size: 13px; }
+.quiz-question { margin: 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; }
+.quiz-question legend { padding: 0 4px; font-weight: 700; color: var(--text-main); }
+.quiz-option { display: flex; gap: 9px; align-items: flex-start; padding: 8px 4px; color: var(--text-dim); cursor: pointer; }
+.quiz-option input { margin-top: 3px; accent-color: var(--bdu-light); }
+.quiz-result { padding: 12px; border: 1px solid rgba(34, 197, 94, .35); border-radius: 10px; background: rgba(34, 197, 94, .08); }
+.quiz-result-details { display: grid; gap: 5px; margin-top: 9px; font-size: 12px; }
+.quiz-result-correct { color: #86efac; }
+.quiz-result-wrong { color: #fca5a5; }
+.quiz-result-details small { color: var(--text-muted); }
+.quiz-toggle-row { display: flex; gap: 9px; align-items: center; margin-bottom: 14px; font-weight: 700; cursor: pointer; }
+.quiz-settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; margin-bottom: 14px; }
+.quiz-settings-grid .form-input { margin-top: 6px; }
+.quiz-import-textarea { margin-top: 6px; min-height: 120px; font-family: var(--font-mono, monospace); font-size: 12px; }
+.quiz-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.quiz-import-actions label { cursor: pointer; }
+.quiz-schema-help, .quiz-question-count { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 680px) {
+  .clan-toolbar, .clan-feed-filter-bar, .clan-docs-toolbar { align-items: stretch !important; }
+  .clan-filter-tabs, .clan-feed-filter-tabs { flex-wrap: wrap; }
+  .clan-search-wrap, .clan-docs-toolbar > .form-input { min-width: 0 !important; max-width: none !important; width: 100%; }
+  .quiz-settings-grid { grid-template-columns: 1fr; }
+  .modal-backdrop { padding: 10px; }
+  .clan-create-dialog, .fb-composer-dialog { max-height: calc(100vh - 20px); overflow-y: auto; }
+}
+
 /* Confession identity layout: one centered flow for every frame family. The
    frame artwork is absolutely positioned inside the reserved avatar block,
    so only the block participates in document flow and the copy never needs a

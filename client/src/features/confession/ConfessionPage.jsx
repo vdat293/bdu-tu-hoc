@@ -27,6 +27,7 @@ import {
   TitleBadges
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
@@ -165,68 +166,6 @@ function profilePhotoFrom(response) {
     || profile?.image
     || profile?.anh_the
     || '';
-}
-
-function focusableElements(container) {
-  if (!container) return [];
-  return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-    .filter((element) => element.getAttribute('aria-hidden') !== 'true');
-}
-
-/* These pickers are rendered in a portal because the page shell is scrollable.
-   Keeping them at document.body makes fixed positioning truly viewport-relative
-   and prevents a scrolled Confession feed from taking the dialog with it. */
-function useViewportDialog(isOpen, onClose, dialogRef, initialFocusRef, returnFocusRef) {
-  const restoreFocusRef = useRef(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    restoreFocusRef.current = returnFocusRef.current || (typeof document.activeElement?.focus === 'function' ? document.activeElement : null);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const focusTimer = window.setTimeout(() => {
-      (initialFocusRef.current || focusableElements(dialogRef.current)[0] || dialogRef.current)?.focus();
-    }, 0);
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        onCloseRef.current();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-      const focusable = focusableElements(dialogRef.current);
-      if (!focusable.length) {
-        event.preventDefault();
-        dialogRef.current?.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      restoreFocusRef.current?.focus();
-    };
-  }, [dialogRef, initialFocusRef, isOpen, returnFocusRef]);
 }
 
 function AttachmentRenderer({ attachment }) {
@@ -429,6 +368,9 @@ export default function ConfessionPage() {
   const frameDialogRef = useRef(null);
   const frameCloseButtonRef = useRef(null);
   const frameOpenerRef = useRef(null);
+  const createDialogRef = useRef(null);
+  const createCloseButtonRef = useRef(null);
+  const createOpenerRef = useRef(null);
   const heroBannerRef = useRef(null);
   const heroAvatarRef = useRef(null);
   const frameAnnouncementRef = useRef(null);
@@ -443,6 +385,7 @@ export default function ConfessionPage() {
 
   useViewportDialog(showTitleModal, closeTitleCustomizer, titleDialogRef, titleCloseButtonRef, titleOpenerRef);
   useViewportDialog(showFrameModal, closeFramePicker, frameDialogRef, frameCloseButtonRef, frameOpenerRef);
+  useViewportDialog(showCreateModal, () => setShowCreateModal(false), createDialogRef, createCloseButtonRef, createOpenerRef);
 
   // Composer draft
   const [draft, setDraft] = useState({
@@ -609,7 +552,8 @@ export default function ConfessionPage() {
     });
   };
 
-  const openComposer = (focusField = 'content', forceAnon = true) => {
+  const openComposer = (focusField = 'content', forceAnon = true, event) => {
+    createOpenerRef.current = event?.currentTarget || document.activeElement;
     setDraft((prev) => ({ ...prev, isAnonymous: forceAnon, category: forceAnon ? 'confession' : 'discussion' }));
     setShowCreateModal(true);
   };
@@ -701,7 +645,7 @@ export default function ConfessionPage() {
               className="quick-composer-row"
               id="quick-composer-trigger"
               title="Nhấn để tạo bài viết / Confession mới"
-              onClick={() => openComposer('content', true)}
+              onClick={(event) => openComposer('content', true, event)}
               aria-label="Tạo bài viết hoặc confession mới"
             >
               <div id="cfs-composer-avatar" className="quick-composer-avatar">
@@ -717,7 +661,7 @@ export default function ConfessionPage() {
                 type="button"
                 className="quick-tag-btn"
                 id="btn-quick-attach-drive"
-                onClick={() => openComposer('drive', false)}
+                onClick={(event) => openComposer('drive', false, event)}
               >
                 <span>Google Drive / Video</span>
               </button>
@@ -725,7 +669,7 @@ export default function ConfessionPage() {
                 type="button"
                 className="quick-tag-btn"
                 id="btn-quick-anon-toggle"
-                onClick={() => openComposer('content', true)}
+                onClick={(event) => openComposer('content', true, event)}
               >
                 <span>Đăng ẩn danh</span>
               </button>
@@ -1063,15 +1007,16 @@ export default function ConfessionPage() {
 
       {/* Modal: Facebook Style Create Confession Modal */}
       {showCreateModal && (
-        <div id="modal-create-confession" className="modal-backdrop" onClick={(e) => { if (e.target.id === 'modal-create-confession') setShowCreateModal(false); }}>
-          <div className="modal-dialog fb-composer-dialog glass-panel" role="dialog" aria-modal="true">
+        <ViewportModal id="modal-create-confession" title="Tạo bài viết" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="fb-composer-dialog">
             <div className="fb-modal-header">
-              <h3 className="fb-modal-title">Tạo bài viết</h3>
+              <h3 id="confession-composer-title" className="fb-modal-title">Tạo bài viết</h3>
               <button
+                ref={createCloseButtonRef}
                 type="button"
                 id="btn-close-cfs-modal"
                 className="fb-modal-close-btn"
                 title="Đóng"
+                aria-label="Đóng hộp thoại tạo bài viết"
                 onClick={() => setShowCreateModal(false)}
               >
                 ✕
@@ -1231,8 +1176,7 @@ export default function ConfessionPage() {
                 {create.isPending ? 'Đang đăng...' : 'Đăng'}
               </button>
             </div>
-          </div>
-        </div>
+        </ViewportModal>
       )}
 
       {/* Modal: Frame Collection Preview */}
