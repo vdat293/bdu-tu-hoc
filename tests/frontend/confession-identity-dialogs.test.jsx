@@ -24,6 +24,7 @@ const presentation = {
 vi.mock('../../client/src/app/providers.jsx', () => ({
   useAuth: () => ({ token: 'test-token', user: { name: 'Sinh viên kiểm thử', mssv: 'TEST0001', idsv: '1' } }),
   useRealtimeRoom: () => {},
+  useRealtimeStatus: () => 'ready',
   useToasts: () => ({ notify: vi.fn() })
 }));
 

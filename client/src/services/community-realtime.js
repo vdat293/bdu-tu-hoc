@@ -20,9 +20,10 @@ function closeSocket(socket) {
 }
 
 export class CommunityRealtime {
-  constructor({ token, onEvent } = {}) {
+  constructor({ token, onEvent, onStatusChange } = {}) {
     this.token = token;
     this.onEvent = onEvent;
+    this.onStatusChange = onStatusChange;
     this.socket = null;
     this.timer = null;
     this.attempt = 0;
@@ -36,6 +37,7 @@ export class CommunityRealtime {
     this.pendingSubscriptionRooms = new Set();
     this.recoveryPending = null;
     this.seen = new Set();
+    this.status = 'connecting';
   }
 
   connect() {
@@ -43,12 +45,14 @@ export class CommunityRealtime {
     if (this.socket && (this.socket.readyState === WebSocket.CONNECTING || this.socket.readyState === WebSocket.OPEN)) return;
     window.clearTimeout(this.timer);
     this.timer = null;
+    this.setStatus(this.hasAuthenticated ? 'reconnecting' : 'connecting');
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let socket;
     try {
       socket = new WebSocket(`${protocol}//${window.location.host}/ws/community`);
     } catch {
+      this.setStatus('unavailable');
       this.scheduleReconnect();
       return;
     }
@@ -86,6 +90,8 @@ export class CommunityRealtime {
       } else if (message.type === 'error' && message.code === 'ROOM_FORBIDDEN') {
         this.pendingSubscriptionRooms.delete(String(message.room || ''));
         this.emitRecoveryWhenRoomsSettled();
+      } else if (message.type === 'error' && message.code === 'AUTH_UNAVAILABLE') {
+        this.setStatus('unavailable');
       } else if (message.type === 'error' && message.code === 'AUTH_INVALID') {
         this.markAuthInvalid(message.message);
       }
@@ -105,6 +111,7 @@ export class CommunityRealtime {
       this.pendingSubscriptionRooms.clear();
       this.recoveryPending = null;
       if (this.closed || this.authInvalid) return;
+      if (this.status !== 'unavailable') this.setStatus('reconnecting');
       this.scheduleReconnect();
     });
     socket.addEventListener('error', () => {
@@ -117,6 +124,7 @@ export class CommunityRealtime {
     if (this.authInvalid) return;
     this.authenticated = false;
     this.authInvalid = true;
+    this.setStatus('auth-invalid');
     window.clearTimeout(this.timer);
     this.timer = null;
     // Let the server close its invalid-auth connection. Calling close(1008)
@@ -190,11 +198,18 @@ export class CommunityRealtime {
     if (!this.recoveryPending || this.pendingSubscriptionRooms.size > 0) return;
     const data = this.recoveryPending;
     this.recoveryPending = null;
+    this.setStatus('ready');
     this.onEvent?.({
       type: 'realtime.recovered',
       data,
       occurredAt: new Date().toISOString()
     });
+  }
+
+  setStatus(status) {
+    if (this.status === status) return;
+    this.status = status;
+    this.onStatusChange?.(status);
   }
 
   close() {

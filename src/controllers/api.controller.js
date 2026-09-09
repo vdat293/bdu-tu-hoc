@@ -808,7 +808,8 @@ export const ApiController = {
     return res.json({
       result: true,
       timestamp: new Date().toISOString(),
-      wordFmtQueue: WordFmtService.getQueueStats()
+      wordFmtQueue: WordFmtService.getQueueStats(),
+      communityRealtime: CommunityRealtime.getStatus()
     });
   },
 

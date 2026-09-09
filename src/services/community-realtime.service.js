@@ -505,6 +505,15 @@ class CommunityRealtimeGateway {
     }
   }
 
+  getStatus() {
+    return {
+      topology: 'single-process',
+      attached: Boolean(this.wss),
+      connected_clients: this.clients.size,
+      active_rooms: this.rooms.size
+    };
+  }
+
   close() {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;

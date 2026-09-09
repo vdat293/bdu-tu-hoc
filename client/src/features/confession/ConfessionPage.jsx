@@ -12,7 +12,7 @@ import {
 } from '../../api/community.js';
 import { getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
-import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
+import { useAuth, useRealtimeRoom, useRealtimeStatus, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import {
   AvatarContent,
@@ -30,6 +30,83 @@ import { useFrameCinematic } from '../../components/identity/useFrameCinematic.j
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
+}
+
+export const FORUM_FALLBACK_BURST_ATTEMPTS = 3;
+const FORUM_FALLBACK_DELAY_MS = 8_000;
+const FORUM_FALLBACK_INTERVAL_MS = 15_000;
+const FORUM_FALLBACK_DEGRADED_INTERVAL_MS = 60_000;
+
+export function shouldUseForumFallback(status) {
+  return status !== 'ready' && status !== 'auth-invalid';
+}
+
+export function isForumCommentsQuery(query) {
+  const key = query?.queryKey;
+  // Forum comments use [post-comments, postId]; course comments carry the
+  // course code too, so a forum fallback must not refetch another route.
+  return Array.isArray(key) && key[0] === 'post-comments' && key.length === 2;
+}
+
+export function invalidateForumFallbackQueries(client, queryKey) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey, exact: true, refetchType: 'active' }),
+    client.invalidateQueries({ refetchType: 'active', predicate: isForumCommentsQuery })
+  ]);
+}
+
+function realtimeStatusMeta(status) {
+  if (status === 'ready') return { label: 'Cập nhật trực tiếp', tone: 'ready' };
+  if (status === 'connecting') return { label: 'Đang kết nối cập nhật', tone: 'connecting' };
+  if (status === 'reconnecting') return { label: 'Đang kết nối lại', tone: 'reconnecting' };
+  if (status === 'unavailable') return { label: 'Cập nhật trực tiếp tạm gián đoạn', tone: 'unavailable' };
+  if (status === 'auth-invalid') return { label: 'Phiên cập nhật đã hết hạn', tone: 'unavailable' };
+  return { label: 'Cập nhật trực tiếp chưa sẵn sàng', tone: 'unavailable' };
+}
+
+function useForumRealtimeFallback({ token, status, client, queryKey }) {
+  const fallbackRef = useRef({ timer: null, attempts: 0, requestKey: '', config: null, schedule: null });
+  const requestKey = `${token || ''}:${queryKey.join('|')}`;
+
+  useEffect(() => {
+    const fallback = fallbackRef.current;
+    fallback.config = { token, status, client, queryKey };
+    if (fallback.requestKey !== requestKey) {
+      window.clearTimeout(fallback.timer);
+      fallback.timer = null;
+      fallback.attempts = 0;
+      fallback.requestKey = requestKey;
+    }
+    if (!token || !shouldUseForumFallback(status)) {
+      window.clearTimeout(fallback.timer);
+      fallback.timer = null;
+      fallback.attempts = 0;
+      return undefined;
+    }
+    if (fallback.timer !== null) return undefined;
+
+    const schedule = (delay) => {
+      fallback.timer = window.setTimeout(() => {
+        fallback.timer = null;
+        const current = fallback.config;
+        if (!current?.token || !shouldUseForumFallback(current.status)) return;
+        fallback.attempts += 1;
+        invalidateForumFallbackQueries(current.client, current.queryKey).catch(() => {});
+        schedule(fallback.attempts < FORUM_FALLBACK_BURST_ATTEMPTS
+          ? FORUM_FALLBACK_INTERVAL_MS
+          : FORUM_FALLBACK_DEGRADED_INTERVAL_MS);
+      }, delay);
+    };
+    fallback.schedule = schedule;
+    schedule(fallback.attempts === 0 ? FORUM_FALLBACK_DELAY_MS
+      : (fallback.attempts < FORUM_FALLBACK_BURST_ATTEMPTS ? FORUM_FALLBACK_INTERVAL_MS : FORUM_FALLBACK_DEGRADED_INTERVAL_MS));
+    return undefined;
+  }, [client, queryKey, requestKey, status, token]);
+
+  useEffect(() => () => {
+    window.clearTimeout(fallbackRef.current.timer);
+    fallbackRef.current.timer = null;
+  }, []);
 }
 
 function formatRelativeTime(dateStr) {
@@ -337,6 +414,7 @@ export default function ConfessionPage() {
   const navigate = useNavigate();
   const { notify } = useToasts();
   const client = useQueryClient();
+  const realtimeStatus = useRealtimeStatus();
   const [params, setParams] = useSearchParams();
 
   // Modals state
@@ -384,8 +462,11 @@ export default function ConfessionPage() {
     queryKey,
     queryFn: ({ signal }) =>
       getCommunityPosts(auth.token, {
-        scope: 'school',
+        // The server's forum scope aggregates school, faculty, and institute
+        // posts. Using `school` here made those latter posts disappear.
+        scope: 'forum',
         scopeId: null,
+        filter,
         category: filter === 'anon' ? 'confession' : undefined,
         limit: 50,
         signal
@@ -394,25 +475,9 @@ export default function ConfessionPage() {
   });
 
   useRealtimeRoom('forum', Boolean(auth.token));
-
-  useEffect(() => {
-    const onEvent = (event) => {
-      const detail = event.detail || {};
-      const data = detail.data || {};
-      const type = detail.type || '';
-      if (!type.startsWith('community.')) return;
-      const postKey = data.postId == null ? null : String(data.postId);
-      const commentKey = postKey ? ['post-comments', postKey] : null;
-      if (type.startsWith('community.comment.') && commentKey) {
-        client.invalidateQueries({ queryKey: commentKey });
-      }
-      if (data.scope === 'school' || data.scope === 'faculty' || data.scope === 'institute' || !data.scope) {
-        client.invalidateQueries({ queryKey: ['confession'] });
-      }
-    };
-    window.addEventListener('bdu:realtime', onEvent);
-    return () => window.removeEventListener('bdu:realtime', onEvent);
-  }, [client]);
+  // The primary query owns the first snapshot. This only supplies a bounded
+  // cadence while the live gateway remains unavailable.
+  useForumRealtimeFallback({ token: auth.token, status: realtimeStatus, client, queryKey });
 
   const presentationQuery = useQuery({
     queryKey: ['identity-presentation', auth.user?.mssv],
@@ -552,6 +617,7 @@ export default function ConfessionPage() {
   const toggleComments = (postId) => {
     setExpandedComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
   };
+  const realtimeMeta = realtimeStatusMeta(realtimeStatus);
 
   return (
     <section id="tab-confession" className="tab-pane active">
@@ -703,6 +769,9 @@ export default function ConfessionPage() {
               </button>
             </div>
             <div className="forum-sort-box">
+              <span className={`forum-realtime-status is-${realtimeMeta.tone}`} role="status" aria-live="polite">
+                <i aria-hidden="true"></i>{realtimeMeta.label}
+              </span>
               <span className="forum-sort-label">Sắp xếp:</span>
               <span className="forum-sort-active">Mới nhất</span>
             </div>

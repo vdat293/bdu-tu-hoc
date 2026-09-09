@@ -21,6 +21,7 @@ const RealtimeContext = createContext(null);
 
 export function useAuth() { return useContext(AuthContext); }
 export function useToasts() { return useContext(ToastContext); }
+export function useRealtimeStatus() { return useContext(RealtimeContext)?.status || 'unavailable'; }
 
 // WebSocket events are deliberately lossy across a deploy, a proxy reload, or
 // a sleeping laptop. Once authentication succeeds again, stale active screens
@@ -35,20 +36,86 @@ export function isRealtimeRecoveryQuery(query) {
   return Array.isArray(query?.queryKey) && REALTIME_RECOVERY_QUERY_ROOTS.has(query.queryKey[0]);
 }
 
-export function invalidateActiveQueriesAfterRealtimeRecovery(client) {
+export function invalidateRealtimeQueriesAfterReady(client) {
   return client.invalidateQueries({
-    type: 'active',
     refetchType: 'active',
     predicate: isRealtimeRecoveryQuery
   });
 }
 
 export function shouldRefetchAfterRealtimeRecovery(event) {
-  return event?.type === 'realtime.recovered' && event.data?.reconnected === true;
+  return event?.type === 'realtime.recovered' && typeof event.data?.reconnected === 'boolean';
+}
+
+function invalidateQueryPrefix(client, queryKey) {
+  return client.invalidateQueries({ queryKey, refetchType: 'active' });
+}
+
+function isPostCommentsQuery(query, postId) {
+  const key = query?.queryKey;
+  return Array.isArray(key)
+    && key[0] === 'post-comments'
+    && String(key[key.length - 1]) === String(postId);
+}
+
+function isClanPostsQuery(query, clanId) {
+  const key = query?.queryKey;
+  return Array.isArray(key)
+    && key[0] === 'clan'
+    && key[3] === 'posts'
+    && String(key[2]) === String(clanId);
+}
+
+function isCoursePostsQuery(query, courseCode) {
+  const key = query?.queryKey;
+  return Array.isArray(key)
+    && key[0] === 'course-posts'
+    && String(key[2] || '').trim().toUpperCase() === String(courseCode || '').trim().toUpperCase();
+}
+
+// Keep mutation/recovery cache policy at the authenticated app boundary. A
+// route may be unmounted while an event arrives; marking its cache stale here
+// makes the next visit fetch immediately instead of trusting five-minute data.
+export function syncRealtimeCache(client, event) {
+  if (shouldRefetchAfterRealtimeRecovery(event)) return invalidateRealtimeQueriesAfterReady(client);
+
+  const type = String(event?.type || '');
+  const data = event?.data || {};
+  const scope = String(data.scope || '').toLowerCase();
+  const work = [];
+  if (type.startsWith('community.')) {
+    if (scope === 'school' || scope === 'faculty' || scope === 'institute' || !scope) {
+      work.push(invalidateQueryPrefix(client, ['confession']));
+    } else if (scope === 'course') {
+      work.push(client.invalidateQueries({
+        refetchType: 'active',
+        predicate: (query) => isCoursePostsQuery(query, data.courseCode || data.scopeId)
+      }));
+    } else if (scope === 'clan') {
+      work.push(client.invalidateQueries({
+        refetchType: 'active',
+        predicate: (query) => isClanPostsQuery(query, data.scopeId)
+      }));
+    }
+    if (data.postId != null && type.startsWith('community.comment.')) {
+      work.push(client.invalidateQueries({
+        refetchType: 'active',
+        predicate: (query) => isPostCommentsQuery(query, data.postId)
+      }));
+    }
+    if (data.postId != null && scope === 'clan' && type.startsWith('community.comment.')) {
+      work.push(client.invalidateQueries({ queryKey: ['clan-post-comments', String(data.postId)], refetchType: 'active' }));
+    }
+  } else if (type === 'identity.entitlements.changed') {
+    work.push(invalidateQueryPrefix(client, ['identity-presentation']));
+  } else if (type === 'identity.presentation.changed') {
+    work.push(invalidateQueryPrefix(client, ['confession']));
+  }
+  return Promise.all(work);
 }
 
 export function useRealtimeRoom(room, enabled = true) {
-  const realtime = useContext(RealtimeContext);
+  const realtime = useContext(RealtimeContext)?.realtime;
   useEffect(() => {
     if (!realtime || !enabled || !room) return undefined;
     realtime.subscribe(room);
@@ -76,6 +143,7 @@ function AuthProvider({ children }) {
   const client = useQueryClient();
   const { notify } = useToasts();
   const [realtime, setRealtime] = useState(null);
+  const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [state, setState] = useState(() => {
     const stored = readStoredSession();
     if (!stored?.token || stored.expired || stored.invalid) return { status: 'initializing', token: null, user: null, expiresAt: null };
@@ -84,18 +152,26 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     if (state.status !== 'authenticated' || !state.token) return undefined;
+    let active = true;
+    setRealtimeStatus('connecting');
     const instance = new CommunityRealtime({
       token: state.token,
       onEvent: (event) => {
-        if (shouldRefetchAfterRealtimeRecovery(event)) {
-          invalidateActiveQueriesAfterRealtimeRecovery(client).catch(() => {});
-        }
+        syncRealtimeCache(client, event).catch(() => {});
         window.dispatchEvent(new CustomEvent('bdu:realtime', { detail: event }));
+      },
+      onStatusChange: (nextStatus) => {
+        if (active) setRealtimeStatus(nextStatus);
       }
     });
+    // Forum is the public community stream. Keep one provider-owned reference
+    // for the authenticated session so events can stale inactive forum/comment
+    // caches after the route unmounts; page hooks add/remove only extra refs.
+    instance.subscribe('forum');
     setRealtime(instance);
     instance.connect();
     return () => {
+      active = false;
       instance.close();
       setRealtime((current) => current === instance ? null : current);
     };
@@ -147,7 +223,8 @@ function AuthProvider({ children }) {
   }, [client, notify]);
 
   const value = useMemo(() => ({ ...state, login, logout }), [state, login, logout]);
-  return <AuthContext.Provider value={value}><RealtimeContext.Provider value={realtime}>{children}</RealtimeContext.Provider></AuthContext.Provider>;
+  const realtimeValue = useMemo(() => ({ realtime, status: realtimeStatus }), [realtime, realtimeStatus]);
+  return <AuthContext.Provider value={value}><RealtimeContext.Provider value={realtimeValue}>{children}</RealtimeContext.Provider></AuthContext.Provider>;
 }
 
 function storageForSession(remember) { return remember ? window.localStorage : window.sessionStorage; }

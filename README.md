@@ -191,6 +191,16 @@ Kết quả xác minh của một token opaque khôi phục sau restart chỉ đ
 `BDU_RESTORED_TOKEN_TTL_MS` (mặc định 5 phút); đăng nhập mới luôn giữ hạn
 `expires_in` do BDU cấp.
 
+### Giới hạn topology WebSocket
+
+Gateway WebSocket hiện giữ membership room và broadcast trong bộ nhớ của một
+Node process. Vì vậy VPS Compose này **phải chạy đúng một `bdu-hub` replica**;
+không dùng `docker compose up --scale bdu-hub=...` hay nhiều worker Node cho đến
+khi có shared pub/sub adapter. Compose đã đặt `deploy.replicas: 1` và
+`container_name` để phản ánh ràng buộc đó. Sau deploy, kiểm tra chỉ có một app
+container bằng `docker compose ps`; `/api/queue-status` cũng trả diagnostics
+không nhạy cảm `communityRealtime` (topology, socket clients, active rooms).
+
 Sau khi app lên, chạy đồng bộ bảng xếp hạng lần đầu:
 
 ```bash

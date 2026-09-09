@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -356,24 +356,6 @@ export default function CourseLearningPage() {
   const semesterLabel = semesters[0]?.name || (isStudying ? 'Đang theo học' : 'Học phần đã hoàn thành');
   const normalizedCourseCode = String(courseCode || '').trim().toUpperCase().replace(/\s+/g, '');
   useRealtimeRoom(normalizedCourseCode ? `course:${normalizedCourseCode}` : null, Boolean(auth.token && courseCode));
-
-  // Realtime updates
-  useEffect(() => {
-    const onEvent = (event) => {
-      const detail = event.detail || {};
-      const data = detail.data || {};
-      const type = detail.type || '';
-      const eventCourseCode = String(data.courseCode || data.scopeId || '').trim().toUpperCase().replace(/\s+/g, '');
-      if (type.startsWith('community.') && data.scope === 'course' && eventCourseCode === normalizedCourseCode) {
-        client.invalidateQueries({ queryKey: ['course-posts', auth.user?.mssv, courseCode] });
-        if (type.startsWith('community.comment.') && data.postId != null) {
-          client.invalidateQueries({ queryKey: ['post-comments', courseCode, String(data.postId)] });
-        }
-      }
-    };
-    window.addEventListener('bdu:realtime', onEvent);
-    return () => window.removeEventListener('bdu:realtime', onEvent);
-  }, [auth.user?.mssv, client, courseCode, normalizedCourseCode]);
 
   const create = useMutation({
     mutationFn: () =>

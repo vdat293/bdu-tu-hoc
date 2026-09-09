@@ -34,7 +34,7 @@ function tokenExpiresAt(token, expiresIn, cacheTtlMs = null) {
   const expiresInAt = Number.isFinite(expiresInSeconds) && expiresInSeconds >= 0
     ? now + (expiresInSeconds * 1000)
     : null;
-  const cacheTtl = Number(cacheTtlMs);
+  const cacheTtl = cacheTtlMs === null || cacheTtlMs === undefined ? Number.NaN : Number(cacheTtlMs);
   const cacheExpiresAt = Number.isFinite(cacheTtl) && cacheTtl >= 0 ? now + cacheTtl : null;
   try {
     const payloadPart = token.split('.')[1];

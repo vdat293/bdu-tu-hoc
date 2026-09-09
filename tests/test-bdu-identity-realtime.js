@@ -32,6 +32,12 @@ try {
     (error) => error?.status === 401 && error?.code === 'AUTH_INVALID'
   );
 
+  // A normal login registration has no restored-session TTL override and must
+  // remain usable; `null` must never be coerced into a zero-millisecond TTL.
+  BduIdentityService.register('fresh-login-token', '24050000');
+  assert.equal(await BduIdentityService.resolveVerifiedMssv('fresh-login-token'), '24050000');
+  BduIdentityService.clear('fresh-login-token');
+
   let calls = 0;
   let resolveProfile;
   BduService.getProfile = () => {

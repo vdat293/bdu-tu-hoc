@@ -16,11 +16,15 @@ services:
       retries: 10
 
   bdu-hub:
+    # Room membership and broadcasts are in this Node process. Keep exactly
+    # one replica until a shared pub/sub adapter is introduced.
     build:
       context: .
       dockerfile: Dockerfile
     container_name: bdu-tu-hoc-app
     restart: unless-stopped
+    deploy:
+      replicas: 1
     ports:
       - "127.0.0.1:3000:3000"
     environment:

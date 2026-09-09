@@ -281,21 +281,6 @@ export default function ClanPage() {
     if (clan) setClanDraft({ name: clan.name || '', description: clan.description || '', tag: clan.tag || '' });
   }, [clan]);
 
-  useEffect(() => {
-    const onEvent = (event) => {
-      const detail = event.detail || {};
-      const data = detail.data || {};
-      if (detail.type?.startsWith('community.') && data.scope === 'clan' && String(data.scopeId) === String(clanId)) {
-        client.invalidateQueries({ queryKey: [...queryBase, 'posts'] });
-        if (detail.type.startsWith('community.comment.') && data.postId != null) {
-          client.invalidateQueries({ queryKey: ['clan-post-comments', String(data.postId)] });
-        }
-      }
-    };
-    window.addEventListener('bdu:realtime', onEvent);
-    return () => window.removeEventListener('bdu:realtime', onEvent);
-  }, [clanId, client, queryBase]);
-
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['clans'] });
     client.invalidateQueries({ queryKey: [...queryBase] });
