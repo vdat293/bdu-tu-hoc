@@ -92,7 +92,7 @@ function useForumRealtimeFallback({ token, status, client, queryKey }) {
         const current = fallback.config;
         if (!current?.token || !shouldUseForumFallback(current.status)) return;
         fallback.attempts += 1;
-        invalidateForumFallbackQueries(current.client, current.queryKey).catch(() => {});
+        invalidateForumFallbackQueries(current.client, current.queryKey).catch(() => { });
         schedule(fallback.attempts < FORUM_FALLBACK_BURST_ATTEMPTS
           ? FORUM_FALLBACK_INTERVAL_MS
           : FORUM_FALLBACK_DEGRADED_INTERVAL_MS);
@@ -885,7 +885,7 @@ export default function ConfessionPage() {
           {/* Widget 2: Fast Utilities & Tools (Dragon Boy styled buttons) */}
           <div className="forum-widget glass-panel">
             <div className="forum-widget-header widget-header-emerald">
-              <h4>TIỆN ÍCH HỌC TẬP BDU</h4>
+              <h4>TIỆN ÍCH</h4>
             </div>
             <div className="forum-widget-body">
               <div className="widget-tool-buttons">
@@ -932,6 +932,16 @@ export default function ConfessionPage() {
                     <small>Kho tài liệu & slide nội bộ</small>
                   </div>
                 </button>
+
+                <a
+                  className="btn-platform btn-tool-games"
+                  href="/games"
+                >
+                  <div className="platform-text">
+                    <strong>Giải trí</strong>
+                    <small>Phòng cờ online & xem realtime</small>
+                  </div>
+                </a>
               </div>
             </div>
           </div>
@@ -1008,143 +1018,47 @@ export default function ConfessionPage() {
       {/* Modal: Facebook Style Create Confession Modal */}
       {showCreateModal && (
         <ViewportModal id="modal-create-confession" title="Tạo bài viết" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="fb-composer-dialog">
-            <div className="fb-modal-header">
-              <h3 id="confession-composer-title" className="fb-modal-title">Tạo bài viết</h3>
-              <button
-                ref={createCloseButtonRef}
-                type="button"
-                id="btn-close-cfs-modal"
-                className="fb-modal-close-btn"
-                title="Đóng"
-                aria-label="Đóng hộp thoại tạo bài viết"
-                onClick={() => setShowCreateModal(false)}
-              >
-                ✕
-              </button>
-            </div>
+          <div className="fb-modal-header">
+            <h3 id="confession-composer-title" className="fb-modal-title">Tạo bài viết</h3>
+            <button
+              ref={createCloseButtonRef}
+              type="button"
+              id="btn-close-cfs-modal"
+              className="fb-modal-close-btn"
+              title="Đóng"
+              aria-label="Đóng hộp thoại tạo bài viết"
+              onClick={() => setShowCreateModal(false)}
+            >
+              ✕
+            </button>
+          </div>
 
-            <div className="fb-modal-body">
-              <div className="fb-composer-author-row">
-                <div id="fb-modal-avatar" className="fb-author-avatar">
-                  {draft.isAnonymous ? '?' : getInitials(displayName)}
+          <div className="fb-modal-body">
+            <div className="fb-composer-author-row">
+              <div id="fb-modal-avatar" className="fb-author-avatar">
+                {draft.isAnonymous ? '?' : getInitials(displayName)}
+              </div>
+              <div className="fb-author-info">
+                <div id="fb-modal-author-name" className="fb-author-name">
+                  {draft.isAnonymous ? 'Sinh viên giấu tên (Confession)' : displayName}
                 </div>
-                <div className="fb-author-info">
-                  <div id="fb-modal-author-name" className="fb-author-name">
-                    {draft.isAnonymous ? 'Sinh viên giấu tên (Confession)' : displayName}
-                  </div>
-                  <div className="fb-author-pills">
-                    <div className="fb-pill-selector">
-                      <select
-                        id="cfs-post-scope"
-                        className="fb-pill-select"
-                        value={draft.scope}
-                        onChange={(e) => setDraft({ ...draft, scope: e.target.value })}
-                      >
-                        <option value="school">Toàn trường</option>
-                        <option value="faculty">Chủ đề Viện / Khoa (công khai)</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="button"
-                      id="fb-btn-toggle-anon"
-                      className={`fb-pill-btn ${draft.isAnonymous ? 'active' : ''}`}
-                      onClick={() =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          isAnonymous: !prev.isAnonymous,
-                          category: !prev.isAnonymous ? 'confession' : 'discussion'
-                        }))
-                      }
-                      title="Bật/Tắt chế độ Confession ẩn danh"
+                <div className="fb-author-pills">
+                  <div className="fb-pill-selector">
+                    <select
+                      id="cfs-post-scope"
+                      className="fb-pill-select"
+                      value={draft.scope}
+                      onChange={(e) => setDraft({ ...draft, scope: e.target.value })}
                     >
-                      <span id="fb-anon-label">Ẩn danh: {draft.isAnonymous ? 'Bật' : 'Tắt'}</span>
-                    </button>
+                      <option value="school">Toàn trường</option>
+                      <option value="faculty">Chủ đề Viện / Khoa (công khai)</option>
+                    </select>
                   </div>
-                </div>
-              </div>
 
-              <div className="fb-inputs-area">
-                <input
-                  type="text"
-                  id="cfs-post-title"
-                  className="fb-title-input"
-                  maxLength={180}
-                  placeholder="Tiêu đề bài viết (tùy chọn)..."
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                />
-                <textarea
-                  id="cfs-post-content"
-                  className="fb-content-textarea"
-                  rows={4}
-                  maxLength={10000}
-                  placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự..."
-                  value={draft.content}
-                  onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div id="fb-attachment-card" className="fb-attachment-card" style={{ marginTop: '12px' }}>
-                <div className="fb-attachment-input-row" style={{ marginBottom: '8px' }}>
-                  <input
-                    type="url"
-                    id="cfs-post-drive-url"
-                    className="fb-attachment-url-input form-input"
-                    maxLength={2048}
-                    placeholder="Dán link Google Drive (File/Folder/Video) hoặc YouTube..."
-                    value={draft.url}
-                    onChange={(e) => setDraft({ ...draft, url: e.target.value })}
-                  />
-                </div>
-                {draft.url && (
-                  <div className="fb-attachment-title-row">
-                    <input
-                      type="text"
-                      id="cfs-post-drive-title"
-                      className="fb-attachment-title-input form-input"
-                      maxLength={180}
-                      placeholder="Tên tài liệu / video hiển thị (tùy chọn)..."
-                      value={draft.urlTitle}
-                      onChange={(e) => setDraft({ ...draft, urlTitle: e.target.value })}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="fb-add-to-post-box">
-                <span className="fb-add-to-post-label">Thêm vào bài viết của bạn</span>
-                <div className="fb-add-actions">
                   <button
                     type="button"
-                    className="fb-add-btn"
-                    id="fb-tool-drive"
-                    title="Nhúng Google Drive"
-                    onClick={() => {
-                      const input = document.getElementById('cfs-post-drive-url');
-                      input?.focus();
-                    }}
-                  >
-                    📁 Drive
-                  </button>
-                  <button
-                    type="button"
-                    className="fb-add-btn"
-                    id="fb-tool-youtube"
-                    title="Nhúng Video YouTube"
-                    onClick={() => {
-                      const input = document.getElementById('cfs-post-drive-url');
-                      input?.focus();
-                    }}
-                  >
-                    🎥 YouTube
-                  </button>
-                  <button
-                    type="button"
-                    className="fb-add-btn"
-                    id="fb-tool-anon"
-                    title="Chuyển chế độ Ẩn danh"
+                    id="fb-btn-toggle-anon"
+                    className={`fb-pill-btn ${draft.isAnonymous ? 'active' : ''}`}
                     onClick={() =>
                       setDraft((prev) => ({
                         ...prev,
@@ -1152,30 +1066,126 @@ export default function ConfessionPage() {
                         category: !prev.isAnonymous ? 'confession' : 'discussion'
                       }))
                     }
+                    title="Bật/Tắt chế độ Confession ẩn danh"
                   >
-                    🎭 Ẩn danh
+                    <span id="fb-anon-label">Ẩn danh: {draft.isAnonymous ? 'Bật' : 'Tắt'}</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="fb-modal-footer">
-              <button
-                type="button"
-                id="btn-submit-cfs"
-                className="btn btn-primary fb-submit-post-btn"
-                onClick={() => {
-                  if (!draft.content.trim()) {
-                    notify('Vui lòng nhập nội dung bài viết.', 'warning');
-                    return;
-                  }
-                  create.mutate();
-                }}
-                disabled={create.isPending || !draft.content.trim()}
-              >
-                {create.isPending ? 'Đang đăng...' : 'Đăng'}
-              </button>
+            <div className="fb-inputs-area">
+              <input
+                type="text"
+                id="cfs-post-title"
+                className="fb-title-input"
+                maxLength={180}
+                placeholder="Tiêu đề bài viết (tùy chọn)..."
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+              <textarea
+                id="cfs-post-content"
+                className="fb-content-textarea"
+                rows={4}
+                maxLength={10000}
+                placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự..."
+                value={draft.content}
+                onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+                required
+              />
             </div>
+
+            <div id="fb-attachment-card" className="fb-attachment-card" style={{ marginTop: '12px' }}>
+              <div className="fb-attachment-input-row" style={{ marginBottom: '8px' }}>
+                <input
+                  type="url"
+                  id="cfs-post-drive-url"
+                  className="fb-attachment-url-input form-input"
+                  maxLength={2048}
+                  placeholder="Dán link Google Drive (File/Folder/Video) hoặc YouTube..."
+                  value={draft.url}
+                  onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+                />
+              </div>
+              {draft.url && (
+                <div className="fb-attachment-title-row">
+                  <input
+                    type="text"
+                    id="cfs-post-drive-title"
+                    className="fb-attachment-title-input form-input"
+                    maxLength={180}
+                    placeholder="Tên tài liệu / video hiển thị (tùy chọn)..."
+                    value={draft.urlTitle}
+                    onChange={(e) => setDraft({ ...draft, urlTitle: e.target.value })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="fb-add-to-post-box">
+              <span className="fb-add-to-post-label">Thêm vào bài viết của bạn</span>
+              <div className="fb-add-actions">
+                <button
+                  type="button"
+                  className="fb-add-btn"
+                  id="fb-tool-drive"
+                  title="Nhúng Google Drive"
+                  onClick={() => {
+                    const input = document.getElementById('cfs-post-drive-url');
+                    input?.focus();
+                  }}
+                >
+                  📁 Drive
+                </button>
+                <button
+                  type="button"
+                  className="fb-add-btn"
+                  id="fb-tool-youtube"
+                  title="Nhúng Video YouTube"
+                  onClick={() => {
+                    const input = document.getElementById('cfs-post-drive-url');
+                    input?.focus();
+                  }}
+                >
+                  🎥 YouTube
+                </button>
+                <button
+                  type="button"
+                  className="fb-add-btn"
+                  id="fb-tool-anon"
+                  title="Chuyển chế độ Ẩn danh"
+                  onClick={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      isAnonymous: !prev.isAnonymous,
+                      category: !prev.isAnonymous ? 'confession' : 'discussion'
+                    }))
+                  }
+                >
+                  🎭 Ẩn danh
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="fb-modal-footer">
+            <button
+              type="button"
+              id="btn-submit-cfs"
+              className="btn btn-primary fb-submit-post-btn"
+              onClick={() => {
+                if (!draft.content.trim()) {
+                  notify('Vui lòng nhập nội dung bài viết.', 'warning');
+                  return;
+                }
+                create.mutate();
+              }}
+              disabled={create.isPending || !draft.content.trim()}
+            >
+              {create.isPending ? 'Đang đăng...' : 'Đăng'}
+            </button>
+          </div>
         </ViewportModal>
       )}
 

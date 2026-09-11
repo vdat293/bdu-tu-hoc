@@ -70,7 +70,16 @@ export async function cancelClanJoinRequest(token, clanId) { return request(`/ap
 export async function getClanJoinRequests(token, clanId, { signal } = {}) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/join-requests`, { token, signal, defaultMessage: 'Không thể tải yêu cầu gia nhập.' }); return unwrap(data, []); }
 export async function reviewClanJoinRequest(token, clanId, requestId, action) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/join-requests/${encodeURIComponent(requestId)}/review`, { method: 'POST', token, body: { action }, defaultMessage: 'Không thể xử lý yêu cầu gia nhập.' }); return unwrap(data, data); }
 export async function getClanMembers(token, clanId, { signal } = {}) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/members`, { token, signal, defaultMessage: 'Không thể tải thành viên.' }); return unwrap(data, []); }
-export async function getClanDocuments(token, clanId, { signal } = {}) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/documents`, { token, signal, defaultMessage: 'Không thể tải tài liệu CLB.' }); return unwrap(data, data); }
+export async function getClanDocuments(token, clanId, { signal, type, search, limit, offset } = {}) {
+  const params = new URLSearchParams();
+  if (type && type !== 'all') params.set('type', type);
+  if (search) params.set('search', search);
+  if (limit !== undefined) params.set('limit', String(limit));
+  if (offset !== undefined) params.set('offset', String(offset));
+  const suffix = params.size ? `?${params}` : '';
+  const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/documents${suffix}`, { token, signal, defaultMessage: 'Không thể tải tài liệu CLB.' });
+  return unwrap(data, data);
+}
 export async function updateClanMemberRole(token, clanId, mssv, role) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/members/${encodeURIComponent(mssv)}/role`, { method: 'PATCH', token, body: { role }, defaultMessage: 'Không thể cập nhật vai trò.' }); return unwrap(data, data); }
 export async function kickClanMember(token, clanId, mssv) { return request(`/api/community/clans/${encodeURIComponent(clanId)}/members/${encodeURIComponent(mssv)}`, { method: 'DELETE', token, defaultMessage: 'Không thể xóa thành viên.' }); }
 export async function updateClan(token, clanId, changes) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}`, { method: 'PATCH', token, body: changes, defaultMessage: 'Không thể cập nhật CLB.' }); return unwrap(data, data); }

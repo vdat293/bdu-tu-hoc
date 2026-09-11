@@ -19,15 +19,16 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: false },
-      '/media': { target: 'http://localhost:3000', changeOrigin: false },
-      '/assets': { target: 'http://localhost:3000', changeOrigin: false },
-      '/css': { target: 'http://localhost:3000', changeOrigin: false },
-      '/admin-tool': { target: 'http://localhost:3000', changeOrigin: false },
-      '/ws': { target: 'ws://localhost:3000', ws: true, changeOrigin: false }
+      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/media': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/assets': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/css': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/admin-tool': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/ws': { target: 'ws://127.0.0.1:3000', ws: true, changeOrigin: false }
     }
   }
 });

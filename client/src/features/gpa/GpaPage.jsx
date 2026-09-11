@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { getGrades } from '../../api/academics.js';
 import { getMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth } from '../../app/providers.jsx';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import GpaTrendChart from './GpaTrendChart.jsx';
 import GradeDistChart from './GradeDistChart.jsx';
@@ -121,6 +122,9 @@ export default function GpaPage() {
   const status = params.get('status') || 'ALL';
   const queryText = params.get('q') || '';
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const detailDialogRef = useRef(null);
+  const detailCloseRef = useRef(null);
+  const detailOpenerRef = useRef(null);
 
   const grades = useQuery({
     queryKey: ['grades', auth.user?.mssv],
@@ -196,6 +200,21 @@ export default function GpaPage() {
   const courseComponents = useMemo(() => {
     return selectedCourse ? extractComponentDetailList(selectedCourse) : [];
   }, [selectedCourse]);
+
+  const closeCourseDetails = () => setSelectedCourse(null);
+
+  useViewportDialog(
+    Boolean(selectedCourse),
+    closeCourseDetails,
+    detailDialogRef,
+    detailCloseRef,
+    detailOpenerRef
+  );
+
+  const openCourseDetails = (course, semTitle, opener) => {
+    detailOpenerRef.current = opener;
+    setSelectedCourse({ ...course, sem_name: semTitle });
+  };
 
   if (grades.isLoading) return <GpaPageSkeleton />;
 
@@ -447,7 +466,16 @@ export default function GpaPage() {
                             <tr
                               key={`${c.ma_mon}-${idx}`}
                               className="course-row"
-                              onClick={() => setSelectedCourse({ ...c, sem_name: semTitle })}
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`Xem chi tiết điểm môn ${c.ten_mon || c.ma_mon || 'học phần'}`}
+                              onClick={(event) => openCourseDetails(c, semTitle, event.currentTarget)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  openCourseDetails(c, semTitle, event.currentTarget);
+                                }
+                              }}
                               style={{ cursor: 'pointer' }}
                             >
                               <td><code>{c.ma_mon || '--'}</code></td>
@@ -499,18 +527,27 @@ export default function GpaPage() {
 
       {/* Modal: Xem chi tiết điểm thành phần môn học */}
       {selectedCourse && (
-        <div id="detail-modal" className="modal-backdrop" onClick={() => setSelectedCourse(null)}>
-          <div className="modal-dialog glass-panel" onClick={(e) => e.stopPropagation()}>
+        <ViewportModal
+          id="detail-modal"
+          title={selectedCourse.ten_mon || 'Chi Tiết Môn Học'}
+          labelledBy="modal-course-name"
+          onClose={closeCourseDetails}
+          dialogRef={detailDialogRef}
+          className="gpa-detail-dialog"
+        >
             <div className="modal-header">
               <div className="modal-title-group">
                 <h3 id="modal-course-name" className="modal-title">{selectedCourse.ten_mon || 'Chi Tiết Môn Học'}</h3>
                 <span id="modal-course-code" className="modal-badge">{selectedCourse.ma_mon || '--'}</span>
               </div>
               <button
+                ref={detailCloseRef}
                 id="modal-close"
+                type="button"
                 className="modal-close-btn"
                 title="Đóng"
-                onClick={() => setSelectedCourse(null)}
+                aria-label="Đóng chi tiết môn học"
+                onClick={closeCourseDetails}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -566,12 +603,11 @@ export default function GpaPage() {
             </div>
 
             <div className="modal-footer">
-              <button id="modal-btn-dismiss" className="btn btn-secondary" onClick={() => setSelectedCourse(null)}>
+              <button id="modal-btn-dismiss" type="button" className="btn btn-secondary" onClick={closeCourseDetails}>
                 Đóng
               </button>
             </div>
-          </div>
-        </div>
+        </ViewportModal>
       )}
     </section>
   );

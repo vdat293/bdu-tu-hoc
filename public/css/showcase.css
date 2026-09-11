@@ -735,6 +735,39 @@ body.theme-light {
 .chart-card:last-child { border-top: 4px solid var(--showcase-lilac); }
 .card-title { font-size: 1.25rem; }
 
+/* The showcase GPA surfaces above are intentionally light in the default
+   theme. Keep the same visual grouping in dark mode without leaving bright
+   cards or the dark-on-dark value colour from the academic stylesheet. */
+body.theme-dark #tab-grades .stats-grid {
+  box-shadow: 0 22px 60px rgba(0, 0, 0, .32);
+}
+
+body.theme-dark #tab-grades .stat-card:nth-child(1) { background: #302b29; }
+body.theme-dark #tab-grades .stat-card:nth-child(2) { background: #382c2b; }
+body.theme-dark #tab-grades .stat-card:nth-child(3) { background: #302d36; }
+body.theme-dark #tab-grades .stat-card:nth-child(4) { background: #3c3020; }
+
+body.theme-dark #tab-grades .stat-card::after {
+  border-color: rgba(255, 255, 255, .09);
+}
+
+body.theme-dark #tab-grades .stat-icon {
+  border-color: rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .09);
+  color: #f4cbc5;
+}
+
+body.theme-dark #tab-grades .text-gradient-amber { color: #ffd18a; }
+body.theme-dark #tab-grades .text-gradient-emerald { color: #92e2b5; }
+body.theme-dark #tab-grades .text-gradient-blue { color: #b6d2ff; }
+body.theme-dark #tab-grades .text-gradient-purple { color: #dec6f0; }
+
+body.theme-dark #tab-grades .chart-card {
+  background: #25211f;
+  border-color: #48403a;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .24);
+}
+
 .section-header-box {
   min-height: 178px;
   position: relative;

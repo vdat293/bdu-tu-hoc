@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  addCommunityPostComment,
+  cancelClanJoinRequest,
   createCommunityPost,
   deleteCommunityPost,
   disbandClan,
   getClanDocuments,
   getClanJoinRequests,
   getClanMembers,
+  getClanQuiz,
   getClans,
+  getCommunityPostComments,
   getCommunityPosts,
   joinClan,
   kickClanMember,
@@ -17,204 +21,132 @@ import {
   toggleCommunityPostLike,
   updateClan,
   updateClanMemberRole,
-  voteClanPoll,
-  getCommunityPostComments,
-  addCommunityPostComment,
-  getClanQuiz,
-  updateClanQuiz
+  updateClanQuiz,
+  voteClanPoll
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import ClanJoinQuizModal from './ClanJoinQuizModal.jsx';
 import { parseQuizText, QUIZ_IMPORT_SCHEMA } from './quiz.js';
+import './clans.css';
+
+const POSTS_PER_PAGE = 12;
+const DOCS_PER_PAGE = 12;
+const roleLabels = {
+  leader: 'Bang chủ',
+  vice_leader: 'Phó bang',
+  elder: 'Trưởng lão',
+  member: 'Thành viên',
+  recruit: 'Tân thành viên'
+};
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
 }
 
-function getInitials(name) {
-  const parts = String(name || 'SV').trim().split(/\s+/);
-  return parts.length > 1
-    ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
+function cleanTag(tag) {
+  return String(tag || '').trim().replace(/^\[+|\]+$/g, '') || 'CLB';
 }
 
-function formatRelativeTime(dateStr) {
-  if (!dateStr) return 'Vừa xong';
-  const now = new Date();
-  const past = new Date(dateStr);
-  const diffSec = Math.floor((now - past) / 1000);
-  if (diffSec < 60) return 'Vừa xong';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} phút trước`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} giờ trước`;
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 30) return `${diffDay} ngày trước`;
-  return past.toLocaleDateString('vi-VN');
+function initials(name) {
+  const words = String(name || 'SV').trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? `${words[0][0]}${words.at(-1)[0]}`.toUpperCase() : words[0].slice(0, 2).toUpperCase();
+}
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatRelativeTime(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return 'Không rõ thời điểm';
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return 'Vừa xong';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} phút trước`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} giờ trước`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 86400)} ngày trước`;
+  return date.toLocaleDateString('vi-VN');
+}
+
+function roleInfo(role) {
+  const value = String(role || 'member');
+  return {
+    label: roleLabels[value] || 'Thành viên',
+    canPost: ['leader', 'vice_leader', 'elder', 'member'].includes(value),
+    canPoll: ['leader', 'vice_leader', 'elder'].includes(value),
+    canReview: ['leader', 'vice_leader'].includes(value),
+    canManageMembers: ['leader', 'vice_leader'].includes(value),
+    canAssignRoles: value === 'leader',
+    canSettings: value === 'leader',
+    canDeleteAny: ['leader', 'vice_leader'].includes(value)
+  };
+}
+
+function Avatar({ name, url, size = 'member' }) {
+  return <span className={`clan-avatar clan-avatar--${size}`} aria-hidden="true">{url ? <img src={url} alt="" /> : initials(name)}</span>;
+}
+
+function PanelError({ message, onRetry }) {
+  return <div className="clan-state-card" role="alert"><h2>Chưa thể tải dữ liệu</h2><p>{message || 'Vui lòng kiểm tra kết nối rồi thử lại.'}</p><button type="button" className="btn btn-secondary" onClick={onRetry}>Thử lại</button></div>;
 }
 
 function AttachmentRenderer({ attachment }) {
   if (!attachment) return null;
-  const targetUrl = attachment.direct_url || attachment.url || '#';
-  const isVideo = attachment.type === 'youtube' || attachment.type === 'video';
-  const isDrive = attachment.type === 'drive_file' || attachment.type === 'drive_folder';
-
-  if (isVideo && attachment.embed_url) {
-    return (
-      <div className="attachment-preview-box" style={{ marginTop: '12px' }}>
-        <div className="attachment-preview-header">
-          <span className="attachment-type-badge">{attachment.type === 'youtube' ? 'Video YouTube' : 'Video Drive'}</span>
-          <span className="attachment-title">{attachment.title || 'Video đính kèm'}</span>
-          <div className="attachment-actions">
-            <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="attachment-action-link">
-              Mở liên kết ↗
-            </a>
-          </div>
-        </div>
-        <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '8px' }}>
-          <iframe
-            src={attachment.embed_url}
-            title={attachment.title || 'Video'}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
-            allowFullScreen
-            loading="lazy"
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (isDrive) {
-    return (
-      <div className="classroom-attachment-card" style={{ marginTop: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '20px' }}>📁</span>
-            <div>
-              <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>{attachment.title || 'Tài liệu Google Drive'}</h5>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>drive.google.com</span>
-            </div>
-          </div>
-          <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ padding: '4px 10px', fontSize: '12px' }}>
-            Xem ↗
-          </a>
-        </div>
-      </div>
-    );
-  }
-
+  const target = attachment.direct_url || attachment.url || '#';
+  const isVideo = ['youtube', 'video', 'drive_video'].includes(attachment.type);
+  const typeLabel = attachment.type === 'drive_folder' ? 'Thư mục Drive' : attachment.type === 'drive_file' ? 'Tệp Drive' : isVideo ? 'Video' : 'Liên kết';
   return (
-    <div className="classroom-attachment-card" style={{ marginTop: '10px' }}>
-      <a
-        href={targetUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', border: '1px solid var(--border-color)', textDecoration: 'none', color: 'var(--text-main)' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px' }}>🔗</span>
-          <div>
-            <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>{attachment.title || 'Liên kết tham khảo'}</h5>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Liên kết ngoài</span>
-          </div>
-        </div>
-        <span style={{ fontSize: '12px', color: 'var(--bdu-light)' }}>Mở ↗</span>
-      </a>
+    <div>
+      <div className="clan-attachment">
+        <div className="clan-attachment__copy"><strong>{attachment.title || 'Tài liệu đính kèm'}</strong><span>{typeLabel}</span></div>
+        <a href={target} target="_blank" rel="noopener noreferrer">Mở ↗</a>
+      </div>
+      {isVideo && attachment.embed_url && <div className="clan-video"><iframe src={attachment.embed_url} title={attachment.title || 'Video đính kèm'} allowFullScreen loading="lazy" /></div>}
     </div>
   );
 }
 
-function ClanCommentsInline({ postId, token }) {
-  const [newComment, setNewComment] = useState('');
+function ClanComments({ postId, token }) {
   const client = useQueryClient();
   const { notify } = useToasts();
+  const [draft, setDraft] = useState('');
   useRealtimeRoom(postId ? `community-post:${postId}` : null, Boolean(token));
-
-  const commentsQuery = useQuery({
+  const query = useQuery({
     queryKey: ['clan-post-comments', String(postId)],
     queryFn: ({ signal }) => getCommunityPostComments(token, postId, { signal }),
     enabled: Boolean(token && postId)
   });
-
-  const commentMutation = useMutation({
-    mutationFn: () => addCommunityPostComment(token, postId, { content: newComment.trim() }),
+  const create = useMutation({
+    mutationFn: () => addCommunityPostComment(token, postId, { content: draft.trim() }),
     onSuccess: () => {
-      setNewComment('');
+      setDraft('');
       client.invalidateQueries({ queryKey: ['clan-post-comments', String(postId)] });
       notify('Đã gửi trao đổi.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
   });
+  const comments = Array.isArray(query.data?.comments) ? query.data.comments : Array.isArray(query.data) ? query.data : [];
+  return <section className="clan-comments" aria-label="Bình luận bài đăng">
+    <form className="clan-comment-form" onSubmit={(event) => { event.preventDefault(); if (draft.trim()) create.mutate(); }}>
+      <label className="sr-only" htmlFor={`clan-comment-${postId}`}>Viết bình luận</label>
+      <input id={`clan-comment-${postId}`} className="form-input" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Viết trao đổi trong nhóm…" />
+      <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim() || create.isPending}>{create.isPending ? 'Đang gửi…' : 'Gửi'}</button>
+    </form>
+    {query.isLoading ? <span className="clan-panel-heading"><p>Đang tải bình luận…</p></span> : query.isError ? <button type="button" className="clan-text-action" onClick={() => query.refetch()}>Tải lại bình luận</button> : comments.length === 0 ? <span className="clan-panel-heading"><p>Chưa có trao đổi nào.</p></span> : <div className="clan-comment-list">{comments.map((comment) => <article className="clan-comment" key={comment.id}><Avatar name={comment.author?.name} size="member" /><div className="clan-comment__copy"><header><strong>{comment.author?.name || 'Thành viên CLB'}</strong><time dateTime={comment.created_at}>{formatRelativeTime(comment.created_at)}</time></header><p>{comment.content}</p></div></article>)}</div>}
+  </section>;
+}
 
-  const comments = Array.isArray(commentsQuery.data?.comments) ? commentsQuery.data.comments : Array.isArray(commentsQuery.data) ? commentsQuery.data : [];
-
-  return (
-    <div className="post-comments-section" style={{ display: 'block', marginTop: '14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (newComment.trim()) commentMutation.mutate();
-        }}
-        style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}
-      >
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Viết trao đổi trong nhóm..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          maxLength={2000}
-        />
-        <button
-          type="submit"
-          className="btn btn-primary btn-sm"
-          disabled={commentMutation.isPending || !newComment.trim()}
-        >
-          Gửi
-        </button>
-      </form>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {commentsQuery.isLoading ? (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Đang tải bình luận...</div>
-        ) : comments.length === 0 ? (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Chưa có thảo luận nào.</div>
-        ) : (
-          comments.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                display: 'flex',
-                gap: '10px',
-                padding: '8px 12px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)'
-              }}
-            >
-              <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', flexShrink: 0 }}>
-                {getInitials(c.author?.name || 'SV')}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <strong style={{ fontSize: '12px', color: 'var(--text-main)' }}>
-                    {c.author?.name || 'Thành viên CLB'}
-                  </strong>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {formatRelativeTime(c.created_at)}
-                  </span>
-                </div>
-                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: 'var(--text-dim)', whiteSpace: 'pre-line' }}>
-                  {c.content}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
+function ConfirmationDialog({ confirmation, onClose, onConfirm, isPending }) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(null);
+  const openerRef = useRef(null);
+  useViewportDialog(Boolean(confirmation), onClose, dialogRef, closeRef, openerRef);
+  if (!confirmation) return null;
+  return <ViewportModal id="modal-clan-confirmation" title={confirmation.title} onClose={onClose} dialogRef={dialogRef} className="clan-confirm">
+    <h2>{confirmation.title}</h2><p>{confirmation.message}</p>
+    <div className="clan-confirm__actions"><button ref={closeRef} type="button" className="btn btn-secondary" onClick={onClose}>Quay lại</button><button type="button" className={confirmation.danger ? 'btn btn-danger' : 'btn btn-primary'} onClick={onConfirm} disabled={isPending}>{isPending ? 'Đang xử lý…' : confirmation.confirmLabel || 'Xác nhận'}</button></div>
+  </ViewportModal>;
 }
 
 export default function ClanPage() {
@@ -224,21 +156,17 @@ export default function ClanPage() {
   const { notify } = useToasts();
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
-
-  const tab = ['feed', 'docs', 'members', 'requests', 'settings'].includes(params.get('tab'))
-    ? params.get('tab')
-    : 'feed';
-
-  const [feedFilter, setFeedFilter] = useState('all'); // all, discussion, poll, mine
+  const initialTab = ['feed', 'docs', 'members', 'requests', 'settings'].includes(params.get('tab')) ? params.get('tab') : 'feed';
+  const [feedFilter, setFeedFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [docSearch, setDocSearch] = useState('');
+  const [docOffset, setDocOffset] = useState(0);
   const [showComposer, setShowComposer] = useState(false);
   const [showJoinQuiz, setShowJoinQuiz] = useState(false);
   const [joinResult, setJoinResult] = useState(null);
-  const [composerMode, setComposerMode] = useState('discussion'); // discussion or poll
+  const [composerMode, setComposerMode] = useState('discussion');
   const [expandedComments, setExpandedComments] = useState({});
-
-  // Drafts
+  const [confirmation, setConfirmation] = useState(null);
   const [postDraft, setPostDraft] = useState({ title: '', content: '', url: '' });
   const [pollDraft, setPollDraft] = useState({ question: '', options: ['', ''] });
   const [clanDraft, setClanDraft] = useState({ name: '', description: '', tag: '' });
@@ -247,1081 +175,214 @@ export default function ClanPage() {
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [quizImportText, setQuizImportText] = useState('');
   const [quizImportFormat, setQuizImportFormat] = useState('json');
+  const [manualQuizDraft, setManualQuizDraft] = useState({ prompt: '', options: ['', ''], correctIndex: 0, explanation: '' });
   const composerDialogRef = useRef(null);
   const composerCloseRef = useRef(null);
   const composerOpenerRef = useRef(null);
   useViewportDialog(showComposer, () => setShowComposer(false), composerDialogRef, composerCloseRef, composerOpenerRef);
 
-  const clans = useQuery({
-    queryKey: ['clans', auth.user?.mssv],
-    queryFn: ({ signal }) => getClans(auth.token, { signal }),
-    enabled: Boolean(auth.token)
-  });
-
-  const clan = useMemo(
-    () => (Array.isArray(clans.data) ? clans.data : []).find((item) => String(item.id) === String(clanId)),
-    [clans.data, clanId]
-  );
-
+  const clansQuery = useQuery({ queryKey: ['clans', auth.user?.mssv], queryFn: ({ signal }) => getClans(auth.token, { signal }), enabled: Boolean(auth.token) });
+  const clan = useMemo(() => (Array.isArray(clansQuery.data) ? clansQuery.data : []).find((item) => String(item.id) === String(clanId)), [clanId, clansQuery.data]);
+  const memberCount = safeNumber(clan?.member_count);
+  const level = Math.max(1, safeNumber(clan?.level, 1));
+  const permissions = roleInfo(clan?.my_role);
   const isJoined = Boolean(clan?.is_joined);
-  const isLeader = clan?.my_role === 'leader';
   const queryBase = useMemo(() => ['clan', auth.user?.mssv, clanId], [auth.user?.mssv, clanId]);
-  const quizQuery = useQuery({
-    queryKey: [...queryBase, 'quiz'],
-    queryFn: ({ signal }) => getClanQuiz(auth.token, clanId, { signal }),
-    enabled: Boolean(auth.token && clanId && (showJoinQuiz || (isLeader && tab === 'settings')))
-  });
-  useRealtimeRoom(isJoined ? `clan:${clanId}` : null, Boolean(auth.token && isJoined));
+  const tabItems = useMemo(() => {
+    const tabs = [{ id: 'feed', label: 'Bản tin' }, { id: 'docs', label: 'Tài liệu' }, { id: 'members', label: 'Thành viên', count: memberCount }];
+    if (permissions.canReview) tabs.push({ id: 'requests', label: 'Yêu cầu', count: safeNumber(clan?.pending_request_count) });
+    if (permissions.canSettings) tabs.push({ id: 'settings', label: 'Quản trị' });
+    return tabs;
+  }, [clan?.pending_request_count, memberCount, permissions.canReview, permissions.canSettings]);
+  const tab = tabItems.some((item) => item.id === initialTab) ? initialTab : 'feed';
 
-  const postsQuery = useQuery({
+  useRealtimeRoom(isJoined ? `clan:${clanId}` : null, Boolean(auth.token && isJoined));
+  const quizQuery = useQuery({ queryKey: [...queryBase, 'quiz'], queryFn: ({ signal }) => getClanQuiz(auth.token, clanId, { signal }), enabled: Boolean(auth.token && clanId && (showJoinQuiz || (permissions.canSettings && tab === 'settings'))) });
+  const postsQuery = useInfiniteQuery({
     queryKey: [...queryBase, 'posts'],
-    queryFn: ({ signal }) =>
-      getCommunityPosts(auth.token, { scope: 'clan', scopeId: clanId, limit: 50, signal }),
+    queryFn: ({ pageParam = 0, signal }) => getCommunityPosts(auth.token, { scope: 'clan', scopeId: clanId, limit: POSTS_PER_PAGE, offset: pageParam, signal }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = safeNumber(lastPage?.offset) + postsFrom(lastPage).length;
+      return nextOffset < safeNumber(lastPage?.total) ? nextOffset : undefined;
+    },
     enabled: Boolean(auth.token && isJoined && tab === 'feed')
   });
-
   const documentsQuery = useQuery({
-    queryKey: [...queryBase, 'documents'],
-    queryFn: ({ signal }) => getClanDocuments(auth.token, clanId, { signal }),
+    queryKey: [...queryBase, 'documents', docFilter, docSearch, docOffset],
+    queryFn: ({ signal }) => getClanDocuments(auth.token, clanId, { type: docFilter, search: docSearch, limit: DOCS_PER_PAGE, offset: docOffset, signal }),
     enabled: Boolean(auth.token && isJoined && tab === 'docs')
   });
-
-  const membersQuery = useQuery({
-    queryKey: [...queryBase, 'members'],
-    queryFn: ({ signal }) => getClanMembers(auth.token, clanId, { signal }),
-    enabled: Boolean(auth.token && isJoined && tab === 'members')
-  });
-
-  const requestsQuery = useQuery({
-    queryKey: [...queryBase, 'requests'],
-    queryFn: ({ signal }) => getClanJoinRequests(auth.token, clanId, { signal }),
-    enabled: Boolean(auth.token && isLeader && tab === 'requests')
-  });
+  const membersQuery = useQuery({ queryKey: [...queryBase, 'members'], queryFn: ({ signal }) => getClanMembers(auth.token, clanId, { signal }), enabled: Boolean(auth.token && isJoined && tab === 'members') });
+  const requestsQuery = useQuery({ queryKey: [...queryBase, 'requests'], queryFn: ({ signal }) => getClanJoinRequests(auth.token, clanId, { signal }), enabled: Boolean(auth.token && permissions.canReview && tab === 'requests') });
 
   useEffect(() => {
-    if (clan) setClanDraft({ name: clan.name || '', description: clan.description || '', tag: clan.tag || '' });
+    if (clan) setClanDraft({ name: clan.name || '', description: clan.description || '', tag: cleanTag(clan.tag) });
   }, [clan]);
-
   useEffect(() => {
     if (quizQuery.data) {
       setQuizEnabled(Boolean(quizQuery.data.enabled));
-      setQuizMinCorrect(Number(quizQuery.data.min_correct || 0));
+      setQuizMinCorrect(safeNumber(quizQuery.data.min_correct));
     }
   }, [quizQuery.data]);
+  useEffect(() => {
+    if (initialTab !== tab) {
+      const next = new URLSearchParams(params);
+      next.set('tab', tab);
+      setParams(next, { replace: true });
+    }
+  }, [initialTab, params, setParams, tab]);
 
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['clans'] });
-    client.invalidateQueries({ queryKey: [...queryBase] });
+    client.invalidateQueries({ queryKey: queryBase });
   };
-
-  const join = useMutation({
-    mutationFn: ({ answers } = {}) => joinClan(auth.token, clanId, null, answers),
-    onSuccess: (data) => {
-      setJoinResult(data);
-      notify('Đã gửi yêu cầu tham gia.', 'success');
-      refresh();
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const leave = useMutation({
-    mutationFn: () => leaveClan(auth.token, clanId),
-    onSuccess: () => {
-      notify('Đã rời CLB.', 'success');
-      refresh();
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
+  const join = useMutation({ mutationFn: ({ answers } = {}) => joinClan(auth.token, clanId, null, answers), onSuccess: (data) => { setJoinResult(data); refresh(); notify(data?.status === 'approved' ? 'Bạn đã vào CLB.' : 'Yêu cầu tham gia đang chờ duyệt.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const cancelJoin = useMutation({ mutationFn: () => cancelClanJoinRequest(auth.token, clanId), onSuccess: () => { refresh(); notify('Đã hủy yêu cầu tham gia.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const leave = useMutation({ mutationFn: () => leaveClan(auth.token, clanId), onSuccess: () => { notify('Đã rời CLB.', 'success'); refresh(); }, onError: (error) => notify(error.message, 'error') });
   const createPost = useMutation({
-    mutationFn: () => {
-      if (composerMode === 'poll') {
-        return createCommunityPost(auth.token, {
-          title: pollDraft.question,
-          content: postDraft.content,
-          scope: 'clan',
-          scopeId: clanId,
-          category: 'poll',
-          poll: {
-            question: pollDraft.question,
-            options: pollDraft.options.filter((opt) => opt.trim())
-          }
-        });
-      }
-      return createCommunityPost(auth.token, {
-        title: postDraft.title,
-        content: postDraft.content,
-        scope: 'clan',
-        scopeId: clanId,
-        category: postDraft.url ? 'material' : 'discussion',
-        attachments: postDraft.url ? [{ url: postDraft.url, title: postDraft.title }] : []
-      });
-    },
-    onSuccess: () => {
-      setPostDraft({ title: '', content: '', url: '' });
-      setPollDraft({ question: '', options: ['', ''] });
-      setShowComposer(false);
-      client.invalidateQueries({ queryKey: [...queryBase, 'posts'] });
-      notify('Đã đăng bài trong CLB.', 'success');
-    },
+    mutationFn: () => composerMode === 'poll' ? createCommunityPost(auth.token, { title: pollDraft.question, content: postDraft.content, scope: 'clan', scopeId: clanId, category: 'poll', poll: { question: pollDraft.question, options: pollDraft.options.map((option) => option.trim()).filter(Boolean) } }) : createCommunityPost(auth.token, { title: postDraft.title, content: postDraft.content, scope: 'clan', scopeId: clanId, category: postDraft.url ? 'material' : 'discussion', attachments: postDraft.url ? [{ url: postDraft.url, title: postDraft.title || 'Tài liệu CLB' }] : [] }),
+    onSuccess: () => { setPostDraft({ title: '', content: '', url: '' }); setPollDraft({ question: '', options: ['', ''] }); setShowComposer(false); client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }); notify('Đã đăng bài trong CLB.', 'success'); },
     onError: (error) => notify(error.message, 'error')
   });
+  const like = useMutation({ mutationFn: (postId) => toggleCommunityPostLike(auth.token, postId), onSuccess: () => client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }), onError: (error) => notify(error.message, 'error') });
+  const removePost = useMutation({ mutationFn: (postId) => deleteCommunityPost(auth.token, postId), onSuccess: () => { client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }); notify('Đã xóa bài viết.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const vote = useMutation({ mutationFn: ({ pollId, optionId }) => voteClanPoll(auth.token, pollId, optionId), onSuccess: () => client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }), onError: (error) => notify(error.message, 'error') });
+  const review = useMutation({ mutationFn: ({ requestId, action }) => reviewClanJoinRequest(auth.token, clanId, requestId, action), onSuccess: () => { client.invalidateQueries({ queryKey: [...queryBase, 'requests'] }); refresh(); notify('Đã cập nhật yêu cầu gia nhập.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const role = useMutation({ mutationFn: ({ mssv, nextRole }) => updateClanMemberRole(auth.token, clanId, mssv, nextRole), onSuccess: () => { client.invalidateQueries({ queryKey: [...queryBase, 'members'] }); refresh(); notify('Đã cập nhật vai trò.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const kick = useMutation({ mutationFn: (mssv) => kickClanMember(auth.token, clanId, mssv), onSuccess: () => { client.invalidateQueries({ queryKey: [...queryBase, 'members'] }); refresh(); notify('Đã mời thành viên ra khỏi CLB.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const saveClan = useMutation({ mutationFn: () => updateClan(auth.token, clanId, clanDraft), onSuccess: () => { refresh(); notify('Đã lưu thông tin CLB.', 'success'); }, onError: (error) => notify(error.message, 'error') });
+  const saveQuiz = useMutation({ mutationFn: () => updateClanQuiz(auth.token, clanId, { enabled: quizEnabled, minCorrect: quizMinCorrect, ...(quizQuestions.length ? { questions: quizQuestions } : {}) }), onSuccess: (data) => { quizQuery.refetch(); setQuizQuestions([]); notify('Đã lưu cấu hình quiz gia nhập.', 'success'); if (data?.total) setQuizMinCorrect((current) => Math.min(current, data.total)); }, onError: (error) => notify(error.message, 'error') });
+  const destroy = useMutation({ mutationFn: () => disbandClan(auth.token, clanId), onSuccess: () => { notify('Đã giải tán CLB.', 'success'); navigate('/clans'); }, onError: (error) => notify(error.message, 'error') });
 
-  const like = useMutation({
-    mutationFn: (postId) => toggleCommunityPostLike(auth.token, postId),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }),
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const removePost = useMutation({
-    mutationFn: (postId) => deleteCommunityPost(auth.token, postId),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: [...queryBase, 'posts'] });
-      notify('Đã xóa bài viết.', 'success');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const vote = useMutation({
-    mutationFn: ({ pollId, optionId }) => voteClanPoll(auth.token, pollId, optionId),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...queryBase, 'posts'] }),
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const review = useMutation({
-    mutationFn: ({ requestId, action }) => reviewClanJoinRequest(auth.token, clanId, requestId, action),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: [...queryBase, 'requests'] });
-      refresh();
-      notify('Đã cập nhật yêu cầu gia nhập.', 'success');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const role = useMutation({
-    mutationFn: ({ mssv, nextRole }) => updateClanMemberRole(auth.token, clanId, mssv, nextRole),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: [...queryBase, 'members'] });
-      refresh();
-      notify('Đã cập nhật vai trò.', 'success');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const kick = useMutation({
-    mutationFn: (mssv) => kickClanMember(auth.token, clanId, mssv),
-    onSuccess: () => {
-      client.invalidateQueries({ queryKey: [...queryBase, 'members'] });
-      refresh();
-      notify('Đã xóa thành viên.', 'success');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const saveClan = useMutation({
-    mutationFn: () => updateClan(auth.token, clanId, clanDraft),
-    onSuccess: () => {
-      refresh();
-      notify('Đã lưu thông tin CLB.', 'success');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const saveQuiz = useMutation({
-    mutationFn: () => updateClanQuiz(auth.token, clanId, {
-      enabled: quizEnabled,
-      minCorrect: quizMinCorrect,
-      questions: quizQuestions
-    }),
-    onSuccess: (data) => {
-      quizQuery.refetch();
-      setQuizQuestions([]);
-      notify('Đã lưu cấu hình quiz gia nhập.', 'success');
-      if (data?.total) setQuizMinCorrect(Math.min(quizMinCorrect, data.total));
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const destroy = useMutation({
-    mutationFn: () => disbandClan(auth.token, clanId),
-    onSuccess: () => {
-      notify('Đã giải tán CLB.', 'success');
-      navigate('/clans');
-    },
-    onError: (error) => notify(error.message, 'error')
-  });
-
-  const switchTab = (value) => {
-    const next = new URLSearchParams(params);
-    next.set('tab', value);
-    setParams(next, { replace: false });
+  const addManualQuizQuestion = () => {
+    const prompt = manualQuizDraft.prompt.trim();
+    const options = manualQuizDraft.options.map((option) => option.trim()).filter(Boolean);
+    const correctIndex = Number(manualQuizDraft.correctIndex);
+    if (!prompt) return notify('Vui lòng nhập nội dung câu hỏi.', 'warning');
+    if (options.length < 2) return notify('Mỗi câu hỏi cần ít nhất 2 lựa chọn.', 'warning');
+    if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) return notify('Hãy chọn một đáp án đúng hợp lệ.', 'warning');
+    if (quizQuestions.length >= 30) return notify('Quiz chỉ được tối đa 30 câu hỏi.', 'warning');
+    setQuizQuestions((current) => [...current, { question: prompt, options, correctIndex, explanation: manualQuizDraft.explanation.trim() }]);
+    setQuizMinCorrect((current) => Math.min(current, quizQuestions.length + 1));
+    setManualQuizDraft({ prompt: '', options: ['', ''], correctIndex: 0, explanation: '' });
+    notify('Đã thêm câu hỏi thủ công.', 'success');
   };
 
-  const rawPosts = postsFrom(postsQuery.data);
+  const rawPosts = useMemo(() => postsQuery.data?.pages?.flatMap(postsFrom) || [], [postsQuery.data]);
   const posts = useMemo(() => {
-    if (feedFilter === 'discussion') return rawPosts.filter((p) => p.category !== 'poll');
-    if (feedFilter === 'poll') return rawPosts.filter((p) => p.category === 'poll' || p.poll);
-    if (feedFilter === 'mine') return rawPosts.filter((p) => Boolean(p.is_mine));
+    if (feedFilter === 'discussion') return rawPosts.filter((post) => post.category !== 'poll' && !post.poll);
+    if (feedFilter === 'poll') return rawPosts.filter((post) => post.category === 'poll' || post.poll);
+    if (feedFilter === 'mine') return rawPosts.filter((post) => Boolean(post.is_mine));
     return rawPosts;
-  }, [rawPosts, feedFilter]);
-
-  const rawDocuments = useMemo(
-    () => (Array.isArray(documentsQuery.data?.documents) ? documentsQuery.data.documents : []),
-    [documentsQuery.data]
-  );
-  const documents = useMemo(() => {
-    return rawDocuments.filter((doc) => {
-      const matchType = docFilter === 'all' || doc.type === docFilter;
-      const matchSearch = !docSearch || `${doc.title} ${doc.author_name}`.toLowerCase().includes(docSearch.toLowerCase());
-      return matchType && matchSearch;
-    });
-  }, [rawDocuments, docFilter, docSearch]);
-
+  }, [feedFilter, rawPosts]);
+  const postTotal = safeNumber(postsQuery.data?.pages?.[0]?.total);
+  const documents = Array.isArray(documentsQuery.data?.documents) ? documentsQuery.data.documents : [];
+  const documentTotal = safeNumber(documentsQuery.data?.total);
+  const documentStats = documentsQuery.data?.stats || {};
   const members = Array.isArray(membersQuery.data) ? membersQuery.data : [];
   const requests = Array.isArray(requestsQuery.data) ? requestsQuery.data : [];
 
-  if (!clan && !clans.isLoading) {
-    return (
-      <section id="tab-clans" className="tab-pane active">
-        <div className="section-header-box glass-panel">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/clans')}>
-            ← Quay lại danh sách CLB
-          </button>
-          <div className="state-card error-state" style={{ marginTop: '20px' }}>
-            Không tìm thấy CLB hoặc bạn không có quyền xem.
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const switchTab = (nextTab) => {
+    const next = new URLSearchParams(params);
+    next.set('tab', nextTab);
+    setParams(next, { replace: false });
+  };
+  const onTabsKeyDown = (event) => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = tabItems.findIndex((item) => item.id === tab);
+    const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabItems.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabItems.length) % tabItems.length;
+    switchTab(tabItems[target].id);
+    document.getElementById(`clan-tab-${tabItems[target].id}`)?.focus();
+  };
+  const setDocumentFilter = (nextFilter) => { setDocFilter(nextFilter); setDocOffset(0); };
+  const openComposer = (mode, event) => { setComposerMode(mode); composerOpenerRef.current = event.currentTarget; setShowComposer(true); };
+  const submitPost = () => {
+    if (composerMode === 'poll') {
+      if (!pollDraft.question.trim()) return notify('Vui lòng nhập câu hỏi bình chọn.', 'warning');
+      if (pollDraft.options.filter((option) => option.trim()).length < 2) return notify('Bình chọn cần ít nhất hai phương án.', 'warning');
+    } else if (!postDraft.title.trim() && !postDraft.content.trim()) return notify('Vui lòng nhập tiêu đề hoặc nội dung bài viết.', 'warning');
+    createPost.mutate();
+  };
+  const confirmAction = () => {
+    const action = confirmation;
+    setConfirmation(null);
+    if (action?.kind === 'leave') leave.mutate();
+    if (action?.kind === 'delete-post') removePost.mutate(action.postId);
+    if (action?.kind === 'kick') kick.mutate(action.mssv);
+    if (action?.kind === 'transfer-role') role.mutate({ mssv: action.mssv, nextRole: action.nextRole });
+    if (action?.kind === 'disband') destroy.mutate();
+  };
+  const confirmationPending = Boolean(leave.isPending || removePost.isPending || kick.isPending || role.isPending || destroy.isPending);
 
-  if (!clan) {
-    return (
-      <section id="tab-clans" className="tab-pane active">
-        <div className="loading-spinner-box glass-panel" style={{ textAlign: 'center', padding: '60px' }}>
-          <div className="spinner"></div>
-          <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Đang tải dữ liệu CLB...</p>
-        </div>
-      </section>
-    );
-  }
+  if (!clan && !clansQuery.isLoading) return <section id="tab-clans" className="tab-pane clan-experience"><div className="clan-state-card" role="alert"><h2>Không tìm thấy CLB này</h2><p>CLB có thể không tồn tại hoặc bạn không có quyền xem.</p><button type="button" className="btn btn-secondary" onClick={() => navigate('/clans')}>Quay lại danh sách</button></div></section>;
+  if (!clan) return <section id="tab-clans" className="tab-pane clan-experience"><div className="clan-state-card" role="status"><h2>Đang tải CLB…</h2></div></section>;
 
-  const roleLabel =
-    clan.my_role === 'leader'
-      ? '👑 Bang Chủ'
-      : clan.my_role === 'vice_leader'
-        ? 'Phó Bang'
-        : clan.my_role === 'elder'
-          ? 'Trưởng Lão'
-          : 'Thành viên';
+  const guestPreview = <div className="clan-guest-preview">
+    <div className="clan-guest-preview__copy"><h2>Nội dung dành cho thành viên</h2><p>Bản tin, tài liệu và trao đổi của {memberCount} thành viên sẽ mở sau khi bạn được chấp thuận.</p></div>
+    <div className="clan-guest-preview__cta"><p>{clan.has_pending_request ? 'Yêu cầu của bạn đang chờ quản trị CLB xét duyệt.' : 'Gửi yêu cầu tham gia để mở không gian nội bộ.'}</p>{clan.has_pending_request ? <button type="button" className="btn btn-secondary" onClick={() => cancelJoin.mutate()} disabled={cancelJoin.isPending}>{cancelJoin.isPending ? 'Đang hủy…' : 'Hủy yêu cầu'}</button> : <button type="button" className="btn btn-primary" onClick={() => { setJoinResult(null); setShowJoinQuiz(true); }}>Tham gia CLB</button>}</div>
+  </div>;
 
-  return (
-    <section id="tab-clans" className="tab-pane active">
-      <div id="clan-channel-view" className="clan-channel-view">
-        {/* Hero Card faithful to production */}
-        <div className="channel-hero-card glass-panel">
-          <div className="channel-hero-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <button
-              type="button"
-              id="btn-back-to-clans"
-              className="btn btn-secondary btn-sm"
-              onClick={() => navigate('/clans')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-              </svg>
-              Quay lại danh sách
-            </button>
-            <div id="channel-action-box">
-              {isJoined ? (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => {
-                    if (window.confirm('Bạn chắc chắn muốn rời CLB này?')) leave.mutate();
-                  }}
-                  disabled={leave.isPending}
-                >
-                  Rời CLB
-                </button>
-              ) : clan.has_pending_request ? (
-                <span className="badge-pending" style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: 'rgba(234, 179, 8, 0.15)', color: '#eab308' }}>
-                  Đang chờ duyệt
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => { setJoinResult(null); setShowJoinQuiz(true); }}
-                  disabled={join.isPending}
-                >
-                  Xin tham gia
-                </button>
-              )}
-            </div>
-          </div>
+  return <section id="tab-clans" className="tab-pane clan-experience">
+    <div className="clan-detail-page">
+      <button type="button" className="clan-back-link" onClick={() => navigate('/clans')}>← Tất cả CLB & nhóm học tập</button>
+      <header className="clan-detail-hero">
+        <div className="clan-detail-hero__main"><Avatar name={clan.name} url={clan.avatar_url} size="hero" /><div className="clan-detail-hero__copy"><span className="clan-eyebrow">[{cleanTag(clan.tag)}] · Cấp {level}</span><h1>{clan.name}</h1><p>{clan.description || 'Không gian học tập và sinh hoạt nội bộ dành cho thành viên CLB.'}</p><div className="clan-detail-hero__facts"><span><strong>{memberCount}</strong> thành viên</span><span><strong>{safeNumber(clan.xp)}</strong> XP</span>{isJoined && <span>Vai trò: <strong>{permissions.label}</strong></span>}</div></div></div>
+        <div className="clan-detail-hero__actions">{isJoined ? clan.my_role === 'leader' ? <p className="clan-leader-note">Bạn là Bang chủ. Hãy chuyển quyền trong mục Thành viên trước khi rời CLB, hoặc giải tán CLB trong phần Quản trị.</p> : <button type="button" className="btn btn-secondary" onClick={() => setConfirmation({ kind: 'leave', title: 'Rời CLB?', message: 'Bạn sẽ không còn xem được bản tin, tài liệu và khu vực nội bộ của CLB này.', confirmLabel: 'Rời CLB', danger: true })}>Rời CLB</button> : clan.has_pending_request ? <><span className="clan-status-chip">Đang chờ duyệt</span><button type="button" className="clan-text-action" onClick={() => cancelJoin.mutate()} disabled={cancelJoin.isPending}>{cancelJoin.isPending ? 'Đang hủy…' : 'Hủy yêu cầu'}</button></> : <button type="button" className="btn btn-primary" onClick={() => { setJoinResult(null); setShowJoinQuiz(true); }}>Xin tham gia CLB</button>}</div>
+      </header>
 
-          <div className="channel-hero-content">
-            <div className="channel-badge-box" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
-              <span id="channel-clan-tag" className="clan-tag-badge" style={{ fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.2)', color: 'var(--bdu-light)' }}>
-                [{clan.tag || 'TAG'}]
-              </span>
-              <span id="channel-clan-level" className="clan-level-badge" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Cấp 1
-              </span>
-            </div>
-            <h3 id="channel-clan-name" className="channel-title" style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: 'var(--text-main)' }}>
-              {clan.name}
-            </h3>
-            <p id="channel-clan-desc" className="channel-desc" style={{ margin: '0 0 16px 0', color: 'var(--text-dim)', fontSize: '14px', lineHeight: 1.5 }}>
-              {clan.description || 'Không gian học tập và sinh hoạt nội bộ của thành viên.'}
-            </p>
-            <div className="channel-meta-row" style={{ display: 'flex', gap: '20px', alignItems: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <span id="channel-clan-members" className="meta-item">
-                👥 {clan.member_count || members.length || 1} Thành viên
-              </span>
-              {isJoined && (
-                <span id="channel-clan-role" className="meta-item role-item" style={{ color: 'var(--bdu-light)', fontWeight: 600 }}>
-                  {roleLabel}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="clan-tabs" role="tablist" aria-label="Khu vực CLB" onKeyDown={onTabsKeyDown}>{tabItems.map((item) => <button key={item.id} id={`clan-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls={`clan-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => switchTab(item.id)}>{item.label}{item.count !== undefined && <span className="clan-count-badge">{item.count}</span>}</button>)}</div>
 
-        {/* Subtabs Nav */}
-        <div className="channel-subtabs-nav" style={{ display: 'flex', gap: '10px', margin: '20px 0', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', overflowX: 'auto' }}>
-          <button
-            type="button"
-            className={`channel-subtab-btn ${tab === 'feed' ? 'active' : ''}`}
-            onClick={() => switchTab('feed')}
-          >
-            📰 Bản Tin CLB
-          </button>
-          <button
-            type="button"
-            className={`channel-subtab-btn ${tab === 'docs' ? 'active' : ''}`}
-            onClick={() => switchTab('docs')}
-          >
-            📚 Kho Tài Liệu ({rawDocuments.length})
-          </button>
-          <button
-            type="button"
-            className={`channel-subtab-btn ${tab === 'members' ? 'active' : ''}`}
-            onClick={() => switchTab('members')}
-          >
-            👥 Thành Viên ({members.length})
-          </button>
-          {isLeader && (
-            <button
-              type="button"
-              className={`channel-subtab-btn ${tab === 'requests' ? 'active' : ''}`}
-              onClick={() => switchTab('requests')}
-            >
-              📥 Yêu Cầu Gia Nhập ({requests.length})
-            </button>
-          )}
-          {isLeader && (
-            <button
-              type="button"
-              className={`channel-subtab-btn ${tab === 'settings' ? 'active' : ''}`}
-              onClick={() => switchTab('settings')}
-            >
-              ⚙️ Quản Trị CLB
-            </button>
-          )}
-        </div>
+      {!isJoined ? <div id={`clan-panel-${tab}`} role="tabpanel" aria-labelledby={`clan-tab-${tab}`} className="clan-panel clan-panel-card">{guestPreview}</div> : <>
+        {tab === 'feed' && <div id="clan-panel-feed" role="tabpanel" aria-labelledby="clan-tab-feed" className="clan-panel">
+          {permissions.canPost && <div className="clan-panel-card"><button type="button" className="clan-composer-trigger" onClick={(event) => openComposer('discussion', event)}><Avatar name={auth.user?.name} size="member" /><span className="clan-composer-trigger__copy"><strong>Chia sẻ với CLB</strong><span>Đăng câu hỏi, cập nhật hoặc tài liệu học tập</span></span></button><div className="clan-composer-actions"><button type="button" className="btn btn-secondary btn-sm" onClick={(event) => openComposer('discussion', event)}>Viết bài</button>{permissions.canPoll && <button type="button" className="btn btn-secondary btn-sm" onClick={(event) => openComposer('poll', event)}>Tạo bình chọn</button>}</div></div>}
+          <div className="clan-feed-filter"><div className="clan-doc-filter" role="group" aria-label="Lọc bản tin">{[['all', 'Tất cả'], ['discussion', 'Thảo luận'], ['poll', 'Bình chọn'], ['mine', 'Của tôi']].map(([value, label]) => <button type="button" key={value} className={feedFilter === value ? 'is-active' : ''} aria-pressed={feedFilter === value} onClick={() => setFeedFilter(value)}>{label}</button>)}</div>{postsQuery.isSuccess && <span className="clan-feed-filter__summary">Đã tải {rawPosts.length}/{postTotal} bài</span>}</div>
+          {postsQuery.isLoading ? <div className="clan-state-card" role="status"><h2>Đang tải bản tin…</h2></div> : postsQuery.isError ? <PanelError message={postsQuery.error?.message} onRetry={() => postsQuery.refetch()} /> : posts.length === 0 ? <div className="clan-state-card"><h2>Chưa có bài đăng phù hợp</h2><p>{feedFilter === 'all' ? 'Hãy bắt đầu cuộc trao đổi đầu tiên của CLB.' : 'Hãy thử bộ lọc khác hoặc đăng một nội dung mới.'}</p></div> : <div className="clan-feed-list">{posts.map((post) => {
+            const poll = post.poll;
+            const postLabel = post.category === 'poll' || poll ? 'Bình chọn' : post.category === 'material' ? 'Tài liệu' : 'Thảo luận';
+            const canDelete = Boolean(post.is_mine || permissions.canDeleteAny);
+            return <article className="clan-post" key={post.id}><div className="clan-post__meta"><div className="clan-post__author"><Avatar name={post.author?.name} url={post.author?.avatar_url} size="member" /><div className="clan-post__author-copy"><strong>{post.author?.name || 'Thành viên CLB'}</strong><span>{post.author?.clan_role ? roleLabels[post.author.clan_role] || 'Thành viên' : 'Thành viên'} · <time dateTime={post.created_at}>{formatRelativeTime(post.created_at)}</time></span></div></div><div className="clan-post__badges">{post.is_pinned && <span className="clan-post__badge clan-post__badge--pinned">Đã ghim</span>}<span className="clan-post__badge">{postLabel}</span></div></div><h3>{post.title || (poll?.question || 'Bài đăng CLB')}</h3>{post.content && <p className="clan-post__content">{post.content}</p>}{Array.isArray(post.attachments) && post.attachments.length > 0 && <div className="clan-attachments">{post.attachments.map((attachment, index) => <AttachmentRenderer attachment={attachment} key={`${post.id}-${index}`} />)}</div>}{poll && <div className="clan-poll"><p className="clan-poll__question">{poll.question || post.title}</p>{(poll.options || []).map((option) => <button type="button" key={option.id} className={`clan-poll__option ${option.is_voted ? 'is-voted' : ''}`} style={{ '--vote': `${safeNumber(option.percentage)}%` }} onClick={() => vote.mutate({ pollId: poll.id, optionId: option.id })} disabled={vote.isPending}><span><span>{option.text || option.option_text}</span><span>{safeNumber(option.percentage)}%</span></span><small className="clan-poll__meta">{safeNumber(option.vote_count)} lượt chọn</small></button>)}</div>}<footer className="clan-post__footer"><div className="clan-post__actions"><button type="button" className={post.is_liked ? 'is-active' : ''} onClick={() => like.mutate(post.id)} disabled={like.isPending}>♥ {safeNumber(post.like_count)}</button><button type="button" onClick={() => setExpandedComments((current) => ({ ...current, [post.id]: !current[post.id] }))}>◌ {safeNumber(post.comment_count)} bình luận</button>{canDelete && <button type="button" className="clan-danger-text" onClick={() => setConfirmation({ kind: 'delete-post', postId: post.id, title: 'Xóa bài đăng?', message: 'Bài đăng và các tương tác liên quan sẽ không còn hiển thị trong CLB.', confirmLabel: 'Xóa bài', danger: true })}>Xóa</button>}</div></footer>{expandedComments[post.id] && <ClanComments postId={post.id} token={auth.token} />}</article>;
+          })}</div>}
+          {postsQuery.hasNextPage && <div className="clan-load-more"><button type="button" className="btn btn-secondary" onClick={() => postsQuery.fetchNextPage()} disabled={postsQuery.isFetchingNextPage}>{postsQuery.isFetchingNextPage ? 'Đang tải…' : 'Tải thêm bài đăng'}</button></div>}
+        </div>}
 
-        {/* Guest alert if not joined */}
-        {!isJoined && tab !== 'settings' && (
-          <div className="glass-panel" style={{ textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
-            <span style={{ fontSize: '32px', display: 'block', marginBottom: '10px' }}>🔒</span>
-            <h4>Khu vực dành riêng cho thành viên CLB</h4>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              Hãy nhấn nút <strong>Xin tham gia</strong> ở góc trên để theo dõi bản tin, tài liệu và các cuộc thảo luận!
-            </p>
-          </div>
-        )}
+        {tab === 'docs' && <div id="clan-panel-docs" role="tabpanel" aria-labelledby="clan-tab-docs" className="clan-panel clan-panel-card"><div className="clan-panel-heading"><div><h2>Kho tài liệu</h2><p>Tài liệu được tổng hợp từ các bài viết có đính kèm trong CLB.</p></div>{documentsQuery.isSuccess && <span className="clan-count-badge">{documentTotal} mục</span>}</div><div className="clan-doc-toolbar"><div className="clan-doc-filter" role="group" aria-label="Loại tài liệu">{[['all', 'Tất cả'], ['drive_folder', 'Thư mục'], ['drive_file', 'Tệp'], ['video', 'Video'], ['link', 'Liên kết']].map(([value, label]) => <button type="button" key={value} className={docFilter === value ? 'is-active' : ''} aria-pressed={docFilter === value} onClick={() => setDocumentFilter(value)}>{label}</button>)}</div><label className="clan-search-field clan-doc-search" htmlFor="clan-doc-search">Tìm tài liệu<div className="clan-search-field__control"><span aria-hidden="true">⌕</span><input id="clan-doc-search" type="search" value={docSearch} onChange={(event) => { setDocSearch(event.target.value); setDocOffset(0); }} placeholder="Tên tài liệu hoặc người chia sẻ" /></div></label></div>{documentsQuery.isLoading ? <div className="clan-state-card" role="status"><h2>Đang tải tài liệu…</h2></div> : documentsQuery.isError ? <PanelError message={documentsQuery.error?.message} onRetry={() => documentsQuery.refetch()} /> : <>{<div className="clan-doc-stats"><div className="clan-doc-stat"><strong>{safeNumber(documentStats.total_files)}</strong><span>Tổng tài liệu</span></div><div className="clan-doc-stat"><strong>{safeNumber(documentStats.folders)}</strong><span>Thư mục</span></div><div className="clan-doc-stat"><strong>{safeNumber(documentStats.files)}</strong><span>Tệp</span></div><div className="clan-doc-stat"><strong>{safeNumber(documentStats.videos)}</strong><span>Video</span></div></div>}{documents.length === 0 ? <div className="clan-state-card"><h2>Chưa có tài liệu phù hợp</h2><p>Hãy thử đổi bộ lọc hoặc chia sẻ tài liệu qua một bài đăng.</p></div> : <div className="clan-doc-grid">{documents.map((doc) => <article className="clan-document" key={doc.id}><span className="clan-document__type">{doc.type === 'drive_folder' ? 'Thư mục' : doc.type === 'drive_file' ? 'Tệp Drive' : ['youtube', 'drive_video', 'video'].includes(doc.type) ? 'Video' : 'Liên kết'}</span><h3>{doc.title || 'Tài liệu học tập'}</h3><p>{doc.author_name || 'Thành viên CLB'} · {formatRelativeTime(doc.created_at)}</p><a href={doc.direct_url || doc.url} target="_blank" rel="noopener noreferrer">Mở tài liệu ↗</a></article>)}</div>}{docOffset + documents.length < documentTotal && <div className="clan-load-more"><button type="button" className="btn btn-secondary" onClick={() => setDocOffset((current) => current + DOCS_PER_PAGE)}>Tải thêm tài liệu</button></div>}</>}</div>}
 
-        {/* Panel 1: Bản Tin & Thảo Luận */}
-        {isJoined && tab === 'feed' && (
-          <div id="channel-panel-feed" className="channel-panel">
-            {/* Quick Composer Trigger Bar */}
-            <div className="clan-quick-composer glass-panel" style={{ padding: '16px', borderRadius: 'var(--radius-lg)', marginBottom: '16px' }}>
-              <div
-                className="quick-composer-row"
-                id="clan-quick-composer-trigger"
-                onClick={(event) => {
-                  setComposerMode('discussion');
-                  composerOpenerRef.current = event.currentTarget;
-                  setShowComposer(true);
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
-              >
-                <div id="clan-quick-composer-avatar" className="quick-composer-avatar avatar-circle" style={{ width: '40px', height: '40px', fontSize: '14px', flexShrink: 0 }}>
-                  {getInitials(auth.user?.name || 'SV')}
-                </div>
-                <div className="quick-composer-fake-input" style={{ flex: 1, padding: '10px 16px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-color)', borderRadius: '999px', color: 'var(--text-muted)', fontSize: '14px' }}>
-                  <span id="clan-quick-composer-placeholder">Bạn ơi, bạn đang nghĩ gì thế?</span>
-                </div>
+        {tab === 'members' && <div id="clan-panel-members" role="tabpanel" aria-labelledby="clan-tab-members" className="clan-panel clan-panel-card"><div className="clan-panel-heading"><div><h2>Thành viên</h2><p>Danh sách được sắp theo vai trò và đóng góp trong CLB.</p></div><span className="clan-count-badge">{memberCount} thành viên</span></div>{membersQuery.isLoading ? <div className="clan-state-card" role="status"><h2>Đang tải thành viên…</h2></div> : membersQuery.isError ? <PanelError message={membersQuery.error?.message} onRetry={() => membersQuery.refetch()} /> : members.length === 0 ? <div className="clan-state-card"><h2>Chưa có thành viên nào</h2></div> : <div className="clan-member-list">{members.map((member) => <article className="clan-member" key={member.mssv}><div className="clan-member__identity"><Avatar name={member.full_name || member.mssv} size="member" /><div className="clan-member__copy"><strong>{member.full_name || member.mssv}</strong><span>{member.mssv} · {roleLabels[member.role] || 'Thành viên'}{member.contribution_points ? ` · ${member.contribution_points} điểm` : ''}</span></div></div><div className="clan-member__actions"><span className="clan-role-label">{roleLabels[member.role] || 'Thành viên'}</span>{permissions.canAssignRoles && member.mssv !== auth.user?.mssv && <select value={member.role} aria-label={`Đổi vai trò của ${member.full_name || member.mssv}`} onChange={(event) => { if (event.target.value !== member.role) setConfirmation({ kind: 'transfer-role', mssv: member.mssv, nextRole: event.target.value, title: event.target.value === 'leader' ? 'Chuyển quyền Bang chủ?' : 'Đổi vai trò thành viên?', message: event.target.value === 'leader' ? 'Bạn sẽ trở thành thành viên thường và không còn quyền quản trị CLB sau khi chuyển quyền.' : `Vai trò của ${member.full_name || member.mssv} sẽ được cập nhật.`, confirmLabel: 'Xác nhận thay đổi' }); }}><option value="leader">Bang chủ</option><option value="vice_leader">Phó bang</option><option value="elder">Trưởng lão</option><option value="member">Thành viên</option></select>}{permissions.canManageMembers && member.role !== 'leader' && member.mssv !== auth.user?.mssv && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirmation({ kind: 'kick', mssv: member.mssv, title: 'Mời thành viên ra khỏi CLB?', message: `${member.full_name || member.mssv} sẽ mất quyền truy cập không gian nội bộ của CLB.`, confirmLabel: 'Mời ra khỏi CLB', danger: true })}>Mời rời CLB</button>}</div></article>)}</div>}</div>}
+
+        {tab === 'requests' && permissions.canReview && <div id="clan-panel-requests" role="tabpanel" aria-labelledby="clan-tab-requests" className="clan-panel clan-panel-card"><div className="clan-panel-heading"><div><h2>Yêu cầu gia nhập</h2><p>Xét duyệt các yêu cầu đang chờ của sinh viên.</p></div><span className="clan-count-badge">{safeNumber(clan.pending_request_count)} chờ duyệt</span></div>{requestsQuery.isLoading ? <div className="clan-state-card" role="status"><h2>Đang tải yêu cầu…</h2></div> : requestsQuery.isError ? <PanelError message={requestsQuery.error?.message} onRetry={() => requestsQuery.refetch()} /> : requests.length === 0 ? <div className="clan-state-card"><h2>Không có yêu cầu chờ duyệt</h2><p>Các yêu cầu mới sẽ xuất hiện tại đây.</p></div> : <div className="clan-request-list">{requests.map((request) => <article className="clan-request" key={request.id}><div className="clan-request__identity"><Avatar name={request.full_name || request.mssv} url={request.avatar_url} size="member" /><div className="clan-request__copy"><strong>{request.full_name || request.mssv}</strong><span>{request.mssv} · {formatRelativeTime(request.created_at)}</span>{request.message && <span>Lời nhắn: {request.message}</span>}{request.quiz_score !== null && request.quiz_score !== undefined && <span>Quiz: {request.quiz_score}/{request.quiz_total} · {request.quiz_passed ? 'Đạt ngưỡng' : 'Chờ xét duyệt'}</span>}</div></div><div className="clan-request__actions"><button type="button" className="btn btn-primary btn-sm" onClick={() => review.mutate({ requestId: request.id, action: 'approve' })} disabled={review.isPending}>Duyệt</button><button type="button" className="btn btn-secondary btn-sm" onClick={() => review.mutate({ requestId: request.id, action: 'reject' })} disabled={review.isPending}>Từ chối</button></div></article>)}</div>}</div>}
+
+        {tab === 'settings' && permissions.canSettings && <div id="clan-panel-settings" role="tabpanel" aria-labelledby="clan-tab-settings" className="clan-panel clan-settings">
+          <form className="clan-panel-card clan-settings-form" onSubmit={(event) => { event.preventDefault(); saveClan.mutate(); }}>
+            <div className="clan-panel-heading"><div><h2>Thông tin công khai</h2><p>Những gì sinh viên thấy trước khi tham gia.</p></div></div>
+            <div className="clan-settings-form__two-columns"><label htmlFor="clan-name">Tên CLB<input id="clan-name" className="form-input" value={clanDraft.name} onChange={(event) => setClanDraft({ ...clanDraft, name: event.target.value })} required /></label><label htmlFor="clan-tag">Tag<input id="clan-tag" className="form-input" value={clanDraft.tag} onChange={(event) => setClanDraft({ ...clanDraft, tag: event.target.value })} /></label></div>
+            <label htmlFor="clan-description">Mô tả<textarea id="clan-description" className="form-input" rows={3} value={clanDraft.description} onChange={(event) => setClanDraft({ ...clanDraft, description: event.target.value })} /></label>
+            <div className="clan-settings-actionbar"><button type="submit" className="btn btn-primary" disabled={saveClan.isPending}>{saveClan.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}</button></div>
+          </form>
+
+          <form className="clan-panel-card clan-quiz-form" onSubmit={(event) => { event.preventDefault(); saveQuiz.mutate(); }}>
+            <div className="clan-settings-row"><div><h2>Quiz gia nhập</h2><p>{quizQuestions.length || quizQuery.data?.total || 0}/30 câu hỏi</p></div><label className="clan-quiz-form__toggle"><input type="checkbox" checked={quizEnabled} onChange={(event) => setQuizEnabled(event.target.checked)} /><span>Bật quiz</span></label></div>
+            {quizEnabled && <label className="clan-quiz-threshold" htmlFor="quiz-min-correct">Số câu đúng tối thiểu<input id="quiz-min-correct" className="form-input" type="number" min="0" max={quizQuestions.length || quizQuery.data?.total || 30} value={quizMinCorrect} onChange={(event) => setQuizMinCorrect(Number(event.target.value))} /></label>}
+            <details className="clan-disclosure">
+              <summary>Soạn hoặc nhập câu hỏi</summary>
+              <div className="clan-disclosure__body">
+                <div className="clan-quiz-import-grid"><label htmlFor="quiz-format">Định dạng<select id="quiz-format" className="form-input" value={quizImportFormat} onChange={(event) => setQuizImportFormat(event.target.value)}><option value="json">JSON</option><option value="csv">CSV</option></select></label><label htmlFor="quiz-import">Nội dung câu hỏi<textarea id="quiz-import" className="form-input quiz-import-textarea" rows={5} value={quizImportText} onChange={(event) => setQuizImportText(event.target.value)} placeholder={QUIZ_IMPORT_SCHEMA} /></label></div>
+                <div className="clan-quiz-import-actions"><label>Chọn file {quizImportFormat.toUpperCase()}<input type="file" accept={quizImportFormat === 'json' ? '.json,application/json' : '.csv,text/csv'} hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) file.text().then(setQuizImportText).catch(() => notify('Không thể đọc file quiz.', 'error')); }} /></label><button type="button" className="btn btn-secondary btn-sm" onClick={() => { try { const parsed = parseQuizText(quizImportText, quizImportFormat); setQuizQuestions(parsed); setQuizMinCorrect((current) => Math.min(current, parsed.length)); notify(`Đã nạp ${parsed.length} câu hỏi.`, 'success'); } catch (error) { notify(error.message, 'error'); } }}>Nạp câu hỏi</button></div>
+                <details className="clan-disclosure clan-disclosure--nested"><summary>Thêm câu hỏi thủ công</summary><div className="clan-disclosure__body clan-quiz-manual"><label htmlFor="manual-quiz-prompt">Nội dung câu hỏi<input id="manual-quiz-prompt" className="form-input" value={manualQuizDraft.prompt} onChange={(event) => setManualQuizDraft({ ...manualQuizDraft, prompt: event.target.value })} placeholder="Nội dung câu hỏi…" /></label><div className="clan-quiz-options">{manualQuizDraft.options.map((option, index) => <label htmlFor={`manual-quiz-option-${index}`} key={index}>Lựa chọn {index + 1}<input id={`manual-quiz-option-${index}`} className="form-input" value={option} onChange={(event) => setManualQuizDraft((current) => ({ ...current, options: current.options.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} /></label>)}</div><div className="clan-quiz-manual__actions"><label htmlFor="manual-quiz-answer">Đáp án đúng<select id="manual-quiz-answer" className="form-input" value={manualQuizDraft.correctIndex} onChange={(event) => setManualQuizDraft({ ...manualQuizDraft, correctIndex: Number(event.target.value) })}>{manualQuizDraft.options.map((_, index) => <option key={index} value={index}>Lựa chọn {index + 1}</option>)}</select></label><label htmlFor="manual-quiz-explanation">Giải thích (tùy chọn)<input id="manual-quiz-explanation" className="form-input" value={manualQuizDraft.explanation} onChange={(event) => setManualQuizDraft({ ...manualQuizDraft, explanation: event.target.value })} /></label></div><button type="button" className="btn btn-secondary btn-sm" onClick={addManualQuizQuestion} disabled={quizQuestions.length >= 30}>Thêm câu hỏi</button></div></details>
+                {quizQuestions.length > 0 && <div className="clan-quiz-draft-list" aria-live="polite"><strong>Câu hỏi sẽ lưu ({quizQuestions.length}/30)</strong>{quizQuestions.map((question, index) => <div className="clan-quiz-draft" key={`${question.question}-${index}`}><span>{index + 1}. {question.question}</span><button type="button" className="clan-text-action" onClick={() => setQuizQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Bỏ</button></div>)}</div>}
               </div>
+            </details>
+            <div className="clan-settings-actionbar"><button type="submit" className="btn btn-primary" disabled={saveQuiz.isPending || quizQuery.isLoading}>{saveQuiz.isPending ? 'Đang lưu…' : 'Lưu cấu hình quiz'}</button></div>
+          </form>
 
-              <div className="quick-composer-tags" style={{ display: 'flex', gap: '10px', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-                <button
-                  type="button"
-                  className="quick-tag-btn clan-tag-btn"
-                  id="btn-clan-open-post-modal"
-                  onClick={(event) => {
-                    setComposerMode('discussion');
-                    composerOpenerRef.current = event.currentTarget;
-                    setShowComposer(true);
-                  }}
-                >
-                  <span>📰 Bản tin</span>
-                </button>
-                <button
-                  type="button"
-                  className="quick-tag-btn clan-tag-btn"
-                  id="btn-clan-open-poll-modal"
-                  onClick={(event) => {
-                    setComposerMode('poll');
-                    composerOpenerRef.current = event.currentTarget;
-                    setShowComposer(true);
-                  }}
-                >
-                  <span>📊 Bình chọn</span>
-                </button>
-              </div>
-            </div>
+          <details className="clan-danger-zone"><summary>Vùng nguy hiểm</summary><div><p>Giải tán CLB sẽ xóa toàn bộ bài viết, tài liệu và thành viên.</p><button type="button" className="btn btn-danger" onClick={() => setConfirmation({ kind: 'disband', title: 'Giải tán CLB?', message: 'Toàn bộ bài viết, tài liệu, thành viên và dữ liệu CLB sẽ bị xóa vĩnh viễn.', confirmLabel: 'Giải tán CLB', danger: true })}>Giải tán CLB</button></div></details>
+        </div>}
+      </>}
+    </div>
 
-            {/* Filter Bar */}
-            <div className="clan-feed-filter-bar glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
-              <div className="clan-feed-filter-tabs" style={{ display: 'flex', gap: '8px' }}>
-                {[
-                  ['all', 'Tất cả bài đăng'],
-                  ['discussion', 'Bản tin'],
-                  ['poll', 'Bình chọn'],
-                  ['mine', 'Bài của tôi']
-                ].map(([f, label]) => (
-                  <button
-                    key={f}
-                    type="button"
-                    className={`clan-feed-pill ${feedFilter === f ? 'active' : ''}`}
-                    onClick={() => setFeedFilter(f)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="clan-sort-box" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                <span className="clan-sort-label">Sắp xếp:</span>{' '}
-                <span className="clan-sort-active" style={{ color: 'var(--bdu-light)', fontWeight: 600 }}>
-                  Mới nhất
-                </span>
-              </div>
-            </div>
-
-            {/* Posts Stream */}
-            <div id="clan-posts-feed" className="clan-feed-stream">
-              {postsQuery.isLoading ? (
-                <div className="loading-spinner-box glass-panel" style={{ textAlign: 'center', padding: '40px' }}>
-                  <div className="spinner"></div>
-                  <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Đang tải bài viết...</p>
-                </div>
-              ) : posts.length === 0 ? (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
-                  <h4>Chưa có bài viết nào</h4>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Hãy bắt đầu chia sẻ tin tức hoặc tạo khảo sát cho CLB!</p>
-                </div>
-              ) : (
-                posts.map((post) => {
-                  const isLiked = Boolean(post.is_liked);
-                  const showCommentThread = Boolean(expandedComments[post.id]);
-
-                  return (
-                    <div className="community-post-card glass-panel" key={post.id} style={{ marginBottom: '16px' }}>
-                      <div className="post-header">
-                        <div className="post-author-box">
-                          <div className="post-avatar">
-                            {getInitials(post.author?.name || 'SV')}
-                          </div>
-                          <div className="post-author-meta">
-                            <span className="post-author-name">{post.author?.name || 'Thành viên CLB'}</span>
-                            <span className="post-time">{formatRelativeTime(post.created_at)}</span>
-                          </div>
-                        </div>
-                        {post.is_mine && (
-                          <button
-                            type="button"
-                            className="btn-delete-post"
-                            onClick={() => {
-                              if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) {
-                                removePost.mutate(post.id);
-                              }
-                            }}
-                            disabled={removePost.isPending}
-                            title="Xóa bài viết"
-                          >
-                            <span>Xóa</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <h4 className="post-title">{post.title || 'Bài viết'}</h4>
-                      <p className="post-content" style={{ whiteSpace: 'pre-line' }}>{post.content}</p>
-
-                      {Array.isArray(post.attachments) && post.attachments.length > 0 && (
-                        <div className="post-attachments-list">
-                          {post.attachments.map((att, idx) => (
-                            <AttachmentRenderer key={idx} attachment={att} />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Poll Rendering */}
-                      {post.poll && (
-                        <div className="poll-box glass-panel" style={{ padding: '16px', borderRadius: '8px', margin: '14px 0', border: '1px solid var(--border-color)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                          <strong style={{ display: 'block', marginBottom: '12px', fontSize: '14px' }}>
-                            📊 {post.poll.question}
-                          </strong>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {post.poll.options?.map((opt) => (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                className={`poll-opt-btn ${opt.is_voted ? 'voted' : ''}`}
-                                onClick={() => vote.mutate({ pollId: post.poll.id, optionId: opt.id })}
-                                disabled={vote.isPending}
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  padding: '10px 14px',
-                                  background: opt.is_voted ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                                  border: `1px solid ${opt.is_voted ? 'var(--bdu-light)' : 'var(--border-color)'}`,
-                                  borderRadius: '6px',
-                                  color: 'var(--text-main)',
-                                  cursor: 'pointer',
-                                  textAlign: 'left'
-                                }}
-                              >
-                                <span>{opt.text}</span>
-                                <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--bdu-light)' }}>
-                                  {opt.percentage || 0}% ({opt.vote_count || 0})
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="post-actions-bar" style={{ marginTop: '12px' }}>
-                        <button
-                          type="button"
-                          className={`btn-post-action btn-toggle-like ${isLiked ? 'liked' : ''}`}
-                          onClick={() => like.mutate(post.id)}
-                          disabled={like.isPending}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? '#ef4444' : 'none'} stroke={isLiked ? '#ef4444' : 'currentColor'} strokeWidth="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                          </svg>
-                          <span className="like-count-num">{post.like_count || 0}</span> Thích
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`btn-post-action btn-toggle-comments ${showCommentThread ? 'active' : ''}`}
-                          onClick={() => setExpandedComments((prev) => ({ ...prev, [post.id]: !prev[post.id] }))}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                          </svg>
-                          <span className="comment-count-num">{post.comment_count || 0}</span> Bình luận
-                        </button>
-                      </div>
-
-                      {showCommentThread && (
-                        <ClanCommentsInline postId={post.id} token={auth.token} />
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Panel 2: Kho Tài Liệu CLB */}
-        {isJoined && tab === 'docs' && (
-          <div id="channel-panel-docs" className="channel-panel">
-            <div className="clan-docs-header-card glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px', borderRadius: 'var(--radius-lg)', marginBottom: '16px' }}>
-              <div style={{ fontSize: '32px' }}>📚</div>
-              <div>
-                <h3 className="docs-header-title" style={{ margin: '0 0 4px 0', fontSize: '1.2rem' }}>
-                  Kho Tài Liệu & Slide Bài Giảng
-                </h3>
-                <p className="docs-header-subtitle" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Tổng hợp toàn bộ tài liệu Google Drive, slide ôn thi và video học tập do thành viên chia sẻ.
-                </p>
-              </div>
-            </div>
-
-            <div className="clan-docs-toolbar glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '12px 16px', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
-              <div className="clan-docs-type-filters" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {[
-                  ['all', 'Tất cả'],
-                  ['drive_folder', '📁 Thư mục Drive'],
-                  ['drive_file', '📄 File & Đề thi'],
-                  ['video', '🎥 Video bài giảng'],
-                  ['link', '🔗 Liên kết']
-                ].map(([dtype, label]) => (
-                  <button
-                    key={dtype}
-                    type="button"
-                    className={`clan-doc-pill ${docFilter === dtype ? 'active' : ''}`}
-                    onClick={() => setDocFilter(dtype)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Tìm tài liệu..."
-                style={{ maxWidth: '240px' }}
-                value={docSearch}
-                onChange={(e) => setDocSearch(e.target.value)}
-              />
-            </div>
-
-            <div id="clan-docs-grid" className="clan-docs-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
-              {documentsQuery.isLoading ? (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>Đang tải tài liệu...</div>
-              ) : documents.length === 0 ? (
-                <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
-                  <p style={{ color: 'var(--text-muted)' }}>Chưa có tài liệu nào phù hợp.</p>
-                </div>
-              ) : (
-                documents.map((doc) => (
-                  <div key={doc.id} className="glass-panel" style={{ padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--bdu-light)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
-                        {doc.type}
-                      </span>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px' }}>{doc.title}</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Người chia sẻ: {doc.author_name}</p>
-                    </div>
-                    <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end' }}>
-                      <a href={doc.direct_url || doc.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                        Mở tài liệu ↗
-                      </a>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Panel 3: Thành Viên */}
-        {isJoined && tab === 'members' && (
-          <div id="channel-panel-members" className="channel-panel">
-            <div className="clan-members-wrapper glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
-              <div className="clan-members-header" style={{ marginBottom: '16px' }}>
-                <h3 className="clan-members-title" style={{ margin: '0 0 4px 0' }}>Danh Sách Thành Viên CLB</h3>
-                <p className="clan-members-subtitle" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Tổng cộng: {members.length} thành viên đã tham gia.
-                </p>
-              </div>
-
-              <div className="table-responsive">
-                <table className="clan-members-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
-                      <th style={{ padding: '10px 12px' }}>Thành Viên</th>
-                      <th style={{ padding: '10px 12px' }}>MSSV</th>
-                      <th style={{ padding: '10px 12px' }}>Chức Vụ</th>
-                      {isLeader && <th style={{ padding: '10px 12px' }}>Thao Tác</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map((member) => (
-                      <tr key={member.mssv} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '12px' }}>
-                          <strong>{member.full_name || 'Sinh viên BDU'}</strong>
-                        </td>
-                        <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{member.mssv}</td>
-                        <td style={{ padding: '12px' }}>
-                          {isLeader && member.mssv !== auth.user?.mssv ? (
-                            <select
-                              className="custom-select"
-                              value={member.role}
-                              onChange={(e) => role.mutate({ mssv: member.mssv, nextRole: e.target.value })}
-                              disabled={role.isPending}
-                              style={{ padding: '4px 8px', fontSize: '12px' }}
-                            >
-                              <option value="member">Thành viên</option>
-                              <option value="elder">Trưởng lão</option>
-                              <option value="vice_leader">Phó bang</option>
-                              <option value="leader">Bang chủ</option>
-                            </select>
-                          ) : (
-                            <span style={{ color: member.role === 'leader' ? '#fbbf24' : 'inherit' }}>
-                              {member.role === 'leader' ? '👑 Bang Chủ' : member.role}
-                            </span>
-                          )}
-                        </td>
-                        {isLeader && (
-                          <td style={{ padding: '12px' }}>
-                            {member.mssv !== auth.user?.mssv && (
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm"
-                                onClick={() => {
-                                  if (window.confirm(`Xóa sinh viên ${member.full_name || member.mssv} khỏi nhóm?`)) {
-                                    kick.mutate(member.mssv);
-                                  }
-                                }}
-                                disabled={kick.isPending}
-                              >
-                                Xóa
-                              </button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Panel 4: Yêu Cầu Gia Nhập (Leader Only) */}
-        {isLeader && tab === 'requests' && (
-          <div id="channel-panel-requests" className="channel-panel">
-            <div className="clan-members-wrapper glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
-              <h3 style={{ margin: '0 0 16px 0' }}>Yêu Cầu Gia Nhập Chờ Duyệt ({requests.length})</h3>
-              {requests.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>Hiện không có yêu cầu nào đang chờ duyệt.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {requests.map((req) => (
-                    <div
-                      key={req.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '12px 16px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border-color)'
-                      }}
-                    >
-                      <div>
-                        <strong style={{ display: 'block' }}>{req.full_name || req.mssv}</strong>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>MSSV: {req.mssv} · {formatRelativeTime(req.created_at)}</span>
-                        {req.quiz_score !== null && req.quiz_score !== undefined && (
-                          <span style={{ display: 'block', fontSize: '12px', color: req.quiz_passed ? '#86efac' : '#fbbf24' }}>
-                            Quiz: {req.quiz_score}/{req.quiz_total} câu đúng{req.quiz_passed ? ' · Đạt ngưỡng' : ' · Chờ duyệt thủ công'}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => review.mutate({ requestId: req.id, action: 'approve' })}
-                          disabled={review.isPending}
-                        >
-                          Duyệt
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => review.mutate({ requestId: req.id, action: 'reject' })}
-                          disabled={review.isPending}
-                        >
-                          Từ chối
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Panel 5: Cài Đặt CLB (Leader Only) */}
-        {isLeader && tab === 'settings' && (
-          <div className="clan-settings-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <form
-              className="clan-settings-box glass-panel"
-              style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveClan.mutate();
-              }}
-            >
-              <h3 style={{ margin: '0 0 16px 0' }}>⚙️ Cài Đặt Thông Tin CLB</h3>
-              <div style={{ display: 'flex', gap: '14px', marginBottom: '14px' }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Tên CLB</label>
-                  <input
-                    className="form-input"
-                    value={clanDraft.name}
-                    onChange={(e) => setClanDraft({ ...clanDraft, name: e.target.value })}
-                  />
-                </div>
-                <div style={{ width: '160px' }}>
-                  <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Tag Viết Tắt</label>
-                  <input
-                    className="form-input"
-                    value={clanDraft.tag}
-                    onChange={(e) => setClanDraft({ ...clanDraft, tag: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Mô Tả CLB</label>
-                <textarea
-                  className="form-input"
-                  rows={3}
-                  value={clanDraft.description}
-                  onChange={(e) => setClanDraft({ ...clanDraft, description: e.target.value })}
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={saveClan.isPending}>
-                {saveClan.isPending ? 'Đang lưu...' : 'Lưu Thay Đổi'}
-              </button>
-            </form>
-
-            <form
-              className="clan-settings-box glass-panel clan-quiz-settings"
-              style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}
-              onSubmit={(e) => { e.preventDefault(); saveQuiz.mutate(); }}
-            >
-              <h3 style={{ margin: '0 0 8px 0' }}>🧠 Quiz xác minh gia nhập</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 16px 0' }}>
-                Khi bật, ứng viên phải trả lời hết câu hỏi. Đạt ngưỡng sẽ được tự động duyệt; dưới ngưỡng vẫn tạo yêu cầu để bạn duyệt thủ công.
-              </p>
-              <label className="quiz-toggle-row">
-                <input type="checkbox" checked={quizEnabled} onChange={(e) => setQuizEnabled(e.target.checked)} />
-                <span>Bật quiz trước khi gia nhập</span>
-              </label>
-              <div className="quiz-settings-grid">
-                <label className="form-label">Số câu đúng tối thiểu (0 = tự động duyệt mọi bài)
-                  <input className="form-input" type="number" min="0" max={quizQuestions.length || quizQuery.data?.total || 30} value={quizMinCorrect} onChange={(e) => setQuizMinCorrect(Number(e.target.value))} />
-                </label>
-                <label className="form-label">Import định dạng
-                  <select className="form-input" value={quizImportFormat} onChange={(e) => setQuizImportFormat(e.target.value)}>
-                    <option value="json">JSON</option>
-                    <option value="csv">CSV</option>
-                  </select>
-                </label>
-              </div>
-              <label className="form-label">Dán schema câu hỏi
-                <textarea className="form-input quiz-import-textarea" rows={6} value={quizImportText} onChange={(e) => setQuizImportText(e.target.value)} placeholder={QUIZ_IMPORT_SCHEMA} />
-              </label>
-              <div className="quiz-import-actions">
-                <label className="btn btn-secondary btn-sm">
-                  Chọn file {quizImportFormat.toUpperCase()}
-                  <input type="file" accept={quizImportFormat === 'json' ? '.json,application/json' : '.csv,text/csv'} hidden onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) file.text().then(setQuizImportText).catch(() => notify('Không thể đọc file quiz.', 'error'));
-                  }}
-                  />
-                </label>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-                  try {
-                    const parsed = parseQuizText(quizImportText, quizImportFormat);
-                    setQuizQuestions(parsed);
-                    setQuizMinCorrect((current) => Math.min(current, parsed.length));
-                    notify(`Đã nạp ${parsed.length} câu hỏi.`, 'success');
-                  } catch (error) { notify(error.message, 'error'); }
-                }}>Kiểm tra & nạp câu hỏi</button>
-              </div>
-              <p className="quiz-schema-help">{QUIZ_IMPORT_SCHEMA}</p>
-              <p className="quiz-question-count">Đang chuẩn bị {quizQuestions.length || quizQuery.data?.total || 0}/30 câu hỏi{quizQuery.data?.total && !quizQuestions.length ? ' (câu hỏi đã lưu chỉ hiển thị nội dung; import lại nếu cần chỉnh đáp án)' : ''}.</p>
-              <button type="submit" className="btn btn-primary" disabled={saveQuiz.isPending || quizQuery.isLoading}>
-                {saveQuiz.isPending ? 'Đang lưu...' : 'Lưu cấu hình quiz'}
-              </button>
-            </form>
-
-            <div className="glass-panel" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
-              <h4 style={{ color: '#ef4444', margin: '0 0 6px 0' }}>Vùng Nguy Hiểm: Giải Tán CLB</h4>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 14px 0' }}>
-                Hành động này sẽ xóa toàn bộ dữ liệu, bài viết và quyền thành viên của tất cả mọi người trong CLB.
-              </p>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => {
-                  if (window.confirm('CẢNH BÁO: Bạn chắc chắn muốn giải tán CLB này vĩnh viễn?')) {
-                    destroy.mutate();
-                  }
-                }}
-                disabled={destroy.isPending}
-              >
-                {destroy.isPending ? 'Đang giải tán...' : 'Giải Tán CLB'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <ClanJoinQuizModal
-        open={showJoinQuiz}
-        clanName={clan.name}
-        quiz={quizQuery.data}
-        isLoading={quizQuery.isLoading}
-        isPending={join.isPending}
-        result={joinResult}
-        onClose={() => { if (!join.isPending) setShowJoinQuiz(false); }}
-        onSubmit={(answers) => join.mutate({ answers })}
-      />
-
-      {/* Modal: Facebook Style Composer Modal faithful to #modal-clan-post-composer */}
-      {showComposer && (
-        <ViewportModal id="modal-clan-post-composer" title="Tạo bài đăng trong CLB" onClose={() => setShowComposer(false)} dialogRef={composerDialogRef} className="fb-composer-dialog">
-            <div className="fb-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className={`clan-feed-pill ${composerMode === 'discussion' ? 'active' : ''}`}
-                  onClick={() => setComposerMode('discussion')}
-                >
-                  📰 Bản tin
-                </button>
-                <button
-                  type="button"
-                  className={`clan-feed-pill ${composerMode === 'poll' ? 'active' : ''}`}
-                  onClick={() => setComposerMode('poll')}
-                >
-                  📊 Bình chọn
-                </button>
-              </div>
-              <button
-                ref={composerCloseRef}
-                type="button"
-                id="btn-close-clan-composer-modal"
-                className="fb-modal-close-btn"
-                title="Đóng"
-                aria-label="Đóng hộp thoại tạo bài đăng"
-                onClick={() => setShowComposer(false)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="fb-modal-body">
-              {composerMode === 'discussion' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Tiêu đề bài viết..."
-                    maxLength={180}
-                    value={postDraft.title}
-                    onChange={(e) => setPostDraft({ ...postDraft, title: e.target.value })}
-                  />
-                  <textarea
-                    className="form-input"
-                    rows={4}
-                    maxLength={5000}
-                    placeholder="Bạn đang nghĩ gì thế? Chia sẻ thảo luận hoặc tài liệu cho nhóm..."
-                    value={postDraft.content}
-                    onChange={(e) => setPostDraft({ ...postDraft, content: e.target.value })}
-                  />
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="Link Google Drive / YouTube (không bắt buộc)"
-                    value={postDraft.url}
-                    onChange={(e) => setPostDraft({ ...postDraft, url: e.target.value })}
-                  />
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Chủ đề / Câu hỏi bình chọn..."
-                    value={pollDraft.question}
-                    onChange={(e) => setPollDraft({ ...pollDraft, question: e.target.value })}
-                  />
-                  <textarea
-                    className="form-input"
-                    rows={2}
-                    placeholder="Lưu ý cho cuộc biểu quyết này (tùy chọn)..."
-                    value={postDraft.content}
-                    onChange={(e) => setPostDraft({ ...postDraft, content: e.target.value })}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Các phương án bình chọn:</label>
-                    {pollDraft.options.map((opt, idx) => (
-                      <input
-                        key={idx}
-                        type="text"
-                        className="form-input"
-                        placeholder={`Lựa chọn ${idx + 1}...`}
-                        value={opt}
-                        onChange={(e) => {
-                          const nextOpts = [...pollDraft.options];
-                          nextOpts[idx] = e.target.value;
-                          setPollDraft({ ...pollDraft, options: nextOpts });
-                        }}
-                      />
-                    ))}
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setPollDraft({ ...pollDraft, options: [...pollDraft.options, ''] })}
-                      style={{ alignSelf: 'flex-start' }}
-                    >
-                      + Thêm lựa chọn
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="fb-modal-footer" style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowComposer(false)}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  if (composerMode === 'poll' && !pollDraft.question.trim()) {
-                    notify('Vui lòng nhập câu hỏi bình chọn.', 'warning');
-                    return;
-                  }
-                  if (composerMode === 'discussion' && !postDraft.title.trim() && !postDraft.content.trim()) {
-                    notify('Vui lòng nhập nội dung bài viết.', 'warning');
-                    return;
-                  }
-                  createPost.mutate();
-                }}
-                disabled={createPost.isPending}
-              >
-                {createPost.isPending ? 'Đang đăng...' : composerMode === 'poll' ? 'Tạo Bình Chọn' : 'Đăng Bài'}
-              </button>
-            </div>
-        </ViewportModal>
-      )}
-    </section>
-  );
+    <ClanJoinQuizModal open={showJoinQuiz} clanName={clan.name} quiz={quizQuery.data} isLoading={quizQuery.isLoading} isPending={join.isPending} result={joinResult} onClose={() => { if (!join.isPending) setShowJoinQuiz(false); }} onViewClan={() => { setShowJoinQuiz(false); refresh(); }} onSubmit={(answers) => join.mutate({ answers })} />
+    {showComposer && <ViewportModal id="modal-clan-post-composer" title="Tạo bài đăng trong CLB" onClose={() => setShowComposer(false)} dialogRef={composerDialogRef} className="clan-modal"><div className="clan-modal__header"><div><span className="clan-eyebrow">BẢN TIN CLB</span><h2>{composerMode === 'poll' ? 'Tạo bình chọn' : 'Viết bài đăng'}</h2></div><button ref={composerCloseRef} type="button" className="clan-icon-button" onClick={() => setShowComposer(false)} aria-label="Đóng hộp thoại">×</button></div><div className="clan-composer-actions" role="group" aria-label="Loại bài đăng"><button type="button" className={`btn btn-sm ${composerMode === 'discussion' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setComposerMode('discussion')}>Bài viết</button>{permissions.canPoll && <button type="button" className={`btn btn-sm ${composerMode === 'poll' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setComposerMode('poll')}>Bình chọn</button>}</div><div className="clan-modal__intro">Nội dung sẽ chỉ hiển thị cho thành viên CLB.</div><div className="clan-composer-form">{composerMode === 'discussion' ? <><label htmlFor="clan-post-title">Tiêu đề<input id="clan-post-title" className="form-input" maxLength={180} value={postDraft.title} onChange={(event) => setPostDraft({ ...postDraft, title: event.target.value })} placeholder="Ví dụ: Tìm bạn ôn thi cuối kỳ" /></label><label htmlFor="clan-post-content">Nội dung<textarea id="clan-post-content" className="form-input" rows={5} maxLength={5000} value={postDraft.content} onChange={(event) => setPostDraft({ ...postDraft, content: event.target.value })} placeholder="Chia sẻ câu hỏi, cập nhật hoặc lời mời học nhóm…" /></label><label htmlFor="clan-post-link">Liên kết tài liệu (tùy chọn)<input id="clan-post-link" className="form-input" type="url" value={postDraft.url} onChange={(event) => setPostDraft({ ...postDraft, url: event.target.value })} placeholder="Google Drive hoặc YouTube" /></label></> : <><label htmlFor="clan-poll-question">Câu hỏi bình chọn<input id="clan-poll-question" className="form-input" value={pollDraft.question} onChange={(event) => setPollDraft({ ...pollDraft, question: event.target.value })} /></label><label htmlFor="clan-poll-note">Ghi chú (tùy chọn)<textarea id="clan-poll-note" className="form-input" rows={3} value={postDraft.content} onChange={(event) => setPostDraft({ ...postDraft, content: event.target.value })} /></label>{pollDraft.options.map((option, index) => <label htmlFor={`clan-poll-option-${index}`} key={index}>Phương án {index + 1}<input id={`clan-poll-option-${index}`} className="form-input" value={option} onChange={(event) => { const options = [...pollDraft.options]; options[index] = event.target.value; setPollDraft({ ...pollDraft, options }); }} /></label>)}<button type="button" className="btn btn-secondary btn-sm" onClick={() => setPollDraft({ ...pollDraft, options: [...pollDraft.options, ''] })}>Thêm phương án</button></>}</div><div className="clan-modal__footer"><button type="button" className="btn btn-secondary" onClick={() => setShowComposer(false)}>Hủy</button><button type="button" className="btn btn-primary" onClick={submitPost} disabled={createPost.isPending}>{createPost.isPending ? 'Đang đăng…' : composerMode === 'poll' ? 'Tạo bình chọn' : 'Đăng bài'}</button></div></ViewportModal>}
+    <ConfirmationDialog confirmation={confirmation} onClose={() => setConfirmation(null)} onConfirm={confirmAction} isPending={confirmationPending} />
+  </section>;
 }

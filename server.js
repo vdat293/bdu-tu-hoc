@@ -15,6 +15,7 @@ import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
 import { AvatarOverrideService } from './src/services/avatar-override.service.js';
 import { IdentityAdminService } from './src/services/identity-admin.service.js';
+import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,24 @@ app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
 }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
+// Giải trí is a separate site, not a portal sidebar route. The portal only
+// links to this entry point; the wildcard keeps room/challenge deep links
+// working after a refresh on the VPS.
+const gamesSiteDir = path.join(__dirname, 'public', 'games');
+app.use('/games', express.static(gamesSiteDir, {
+  index: false,
+  fallthrough: true,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
+app.get(['/games', '/games/', '/games/*'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(gamesSiteDir, 'index.html'));
+});
+
 // Dedicated server-side guarded administration surface. The page itself is
 // public static HTML; every data mutation is still protected by API roles.
 app.get(['/admin-tool', '/admin-tool/'], (req, res) => {
@@ -103,6 +122,11 @@ app.use((err, req, res, next) => {
 
 const server = createServer(app);
 CommunityRealtime.attach(server);
+EntertainmentGameService.start({
+  onEvent(event) {
+    CommunityRealtime.publishGameExpiry(event);
+  }
+});
 
 server.listen(PORT, () => {
   console.log(`\n======================================================`);
@@ -123,9 +147,10 @@ server.listen(PORT, () => {
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   RankingSchedulerService.stop();
+  EntertainmentGameService.stop();
   CommunityRealtime.close();
   server.close(async () => {
-    await closeDatabase().catch(() => {});
+    await closeDatabase().catch(() => { });
     process.exit(0);
   });
 }

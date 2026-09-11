@@ -1,11 +1,39 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createClan, getClanQuiz, getClans, joinClan } from '../../api/community.js';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { cancelClanJoinRequest, createClan, getClanQuiz, getClans, joinClan } from '../../api/community.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import ClanJoinQuizModal from './ClanJoinQuizModal.jsx';
+import './clans.css';
+
+function cleanTag(tag) {
+  return String(tag || '').trim().replace(/^\[+|\]+$/g, '') || 'CLB';
+}
+
+function initials(name) {
+  const words = String(name || 'CLB').trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? `${words[0][0]}${words.at(-1)[0]}`.toUpperCase() : words[0].slice(0, 2).toUpperCase();
+}
+
+function clanLevel(clan) {
+  const level = Number(clan?.level);
+  return Number.isFinite(level) && level > 0 ? level : 1;
+}
+
+function memberCount(clan) {
+  const count = Number(clan?.member_count);
+  return Number.isFinite(count) && count >= 0 ? count : 0;
+}
+
+function ClanAvatar({ clan, size = 'card' }) {
+  return (
+    <span className={`clan-avatar clan-avatar--${size}`} aria-hidden="true">
+      {clan.avatar_url ? <img src={clan.avatar_url} alt="" /> : initials(clan.name)}
+    </span>
+  );
+}
 
 export default function ClansPage() {
   const auth = useAuth();
@@ -15,7 +43,6 @@ export default function ClansPage() {
   const [params, setParams] = useSearchParams();
   const search = params.get('q') || '';
   const filter = params.get('filter') === 'mine' ? 'mine' : 'all';
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [joinTarget, setJoinTarget] = useState(null);
   const [joinResult, setJoinResult] = useState(null);
@@ -37,12 +64,13 @@ export default function ClansPage() {
     enabled: Boolean(auth.token && joinTarget?.id)
   });
 
+  const refreshClans = () => client.invalidateQueries({ queryKey: ['clans'] });
   const create = useMutation({
     mutationFn: () => createClan(auth.token, draft),
     onSuccess: (data) => {
       setDraft({ name: '', code: '', tag: '', description: '' });
       setShowCreateModal(false);
-      client.invalidateQueries({ queryKey: ['clans'] });
+      refreshClans();
       notify('Đã thành lập CLB mới.', 'success');
       if (data?.id) navigate(`/clans/${data.id}`);
     },
@@ -53,351 +81,112 @@ export default function ClansPage() {
     mutationFn: ({ clanId, answers }) => joinClan(auth.token, clanId, null, answers),
     onSuccess: (data) => {
       setJoinResult(data);
-      client.invalidateQueries({ queryKey: ['clans'] });
-      notify(data?.status === 'approved' ? 'Đã tự động duyệt bạn vào CLB.' : 'Đã gửi yêu cầu tham gia CLB.', 'success');
+      refreshClans();
+      notify(data?.status === 'approved' ? 'Bạn đã vào CLB.' : 'Yêu cầu tham gia đang chờ duyệt.', 'success');
+    },
+    onError: (error) => notify(error.message, 'error')
+  });
+
+  const cancelJoin = useMutation({
+    mutationFn: (clanId) => cancelClanJoinRequest(auth.token, clanId),
+    onSuccess: () => {
+      refreshClans();
+      notify('Đã hủy yêu cầu tham gia CLB.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
   });
 
   const rawList = useMemo(() => (Array.isArray(query.data) ? query.data : []), [query.data]);
-
+  const canCreateClan = Boolean(query.data?.can_create_clan);
   const filtered = useMemo(() => {
     const needle = search.toLocaleLowerCase('vi-VN').trim();
-    return rawList.filter((item) => {
-      const matchText =
-        !needle ||
-        `${item.name} ${item.code || ''} ${item.tag || ''} ${item.description || ''}`
-          .toLocaleLowerCase('vi-VN')
-          .includes(needle);
-      const matchFilter = filter === 'all' || Boolean(item.is_joined);
-      return matchText && matchFilter;
+    return rawList.filter((clan) => {
+      const text = `${clan.name || ''} ${clan.code || ''} ${clan.tag || ''} ${clan.description || ''}`.toLocaleLowerCase('vi-VN');
+      return (!needle || text.includes(needle)) && (filter === 'all' || Boolean(clan.is_joined));
     });
-  }, [rawList, search, filter]);
+  }, [filter, rawList, search]);
 
-  const setFilterMode = (mode) => {
+  const updateParams = (changes, replace = false) => {
     const next = new URLSearchParams(params);
-    if (mode === 'mine') next.set('filter', 'mine');
-    else next.delete('filter');
-    setParams(next, { replace: false });
+    Object.entries(changes).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    });
+    setParams(next, { replace });
   };
 
-  const setSearchValue = (value) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set('q', value);
-    else next.delete('q');
-    setParams(next, { replace: true });
+  const openCreate = (event) => {
+    if (!canCreateClan) return;
+    createOpenerRef.current = event.currentTarget;
+    setShowCreateModal(true);
   };
 
   return (
-    <section id="tab-clans" className="tab-pane active">
-      {/* Header faithfully matching production */}
-      <div className="section-header-box glass-panel">
-        <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
-        <div className="clan-header-flex" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h2 className="section-title">CLB & Nhóm Học Tập BDU</h2>
-            <p className="section-desc">
-              Cơ chế Clan/Guild: Không gian sinh hoạt câu lạc bộ, chia sẻ tài liệu ôn thi, slide bài giảng và video Google Drive nội bộ.
-            </p>
-          </div>
-          <button
-            type="button"
-            id="btn-open-create-clan"
-            className="btn btn-primary btn-create-clan"
-            onClick={(event) => { createOpenerRef.current = event.currentTarget; setShowCreateModal(true); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Tạo CLB / Nhóm Mới
+    <section id="tab-clans" className="tab-pane clan-experience">
+      <header className="clan-directory-hero">
+        <div className="clan-directory-hero__copy">
+          <h1>CLB & Nhóm học tập</h1>
+          <p>Khám phá, tham gia hoặc quản lý cộng đồng học tập của bạn.</p>
+        </div>
+        <div className="clan-directory-hero__action">
+          <button type="button" className="btn btn-primary clan-primary-action" onClick={openCreate} disabled={query.isSuccess && !canCreateClan} aria-describedby="clan-create-permission">
+            Thành lập CLB
           </button>
+          {query.isSuccess && !canCreateClan && <p id="clan-create-permission" className="clan-permission-note">Cần danh hiệu #TTCDS hoặc quyền quản trị để thành lập CLB.</p>}
+        </div>
+      </header>
+
+      <div className="clan-directory-toolbar" aria-label="Lọc danh sách CLB">
+        <div className="clan-segmented" role="group" aria-label="Phạm vi CLB">
+          <button type="button" className={filter === 'all' ? 'is-active' : ''} aria-pressed={filter === 'all'} onClick={() => updateParams({ filter: null })}>Khám phá tất cả</button>
+          <button type="button" className={filter === 'mine' ? 'is-active' : ''} aria-pressed={filter === 'mine'} onClick={() => updateParams({ filter: 'mine' })}>CLB của tôi</button>
+        </div>
+        <div className="clan-search-field">
+          <label className="clan-visually-hidden" htmlFor="clan-search-input">Tìm CLB hoặc nhóm học tập</label>
+          <div className="clan-search-field__control">
+            <input id="clan-search-input" type="search" value={search} onChange={(event) => updateParams({ q: event.target.value }, true)} placeholder="Tên, mã hoặc tag CLB" />
+            {search && <button type="button" className="clan-icon-button" onClick={() => updateParams({ q: null }, true)} aria-label="Xóa từ khóa tìm kiếm">×</button>}
+          </div>
         </div>
       </div>
 
-      <div id="clan-main-view">
-        {/* Toolbar faithfully matching production */}
-        <div className="clan-toolbar glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', margin: '20px 0' }}>
-          <div className="clan-filter-tabs" style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              id="filter-clans-all"
-              className={`clan-tab-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilterMode('all')}
-            >
-              Tất Cả CLB / Nhóm
-            </button>
-            <button
-              type="button"
-              id="filter-clans-mine"
-              className={`clan-tab-btn ${filter === 'mine' ? 'active' : ''}`}
-              onClick={() => setFilterMode('mine')}
-            >
-              CLB Của Tôi
-            </button>
-          </div>
-          <div className="clan-search-wrap" style={{ position: 'relative', minWidth: '280px' }}>
-            <input
-              type="text"
-              id="clan-search-input"
-              className="search-input form-input"
-              placeholder="Tìm kiếm CLB theo tên hoặc mã [TAG]..."
-              value={search}
-              onChange={(e) => setSearchValue(e.target.value)}
-            />
-          </div>
+      {query.isLoading ? (
+        <div className="clan-directory-grid" aria-label="Đang tải danh sách CLB">
+          {[1, 2, 3].map((item) => <div className="clan-card clan-card--skeleton" key={item}><SkeletonBlock className="skeleton-avatar" /><SkeletonBlock className="skeleton-line heading" /><SkeletonBlock className="skeleton-line wide" /><SkeletonBlock className="skeleton-line short" /></div>)}
         </div>
-
-        {/* Clans Grid */}
-        <div id="clans-list-grid" className="clans-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
-          {query.isLoading ? (
-            [1, 2, 3].map((card) => (
-              <div
-                className="clan-card glass-panel skeleton-clan-card"
-                key={card}
-                aria-hidden="true"
-                style={{
-                  padding: '20px',
-                  borderRadius: 'var(--radius-lg)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  border: '1px solid var(--border-color)',
-                  background: 'rgba(255, 255, 255, 0.03)'
-                }}
-              >
-                <SkeletonBlock className="skeleton-line eyebrow" />
-                <SkeletonBlock className="skeleton-line heading" />
-                <SkeletonBlock className="skeleton-line wide" />
-                <SkeletonBlock className="skeleton-line medium" />
-                <SkeletonBlock className="skeleton-line short" />
-              </div>
-            ))
-          ) : filtered.length === 0 ? (
-            <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
-              <span style={{ fontSize: '36px', display: 'block', marginBottom: '10px' }}>👥</span>
-              <h4 style={{ margin: '0 0 6px 0' }}>{search ? 'Không tìm thấy CLB phù hợp' : 'Chưa có CLB nào'}</h4>
-              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                {search ? 'Hãy thử tìm bằng từ khóa hoặc mã tag khác.' : 'Hãy là người tiên phong thành lập CLB học tập đầu tiên!'}
-              </p>
-            </div>
-          ) : (
-            filtered.map((clan) => (
-              <div
-                key={clan.id}
-                className="clan-card glass-panel"
-                style={{
-                  padding: '20px',
-                  borderRadius: 'var(--radius-lg)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  border: '1px solid var(--border-color)',
-                  background: 'rgba(255, 255, 255, 0.03)'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <span className="clan-tag-badge" style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.2)', color: 'var(--bdu-light)' }}>
-                      [{clan.tag || 'TAG'}]
-                    </span>
-                    <span className="clan-level-badge" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      Cấp 1
-                    </span>
-                    {clan.my_role === 'leader' && (
-                      <span style={{ fontSize: '11px', color: '#fbbf24', marginLeft: 'auto', fontWeight: 700 }}>
-                        👑 Bang Chủ
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.15rem', color: 'var(--text-main)' }}>
-                    {clan.name}
-                  </h3>
-                  <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
-                    {clan.description || 'Không gian học tập, trao đổi tài liệu môn học chuyên sâu.'}
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--border-color)' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    👥 {clan.member_count || 1} Thành viên
-                  </span>
-
-                  {clan.is_joined ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => navigate(`/clans/${clan.id}`)}
-                    >
-                      Vào phòng CLB →
-                    </button>
-                  ) : clan.has_pending_request ? (
-                    <span className="badge-pending" style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: 'rgba(234, 179, 8, 0.15)', color: '#eab308' }}>
-                      Đang chờ duyệt
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => { setJoinResult(null); setJoinTarget(clan); }}
-                      disabled={join.isPending}
-                    >
-                      Xin tham gia
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+      ) : query.isError ? (
+        <div className="clan-state-card" role="alert"><h2>Chưa thể tải danh sách CLB</h2><p>{query.error?.message || 'Vui lòng thử lại sau ít phút.'}</p><button type="button" className="btn btn-secondary" onClick={() => query.refetch()}>Thử lại</button></div>
+      ) : filtered.length === 0 ? (
+        <div className="clan-state-card"><h2>{search ? 'Không tìm thấy CLB phù hợp' : filter === 'mine' ? 'Bạn chưa tham gia CLB nào' : 'Chưa có CLB nào'}</h2><p>{search ? 'Thử lại với tên đầy đủ, mã CLB hoặc tag khác.' : filter === 'mine' ? 'Khám phá các nhóm đang hoạt động để bắt đầu.' : 'Hãy là người tiên phong thành lập một cộng đồng học tập.'}</p>{(search || filter === 'mine') && <button type="button" className="btn btn-secondary" onClick={() => updateParams({ q: null, filter: null })}>Xem tất cả CLB</button>}</div>
+      ) : (
+        <div id="clans-list-grid" className="clan-directory-grid">
+          {filtered.map((clan) => {
+            const isPending = Boolean(clan.has_pending_request);
+            const isJoined = Boolean(clan.is_joined);
+            return (
+              <article key={clan.id} className="clan-card">
+                <div className="clan-card__topline"><ClanAvatar clan={clan} /><div className="clan-card__badges"><span className="clan-tag">[{cleanTag(clan.tag)}]</span><span className="clan-level">Cấp {clanLevel(clan)}{Number.isFinite(Number(clan.xp)) ? ` · ${Number(clan.xp)} XP` : ''}</span></div>{clan.my_role === 'leader' && <span className="clan-role-chip">Bang chủ</span>}</div>
+                <div className="clan-card__copy"><h2>{clan.name}</h2><p>{clan.description || 'Không gian học tập, trao đổi kiến thức và tài liệu dành cho sinh viên BDU.'}</p></div>
+                <footer className="clan-card__footer"><span className="clan-member-count">{memberCount(clan)} thành viên</span>{isJoined ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate(`/clans/${clan.id}`)}>Mở CLB</button> : isPending ? <div className="clan-pending-actions"><span className="clan-status-chip">Đang chờ duyệt</span><button type="button" className="clan-text-action" onClick={() => cancelJoin.mutate(clan.id)} disabled={cancelJoin.isPending}>Hủy yêu cầu</button></div> : <button type="button" className="btn btn-primary btn-sm" onClick={() => { setJoinResult(null); setJoinTarget(clan); }} disabled={join.isPending}>Tham gia</button>}</footer>
+                <Link className="clan-card__cover" to={`/clans/${clan.id}`} aria-label={`Xem CLB ${clan.name}`} />
+              </article>
+            );
+          })}
         </div>
-      </div>
-
-      <ClanJoinQuizModal
-        open={Boolean(joinTarget)}
-        clanName={joinTarget?.name}
-        quiz={joinQuizQuery.data}
-        isLoading={joinQuizQuery.isLoading}
-        isPending={join.isPending}
-        result={joinResult}
-        onClose={() => { if (!join.isPending) setJoinTarget(null); }}
-        onSubmit={(answers) => join.mutate({ clanId: joinTarget.id, answers })}
-      />
-
-      {/* Modal: Create Clan faithful to #modal-create-clan */}
-      {showCreateModal && (
-        <ViewportModal id="modal-create-clan" title="Thành Lập CLB / Nhóm Học Tập Mới" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="clan-create-dialog">
-            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div className="modal-title-group">
-                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.2rem' }}>Thành Lập CLB / Nhóm Học Tập Mới</h3>
-                <span className="modal-badge" style={{ fontSize: '11px', color: 'var(--bdu-light)' }}>GUILD</span>
-              </div>
-              <button
-                ref={createCloseRef}
-                type="button"
-                id="btn-close-create-clan"
-                className="modal-close-btn"
-                onClick={() => setShowCreateModal(false)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!draft.name.trim()) {
-                  notify('Vui lòng nhập tên CLB.', 'warning');
-                  return;
-                }
-                create.mutate();
-              }}
-            >
-              <div className="modal-body">
-                <div
-                  className="clan-vip-creation-notice"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 14px',
-                    background: 'rgba(168, 85, 247, 0.12)',
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                    borderRadius: '8px',
-                    marginBottom: '16px'
-                  }}
-                >
-                  <span style={{ fontWeight: 700, color: '#c084fc', fontSize: '13px', background: 'rgba(168, 85, 247, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
-                    #TTCDS
-                  </span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Quyền thành lập CLB mới hiện tại dành cho các thành viên sở hữu danh hiệu <strong>#TTCDS</strong> hoặc có thẩm quyền.
-                  </span>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px' }}>
-                    Tên CLB / Nhóm Học Tập *
-                  </label>
-                  <input
-                    type="text"
-                    id="new-clan-name"
-                    className="form-input"
-                    placeholder="Ví dụ: CLB Trí Tuệ Nhân Tạo BDU"
-                    value={draft.name}
-                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px' }}>
-                      Mã Định Danh (Code) *
-                    </label>
-                    <input
-                      type="text"
-                      id="new-clan-code"
-                      className="form-input"
-                      placeholder="Ví dụ: CLB_AI"
-                      value={draft.code}
-                      onChange={(e) => setDraft({ ...draft, code: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div style={{ width: '140px' }}>
-                    <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px' }}>
-                      Tag Viết Tắt
-                    </label>
-                    <input
-                      type="text"
-                      id="new-clan-tag"
-                      className="form-input"
-                      placeholder="[AI]"
-                      value={draft.tag}
-                      onChange={(e) => setDraft({ ...draft, tag: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label className="form-label" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px' }}>
-                    Mô Tả Mục Tiêu / Hoạt Động Của CLB
-                  </label>
-                  <textarea
-                    id="new-clan-desc"
-                    className="form-input"
-                    rows={3}
-                    placeholder="Chia sẻ mục đích học tập, môn học trọng tâm hoặc tài liệu chuyên ngành..."
-                    value={draft.description}
-                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  id="btn-cancel-create-clan"
-                  className="btn btn-secondary"
-                  onClick={() => setShowCreateModal(false)}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  id="btn-confirm-create-clan"
-                  className="btn btn-primary"
-                  disabled={create.isPending}
-                >
-                  {create.isPending ? 'Đang tạo...' : 'Tạo CLB Ngay'}
-                </button>
-              </div>
-            </form>
-        </ViewportModal>
       )}
+
+      <ClanJoinQuizModal open={Boolean(joinTarget)} clanName={joinTarget?.name} quiz={joinQuizQuery.data} isLoading={joinQuizQuery.isLoading} isPending={join.isPending} result={joinResult} onClose={() => { if (!join.isPending) setJoinTarget(null); }} onViewClan={() => { if (joinTarget?.id) navigate(`/clans/${joinTarget.id}`); }} onSubmit={(answers) => join.mutate({ clanId: joinTarget.id, answers })} />
+
+      {showCreateModal && <ViewportModal id="modal-create-clan" title="Thành lập CLB hoặc nhóm học tập" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="clan-modal">
+        <div className="clan-modal__header"><div><span className="clan-eyebrow">CỘNG ĐỒNG MỚI</span><h2>Thành lập CLB</h2></div><button ref={createCloseRef} type="button" className="clan-icon-button" onClick={() => setShowCreateModal(false)} aria-label="Đóng hộp thoại">×</button></div>
+        <p className="clan-modal__intro">Hãy đặt tên rõ ràng để sinh viên dễ tìm đúng cộng đồng học tập của bạn.</p>
+        <form className="clan-form" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim() || !draft.code.trim()) { notify('Vui lòng nhập tên và mã định danh của CLB.', 'warning'); return; } create.mutate(); }}>
+          <label htmlFor="new-clan-name">Tên CLB hoặc nhóm <span aria-hidden="true">*</span><input id="new-clan-name" className="form-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Ví dụ: CLB Trí tuệ nhân tạo BDU" required /></label>
+          <div className="clan-form__two-columns"><label htmlFor="new-clan-code">Mã định danh <span aria-hidden="true">*</span><input id="new-clan-code" className="form-input" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} placeholder="CLB_AI" required /></label><label htmlFor="new-clan-tag">Tag ngắn<input id="new-clan-tag" className="form-input" value={draft.tag} onChange={(event) => setDraft({ ...draft, tag: event.target.value })} placeholder="AI" /></label></div>
+          <label htmlFor="new-clan-desc">Mục tiêu và hoạt động<textarea id="new-clan-desc" className="form-input" rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Môn học trọng tâm, cách sinh hoạt hoặc tài liệu sẽ chia sẻ…" /></label>
+          <div className="clan-modal__footer"><button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Hủy</button><button type="submit" className="btn btn-primary" disabled={create.isPending}>{create.isPending ? 'Đang tạo…' : 'Tạo CLB'}</button></div>
+        </form>
+      </ViewportModal>}
     </section>
   );
 }

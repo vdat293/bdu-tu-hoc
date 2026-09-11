@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ViewportModal, useViewportDialog } from '../../components/ViewportModal.jsx';
 
-export default function ClanJoinQuizModal({ open, clanName, quiz, isLoading, isPending, result, onClose, onSubmit }) {
+export default function ClanJoinQuizModal({ open, clanName, quiz, isLoading, isPending, result, onClose, onSubmit, onViewClan }) {
   const [answers, setAnswers] = useState({});
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
@@ -28,7 +28,7 @@ export default function ClanJoinQuizModal({ open, clanName, quiz, isLoading, isP
         <button ref={closeRef} type="button" className="modal-close-btn" onClick={onClose} aria-label="Đóng hộp thoại xin tham gia">✕</button>
       </div>
       <div className="modal-body clan-join-quiz-body">
-        {isLoading ? <p>Đang tải cấu hình gia nhập...</p> : hasQuiz ? (
+        {isLoading ? <p role="status">Đang tải cấu hình gia nhập...</p> : hasQuiz ? (
           <>
             <div className="quiz-progress" aria-live="polite">Đã trả lời {answered}/{questions.length} câu · Cần đúng ít nhất {quiz.min_correct}/{questions.length} câu</div>
             {questions.map((question, index) => (
@@ -66,8 +66,8 @@ export default function ClanJoinQuizModal({ open, clanName, quiz, isLoading, isP
       </div>
       <div className="modal-footer">
         <button type="button" className="btn btn-secondary" onClick={onClose}>Đóng</button>
-        {!result?.status && <button type="button" className="btn btn-primary" onClick={() => onSubmit(hasQuiz ? questions.map((question) => ({ questionId: question.id, selectedIndex: answers[question.id] })) : undefined)} disabled={isPending || (hasQuiz && answered !== questions.length)}>
-          {isPending ? 'Đang gửi...' : hasQuiz ? 'Nộp quiz & xin tham gia' : 'Gửi yêu cầu'}
+        {result?.status === 'approved' ? <button type="button" className="btn btn-primary" onClick={onViewClan}>Vào CLB</button> : !result?.status && <button type="button" className="btn btn-primary" onClick={() => onSubmit(hasQuiz ? questions.map((question) => ({ questionId: question.id, selectedIndex: answers[question.id] })) : undefined)} disabled={isLoading || isPending || (hasQuiz && answered !== questions.length)}>
+          {isLoading ? 'Đang tải…' : isPending ? 'Đang gửi...' : hasQuiz ? 'Nộp quiz & xin tham gia' : 'Gửi yêu cầu'}
         </button>}
       </div>
     </ViewportModal>

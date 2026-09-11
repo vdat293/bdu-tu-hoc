@@ -6,7 +6,7 @@ import { useAuth } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
 function normalize(data) {
-  return data?.data || data || { semesters: [], items: [] };
+  return data?.data || data || { semesters: [], items: [], week: null, nextOccurrence: null, upcomingOccurrence: null };
 }
 
 export default function SchedulePage() {
@@ -23,18 +23,10 @@ export default function SchedulePage() {
   const data = normalize(schedule.data);
   const semesters = Array.isArray(data.semesters) ? data.semesters : [];
 
-  const items = useMemo(() => {
-    if (Array.isArray(data.items)) return data.items;
-    if (data.schedule) {
-      const sch = data.schedule;
-      if (Array.isArray(sch)) return sch;
-      if (Array.isArray(sch.ds_thoi_khoa_bieu)) return sch.ds_thoi_khoa_bieu;
-      if (Array.isArray(sch.ds_tuan_tkb)) return sch.ds_tuan_tkb;
-      if (Array.isArray(sch.ds_lop_hoc_phan)) return sch.ds_lop_hoc_phan;
-      if (Array.isArray(sch.data)) return sch.data;
-    }
-    return [];
-  }, [data]);
+  // The API returns pre-filtered, dated occurrences. Rendering only this
+  // contract prevents the browser from accidentally rebuilding an all-term
+  // schedule from raw BDU weekday records.
+  const items = useMemo(() => (Array.isArray(data.items) ? data.items : []), [data.items]);
 
   useEffect(() => {
     if (!selected && data.selectedHocKy && semesters.length) {
@@ -54,6 +46,23 @@ export default function SchedulePage() {
 
   const selectedSemesterObj = semesters.find((s) => String(s.hoc_ky || s.ma_hoc_ky || s.id) === String(selected || data.selectedHocKy));
   const semesterTitle = selectedSemesterObj?.ten_hoc_ky || selectedSemesterObj?.ten || (selected ? `Học kỳ ${selected}` : '');
+  const week = data.week;
+  const weekRange = week ? `${week.startLabel}–${week.endLabel}` : '';
+  const weekContext = week
+    ? `${data.isCurrentWeek ? 'Tuần hiện tại' : 'Tuần học kế tiếp'}: ${week.label} (${weekRange})`
+    : '';
+  // "Đang học" and "Môn tiếp theo" are different states. If a class is in
+  // progress, the next card must still tell the student what to prepare for.
+  const upcomingOccurrenceKey = data.upcomingOccurrence?.occurrenceKey || data.nextOccurrence?.occurrenceKey || '';
+
+  let statusText = 'Chưa có dữ liệu';
+  if (schedule.isLoading) statusText = 'Đang tải…';
+  else if (data.isSessionExpired) statusText = 'Phiên BDU đã hết hạn';
+  else if (data.scheduleStatus === 'date_range_unavailable') statusText = 'BDU · Chưa xác định tuần học';
+  else if (data.scheduleStatus === 'no_upcoming') statusText = 'Không còn buổi học sắp tới';
+  else if (data.scheduleStatus === 'ongoing') statusText = 'Cổng BDU · Đang học';
+  else if (data.isCurrentWeek) statusText = 'Cổng BDU · Buổi học sắp tới';
+  else if (week) statusText = 'Cổng BDU · Tuần kế tiếp';
 
   return (
     <section id="tab-schedule" className="tab-pane active">
@@ -63,7 +72,7 @@ export default function SchedulePage() {
           <div>
             <h2 className="section-title">Thời Khóa Biểu Học Tập</h2>
             <p id="schedule-subtitle" className="section-desc">
-              {semesterTitle ? `Lịch học: ${semesterTitle} (Đồng bộ từ Cổng BDU)` : 'Đồng bộ tự động từ Cổng Quản Lý Đào Tạo Đại Học Bình Dương'}
+              {weekContext || (semesterTitle ? `Lịch học: ${semesterTitle} (Đồng bộ từ Cổng BDU)` : 'Đồng bộ tự động từ Cổng Quản Lý Đào Tạo Đại Học Bình Dương')}
             </p>
           </div>
           <div className="schedule-controls-row">
@@ -89,7 +98,7 @@ export default function SchedulePage() {
             <div id="schedule-badge-status" className="schedule-badge">
               <span className="pulse-dot"></span>
               <span id="schedule-status-text">
-                {schedule.isLoading ? 'Đang tải…' : data.isRealData !== false ? 'Cổng BDU · Thời gian thực' : 'Chưa có dữ liệu'}
+                {statusText}
               </span>
             </div>
           </div>
@@ -113,64 +122,57 @@ export default function SchedulePage() {
           <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
             <div className="empty-monogram">TKB</div>
             <h4 style={{ color: 'var(--text-main)', fontSize: '16px', marginBottom: '6px' }}>
-              Không có lịch học trong học kỳ này
+              {data.scheduleStatus === 'date_range_unavailable'
+                ? 'Chưa xác định được tuần học hiện tại'
+                : data.scheduleStatus === 'no_upcoming'
+                  ? 'Không còn buổi học sắp tới'
+                  : 'Không có lịch học trong học kỳ này'}
             </h4>
             <p style={{ fontSize: '13px' }}>
-              Sinh viên chưa đăng ký học phần hoặc chưa có lịch xếp phòng từ phòng đào tạo.
+              {data.scheduleStatus === 'date_range_unavailable'
+                ? 'Cổng BDU chưa trả về khoảng ngày của tuần học nên hệ thống không hiển thị lịch có thể đã cũ.'
+                : data.scheduleStatus === 'no_upcoming'
+                  ? 'Hệ thống đã kiểm tra tuần hiện tại và các tuần kế tiếp trong học kỳ đã chọn.'
+                  : 'Sinh viên chưa đăng ký học phần hoặc chưa có lịch xếp phòng từ phòng đào tạo.'}
             </p>
           </div>
         ) : (
-          items.map((rawItem, idx) => {
-            const day = rawItem.thu || (rawItem.thu_kieu_so ? `Thứ ${rawItem.thu_kieu_so}` : rawItem.day || `Buổi ${idx + 1}`);
-            const courseName = rawItem.ten_mon_hoc || rawItem.ten_mon || rawItem.ten_hp || rawItem.courseName || 'Môn học BDU';
-            const courseCode = rawItem.ma_mon_hoc || rawItem.ma_mon || rawItem.ma_hp || rawItem.courseCode || '--';
-            const credits = rawItem.so_tin_chi || rawItem.credits || '3';
-
-            let periods = rawItem.periods || '';
-            if (!periods) {
-              const startPeriod = rawItem.tiet_bat_dau || rawItem.tiet_bd;
-              const periodCount = rawItem.so_tiet;
-              if (startPeriod && periodCount) {
-                const endPeriod = parseInt(startPeriod, 10) + parseInt(periodCount, 10) - 1;
-                periods = `Tiết ${startPeriod} - ${endPeriod} (${periodCount} tiết)`;
-              } else if (rawItem.tiet_hoc) {
-                periods = `Tiết: ${rawItem.tiet_hoc}`;
-              } else {
-                periods = 'Lịch học tiêu chuẩn';
-              }
-            }
-
-            const room = rawItem.phong_hoc || rawItem.ten_phong || rawItem.ten_phong_hoc || rawItem.room || 'Phòng học BDU';
-            const lecturer = rawItem.ten_giang_vien || rawItem.giang_vien || rawItem.cb_giang_day || rawItem.lecturer || 'Giảng viên khoa';
-            const note = rawItem.ghi_chu || rawItem.lop_hoc_phan || '';
+          items.map((item) => {
+            const occurrenceKey = item.occurrenceKey || `${item.courseCode}-${item.startAt}-${item.room}`;
+            const isNext = occurrenceKey === upcomingOccurrenceKey;
+            const isOngoing = item.status === 'ongoing';
+            const showLecturer = item.lecturer && item.lecturer !== 'Bộ môn BDU';
 
             return (
-              <div key={`${courseCode}-${idx}`} className="schedule-card glass-panel">
+              <div key={occurrenceKey} className={`schedule-card glass-panel${isNext ? ' schedule-card--next' : ''}${isOngoing ? ' schedule-card--ongoing' : ''}`}>
                 <div>
-                  <div className="sch-day-badge">
-                    <span className="sch-day">{day}</span>
+                  <div className="schedule-card__eyebrow">
+                    <div className="sch-day-badge">
+                      <span className="sch-day">{item.day}</span>
+                      {item.displayDate && <span className="sch-date">{item.displayDate}</span>}
+                    </div>
+                    <span className={`sch-status-chip${isOngoing ? ' is-ongoing' : ''}`}>
+                      {isOngoing ? 'Đang học' : isNext ? 'Môn tiếp theo' : 'Sắp tới'}
+                    </span>
                   </div>
-                  <h4 className="sch-name" title={courseName}>{courseName}</h4>
+                  <h4 className="sch-name" title={item.courseName}>{item.courseName}</h4>
                   <div className="sch-meta">
                     <div className="sch-meta-item">
-                      <strong>{periods}</strong>
+                      <strong>{item.periods}</strong>
                     </div>
                     <div className="sch-meta-item">
-                      <span className="sch-room-pill">{room}</span>
+                      <span className="sch-room-pill">{item.room}</span>
                     </div>
-                    <div className="sch-meta-item">
-                      <span>{lecturer}</span>
-                    </div>
-                    {note && (
-                      <div className="sch-meta-item sch-note">
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{note}</span>
+                    {showLecturer && (
+                      <div className="sch-meta-item">
+                        <span>{item.lecturer}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="sch-footer">
-                  <span className="sch-code">Mã: <code>{courseCode}</code></span>
-                  <span className="badge-mini badge-pill-blue">{credits} Tín Chỉ</span>
+                  <span className="sch-code">Mã: <code>{item.courseCode}</code></span>
+                  <span className="badge-mini badge-pill-blue">{item.credits} Tín Chỉ</span>
                 </div>
               </div>
             );

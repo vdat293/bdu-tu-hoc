@@ -191,6 +191,43 @@ Kết quả xác minh của một token opaque khôi phục sau restart chỉ đ
 `BDU_RESTORED_TOKEN_TTL_MS` (mặc định 5 phút); đăng nhập mới luôn giữ hạn
 `expires_in` do BDU cấp.
 
+### Site Giải trí độc lập
+
+`/games` là một site static độc lập với portal React: portal chỉ có shortcut
+trong khối `TIỆN ÍCH`, không đưa Game Lounge vào sidebar hay layout học tập.
+Các URL `/games/room/<mã-phòng>` và `/games/challenges/<id>` đều được server
+fallback về `public/games/index.html` để refresh/deep-link không bị 404.
+
+Phòng, lịch sử nước đi và challenge được lưu trong PostgreSQL ở migration 026;
+WebSocket dùng `/ws/community` với room `game:<room_code>`. State được máy chủ
+kiểm tra bằng transaction + row lock + `clientMoveId` idempotency, nên client
+không được tự quyết định nước đi. Challenge có invite code băm, thời hạn tối đa
+7 ngày và bài Confession được ẩn khi challenge hết hạn.
+Cờ vua dùng `chess.js` để kiểm tra FEN, nước đi hợp lệ, phong cấp và trạng thái
+chiếu hết/hòa; caro dùng bàn 15×15 với điều kiện nối 5 quân.
+
+Khi chạy production trên VPS:
+
+1. Đặt `PUBLIC_APP_URL` là origin public đang map tới site games (ví dụ
+   `https://hub.example.edu.vn` khi dùng `/games`, hoặc
+   `https://games.example.edu.vn` nếu reverse proxy map `/games` vào root của
+   hostname đó; để trống sẽ tạo link tương đối).
+2. Proxy `/games`, `/api/entertainment/*` và `/ws/community` về cùng app Node;
+   dùng cấu hình Upgrade HTTP/1.1 trong file Nginx mẫu.
+3. Giữ đúng một replica Node cho đến khi bổ sung pub/sub dùng chung; PostgreSQL
+   là nguồn dữ liệu bền vững, còn membership/broadcast WebSocket hiện nằm trong
+   process đang chạy.
+
+Kiểm tra nhanh sau deploy:
+
+```bash
+curl -fsS https://games.example.edu.vn/api/entertainment/games
+curl -fsS https://games.example.edu.vn/api/entertainment/rooms
+```
+
+Nếu cần nhiều replica, phải thay gateway in-memory bằng adapter pub/sub (Redis
+hoặc PostgreSQL NOTIFY) trước khi scale ngang.
+
 ### Giới hạn topology WebSocket
 
 Gateway WebSocket hiện giữ membership room và broadcast trong bộ nhớ của một

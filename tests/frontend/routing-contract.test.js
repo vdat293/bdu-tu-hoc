@@ -6,6 +6,7 @@ describe('student route contract', () => {
     expect(navigation).toHaveLength(11);
     expect(new Set(navigation.map((item) => item.path)).size).toBe(11);
     expect(navigation.map((item) => item.path)).toEqual(expect.arrayContaining(['/gpa', '/info', '/schedule', '/leaderboard', '/learning', '/clans', '/confession']));
+    expect(navigation.map((item) => item.path)).not.toContain('/entertainment');
   });
 
   it('uses dynamic route metadata for deep links', () => {

@@ -13,7 +13,10 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const returnTo = isInternalReturnTo(location.state?.returnTo) ? location.state.returnTo : '/gpa';
+  const queryReturnTo = new URLSearchParams(location.search).get('returnTo');
+  const returnTo = isInternalReturnTo(location.state?.returnTo)
+    ? location.state.returnTo
+    : isInternalReturnTo(queryReturnTo) ? queryReturnTo : '/gpa';
 
   useEffect(() => {
     if (auth.status === 'authenticated') navigate(returnTo, { replace: true });

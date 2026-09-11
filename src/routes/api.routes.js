@@ -138,4 +138,18 @@ router.get('/health', (req, res) => {
 });
 router.get('/queue-status', ApiController.getQueueStatus);
 
+// 8. Giải trí: online game rooms, challenges and move history
+router.get('/entertainment/games', ApiController.getEntertainmentGames);
+router.get('/entertainment/rooms', ApiController.listEntertainmentRooms);
+router.post('/entertainment/rooms', ApiController.createEntertainmentRoom);
+router.get('/entertainment/rooms/:roomRef', ApiController.getEntertainmentRoom);
+router.post('/entertainment/rooms/:roomRef/join', ApiController.joinEntertainmentRoom);
+router.post('/entertainment/rooms/:roomRef/leave', ApiController.leaveEntertainmentRoom);
+router.post('/entertainment/rooms/:roomRef/rematch', ApiController.rematchEntertainmentRoom);
+router.get('/entertainment/rooms/:roomRef/moves', ApiController.listEntertainmentMoves);
+router.post('/entertainment/rooms/:roomRef/moves', ApiController.makeEntertainmentMove);
+router.post('/entertainment/rooms/:roomRef/challenges', ApiController.createEntertainmentChallenge);
+router.get('/entertainment/challenges/:challengeId', ApiController.getEntertainmentChallenge);
+router.post('/entertainment/challenges/:challengeId/accept', ApiController.acceptEntertainmentChallenge);
+
 export default router;

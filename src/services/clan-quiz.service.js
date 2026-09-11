@@ -120,7 +120,29 @@ export async function getClanQuiz(clanId) {
 
 export async function saveClanQuiz(clanId, requesterMssv, config) {
   await PermissionService.requireInClan(requesterMssv, clanId, 'clan:edit', 'Chỉ Bang Chủ mới được cấu hình quiz gia nhập.');
-  const normalized = validateQuizConfig(config);
+  const hasQuestions = Array.isArray(config?.questions);
+  let normalized;
+  if (hasQuestions) {
+    normalized = validateQuizConfig(config);
+  } else {
+    const existing = await query(`
+      SELECT q.enabled, q.min_correct, COUNT(qq.id)::int AS total
+      FROM clan_quizzes q
+      LEFT JOIN clan_quiz_questions qq ON qq.quiz_id = q.id
+      WHERE q.clan_id = $1
+      GROUP BY q.id;
+    `, [clanId]);
+    const row = existing.rows[0];
+    const total = Number(row?.total || 0);
+    const threshold = Number(config?.minCorrect ?? row?.min_correct ?? 0);
+    if (!Number.isInteger(threshold) || threshold < 0 || threshold > total) {
+      throw error(`Số câu đúng tối thiểu phải từ 0 đến ${total}.`);
+    }
+    if (Boolean(config?.enabled) && total === 0) {
+      throw error('Muốn bật quiz, CLB phải có ít nhất một câu hỏi.');
+    }
+    normalized = { enabled: Boolean(config?.enabled), min_correct: threshold, questions: null };
+  }
   await transaction(async (client) => {
     const quiz = await client.query(`
       INSERT INTO clan_quizzes (clan_id, enabled, min_correct, updated_by_mssv)
@@ -130,12 +152,14 @@ export async function saveClanQuiz(clanId, requesterMssv, config) {
       RETURNING id;
     `, [clanId, normalized.enabled, normalized.min_correct, requesterMssv]);
     const quizId = quiz.rows[0].id;
-    await client.query('DELETE FROM clan_quiz_questions WHERE quiz_id = $1', [quizId]);
-    for (const [index, question] of normalized.questions.entries()) {
-      await client.query(`
-        INSERT INTO clan_quiz_questions (quiz_id, question_order, prompt, options, correct_index, explanation)
-        VALUES ($1, $2, $3, $4::jsonb, $5, $6)
-      `, [quizId, index + 1, question.prompt, JSON.stringify(question.options), question.correct_index, question.explanation || null]);
+    if (normalized.questions) {
+      await client.query('DELETE FROM clan_quiz_questions WHERE quiz_id = $1', [quizId]);
+      for (const [index, question] of normalized.questions.entries()) {
+        await client.query(`
+          INSERT INTO clan_quiz_questions (quiz_id, question_order, prompt, options, correct_index, explanation)
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+        `, [quizId, index + 1, question.prompt, JSON.stringify(question.options), question.correct_index, question.explanation || null]);
+      }
     }
   });
   return getClanQuiz(clanId);

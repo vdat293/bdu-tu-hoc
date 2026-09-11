@@ -59,7 +59,7 @@ export function ViewportModal({ id, title, labelledBy, onClose, dialogRef, child
     if (event.target === event.currentTarget) onClose();
   };
   return createPortal(
-    <div id={id} className="modal-backdrop" onMouseDown={closeOnBackdrop}>
+    <div id={id} className="modal-backdrop" onClick={closeOnBackdrop}>
       <div
         ref={dialogRef}
         className={`modal-dialog glass-panel ${className}`.trim()}

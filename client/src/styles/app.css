@@ -192,6 +192,83 @@ body.theme-light .sidebar .nav-item.active {
   min-height: 220px;
 }
 
+/* The normal schedule card stays intact; these small cues make the first
+   remaining occurrence immediately scannable without introducing a new view. */
+#tab-schedule .schedule-card--next {
+  border-color: var(--bdu-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bdu-primary) 18%, transparent);
+}
+
+#tab-schedule .schedule-card--ongoing {
+  border-color: var(--color-emerald);
+}
+
+#tab-schedule .schedule-card__eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#tab-schedule .schedule-card__eyebrow .sch-day-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#tab-schedule .schedule-card__eyebrow .sch-day {
+  margin: 0;
+  color: var(--bdu-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+#tab-schedule .schedule-card__eyebrow .sch-date {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid #d8c5c2;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+#tab-schedule .sch-date {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#tab-schedule .sch-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0;
+  padding: 3px 7px;
+  border: 1px solid #e3c8c6;
+  border-radius: 2px;
+  color: var(--bdu-primary);
+  background: #fdf7f6;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#tab-schedule .sch-status-chip.is-ongoing {
+  color: var(--color-emerald);
+  border-color: color-mix(in srgb, var(--color-emerald) 35%, transparent);
+  background: color-mix(in srgb, var(--color-emerald) 9%, transparent);
+}
+
 .learning-skeleton-heading {
   pointer-events: none;
 }
@@ -787,6 +864,13 @@ body.theme-light .sidebar .nav-item.active:hover {
 .quiz-import-textarea { margin-top: 6px; min-height: 120px; font-family: var(--font-mono, monospace); font-size: 12px; }
 .quiz-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .quiz-import-actions label { cursor: pointer; }
+.quiz-manual-editor { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border-color); }
+.quiz-manual-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.quiz-manual-actions { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 8px; align-items: end; }
+.quiz-manual-actions .form-input { margin-top: 6px; }
+.quiz-question-draft-list { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color); }
+.quiz-question-draft { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; }
+.quiz-question-draft span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quiz-schema-help, .quiz-question-count { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 
 @media (max-width: 680px) {
@@ -794,6 +878,7 @@ body.theme-light .sidebar .nav-item.active:hover {
   .clan-filter-tabs, .clan-feed-filter-tabs { flex-wrap: wrap; }
   .clan-search-wrap, .clan-docs-toolbar > .form-input { min-width: 0 !important; max-width: none !important; width: 100%; }
   .quiz-settings-grid { grid-template-columns: 1fr; }
+  .quiz-manual-options, .quiz-manual-actions { grid-template-columns: 1fr; }
   .modal-backdrop { padding: 10px; }
   .clan-create-dialog, .fb-composer-dialog { max-height: calc(100vh - 20px); overflow-y: auto; }
 }
@@ -957,6 +1042,78 @@ body.theme-light .sidebar .nav-item.active:hover {
   padding: 18px 22px 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-card);
+}
+
+/* GPA course detail is portalled to document.body so it stays independent of
+   the dashboard's scrolling/perspective context.  Header and footer remain
+   available while a long component-grade table scrolls inside the dialog. */
+#detail-modal.modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100001 !important;
+  display: grid !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0;
+  place-items: center;
+  padding: clamp(12px, 3vh, 28px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: rgba(17, 13, 12, .72) !important;
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
+#detail-modal .gpa-detail-dialog {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+}
+
+#detail-modal .gpa-detail-dialog .modal-header,
+#detail-modal .gpa-detail-dialog .modal-footer {
+  flex: 0 0 auto;
+}
+
+#detail-modal .gpa-detail-dialog .modal-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#detail-modal .gpa-detail-dialog .modal-title-group {
+  min-width: 0;
+}
+
+#detail-modal .gpa-detail-dialog .modal-title {
+  overflow-wrap: anywhere;
+}
+
+#detail-modal .gpa-detail-dialog .modal-close-btn {
+  flex: 0 0 auto;
+}
+
+#detail-modal .gpa-detail-dialog .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 680px) {
+  #detail-modal .gpa-detail-dialog .modal-header,
+  #detail-modal .gpa-detail-dialog .modal-body,
+  #detail-modal .gpa-detail-dialog .modal-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  #detail-modal .gpa-detail-dialog .course-summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .identity-title-dialog-header>div,

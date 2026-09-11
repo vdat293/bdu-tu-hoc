@@ -3,6 +3,7 @@ import { WebSocketServer } from 'ws';
 import { query } from '../db/database.js';
 import { BduIdentityService } from './bdu-identity.service.js';
 import { normalizeCourseCode } from './learning.service.js';
+import { EntertainmentGameService } from './entertainment-game.service.js';
 
 const WS_PATH = '/ws/community';
 const MAX_PAYLOAD = 16 * 1024;
@@ -131,6 +132,10 @@ function clanRoom(clanId) {
 
 function courseRoom(courseCode) {
   return `course:${normalizeCourseCode(courseCode)}`;
+}
+
+function gameRoom(roomCode) {
+  return `game:${String(roomCode || '').trim().toUpperCase()}`;
 }
 
 function scopeRoom(scope, scopeId) {
@@ -289,15 +294,69 @@ class CommunityRealtimeGateway {
       jsonSend(client.ws, { type: 'error', code: 'AUTH_REQUIRED', message: 'Cần xác thực socket trước.' });
       return;
     }
+    if (message.type === 'game.move' || message.type === 'game_move') {
+      const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
+      const result = await EntertainmentGameService.makeMove(roomRef, client.mssv, message.move || message.payload, {
+        clientMoveId: message.clientMoveId || message.client_move_id
+      });
+      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.move.accepted', data: result });
+      this.publishGameMove(result);
+      return;
+    }
+    if (message.type === 'game.join' || message.type === 'game_join') {
+      const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
+      const result = await EntertainmentGameService.joinRoom(roomRef, client.mssv, { inviteCode: message.inviteCode || message.invite_code || message.code });
+      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.join.accepted', data: result });
+      this.publishGameRoomUpdated(result);
+      return;
+    }
+    if (message.type === 'game.leave' || message.type === 'game_leave') {
+      const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
+      const result = await EntertainmentGameService.leaveRoom(roomRef, client.mssv);
+      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.leave.accepted', data: result });
+      if (result.deleted) {
+        this.publishGameRoomClosed(result.room_code, {
+          reason: 'player_left',
+          actor: client.mssv,
+          message: 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.'
+        });
+      }
+      return;
+    }
+    if (message.type === 'game.rematch' || message.type === 'game_rematch') {
+      const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
+      const result = await EntertainmentGameService.requestRematch(roomRef, client.mssv);
+      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.rematch.accepted', data: result });
+      if (result.ready) {
+        this.publishGameRematchStarted(result.room_code, result);
+      } else {
+        this.publishGameRematchRequested(result.room_code, result);
+      }
+      return;
+    }
     if (message.type === 'subscribe') {
       const room = String(message.room || '').trim();
+      if (!room) {
+        jsonSend(client.ws, { type: 'error', code: 'ROOM_INVALID', message: 'Room không hợp lệ.' });
+        return;
+      }
       client.requestedRooms.add(room);
       if (await this.canJoin(client, room)) {
         // `unsubscribe` may arrive while canJoin is waiting on PostgreSQL.
         // Honor the newest client intent rather than adding a ghost room.
         if (!this.isClientAttached(client) || !client.requestedRooms.has(room)) return;
         this.join(client, room);
-        if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'subscribed', room });
+        if (this.isClientAttached(client)) {
+          jsonSend(client.ws, { type: 'subscribed', room });
+          if (this.isGameRoom(room)) {
+            try {
+              const snapshot = await EntertainmentGameService.getRoom(this.gameRoomRef(room), { mssv: client.mssv });
+              if (this.isClientAttached(client) && client.requestedRooms.has(room)) jsonSend(client.ws, { type: 'game.snapshot', data: snapshot });
+            } catch (error) {
+              if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'error', code: error.code || 'GAME_SNAPSHOT_FAILED', message: error.message });
+            }
+          }
+        }
       } else {
         if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', room, message: 'Không có quyền theo dõi room này.' });
       }
@@ -314,6 +373,18 @@ class CommunityRealtimeGateway {
 
   async canJoin(client, room) {
     if (room === 'forum') return true;
+    if (this.isGameRoom(room)) {
+      const roomRef = this.gameRoomRef(room);
+      const result = await query(`
+        SELECT r.visibility, r.allow_spectators, p.mssv
+        FROM game_rooms r
+        LEFT JOIN game_room_players p ON p.room_id = r.id AND p.mssv = $2 AND p.left_at IS NULL
+        WHERE (r.room_code = $1 OR r.id::text = $1) AND r.status IN ('waiting', 'active')
+        LIMIT 1
+      `, [roomRef, client.mssv]);
+      if (!result.rowCount) return false;
+      return Boolean(result.rows[0].mssv) || (result.rows[0].visibility === 'public' && result.rows[0].allow_spectators !== false);
+    }
     const communityPostMatch = room.match(/^community-post:(\d+)$/);
     if (communityPostMatch) {
       const result = await query(`
@@ -379,6 +450,9 @@ class CommunityRealtimeGateway {
     client.rooms.add(room);
     if (!this.rooms.has(room)) this.rooms.set(room, new Set());
     this.rooms.get(room).add(client);
+    if (this.isGameRoom(room)) {
+      this.publishGameSpectatorCount(this.gameRoomRef(room));
+    }
     return true;
   }
 
@@ -388,6 +462,34 @@ class CommunityRealtimeGateway {
     const members = this.rooms.get(room);
     members?.delete(client);
     if (members && members.size === 0) this.rooms.delete(room);
+    if (this.isGameRoom(room)) {
+      this.publishGameSpectatorCount(this.gameRoomRef(room));
+      if (client.mssv) {
+        const roomRef = this.gameRoomRef(room);
+        const mssv = client.mssv;
+        setTimeout(async () => {
+          try {
+            const currentRoomClients = this.rooms.get(room);
+            const stillConnected = currentRoomClients && [...currentRoomClients].some((c) => c.mssv === mssv);
+            if (!stillConnected) {
+              const res = await query(
+                `SELECT r.id, r.room_code FROM game_rooms r JOIN game_room_players p ON p.room_id = r.id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.mssv = $2 AND p.left_at IS NULL`,
+                [roomRef, mssv]
+              );
+              if (res.rowCount > 0) {
+                await query(`DELETE FROM game_rooms WHERE id = $1`, [res.rows[0].id]);
+                EntertainmentGameService.clearRematchTimer?.(res.rows[0].room_code);
+                this.publishGameRoomClosed(res.rows[0].room_code, {
+                  reason: 'player_left',
+                  actor: mssv,
+                  message: 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.'
+                });
+              }
+            }
+          } catch {}
+        }, 4000);
+      }
+    }
   }
 
   removeClient(client) {
@@ -484,6 +586,62 @@ class CommunityRealtimeGateway {
     });
   }
 
+  isGameRoom(room) {
+    return /^game(?::|-room:)[A-Za-z0-9_-]+$/i.test(String(room || '').trim());
+  }
+
+  gameRoomRef(room) {
+    return String(room || '').trim().replace(/^game(?::|-room:)/i, '');
+  }
+
+  publishGameRoomUpdated(room) {
+    if (!room?.room_code) return;
+    this.emitToRooms([gameRoom(room.room_code)], 'game.room.updated', {
+      room_code: room.room_code,
+      id: room.id ? String(room.id) : null,
+      status: room.status || null,
+      state_version: room.state_version === undefined ? null : Number(room.state_version),
+      players: room.players || null
+    });
+  }
+
+  publishGameMove(move) {
+    if (!move?.room_code) return;
+    this.emitToRooms([gameRoom(move.room_code)], 'game.move.applied', {
+      room_code: move.room_code,
+      move_number: Number(move.move_number),
+      actor_mssv: move.actor_mssv || null,
+      seat: move.seat === undefined ? null : Number(move.seat),
+      move: move.move,
+      state: move.state,
+      state_version: Number(move.state_version || move.move_number),
+      status: move.status,
+      winner_seat: move.winner_seat === undefined ? null : move.winner_seat,
+      result: move.result || null,
+      idempotent: Boolean(move.idempotent)
+    });
+  }
+
+  publishGameChallengeCreated(challenge) {
+    if (!challenge?.room_code) return;
+    this.emitToRooms([gameRoom(challenge.room_code)], 'game.challenge.created', {
+      challenge_id: challenge.id,
+      room_code: challenge.room_code,
+      game_type: challenge.game_type,
+      expires_at: challenge.expires_at,
+      confession_post_id: challenge.confession_post_id || null
+    });
+  }
+
+  publishGameExpiry({ type, data }) {
+    if (type === 'room.expired' && data?.room_code) {
+      this.emitToRooms([gameRoom(data.room_code)], 'game.room.expired', data);
+    }
+    if (type === 'challenge.expired' && data?.room_code) {
+      this.emitToRooms([gameRoom(data.room_code)], 'game.challenge.expired', data);
+    }
+  }
+
   publishIdentityChanged(mssv, changes = {}) {
     const clean = normalizeMssv(mssv);
     for (const client of this.clients) {
@@ -503,6 +661,60 @@ class CommunityRealtimeGateway {
         avatarSource: changes.avatarSource || 'initials'
       });
     }
+  }
+
+  getSpectatorCount(roomCode, playerMssvs = []) {
+    const r = gameRoom(roomCode);
+    const clients = this.rooms.get(r);
+    if (!clients) return 0;
+    const playerSet = new Set((playerMssvs || []).map((m) => String(m).toUpperCase()));
+    let count = 0;
+    for (const client of clients) {
+      if (client.mssv && !playerSet.has(String(client.mssv).toUpperCase())) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  async publishGameSpectatorCount(roomRef) {
+    if (!roomRef) return;
+    try {
+      const res = await query(
+        `SELECT p.mssv FROM game_room_players p JOIN game_rooms r ON r.id = p.room_id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.left_at IS NULL`,
+        [roomRef]
+      );
+      const playerMssvs = res.rows.map((r) => r.mssv);
+      const count = this.getSpectatorCount(roomRef, playerMssvs);
+      this.emitToRooms([gameRoom(roomRef)], 'game.spectators.updated', {
+        room_code: roomRef,
+        spectator_count: count
+      });
+    } catch {}
+  }
+
+  publishGameRoomClosed(roomCode, data = {}) {
+    if (!roomCode) return;
+    this.emitToRooms([gameRoom(roomCode)], 'game.room.closed', {
+      room_code: roomCode,
+      ...data
+    });
+  }
+
+  publishGameRematchRequested(roomCode, data = {}) {
+    if (!roomCode) return;
+    this.emitToRooms([gameRoom(roomCode)], 'game.rematch.requested', {
+      room_code: roomCode,
+      ...data
+    });
+  }
+
+  publishGameRematchStarted(roomCode, data = {}) {
+    if (!roomCode) return;
+    this.emitToRooms([gameRoom(roomCode)], 'game.rematch.started', {
+      room_code: roomCode,
+      ...data
+    });
   }
 
   getStatus() {
@@ -527,7 +739,9 @@ class CommunityRealtimeGateway {
 }
 
 export const CommunityRealtime = new CommunityRealtimeGateway();
+EntertainmentGameService.getSpectatorCount = (roomCode, players) => CommunityRealtime.getSpectatorCount(roomCode, players);
+EntertainmentGameService.onRoomClosed = (roomCode, data) => CommunityRealtime.publishGameRoomClosed(roomCode, data);
 export const CommunityRealtimeInternals = {
-  WS_PATH, communityPostRoom, coursePostRoom, clanRoom, courseRoom, scopeRoom,
+  WS_PATH, communityPostRoom, coursePostRoom, clanRoom, courseRoom, gameRoom, scopeRoom,
   isAllowedOrigin, trustsProxyHeaders, authTimeoutMs, maxBufferedBytes
 };
