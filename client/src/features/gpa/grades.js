@@ -71,7 +71,7 @@ export function calculateRank(gpa10, gpa4) {
   const ten = Number.parseFloat(gpa10);
   if (!Number.isNaN(four) && four > 0) return four >= 3.6 ? 'Xuất sắc' : four >= 3.2 ? 'Giỏi' : four >= 2.5 ? 'Khá' : four >= 2 ? 'Trung bình' : 'Yếu';
   if (!Number.isNaN(ten) && ten > 0) return ten >= 9 ? 'Xuất sắc' : ten >= 8 ? 'Giỏi' : ten >= 6.5 ? 'Khá' : ten >= 5 ? 'Trung bình' : 'Yếu';
-  return 'Đang học';
+  return 'Chưa xếp loại';
 }
 
 export function coursesForFilters(semesters, { semester = 'ALL', status = 'ALL', query = '' } = {}) {
@@ -92,7 +92,13 @@ export function latestSummary(semesters) {
   const latest = semesters.find((sem) => sem.dtb_tich_luy_he_10 !== undefined && sem.dtb_tich_luy_he_10 !== '') || semesters[0] || {};
   const gpa10 = latest.dtb_tich_luy_he_10 ?? latest.dtb_hk_he10;
   const gpa4 = latest.dtb_tich_luy_he_4 ?? latest.dtb_hk_he4;
-  return { gpa10: formatScore(gpa10), gpa4: formatScore(gpa4), credits: numericCredits(latest.so_tin_chi_dat_tich_luy ?? latest.so_tin_chi_dat_hk), rank: latest.xep_loai_tkb_hk || calculateRank(gpa10, gpa4) };
+  const rank = calculateRank(gpa10, gpa4);
+  return {
+    gpa10: formatScore(gpa10),
+    gpa4: formatScore(gpa4),
+    credits: numericCredits(latest.so_tin_chi_dat_tich_luy ?? latest.so_tin_chi_dat_hk),
+    rank: rank === 'Chưa xếp loại' ? rank : (latest.xep_loai_tkb_hk || rank)
+  };
 }
 
 export function buildGradesCsv(semesters, filters = {}) {

@@ -1,8 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { getGrades } from '../../api/academics.js';
-import { getMyIdentityPresentation } from '../../api/identity.js';
+import { getGrades, getMyAcademicRanking } from '../../api/academics.js';
 import { useAuth } from '../../app/providers.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
@@ -38,6 +37,23 @@ function getGradeLetterClass(letter) {
 function getInitials(name) {
   const parts = String(name || 'SV').trim().split(/\s+/);
   return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+}
+
+function validHighlightedRank(rank) {
+  const position = Number(rank?.hang);
+  const total = Number(rank?.tong_sinh_vien);
+  if (!Number.isInteger(position) || position < 1 || !Number.isInteger(total) || total < 1) return null;
+  return { ...rank, hang: position, tong_sinh_vien: total };
+}
+
+function formatRankCaption(rank) {
+  const validRank = validHighlightedRank(rank);
+  return validRank ? `#${validRank.hang} ${validRank.pham_vi}` : 'Chưa có hạng';
+}
+
+function formatRankTitle(rank) {
+  const validRank = validHighlightedRank(rank);
+  return validRank ? `Hạng ${validRank.hang}/${validRank.tong_sinh_vien} sinh viên ${validRank.pham_vi}` : undefined;
 }
 
 function GpaPageSkeleton() {
@@ -133,11 +149,12 @@ export default function GpaPage() {
     retry: 1
   });
 
-  const presentation = useQuery({
-    queryKey: ['identity-presentation', auth.user?.mssv],
-    queryFn: ({ signal }) => getMyIdentityPresentation(auth.token, { signal }),
+  const academicRanking = useQuery({
+    queryKey: ['academic-ranking', auth.user?.mssv],
+    queryFn: ({ signal }) => getMyAcademicRanking(auth.token, { signal }),
     enabled: Boolean(auth.token),
-    staleTime: 5 * 60 * 1000
+    staleTime: 5 * 60 * 1000,
+    retry: false
   });
 
   const semesters = useMemo(() => getSemesters(grades.data), [grades.data]);
@@ -153,8 +170,10 @@ export default function GpaPage() {
   const displayName = auth.user?.name || 'Sinh viên BDU';
   const userMssv = auth.user?.mssv || '--';
   const userEmail = auth.user?.email || `${userMssv}@student.bdu.edu.vn`;
-  const rankNumber = presentation.data?.rank || presentation.data?.ranking?.rank || 2;
-  const facultyName = presentation.data?.faculty || 'VIỆN';
+  const rankingData = academicRanking.data;
+  const gpaRank = validHighlightedRank(rankingData?.xep_hang_noi_bat?.gpa_tich_luy);
+  const creditRank = validHighlightedRank(rankingData?.xep_hang_noi_bat?.tin_chi_tich_luy);
+  const overallRank = validHighlightedRank(rankingData?.xep_hang_noi_bat?.tong_hop);
 
   // Filter semesters and courses
   const filteredSemesters = useMemo(() => {
@@ -239,8 +258,12 @@ export default function GpaPage() {
             </div>
             <div className="hero-name-line">
               <h1 id="hero-name" className="hero-name">{displayName}</h1>
-              <span id="hero-overall-rank-badge" className="hero-overall-rank-badge">
-                #{rankNumber} · TRONG {facultyName.toUpperCase()}
+              <span
+                id="hero-overall-rank-badge"
+                className={`hero-overall-rank-badge${overallRank ? '' : ' rank-unavailable'}`}
+                title={formatRankTitle(overallRank)}
+              >
+                {overallRank ? `#${overallRank.hang} · ${overallRank.pham_vi.toLocaleUpperCase('vi-VN')}` : 'Chưa xếp hạng'}
               </span>
             </div>
             <div className="hero-meta">
@@ -269,7 +292,9 @@ export default function GpaPage() {
             <div className="stat-info">
               <span className="stat-title">GPA Tích Lũy (10)</span>
               <h3 id="stat-gpa-10" className="stat-value text-gradient-amber">{summary.gpa10}</h3>
-              <span id="stat-gpa-10-school-rank" className="stat-rank-caption">#{rankNumber} trong viện</span>
+              <span id="stat-gpa-10-school-rank" className="stat-rank-caption" title={formatRankTitle(gpaRank)}>
+                {formatRankCaption(gpaRank)}
+              </span>
             </div>
           </div>
 
@@ -278,7 +303,9 @@ export default function GpaPage() {
             <div className="stat-info">
               <span className="stat-title">GPA Tích Lũy (4.0)</span>
               <h3 id="stat-gpa-4" className="stat-value text-gradient-emerald">{summary.gpa4}</h3>
-              <span id="stat-gpa-school-rank" className="stat-rank-caption">#{rankNumber} trong viện</span>
+              <span id="stat-gpa-school-rank" className="stat-rank-caption" title={formatRankTitle(gpaRank)}>
+                {formatRankCaption(gpaRank)}
+              </span>
             </div>
           </div>
 
@@ -287,7 +314,9 @@ export default function GpaPage() {
             <div className="stat-info">
               <span className="stat-title">Tín Chỉ Đạt</span>
               <h3 id="stat-credits" className="stat-value text-gradient-blue">{summary.credits} TC</h3>
-              <span id="stat-credit-school-rank" className="stat-rank-caption">#{rankNumber} trong khoa</span>
+              <span id="stat-credit-school-rank" className="stat-rank-caption" title={formatRankTitle(creditRank)}>
+                {formatRankCaption(creditRank)}
+              </span>
             </div>
           </div>
 
@@ -295,7 +324,12 @@ export default function GpaPage() {
             <div className="stat-icon icon-rank">XL</div>
             <div className="stat-info">
               <span className="stat-title">Xếp Loại</span>
-              <h3 id="stat-rank" className="stat-value text-gradient-purple">{summary.rank}</h3>
+              <h3
+                id="stat-rank"
+                className={`stat-value${summary.rank === 'Chưa xếp loại' ? ' stat-value-unavailable' : ' text-gradient-purple'}`}
+              >
+                {summary.rank}
+              </h3>
             </div>
           </div>
         </div>

@@ -27,6 +27,22 @@ body.theme-light .sidebar .nav-item.active {
   display: block !important;
 }
 
+/* A student without published results is not ranked yet. Keep the explicit
+   state readable and static instead of giving it the rank shimmer treatment. */
+.hero-overall-rank-badge.rank-unavailable {
+  animation: none;
+  background: none;
+  background-image: none;
+  color: var(--text-muted);
+  filter: none;
+  opacity: .82;
+  -webkit-text-fill-color: currentColor;
+}
+
+.stat-value.stat-value-unavailable {
+  color: var(--text-muted);
+}
+
 .page-loading {
   min-height: min(420px, calc(100vh - 190px));
   display: flex;

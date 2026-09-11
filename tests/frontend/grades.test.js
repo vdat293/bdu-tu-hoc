@@ -24,6 +24,8 @@ describe('grade selectors and formatters', () => {
 
   it('keeps the existing rank thresholds and CSV Vietnamese header', () => {
     expect(calculateRank(0, 3.6)).toBe('Xuất sắc');
+    expect(calculateRank('', '')).toBe('Chưa xếp loại');
+    expect(latestSummary([]).rank).toBe('Chưa xếp loại');
     expect(buildGradesCsv(semesters)).toContain('Học Kỳ,Mã Môn,Tên Môn Học');
     expect(buildGradesCsv(semesters)).toContain('Lập trình JSX');
     expect(buildGradesCsv(semesters)).toContain('Chưa có điểm');
