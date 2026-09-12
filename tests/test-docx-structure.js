@@ -113,8 +113,14 @@ try {
   assert.equal(Number(indent.attr('w:left'))-Number(indent.attr('w:hanging')),720);
   assert.equal($('w\\:pgNumType[w\\:start="1"][w\\:fmt="decimal"]').length,1,'restart only at real Chapter 1');
   const headers=z.getEntries().filter(e=>/wfStructureHeader/.test(e.entryName)).map(e=>e.getData().toString());
+  const footers=z.getEntries().filter(e=>/wfStructureFooter/.test(e.entryName)).map(e=>e.getData().toString());
   assert.ok(headers.some(t=>t.includes('CHƯƠNG 1')));
   assert.ok(headers.some(t=>t.includes('CHƯƠNG 2')));
+  for (const part of [...headers, ...footers]) {
+    assert.ok(part.includes('w:ascii="Times New Roman"'), 'header/footer dùng Times New Roman');
+    assert.ok(part.includes('w:eastAsia="Times New Roman"'), 'header/footer áp dụng font cho tiếng Việt');
+    assert.match(part, /<w:sz w:val="26"\/><w:szCs w:val="26"\/>/, 'header/footer là 13 pt');
+  }
   const again=path.join(temp,'again.docx');
   formatStructuredDocx(result.outputPath,again,options);
   const second=new AdmZip(again), $$=load(second.readAsText('word/document.xml'),{xml:true});

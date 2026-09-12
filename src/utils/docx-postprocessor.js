@@ -133,6 +133,23 @@ function patchRun(runXml, {
   return runXml.replace(/^(<w:r\b[^>]*>)/, `$1<w:rPr>${properties.map(property => property.xml).join('')}</w:rPr>`);
 }
 
+function headerFooterFormatting(formatting = {}) {
+  const fontName = String(formatting.font || 'Times New Roman').trim() || 'Times New Roman';
+  const configuredSize = Number(formatting.size_pt);
+  const sizeHalfPoints = Number.isFinite(configuredSize) && configuredSize > 0
+    ? Math.round(configuredSize * 2)
+    : 26;
+  return { fontName, sizeHalfPoints };
+}
+
+export function normalizeAcademicHeaderFooter(partXml, formatting = {}) {
+  const normalized = partXml.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, runXml => patchRun(
+    runXml,
+    headerFooterFormatting(formatting)
+  ));
+  return normalizeWordprocessingPropertyOrder(normalized).xml;
+}
+
 function getParagraphStyleId(paragraphXml) {
   return paragraphXml.match(/<w:pStyle\b[^>]*w:val="([^"]+)"[^>]*\/?\s*>/)?.[1] || '';
 }
@@ -1429,15 +1446,11 @@ function replaceHeaderText(headerXml, documentTitle, sectionTitle) {
   });
 }
 
-export function normalizeAcademicHeader(headerXml, templateXml, documentTitle, sectionTitle) {
+export function normalizeAcademicHeader(headerXml, templateXml, documentTitle, sectionTitle, formatting = {}) {
   let normalized = headerXml;
   if ((normalized.match(/<w:t\b/g) || []).length < 2 && templateXml) normalized = templateXml;
   normalized = replaceHeaderText(normalized, documentTitle, sectionTitle);
-  normalized = normalized.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, runXml => patchRun(runXml, {
-    fontName: 'Times New Roman',
-    sizeHalfPoints: 20
-  }));
-  return normalized;
+  return normalizeAcademicHeaderFooter(normalized, formatting);
 }
 
 function auditCompliance(documentXml, stylesXml, stats) {
@@ -1515,6 +1528,9 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
     hyperlinkRelationshipsRemoved: 0,
     remainingReferenceHyperlinks: 0,
     headersNormalized: 0,
+    footersNormalized: 0,
+    headerFooterFont: headerFooterFormatting(options.profile?.header_footer).fontName,
+    headerFooterSizePt: headerFooterFormatting(options.profile?.header_footer).sizeHalfPoints / 2,
     frontMatterReordered: false,
     bindingPagesInserted: 0,
     sectionsNormalized: 0,
@@ -1632,9 +1648,14 @@ export function normalizeFormattedDocx(docxPath, options = {}) {
       const sectionTitle = headerMappings.get(entry.entryName);
       if (sectionTitle) {
         const template = /Even\.xml$/i.test(entry.entryName) ? evenTemplate : defaultTemplate;
-        xml = normalizeAcademicHeader(xml, template, documentTitle, sectionTitle);
-        stats.headersNormalized += 1;
+        xml = normalizeAcademicHeader(xml, template, documentTitle, sectionTitle, options.profile?.header_footer);
+      } else {
+        xml = normalizeAcademicHeaderFooter(xml, options.profile?.header_footer);
       }
+      stats.headersNormalized += 1;
+    } else if (/^word\/[^/]*footer[^/]*\.xml$/i.test(entry.entryName)) {
+      xml = normalizeAcademicHeaderFooter(xml, options.profile?.header_footer);
+      stats.footersNormalized += 1;
     }
 
     const propertyOrderResult = normalizeWordprocessingPropertyOrder(xml);

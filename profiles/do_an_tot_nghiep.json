@@ -145,7 +145,7 @@
   "header_footer": {
     "enabled": true,
     "font": "Times New Roman",
-    "size_pt": 10,
+    "size_pt": 13,
     "header_left": "ĐỒ ÁN TỐT NGHIỆP",
     "header_right": "{section_title}",
     "suppress_header_on_heading1_page": false,

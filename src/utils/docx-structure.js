@@ -924,10 +924,19 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     archive.addFile(`word/${name}`, Buffer.from(xml)); return id;
   };
   const title = graduation ? 'ĐỒ ÁN TỐT NGHIỆP' : analysis.documentType || options.documentTitle || 'TIỂU LUẬN MÔN HỌC';
-  const hfRun = text => `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="20"/></w:rPr><w:t>${esc(text)}</w:t></w:r>`;
+  const headerFooter = profile.header_footer || {};
+  const headerFooterFont = String(headerFooter.font || 'Times New Roman').trim() || 'Times New Roman';
+  const configuredHeaderFooterSize = Number(headerFooter.size_pt);
+  const headerFooterSizePt = Number.isFinite(configuredHeaderFooterSize) && configuredHeaderFooterSize > 0
+    ? configuredHeaderFooterSize
+    : 13;
+  const headerFooterSizeHalfPoints = Math.round(headerFooterSizePt * 2);
+  const hfRunProperties = `<w:rFonts w:ascii="${esc(headerFooterFont)}" w:hAnsi="${esc(headerFooterFont)}" w:eastAsia="${esc(headerFooterFont)}" w:cs="${esc(headerFooterFont)}"/><w:sz w:val="${headerFooterSizeHalfPoints}"/><w:szCs w:val="${headerFooterSizeHalfPoints}"/>`;
+  const hfRun = text => `<w:r><w:rPr>${hfRunProperties}</w:rPr><w:t>${esc(text)}</w:t></w:r>`;
+  const hfFieldRun = content => `<w:r><w:rPr>${hfRunProperties}</w:rPr>${content}</w:r>`;
   const hfParagraph = (left, right, page = false) => {
-    const cell = (width,align,content) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="${align}"/></w:pPr>${content}</w:p></w:tc>`;
-    const pageField = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>'+hfRun('1')+'<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const cell = (width,align,content) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="${align}"/><w:rPr>${hfRunProperties}</w:rPr></w:pPr>${content}</w:p></w:tc>`;
+    const pageField = hfFieldRun('<w:fldChar w:fldCharType="begin"/>')+hfFieldRun('<w:instrText xml:space="preserve"> PAGE </w:instrText>')+hfFieldRun('<w:fldChar w:fldCharType="separate"/>')+hfRun('1')+hfFieldRun('<w:fldChar w:fldCharType="end"/>');
     const widths = page ? [4000,1071,4000] : [3000,6071];
     return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:${page?'top':'bottom'} w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0],'left',hfRun(left))}${page?cell(widths[1],'center',pageField):''}${cell(widths.at(-1),'right',hfRun(right))}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
   };
@@ -1013,6 +1022,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       structure:{...analysis.summary,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
         indexPagesRebuilt, leadingPageBordersDetected, borderedLeadingCoverPagesReplaced, tableFontSizePt:13,
+        headerFooterFont, headerFooterSizePt,
         enDashesReplaced:dashReplacements, hyperlinksRemoved:hyperlinks.stats.hyperlinksRemoved, frontMatterReordered, bindingPagesInserted,
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,

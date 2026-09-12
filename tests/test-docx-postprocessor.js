@@ -4,6 +4,7 @@ import {
   materializeAutomaticLists,
   mapHeadersToSectionTitles,
   normalizeAcademicHeader,
+  normalizeAcademicHeaderFooter,
   normalizeAcademicLists,
   normalizeFrontMatter,
   normalizeReferenceHeader,
@@ -145,6 +146,22 @@ const referenceHeaderResult = normalizeReferenceHeader(referenceHeaderXml);
 assert.equal(referenceHeaderResult.cleared, false);
 assert.equal(referenceHeaderResult.xml, referenceHeaderXml);
 
+const headerFooterSource = '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:rPr><w:rFonts w:ascii="Aptos"/><w:sz w:val="22"/></w:rPr><w:t>Header</w:t></w:r></w:p></w:hdr>';
+const normalizedHeaderFooter = normalizeAcademicHeaderFooter(headerFooterSource, {
+  font: 'Times New Roman',
+  size_pt: 13
+});
+assert.match(normalizedHeaderFooter, /w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/);
+assert.match(normalizedHeaderFooter, /<w:sz w:val="26"\/><w:szCs w:val="26"\/>/);
+const normalizedHeader = normalizeAcademicHeader(
+  referenceHeaderXml,
+  '',
+  'TIỂU LUẬN MÔN HỌC',
+  'CHƯƠNG 1',
+  { font: 'Times New Roman', size_pt: 13 }
+);
+assert.match(normalizedHeader, /<w:sz w:val="26"\/><w:szCs w:val="26"\/>/);
+
 const strippedLinks = stripReferenceHyperlinks(referenceHyperlinkDocumentXml);
 assert.equal(strippedLinks.stats.hyperlinksRemoved, 1);
 assert.doesNotMatch(strippedLinks.xml, /<w:hyperlink/);
@@ -196,6 +213,8 @@ assert.equal(
   formattingProfile.cover.document_type
 );
 assert.equal(formattingProfile.header_footer.header_right, '{section_title}');
+assert.equal(formattingProfile.header_footer.font, 'Times New Roman');
+assert.equal(formattingProfile.header_footer.size_pt, 13);
 assert.equal(formattingProfile.lists.normalize_all, false);
 assert.equal(formattingProfile.references.remove_hyperlinks, true);
 
