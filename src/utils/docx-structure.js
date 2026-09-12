@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import { prepareGraduation, prepareCourseworkCover, isolateProposalStyles } from './docx-graduation.js';
 import { readCoverMetadata } from './docx-graduation-cover.js';
 import {captureProposalBlock, markProposalBlock, restoreProposalBlock} from './docx-proposal-preservation.js';
-import { repairDataTable, normalizeStructuredCaptions, ensureAcknowledgementFrame } from './docx-layout.js';
+import { repairDataTable, normalizeStructuredCaptions, ensureAcknowledgementFrame, convertTabbedTableBlocks } from './docx-layout.js';
 import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
 import {
   processStylesXml, normalizeWordprocessingPropertyOrder,
   normalizeTablesAndDrawings, stripReferenceHyperlinks,
-  removeUnusedHyperlinkRelationships
+  removeUnusedHyperlinkRelationships, normalizeBodyText
 } from './docx-postprocessor.js';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -313,7 +313,46 @@ function ensureStyles(archive, profile) {
   archive.updateFile('word/styles.xml', Buffer.from(normalizeWordprocessingPropertyOrder($.xml()).xml));
 }
 
-function applyParagraphFormat($, p, rec, profile) {
+function isBoldPropertyOn($, propertiesNode) {
+  if (!propertiesNode || !propertiesNode.name) return false;
+  return $(propertiesNode).children(`${tag('b')},${tag('bCs')}`).toArray().some(node => {
+    const value = $(node).attr('w:val');
+    return value === undefined || !/^(?:0|false|off|none)$/iu.test(String(value));
+  });
+}
+
+function paragraphHasDirectBold($, paragraph) {
+  const p = $(paragraph);
+  const paragraphProperties = p.children(tag('pPr')).children(tag('rPr')).first();
+  if (isBoldPropertyOn($, paragraphProperties[0])) return true;
+  return p.find(tag('r')).toArray()
+    .filter(run => $(run).find(tag('t')).length > 0)
+    .some(run => isBoldPropertyOn($, $(run).children(tag('rPr')).first()[0]));
+}
+
+function hasUniformDirectBodyBold($, records) {
+  const candidates = records.filter(record => !record.insideTable && !record.inIndex
+    && ['body', 'chapter_summary'].includes(record.role) && record.text?.trim());
+  if (candidates.length < 12) return false;
+  return candidates.every(record => paragraphHasDirectBold($, record.element));
+}
+
+function clearDirectBold($, paragraph) {
+  const p = $(paragraph);
+  let changed = false;
+  const removeBold = propertiesNode => {
+    if (!propertiesNode?.name) return;
+    for (const name of ['b', 'bCs']) {
+      const nodes = $(propertiesNode).children(tag(name));
+      if (nodes.length) { nodes.remove(); changed = true; }
+    }
+  };
+  removeBold(p.children(tag('pPr')).children(tag('rPr')).first()[0]);
+  p.find(tag('r')).each((_, run) => removeBold($(run).children(tag('rPr')).first()[0]));
+  return changed;
+}
+
+function applyParagraphFormat($, p, rec, profile, options = {}) {
   const heading = rec.role === 'chapter' || rec.role === 'heading';
   const id = heading ? `WFHeading${rec.level}` : ({ intro_title:'WFIntroTitle', part_title:'WFPartTitle',
     major_title:'WFMajorTitle', front_title:'WFFrontTitle', intro_heading:'WFIntroHeading',
@@ -362,6 +401,10 @@ function applyParagraphFormat($, p, rec, profile) {
       rp.append('<w:sz w:val="26"/><w:szCs w:val="26"/>');
     });
   }
+  if (options.regularizeBodyBold && ['body', 'chapter_summary'].includes(rec.role)) {
+    return clearDirectBold($, p);
+  }
+  return false;
 }
 
 export function ensureMissingCaptionPlaceholders($, body, records, warnings = []) {
@@ -546,6 +589,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     analysis.warnings.push(`Đã thay ${borderedLeadingCoverPagesReplaced} trang đầu có page border bằng bìa chuẩn của tool.`);
   }
   const graduation = options.documentType === 'do_an_tot_nghiep';
+  const profile = options.profile || {};
   const shouldSkipProposal = Boolean(options.skipProposal);
   const preserveProposal = graduation || shouldSkipProposal;
   const originalProposalSection = preserveProposal ? captureProposalBlock(analysis, options)?.sectionXml : '';
@@ -563,6 +607,29 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       analysis.warnings.push(...warnings);
     }
   }
+  let tabbedTableResult = { tablesConverted: 0, rowsConverted: 0 };
+  const tableWidthForConversion = cm(21 - (profile.page?.margins_cm?.left ?? 3) - (profile.page?.margins_cm?.right ?? 2));
+  const convertibleRegions = new Set(['introduction', 'body', 'conclusion']);
+  tabbedTableResult = convertTabbedTableBlocks(analysis.$, analysis.body, {
+    width: tableWidthForConversion,
+    // Cover, front-matter, proposal and signature layouts also use tabs by
+    // design. Only prose regions are eligible for table recovery.
+    shouldConvert: paragraph => {
+      const record = analysis.records.find(item => item.element === paragraph);
+      return !record || convertibleRegions.has(record.region);
+    }
+  });
+  if (tabbedTableResult.tablesConverted) {
+    const warnings = analysis.warnings;
+    // The converter works on the Cheerio tree owned by the current analysis.
+    // Persist it before re-analysis; otherwise the next parse would reload
+    // the untouched archive and silently discard the newly-created tables.
+    analysis.archive.updateFile('word/document.xml', Buffer.from(analysis.$.xml()));
+    analysis = analyzeDocxStructure(analysis.archive);
+    analysis.warnings.push(...warnings);
+    analysis.warnings.push(`Đã chuyển ${tabbedTableResult.tablesConverted} cụm văn bản ngăn bằng tab thành bảng Word thật.`);
+  }
+  const bodyDirectBoldMode = profile.body?.bold === false && hasUniformDirectBodyBold(analysis.$, analysis.records);
   const { archive, $, body, records } = analysis;
   if(preserveProposal) {
     const isolated = isolateProposalStyles(analysis);
@@ -574,7 +641,6 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     analysis.warnings.push('Tùy chọn "Bỏ qua định dạng đề cương" được bật nhưng tài liệu không có phần đề cương.');
   }
   $(tag('document')).attr('xmlns:r', R);
-  const profile = options.profile || {};
   const originalNumbering = archive.readAsText('word/numbering.xml');
   const originalProposal = records.filter(r=>r.region==='proposal' && !r.inIndex && r.text).map(r=>r.text);
   const preserved = new Set(records.filter(r => r.region==='proposal' || ['cover','embedded'].includes(r.role)).map(r => r.element));
@@ -586,6 +652,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const generatedIndexes = new Set();
   const tocCode = 'TOC \\t "WFIntroTitle,1,WFIntroHeading,2,WFPartTitle,1,WFMajorTitle,1,WFHeading1,1,WFHeading2,2,WFHeading3,3,WFHeading4,4" \\h';
   let restoredIndexes = 0;
+  let bodyDirectBoldNormalized = 0;
   for (const rec of records) {
     const p = $(rec.element);
     if (rec.inIndex) {
@@ -603,7 +670,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       p.remove(); continue;
     }
     if (preserved.has(rec.element) || rec.insideTable || (graduation && rec.styleId==='WFGraduationForm')) continue;
-    applyParagraphFormat($, p, rec, profile);
+    if (applyParagraphFormat($, p, rec, profile, { regularizeBodyBold: bodyDirectBoldMode })) bodyDirectBoldNormalized++;
     if (!rec.text && /^Heading|^WFHeading/.test(rec.styleId)) prop(p,'numPr','<w:numPr><w:numId w:val="0"/></w:numPr>');
   }
   // Remove source spacer paragraphs immediately before an index, including
@@ -660,6 +727,11 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     // Front-matter signature/comment layouts are not data tables.
     const rec=records.find(r=>r.insideTable && $(r.element).parents(tag('tbl')).toArray().includes(table));
     if(rec?.region==='front' && !records.slice(0,rec.index).reverse().find(r=>r.role==='front_title')?.text.includes('VIẾT TẮT'))return;
+    if (bodyDirectBoldMode && rec?.region !== 'front') {
+      $(table).find(tag('p')).each((_, paragraph) => {
+        if (clearDirectBold($, paragraph)) bodyDirectBoldNormalized++;
+      });
+    }
     repairDataTable($,table,tableWidth);
     tablesCentered++;tablesResized++;
   });
@@ -903,6 +975,8 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const hyperlinks = stripReferenceHyperlinks(documentXml);
   documentXml = hyperlinks.xml;
   documentXml = normalizeWordprocessingPropertyOrder(documentXml).xml;
+  const bodyTextResult = normalizeBodyText(documentXml, { profile });
+  documentXml = bodyTextResult.xml;
   protectedTables.forEach((entry,i)=>{documentXml=documentXml.replace(`<!--WF_PROTECTED_TABLE_${i}-->`,entry.xml);});
   documentXml=restoreProposalBlock(documentXml,proposalBlock);
   const relationshipResult = removeUnusedHyperlinkRelationships(rels.xml(), hyperlinks.removedRelationshipIds, documentXml);
@@ -946,6 +1020,9 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
           longDashesNormalized:!verified.records.some(r=>!['cover','proposal'].includes(r.region)&&/[–—]/.test(r.text)),
           wideTablesFitPortrait:wideTablesDetected===0,wordCompatibleAnchors,wordprocessingPropertyOrder,headingStructure:chapterStructure,headingIndentation,
           proposalPreserved,proposalTablesPreserved,proposalBlockPreserved,proposalSkipped:shouldSkipProposal },
-        tablesCentered, drawingParagraphsCentered, wideTablesDetected, tablesResized, acknowledgementFramesAdded, ...captionStats,
+        tablesCentered, drawingParagraphsCentered, wideTablesDetected, tablesResized, acknowledgementFramesAdded,
+        tabbedTablesConverted: tabbedTableResult.tablesConverted, tabbedTableRowsConverted: tabbedTableResult.rowsConverted,
+        bodyTextCase: bodyTextResult.stats.bodyTextCase, bodyTextNodesNormalized: bodyTextResult.stats.bodyTextNodesNormalized,
+        bodyDirectBoldMode, bodyDirectBoldNormalized, ...captionStats,
         warnings:analysis.warnings } } };
 }

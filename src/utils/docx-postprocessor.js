@@ -149,17 +149,65 @@ function getNumberingReference(xml) {
 }
 
 function getFirstTextValue(paragraphXml) {
-  return paragraphXml.match(/<(?:w|a|m):t\b[^>]*>([\s\S]*?)<\/(?:w|a|m):t>/)?.[1] || '';
+  const text = paragraphXml.match(/<(?:w|a|m):t\b[^>]*>([\s\S]*?)<\/(?:w|a|m):t>/)?.[1] || '';
+  return decodeXmlText(text);
+}
+
+function decodeXmlText(value) {
+  return String(value).replace(
+    /&(?:amp|lt|gt|quot|apos|nbsp|#(?:x[0-9a-f]+|\d+));/gi,
+    entity => {
+      const lower = entity.toLowerCase();
+      const named = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&apos;': "'",
+        '&nbsp;': ' '
+      }[lower];
+      if (named !== undefined) return named;
+      const numeric = lower.startsWith('&#x')
+        ? Number.parseInt(lower.slice(3, -1), 16)
+        : Number.parseInt(lower.slice(2, -1), 10);
+      return Number.isInteger(numeric) && numeric >= 0 && numeric <= 0x10ffff
+        ? String.fromCodePoint(numeric)
+        : entity;
+    }
+  );
+}
+
+function encodeXmlText(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/**
+ * Return visible text from a WordprocessingML subtree in document order.
+ * Word can split a sentence over runs and represents tabs/line breaks as
+ * elements rather than text nodes. Do not include paragraph-property tabs or
+ * field instructions: neither is visible body text.
+ */
+export function extractWordprocessingText(xml) {
+  const source = String(xml || '').replace(/<w:pPr\b[^>]*>[\s\S]*?<\/w:pPr>/gi, '');
+  const tokens = /<(?:w|a|m):t\b[^>]*>[\s\S]*?<\/(?:w|a|m):t>|<w:(?:tab|br|cr)\b[^>]*(?:\/>|>[\s\S]*?<\/w:(?:tab|br|cr)>)/gi;
+  let text = '';
+  for (const match of source.matchAll(tokens)) {
+    if (/^<(?:w|a|m):t\b/i.test(match[0])) {
+      text += decodeXmlText(match[0].replace(/^<[^>]+>|<\/[^>]+>$/g, ''));
+    } else {
+      text += /^<w:tab\b/i.test(match[0]) ? '\t' : '\n';
+    }
+  }
+  return text;
 }
 
 function getParagraphText(paragraphXml) {
-  return [...paragraphXml.matchAll(/<(?:w|a|m):t\b[^>]*>([\s\S]*?)<\/(?:w|a|m):t>/g)]
-    .map(match => match[1])
-    .join('')
-    .replace(/&nbsp;|&#160;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
+  return extractWordprocessingText(paragraphXml);
 }
 
 function normalizeLookupText(value) {
@@ -639,11 +687,14 @@ export function replaceStraightDoubleQuotes(xml) {
 }
 
 export function processDocumentXml(documentXml, profile = {}) {
+  const bodyTextCase = resolveBodyTextCase(profile);
   const stats = {
     headingParagraphs: 0,
     headingRuns: 0,
     bodyParagraphs: 0,
-    bodyRunsNormalized: 0
+    bodyRunsNormalized: 0,
+    bodyTextNodesNormalized: 0,
+    bodyTextCase
   };
 
   const xml = documentXml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, paragraphXml => {
@@ -658,6 +709,11 @@ export function processDocumentXml(documentXml, profile = {}) {
     if (isBody) stats.bodyParagraphs += 1;
 
     let formatted = paragraphXml;
+    if (isBody) {
+      const bodyTextResult = normalizeTextNodeCase(formatted, bodyTextCase);
+      if (bodyTextResult.changed) stats.bodyTextNodesNormalized += 1;
+      formatted = bodyTextResult.xml;
+    }
     if (isHeading) {
       const level = Number(styleId.at(-1));
       const cfg = profile.headings?.[level === 1 ? 'chapter' : `level${level}`] || {};
@@ -683,6 +739,61 @@ export function processDocumentXml(documentXml, profile = {}) {
 
 function normalizeTextForMatching(value) {
   return value.replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The academic rules preserve source characters. A caller that intentionally
+ * wants lower-case body prose can opt in through `bodyTextCase: 'lower'` or a
+ * profile's `body.text_case`/`text_normalization.body_case` setting.
+ */
+export function resolveBodyTextCase(profile = {}, explicitCase = undefined) {
+  const configured = explicitCase
+    ?? profile.body?.text_case
+    ?? profile.body?.case
+    ?? profile.text_normalization?.body_case
+    ?? profile.text_normalization?.bodyCase
+    ?? 'preserve';
+  const normalized = String(configured).trim().toLowerCase();
+  if (['lower', 'lowercase', 'lower_case'].includes(normalized)) return 'lower';
+  return 'preserve';
+}
+
+function normalizeTextNodeCase(xml, textCase) {
+  if (textCase !== 'lower') return { xml, changed: false };
+  let changed = false;
+  const normalized = xml.replace(
+    /(<(?:w|a|m):t\b[^>]*>)([\s\S]*?)(<\/(?:w|a|m):t>)/gi,
+    (fullMatch, open, text, close) => {
+      // Word often stores Vietnamese characters as numeric entities. Decode
+      // before case conversion so literal lowercase also works for those runs,
+      // then re-escape the text content without touching the surrounding XML.
+      const decoded = decodeXmlText(text);
+      const lower = decoded.toLocaleLowerCase('vi-VN');
+      if (lower === decoded) return fullMatch;
+      changed = true;
+      return `${open}${encodeXmlText(lower)}${close}`;
+    }
+  );
+  return { xml: normalized, changed };
+}
+
+/**
+ * Normalize only paragraphs carrying the formatter-owned body style. The
+ * default is a no-op so existing documents and the preserve-original-text
+ * heading contract remain backwards compatible.
+ */
+export function normalizeBodyText(documentXml, options = {}) {
+  const textCase = resolveBodyTextCase(options.profile || options, options.bodyTextCase ?? options.case);
+  let bodyParagraphs = 0;
+  let textNodesChanged = 0;
+  const xml = documentXml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi, paragraphXml => {
+    if (getParagraphStyleId(paragraphXml) !== 'WFBody') return paragraphXml;
+    bodyParagraphs += 1;
+    const result = normalizeTextNodeCase(paragraphXml, textCase);
+    if (result.changed) textNodesChanged += 1;
+    return result.xml;
+  });
+  return { xml, stats: { bodyParagraphs, bodyTextNodesNormalized: textNodesChanged, bodyTextCase: textCase } };
 }
 
 export function collectInlineEmphasis(docxPath) {
@@ -1151,7 +1262,7 @@ export function normalizeSectionProperties(documentXml, documentMode = 'digital_
 
 function centerTable(tableXml) {
   // Table formatting uses no colored fill, including headers from the DLL.
-  tableXml = tableXml.replace(/<w:shd\b[^>]*\/>/g, '<w:shd w:val="clear" w:fill="auto"/>');
+  tableXml = tableXml.replace(/<w:shd\b[^>]*(?:\/>|>[\s\S]*?<\/w:shd>)/g, '<w:shd w:val="clear" w:fill="auto"/>');
   tableXml = tableXml.replace(/<w:tcBorders\b[^>]*>[\s\S]*?<\/w:tcBorders>/g, '');
   tableXml = tableXml.replace(/<w:tblCellSpacing\b[^>]*(?:\/>|>[\s\S]*?<\/w:tblCellSpacing>)/g, '');
   tableXml = tableXml.replace(/<w:tblOverlap\b[^>]*(?:\/>|>[\s\S]*?<\/w:tblOverlap>)/g, '');
@@ -1160,9 +1271,8 @@ function centerTable(tableXml) {
       borders => borders.replace(/w:sz="\d+"/g, 'w:sz="4"'));
   } else {
     const borders = '<w:tblBorders>' + ['top','left','bottom','right','insideH','insideV'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join('') + '</w:tblBorders>';
-    if (/<w:tblPr\b[^>]*>/.test(tableXml)) {
-      tableXml = tableXml.replace(/<\/w:tblPr>/, `${borders}</w:tblPr>`);
-    }
+    if (/<w:tblPr\b[^>]*>/.test(tableXml)) tableXml = tableXml.replace(/<\/w:tblPr>/, `${borders}</w:tblPr>`);
+    else tableXml = tableXml.replace(/^(<w:tbl\b[^>]*>)/, `$1<w:tblPr>${borders}</w:tblPr>`);
   }
   const alignment = '<w:jc w:val="center"/>';
   if (/<w:tblPr\b[^>]*>/.test(tableXml)) {
@@ -1173,12 +1283,61 @@ function centerTable(tableXml) {
   return tableXml.replace(/^(<w:tbl\b[^>]*>)/, `$1<w:tblPr>${alignment}</w:tblPr>`);
 }
 
+function rewriteWordprocessingElements(xml, localName, transform) {
+  const pattern = new RegExp(`<\\/?w:${escapeRegExp(localName)}\\b[^>]*>`, 'gi');
+
+  function matchingClose(start, limit) {
+    let depth = 1;
+    pattern.lastIndex = start;
+    let match;
+    while ((match = pattern.exec(xml)) !== null && match.index < limit) {
+      if (match[0].startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return { start: match.index, end: pattern.lastIndex };
+      } else if (!/\/\s*>$/.test(match[0])) {
+        depth += 1;
+      }
+    }
+    return null;
+  }
+
+  function rewriteRange(start, end) {
+    let output = '';
+    let cursor = start;
+    pattern.lastIndex = start;
+    let match;
+    while ((match = pattern.exec(xml)) !== null && match.index < end) {
+      if (match[0].startsWith('</')) continue;
+      output += xml.slice(cursor, match.index);
+      const openEnd = pattern.lastIndex;
+      if (/\/\s*>$/.test(match[0])) {
+        output += match[0];
+        cursor = openEnd;
+        continue;
+      }
+      const close = matchingClose(openEnd, end);
+      if (!close) {
+        output += xml.slice(match.index, end);
+        cursor = end;
+        break;
+      }
+      const inner = rewriteRange(openEnd, close.start);
+      output += transform(`${match[0]}${inner}${xml.slice(close.start, close.end)}`);
+      cursor = close.end;
+      pattern.lastIndex = cursor;
+    }
+    return output + xml.slice(cursor, end);
+  }
+
+  return rewriteRange(0, xml.length);
+}
+
 export function normalizeTablesAndDrawings(documentXml) {
   let tablesCentered = 0;
   let wideTablesDetected = 0;
   let drawingParagraphsCentered = 0;
   let anchoredImagesWrapped = 0;
-  let xml = documentXml.replace(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g, tableXml => {
+  let xml = rewriteWordprocessingElements(documentXml, 'tbl', tableXml => {
     const gridWidth = [...tableXml.matchAll(/<w:gridCol\b[^>]*w:w="(\d+)"[^>]*\/>/g)]
       .reduce((total, match) => total + Number(match[1]), 0);
     if (gridWidth > 9071) wideTablesDetected += 1;

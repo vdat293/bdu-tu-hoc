@@ -9,10 +9,204 @@ function properties(n, name) {
   return p;
 }
 function set(p, name, xml) { children(p, name).remove(); p.append(xml); }
+
+const xmlOf = ($, node) => $.xml(node);
+
+function hasVisibleText($, node) {
+  return $(node).find(tag('t')).toArray().some(textNode => $(textNode).text().trim());
+}
+
+function inlineTabCount($, paragraph) {
+  return $(paragraph).children().toArray()
+    .filter(node => node.name !== 'w:pPr')
+    .reduce((count, node) => count + (node.name === 'w:tab'
+      ? 1
+      : $(node).find(tag('tab')).length), 0);
+}
+
+function cloneTableCellParagraphProperties($, paragraph) {
+  const source = $(paragraph).children(tag('pPr')).first();
+  if (!source.length) return '<w:pPr/>';
+  const copy = $(`<w:pPr>${source.html() || ''}</w:pPr>`);
+  // Table repair owns these properties. In particular, source tab stops and
+  // paragraph-level bold must not leak back into a converted cell.
+  for (const name of ['rPr', 'tabs', 'numPr', 'ind', 'jc']) children(copy, name).remove();
+  return xmlOf($, copy[0]);
+}
+
+function splitTabbedParagraph($, paragraph) {
+  const cells = [[]];
+  let sawTab = false;
+  let supported = true;
+
+  const startCell = () => {
+    cells.push([]);
+    sawTab = true;
+  };
+
+  const appendRunParts = run => {
+    const r = $(run);
+    const sourceXml = xmlOf($, run);
+    const opening = sourceXml.match(/^<w:r\b[^>]*>/)?.[0] || '<w:r>';
+    const closing = '</w:r>';
+    const rPr = r.children(tag('rPr')).first();
+    const rPrXml = rPr.length ? xmlOf($, rPr[0]) : '';
+    let content = [];
+    const flush = () => {
+      if (content.length) {
+        cells.at(-1).push(`${opening}${rPrXml}${content.join('')}${closing}`);
+        content = [];
+      }
+    };
+
+    for (const node of r.contents().toArray()) {
+      if (node.name === 'w:rPr') continue;
+      if (node.name === 'w:tab') {
+        flush();
+        startCell();
+      } else {
+        content.push(xmlOf($, node));
+      }
+    }
+    flush();
+  };
+
+  for (const node of $(paragraph).contents().toArray()) {
+    if (node.name === 'w:pPr') continue;
+    if (node.name === 'w:r') {
+      appendRunParts(node);
+    } else if (node.name === 'w:tab') {
+      startCell();
+    } else if ($(node).find(tag('tab')).length) {
+      // Hyperlinks/content controls with embedded tabs need a richer tree
+      // split; leave them untouched instead of corrupting their XML.
+      supported = false;
+    } else {
+      cells.at(-1).push(xmlOf($, node));
+    }
+  }
+
+  return { cells, sawTab, supported };
+}
+
+function cellText($, cellParts) {
+  return $(cellParts.join('')).find(tag('t')).text().replace(/\s+/g, ' ').trim();
+}
+
+function rowHasUnsafeContent($, paragraph) {
+  const p = $(paragraph);
+  return p.find(`${tag('fldChar')},${tag('instrText')},${tag('fldSimple')},${tag('drawing')},${tag('pict')},${tag('object')},m\\:oMath,m\\:oMathPara`).length > 0;
+}
+
+function isLikelyTabbedTable($, rows, previous, next) {
+  if (rows.length < 3) return false;
+  const firstCount = rows[0].cells.length;
+  if (firstCount < 2 || rows.some(row => !row.supported || !row.sawTab || row.cells.length !== firstCount)) return false;
+  if (rows.some(row => row.unsafe)) return false;
+
+  const values = rows.map(row => row.cells.map(parts => cellText($, parts)));
+  const header = values[0];
+  if (header.some(value => !value)) return false;
+  const dataRows = values.slice(1).filter(row => row.some(value => value));
+  if (dataRows.length < 2) return false;
+
+  const captionAdjacent = [previous, next].some(node => node?.name === 'w:p'
+    && /^Bảng(?:\s|:|$)/iu.test($(node).find(tag('t')).text().trim()));
+  const headerWords = /^(?:stt|mã|ma|id|nhóm|nhom|nội dung|noi dung|vai trò|vai tro|mục tiêu|muc tieu|yêu cầu|yeu cau|bước|buoc|tuần|tuan|thành phần|thanh phan|ưu tiên|uu tien|tình huống|tinh huong|mã kiểm thử|ma kiem thu|nội dung cần ghi|pham vi|phạm vi)$/iu;
+  const knownHeader = header.some(value => headerWords.test(value.trim()));
+  const compactHeader = header.every(value => value.length <= 80);
+  // A stable multi-row block with a compact first row is table-like even if
+  // the LLM did not add a "Bảng" caption or Markdown separator.
+  return captionAdjacent || knownHeader || compactHeader;
+}
+
+function buildTabbedTable($, rows, width = 9071) {
+  const columnCount = rows[0].cells.length;
+  const columns = Array.from({ length: columnCount }, () => Math.floor(width / columnCount));
+  columns[columnCount - 1] += width - columns.reduce((sum, value) => sum + value, 0);
+  const grid = columns.map(value => `<w:gridCol w:w="${value}"/>`).join('');
+  const rowXml = rows.map(row => {
+    const cells = row.cells.map((parts, index) => {
+      const body = parts.length ? parts.join('') : '';
+      const pPr = cloneTableCellParagraphProperties($, row.paragraph);
+      return `<w:tc><w:tcPr><w:tcW w:w="${columns[index]}" w:type="dxa"/></w:tcPr><w:p>${pPr}${body}</w:p></w:tc>`;
+    }).join('');
+    return `<w:tr>${cells}</w:tr>`;
+  }).join('');
+  return $(`<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rowXml}</w:tbl>`)[0];
+}
+
+/**
+ * Convert LLM-pasted tabular prose into native Word tables.
+ *
+ * This is intentionally conservative: only contiguous blocks of at least
+ * three paragraphs with a stable two-or-more-column shape are converted.
+ * Paragraphs containing fields, drawings, equations, lists, or unsupported
+ * nested tab content remain untouched. Native w:tbl trees are never rebuilt.
+ */
+export function convertTabbedTableBlocks($, body, options = {}) {
+  const width = options.width || 9071;
+  const childrenList = $(body).children().toArray();
+  const blocks = [];
+  let current = [];
+
+  const flush = () => {
+    if (current.length) blocks.push(current);
+    current = [];
+  };
+
+  for (const node of childrenList) {
+    if (node.name !== 'w:p' || inlineTabCount($, node) === 0 || !hasVisibleText($, node)) {
+      flush();
+      continue;
+    }
+    const split = splitTabbedParagraph($, node);
+    current.push({
+      paragraph: node,
+      cells: split.cells,
+      sawTab: split.sawTab,
+      supported: split.supported,
+      unsafe: rowHasUnsafeContent($, node)
+    });
+  }
+  flush();
+
+  let tablesConverted = 0;
+  let rowsConverted = 0;
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    const first = block[0].paragraph;
+    const previous = $(first).prev()[0];
+    const last = block.at(-1).paragraph;
+    const next = $(last).next()[0];
+    if (typeof options.shouldConvert === 'function' && !options.shouldConvert(first, block)) continue;
+    if (!isLikelyTabbedTable($, block, previous, next)) continue;
+    const table = buildTabbedTable($, block);
+    $(first).before(table);
+    block.forEach(row => $(row.paragraph).remove());
+    tablesConverted += 1;
+    rowsConverted += block.length;
+  }
+
+  return { tablesConverted, rowsConverted };
+}
+
 export function repairDataTable($, table, width = 9071) {
   const t = $(table), rows = children(t, 'tr'), grid = children(t, 'tblGrid');
   const columns = children(grid, 'gridCol');
-  const count = columns.length || Math.max(...rows.toArray().map(r => children($(r), 'tc').length));
+  // LLM-generated tables often omit tblGrid or use gridSpan/gridBefore. The
+  // physical cell count alone then underestimates the logical column count.
+  const rowWidth = row => {
+    const r = $(row), rp = children(r, 'trPr');
+    const before = Number(children(rp, 'gridBefore').attr('w:val') || 0);
+    const after = Number(children(rp, 'gridAfter').attr('w:val') || 0);
+    const cells = children(r, 'tc').toArray().reduce((total, cell) => {
+      const cp = children($(cell), 'tcPr');
+      return total + Math.max(1, Number(children(cp, 'gridSpan').attr('w:val') || 1));
+    }, 0);
+    return before + cells + after;
+  };
+  const count = Math.max(columns.length, ...rows.toArray().map(rowWidth), 0);
   if (!count) return;
   const code = rows.length === 1 && children(rows.first(), 'tc').length === 1;
   const tp = properties(t, 'tblPr');
