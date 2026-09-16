@@ -280,6 +280,21 @@
     }
   },
   {
+    "id": "frame:anime-sukuna",
+    "item_type": "frame",
+    "label": "Ngự Trù Tử",
+    "description": "Khung Anime Signature Sukuna lấy cảm hứng từ Malevolent Shrine: lãnh địa mở và đại điện nguyền rủa hiện thân trong không gian thật.",
+    "rarity": "legendary",
+    "asset_key": "anime-sukuna",
+    "display_policy": "optional",
+    "sort_order": 12,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "motion": "sukuna-malevolent-shrine"
+    }
+  },
+  {
     "id": "frame:aidti-bdu",
     "item_type": "frame",
     "label": "AIDTI",
@@ -287,7 +302,7 @@
     "rarity": "legendary",
     "asset_key": "aidti-bdu",
     "display_policy": "optional",
-    "sort_order": 12,
+    "sort_order": 13,
     "metadata": {
       "manual_grantable": true,
       "source": "config",

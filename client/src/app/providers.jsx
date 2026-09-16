@@ -133,8 +133,8 @@ function ToastProvider({ children }) {
   const value = useMemo(() => ({ notify }), [notify]);
   return <ToastContext.Provider value={value}>
     {children}
-    <div className="toast-region" aria-live="polite" aria-atomic="true">
-      {toasts.map((toast) => <div className={`toast toast-${toast.type}`} key={toast.id} role="status">{toast.message}</div>)}
+    <div className="toast-container toast-region" aria-live="polite" aria-atomic="true">
+      {toasts.map((toast) => <div className={`toast toast-${toast.type}`} key={toast.id} role={toast.type === 'error' ? 'alert' : 'status'}>{toast.message}</div>)}
     </div>
   </ToastContext.Provider>;
 }

@@ -6079,7 +6079,7 @@ function hasFullFramePreviewAccess(user = AppState.user) {
 function hasAnimeFrameAccess(user = AppState.user) {
   if (user !== AppState.user) return false;
   const access = AppState.identityPresentation?.frame_access;
-  return Boolean(access?.all || access?.keys?.includes('anime-gojo') || access?.keys?.includes('anime-itachi'));
+  return Boolean(access?.all || access?.keys?.includes('anime-gojo') || access?.keys?.includes('anime-itachi') || access?.keys?.includes('anime-sukuna'));
 }
 
 function buildScopeFrameConfig(scope, rank, totalStudents, facultyCode = '') {
@@ -6266,6 +6266,26 @@ function buildAnimeSignatureFrameConfig(key) {
       title: 'Ảo Nguyệt Hắc Viêm',
       badgeText: '● ITACHI SIGNATURE',
       rankLabel: 'SHARINGAN • AMATERASU'
+    },
+    'anime-sukuna': {
+      rank: 0,
+      scope: 'anime',
+      scopeLabel: 'Anime Signature',
+      scopeUpper: 'NGỰ TRÙ TỬ • MALEVOLENT SHRINE',
+      totalStudents: 0,
+      tier: 'anime-sukuna',
+      frameSvg: 'assets/images/frame-sukuna-shrine-overlay.png',
+      frameArt: 'assets/images/frame-sukuna-shrine-overlay.png',
+      sealOpenAsset: 'assets/images/sukuna-domain-seal-open-wide.png',
+      characterAsset: 'assets/images/chibi-sukuna-shrine.png',
+      characterSide: 'right',
+      introEffect: 'sukuna-malevolent-shrine',
+      themeKey: 'anime-sukuna',
+      frameFamily: 'anime-sukuna',
+      icon: '☠',
+      title: 'Ngự Trù Tử',
+      badgeText: '☠ SUKUNA SIGNATURE',
+      rankLabel: 'OPEN BARRIER • MALEVOLENT SHRINE'
     }
   };
   return frames[key] || null;
@@ -6306,7 +6326,7 @@ function getAcademicAvatarFrame(rankingData) {
     if (!previewAccess?.unlocked) return null;
     if (previewTier === 'aidti-bdu') {
       return buildAidtiSignatureFrameConfig();
-    } else if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi') {
+    } else if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi' || previewTier === 'anime-sukuna') {
       return buildAnimeSignatureFrameConfig(previewTier);
     } else if (previewTier === 'truong-1' || previewTier === 'top-1') {
       return buildScopeFrameConfig('truong', 1, 1800);
@@ -6547,6 +6567,21 @@ const ANIME_SIGNATURE_FRAME_COLLECTION = [
     tag: 'ĐỘC QUYỀN • ITACHI',
     title: 'Ảo Nguyệt Hắc Viêm',
     desc: 'Đàn quạ tan thành mực đen, kết ấn Mangekyō rồi để Amaterasu bò dọc khung như ngọn lửa sống.'
+  },
+  {
+    key: 'anime-sukuna',
+    scope: 'anime',
+    family: 'anime-sukuna',
+    tier: 'anime-sukuna',
+    svg: 'assets/images/frame-sukuna-shrine-overlay.png',
+    art: 'assets/images/frame-sukuna-shrine-overlay.png',
+    character: 'assets/images/chibi-sukuna-shrine.png',
+    sealOpen: 'assets/images/sukuna-domain-seal-open-wide.png',
+    characterSide: 'right',
+    icon: '☠',
+    tag: 'ĐỘC QUYỀN • SUKUNA',
+    title: 'Ngự Trù Tử',
+    desc: 'Lãnh địa mở dựng shrine vào không gian thật với đại điện nguyền rủa hiện thân trong nền.'
   }
 ];
 
@@ -6609,6 +6644,7 @@ function getStudentAcademicUnlockedFrames() {
     'aidti-bdu': { unlocked: false, currentRank: 0, req: 'Khung độc quyền AIDTI' },
     'anime-gojo': { unlocked: false, currentRank: 0, req: 'Khung độc quyền' },
     'anime-itachi': { unlocked: false, currentRank: 0, req: 'Khung độc quyền' },
+    'anime-sukuna': { unlocked: false, currentRank: 0, req: 'Khung độc quyền' },
     'truong-1': { unlocked: truongRank === 1, currentRank: truongRank, req: 'Top 1 Toàn Trường' },
     'truong-2': { unlocked: truongRank === 2, currentRank: truongRank, req: 'Top 2 Toàn Trường' },
     'truong-3': { unlocked: truongRank === 3, currentRank: truongRank, req: 'Top 3 Toàn Trường' },
@@ -6629,6 +6665,8 @@ function getStudentAcademicUnlockedFrames() {
     unlockedFrames['anime-gojo'].req = 'Độc quyền Signature';
     unlockedFrames['anime-itachi'].unlocked = true;
     unlockedFrames['anime-itachi'].req = 'Độc quyền Signature';
+    unlockedFrames['anime-sukuna'].unlocked = true;
+    unlockedFrames['anime-sukuna'].req = 'Độc quyền Signature';
   }
 
   if (hasFullFramePreviewAccess()) {
@@ -6728,6 +6766,11 @@ function renderFrameCollectionModal() {
               ? `<img class="avatar-frame-overlay aidti-frame-art-mini" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`
               : `<img class="avatar-frame-overlay ${item.art ? 'anime-frame-art-mini' : ''}" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`}
             ${item.character ? `<img class="anime-frame-character is-${item.characterSide}" src="${item.character}" alt="" loading="lazy" decoding="async">` : ''}
+            ${item.family === 'anime-sukuna' ? `<div class="sukuna-domain-stage" aria-hidden="true">
+              <span class="sukuna-domain-crest"></span>
+              <span class="sukuna-domain-shrine"></span>
+              <span class="sukuna-domain-seal"><img class="sukuna-domain-seal-art" src="${item.sealOpen || ''}" alt=""></span>
+            </div>` : ''}
           </div>
         </div>
         <div class="frame-option-info">
@@ -6817,6 +6860,7 @@ window.selectAvatarFramePreview = function(tier) {
     'aidti-bdu': 'AIDTI - Trung tâm Chuyển đổi số',
     'anime-gojo': '∞ Anime Signature - Thiên Thượng Thiên Hạ',
     'anime-itachi': '● Anime Signature - Ảo Nguyệt Hắc Viêm',
+    'anime-sukuna': '☠ Anime Signature - Ngự Trù Tử',
     'truong-1': '✦ Top 1 Toàn Trường - Thiên Cực Đế Tinh BDU',
     'truong-2': '☾ Top 2 Toàn Trường - Song Nguyệt Tinh Vân BDU',
     'truong-3': '△ Top 3 Toàn Trường - Tam Tinh Xích Quang BDU',
@@ -6927,6 +6971,13 @@ const FRAME_CINEMATIC_THEMES = {
     rgb: '239, 68, 68',
     rarity: 'GENJUTSU'
   },
+  'anime-sukuna': {
+    primary: '#fb7185',
+    secondary: '#312e81',
+    highlight: '#fde68a',
+    rgb: '251, 113, 133',
+    rarity: 'MALEVOLENT'
+  },
   'aidti-bdu': {
     primary: '#ef233c',
     secondary: '#2563eb',
@@ -6946,7 +6997,7 @@ const FRAME_CINEMATIC_THEMES = {
 const FRAME_INTRO_EFFECTS = [
   'constellation-forge', 'binary-eclipse', 'triad-supernova', 'orbit-lock', 'dragon-awaken', 'crystal-wings', 'mecha-assemble', 'phoenix-rise',
   'runner-up-dual', 'blade-cross', 'elite-pulse', 'th-quantum-compile', 'th-dual-synapse', 'th-ternary-boot', 'th-protocol-lock',
-  'gojo-limitless-awaken', 'itachi-crow-genjutsu', 'aidti-data-awaken'
+  'gojo-limitless-awaken', 'itachi-crow-genjutsu', 'sukuna-malevolent-shrine', 'aidti-data-awaken'
 ];
 
 let frameIntroTimer = null;
@@ -6957,6 +7008,8 @@ function prepareFrameCinematic(frameInfo) {
   const announcement = document.getElementById('frame-unlock-announcement');
   const particleField = document.getElementById('frame-particle-field');
   if (!heroAvatarWrap || !banner || !frameInfo) return;
+
+  banner.dataset.frameFamily = frameInfo.frameFamily || '';
 
   announcement?.classList.add('is-persistent');
 
@@ -6980,7 +7033,7 @@ function prepareFrameCinematic(frameInfo) {
   if (title) title.textContent = frameInfo.title;
   if (rank) rank.textContent = frameInfo.rankLabel || `#${frameInfo.rank} ${frameInfo.scopeUpper}`;
   const rarity = theme.rarity || (frameInfo.rank === 1 ? 'LEGENDARY' : (frameInfo.rank === 2 ? 'MYTHIC' : (frameInfo.rank === 3 ? 'EPIC' : 'ELITE')));
-  if (kicker) kicker.textContent = `${rarity} • VINH DANH HỌC THUẬT`;
+  if (kicker) kicker.textContent = `${rarity} • ${frameInfo.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}`;
 
   if (!particleField || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const particles = document.createDocumentFragment();
@@ -7006,6 +7059,8 @@ function prepareFrameCinematic(frameInfo) {
       ? (index % 4 === 0 ? 'star' : 'spark')
       : frameInfo.frameFamily === 'anime-itachi'
       ? (index % 3 === 0 ? 'shard' : 'spark')
+      : frameInfo.frameFamily === 'anime-sukuna'
+      ? (index % 2 === 0 ? 'shard' : 'spark')
       : (frameInfo.frameFamily === 'anime-gojo'
         ? (index % 2 === 0 ? 'star' : 'spark')
       : frameInfo.frameFamily === 'khoa-th'
@@ -7050,6 +7105,16 @@ function renderAcademicFrameMarkup(frameInfo) {
   }
   if (frameInfo.frameArt) {
     const safeArt = escapeHtml(frameInfo.frameArt);
+    if (frameInfo.frameFamily === 'anime-sukuna') {
+      return `<div class="anime-frame-art-stack" aria-label="${safeTitle}">
+        <img class="anime-frame-art anime-art-base" src="${safeArt}" alt="Khung ${safeTitle}" decoding="async">
+      </div>${characterMarkup}<div class="sukuna-domain-stage" aria-hidden="true">
+        <span class="sukuna-domain-crest"></span>
+        <span class="sukuna-domain-shrine"></span>
+        <span class="sukuna-domain-seal"><img class="sukuna-domain-seal-art" src="${escapeHtml(frameInfo.sealOpenAsset)}" alt=""></span>
+        <span class="sukuna-domain-sparks"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </div>`;
+    }
     const awakeningMarkup = frameInfo.awakeningAsset && frameInfo.awakeningClosedAsset && frameInfo.awakeningHalfAsset
       ? `<div class="anime-awakening-stage is-${frameInfo.frameFamily === 'anime-itachi' ? 'itachi' : 'gojo'}" aria-hidden="true">
         <img class="anime-eye-state anime-eye-state-closed" src="${escapeHtml(frameInfo.awakeningClosedAsset)}" alt="">
@@ -7132,7 +7197,7 @@ function updateForumUserWidgets() {
     heroAvatarWrap.classList.remove(
       'has-frame-top-1', 'has-frame-top-2', 'has-frame-top-3', 'has-frame-top-4-5', 'has-frame-top-6-10',
       'has-frame-scope-truong', 'has-frame-scope-vien', 'has-frame-scope-khoa', 'has-frame-scope-lop', 'has-frame-scope-anime',
-      'has-frame-scope-aidti', 'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi', 'has-frame-aidti-bdu'
+      'has-frame-scope-aidti', 'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi', 'has-frame-anime-sukuna', 'has-frame-aidti-bdu'
     );
   }
 
@@ -7393,6 +7458,11 @@ function renderConfessionCardHtml(post) {
 
   // Khung & nhãn xếp hạng học thuật (thay thế hoàn toàn 14 sao)
   const frameInfo = getAcademicAvatarFrame(AppState.academicRanking);
+  const postFrameKey = String(post.author?.equipped_frame_id || '').replace(/^frame:/, '').trim();
+  const postFrame = !isAnon && postFrameKey.startsWith('anime-')
+    ? buildAnimeSignatureFrameConfig(postFrameKey)
+    : (isCurrentAuthor ? frameInfo : null);
+  const inlineFrameMarkup = postFrame ? renderAcademicFrameMarkup(postFrame) : '';
   let rankTagHtml = '';
   if (isAnon) {
     rankTagHtml = `<span class="forum-post-rank-tag is-anon">Ẩn danh</span>`;
@@ -7425,7 +7495,7 @@ function renderConfessionCardHtml(post) {
     <div class="forum-post-card glass-panel" data-post-id="${post.id}">
       <div class="forum-post-header">
         <div class="forum-user-col">
-          <div class="forum-avatar ${isAnon ? 'anon' : ''}">${avatarContent}</div>
+          <div class="forum-avatar ${isAnon ? 'anon' : ''} ${postFrame ? `has-inline-frame has-frame-${postFrame.tier} has-frame-scope-${postFrame.scope} ${postFrame.frameFamily ? `has-frame-${postFrame.frameFamily}` : ''}` : ''}">${avatarContent}${inlineFrameMarkup}</div>
           <div class="forum-user-details">
             <div class="forum-author-name-line">
               <strong class="forum-author-name">${authorName}</strong>

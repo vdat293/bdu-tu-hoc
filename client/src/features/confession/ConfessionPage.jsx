@@ -527,8 +527,9 @@ export default function ConfessionPage() {
   const frameOptions = getFrameOptions(presentation?.frame_access);
   const identityUser = { ...auth.user, name: displayName, photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data) };
   const frameCinematic = getFrameCinematicMetadata(equippedFrame);
+  const identityReady = presentationQuery.isFetched && profileQuery.isFetched;
   useFrameCinematic({
-    frame: equippedFrame,
+    frame: identityReady ? equippedFrame : null,
     avatarRef: heroAvatarRef,
     bannerRef: heroBannerRef,
     announcementRef: frameAnnouncementRef,
@@ -566,7 +567,11 @@ export default function ConfessionPage() {
   return (
     <section id="tab-confession" className="tab-pane active">
       {/* Hero Full-width Banner faithful to production */}
-      <div ref={heroBannerRef} className="forum-hero-banner glass-panel">
+      <div
+        ref={heroBannerRef}
+        className={`forum-hero-banner glass-panel ${equippedFrame?.family ? `hero-frame-family-${equippedFrame.family}` : ''}`.trim()}
+        data-frame-family={equippedFrame?.family || 'automatic'}
+      >
         <button
           type="button"
           className="btn-hero-frame-customizer"
@@ -581,6 +586,12 @@ export default function ConfessionPage() {
         <img className="brand-watermark hero-brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
         <div className="forum-banner-bg"></div>
         <div id="frame-cinematic-backdrop" className="frame-cinematic-backdrop" aria-hidden="true"></div>
+        {equippedFrame?.family === 'anime-sukuna' && <div className="sukuna-hero-layer-stack" aria-hidden="true">
+          <img className="sukuna-hero-layer sukuna-hero-layer-01" src="/assets/images/sukuna-ngutrutu-confession-hero-layer-01-ground.png" alt="" />
+          <img className="sukuna-hero-layer sukuna-hero-layer-02" src="/assets/images/sukuna-ngutrutu-confession-hero-layer-02-mid.png" alt="" />
+          <img className="sukuna-hero-layer sukuna-hero-layer-03" src="/assets/images/sukuna-ngutrutu-confession-hero-layer-03-upper.png" alt="" />
+          <img className="sukuna-hero-layer sukuna-hero-layer-04" src="/assets/images/sukuna-ngutrutu-confession-hero-layer-04-top.png" alt="" />
+        </div>}
 
         <div className="forum-hero-content">
           <button
@@ -619,7 +630,7 @@ export default function ConfessionPage() {
           </button>
 
           <div ref={frameAnnouncementRef} id="frame-unlock-announcement" className="frame-unlock-announcement" aria-hidden="true">
-            <span className="frame-unlock-kicker">{frameCinematic ? `${frameCinematic.theme.rarity} • VINH DANH HỌC THUẬT` : 'VINH DANH HỌC THUẬT'}</span>
+            <span className="frame-unlock-kicker">{frameCinematic ? `${frameCinematic.theme.rarity} • ${equippedFrame?.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}` : 'VINH DANH HỌC THUẬT'}</span>
             <strong id="frame-unlock-title">{equippedFrame?.title || 'KHUNG HUYỀN THOẠI'}</strong>
             <span id="frame-unlock-rank">{frameCinematic?.rankLabel || 'TOP 1 TOÀN TRƯỜNG'}</span>
           </div>
@@ -755,6 +766,7 @@ export default function ConfessionPage() {
                 const isLiked = Boolean(post.is_liked);
                 const showCommentThread = Boolean(expandedComments[post.id]);
                 const author = postAvatarUser(post, identityUser, presentation);
+                const postFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
                 const authorTitles = titlesForPost(post, auth.user, presentation);
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
 
@@ -762,8 +774,9 @@ export default function ConfessionPage() {
                   <article className="forum-post-card glass-panel" key={post.id} data-post-id={post.id}>
                     <div className="forum-post-header">
                       <div className="forum-user-col">
-                        <div className={`forum-avatar ${isAnon ? 'anon' : ''}`}>
+                        <div className={`forum-avatar ${isAnon ? 'anon' : ''} ${postFrame ? `has-inline-frame has-frame-${postFrame.tier} has-frame-scope-${postFrame.scope} ${postFrame.family ? `has-frame-${postFrame.family}` : ''}` : ''}`.trim()}>
                           {isAnon ? '?' : <AvatarContent user={author} alt={`Ảnh của ${authorName}`} />}
+                          {postFrame && <FrameArtwork frame={postFrame} />}
                         </div>
                         <div className="forum-user-details">
                           <div className="forum-author-name-line">

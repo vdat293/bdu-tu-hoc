@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/style.css?v=20260904-aidti-frame-v1">
+  <link rel="stylesheet" href="css/style.css?v=20260916-login-ui-v3">
   <link rel="stylesheet" href="css/showcase.css?v=20260903-school-podium-frames">
 </head>
 
@@ -104,9 +104,15 @@
               <label for="username" class="form-label">
                 <span class="label-text">Mã Số Sinh Viên (MSSV)</span>
               </label>
-              <div class="input-wrapper">
-                <input type="text" id="username" name="username" class="form-input"
-                  placeholder="Nhập mã số sinh viên (MSSV)" required autocomplete="username">
+              <div class="login-input-box">
+                <span class="login-input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </span>
+                <input type="text" id="username" name="username" class="login-input"
+                  placeholder="Nhập MSSV của bạn" required autocomplete="username">
               </div>
             </div>
 
@@ -114,13 +120,15 @@
               <label for="password" class="form-label">
                 <span class="label-text">Mật Khẩu</span>
               </label>
-              <div class="input-wrapper">
-                <input type="password" id="password" name="password" class="form-input" placeholder="Mật khẩu của bạn"
+              <div class="login-input-box">
+                <span class="login-input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </span>
+                <input type="password" id="password" name="password" class="login-input" placeholder="Mật khẩu của bạn"
                   required autocomplete="current-password">
-                <button type="button" id="toggle-password" class="input-btn" title="Hiện/Ẩn mật khẩu" tabindex="-1">
-                  <span class="password-show">Hiện</span>
-                  <span class="password-hide hidden">Ẩn</span>
-                </button>
               </div>
             </div>
 
@@ -1727,6 +1735,12 @@
               aria-hidden="true">
             <div class="forum-banner-bg"></div>
             <div id="frame-cinematic-backdrop" class="frame-cinematic-backdrop" aria-hidden="true"></div>
+            <div id="sukuna-hero-layer-stack" class="sukuna-hero-layer-stack" aria-hidden="true">
+              <img class="sukuna-hero-layer sukuna-hero-layer-01" src="assets/images/sukuna-ngutrutu-confession-hero-layer-01-ground.png" alt="">
+              <img class="sukuna-hero-layer sukuna-hero-layer-02" src="assets/images/sukuna-ngutrutu-confession-hero-layer-02-mid.png" alt="">
+              <img class="sukuna-hero-layer sukuna-hero-layer-03" src="assets/images/sukuna-ngutrutu-confession-hero-layer-03-upper.png" alt="">
+              <img class="sukuna-hero-layer sukuna-hero-layer-04" src="assets/images/sukuna-ngutrutu-confession-hero-layer-04-top.png" alt="">
+            </div>
             <div class="forum-hero-content">
               <div class="forum-hero-avatar-wrap" id="cfs-hero-avatar-wrap" onclick="openFramePreviewModal()"
                 title="Nhấn để đổi thử các mẫu khung avatar vinh danh động">
@@ -2368,7 +2382,7 @@
 
   <!-- Scripts -->
   <script src="js/api.js"></script>
-  <script src="js/app.js?v=20260904-aidti-frame-v1"></script>
+  <script src="js/app.js?v=20260916-sukuna-domain-v1"></script>
   <script src="js/interactions.js"></script>
 </body>
 

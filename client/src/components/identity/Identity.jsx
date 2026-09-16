@@ -108,6 +108,11 @@ const FRAME_DEFINITIONS = {
   'anime-itachi': {
     tier: 'anime-itachi', scope: 'anime', title: 'Ảo Nguyệt Hắc Viêm', family: 'anime-itachi', introEffect: 'itachi-crow-genjutsu', themeKey: 'anime-itachi', rank: 0, src: '/assets/images/frame-itachi-genjutsu-art.png',
     character: '/assets/images/chibi-itachi-signature.png', characterSide: 'right', eye: '/assets/images/itachi-sharingan-awakening.png', eyeClosed: '/assets/images/itachi-sharingan-closed-v2.png', eyeHalf: '/assets/images/itachi-sharingan-half-v2.png'
+  },
+  'anime-sukuna': {
+    tier: 'anime-sukuna', scope: 'anime', title: 'Ngự Trù Tử', family: 'anime-sukuna', introEffect: 'sukuna-malevolent-shrine', themeKey: 'anime-sukuna', rank: 0, src: '/assets/images/frame-sukuna-shrine-overlay.png',
+    character: '/assets/images/chibi-sukuna-shrine.png', characterSide: 'right',
+    sealOpen: '/assets/images/sukuna-domain-seal-open-wide.png'
   }
 };
 
@@ -125,6 +130,7 @@ export const FRAME_CINEMATIC_THEMES = {
   lop: { primary: '#fb923c', secondary: '#ef4444', highlight: '#ffedd5', rgb: '251, 146, 60', rarity: 'ELITE' },
   'anime-gojo': { primary: '#67e8f9', secondary: '#8b5cf6', highlight: '#f0f9ff', rgb: '103, 232, 249', rarity: 'LIMITLESS' },
   'anime-itachi': { primary: '#ef4444', secondary: '#0a0a0f', highlight: '#fecaca', rgb: '239, 68, 68', rarity: 'GENJUTSU' },
+  'anime-sukuna': { primary: '#fb7185', secondary: '#312e81', highlight: '#fde68a', rgb: '251, 113, 133', rarity: 'MALEVOLENT' },
   'aidti-bdu': { primary: '#ef233c', secondary: '#2563eb', highlight: '#ffffff', rgb: '239, 35, 60', rarity: 'AIDTI SIGNATURE' }
 };
 
@@ -190,22 +196,29 @@ export function FrameArtwork({ frame }) {
     </div></div>;
   }
   if (frame.family?.startsWith('anime-')) {
-    const version = frame.family === 'anime-itachi' ? 'itachi' : 'gojo';
+    const version = frame.family === 'anime-itachi' ? 'itachi' : frame.family === 'anime-sukuna' ? 'sukuna' : 'gojo';
     return <div className="avatar-frame-artwork">
       <div className="anime-frame-art-stack" aria-label={frame.title}>
         <img className="anime-frame-art anime-art-base" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" />
-        <img className="anime-frame-art anime-art-fragment anime-art-fragment-a" src={frame.src} alt="" aria-hidden="true" />
-        <img className="anime-frame-art anime-art-fragment anime-art-fragment-b" src={frame.src} alt="" aria-hidden="true" />
-        <img className="anime-frame-art anime-art-fragment anime-art-fragment-c" src={frame.src} alt="" aria-hidden="true" />
+        {frame.family !== 'anime-sukuna' && <>
+          <img className="anime-frame-art anime-art-fragment anime-art-fragment-a" src={frame.src} alt="" aria-hidden="true" />
+          <img className="anime-frame-art anime-art-fragment anime-art-fragment-b" src={frame.src} alt="" aria-hidden="true" />
+          <img className="anime-frame-art anime-art-fragment anime-art-fragment-c" src={frame.src} alt="" aria-hidden="true" />
+        </>}
       </div>
-      <img className={`anime-frame-character is-${frame.characterSide}`} src={frame.character} alt={`Nhân vật chibi của khung ${frame.title}`} decoding="async" />
-      <div className={`anime-awakening-stage is-${version}`} aria-hidden="true">
+      {frame.character && <img className={`anime-frame-character is-${frame.characterSide}`} src={frame.character} alt={`Nhân vật chibi của khung ${frame.title}`} decoding="async" />}
+      {frame.family === 'anime-sukuna' ? <div className="sukuna-domain-stage" aria-hidden="true">
+        <span className="sukuna-domain-crest" />
+        <span className="sukuna-domain-shrine" />
+        <span className="sukuna-domain-seal"><img className="sukuna-domain-seal-art" src={frame.sealOpen} alt="" /></span>
+        <span className="sukuna-domain-sparks"><i /><i /><i /><i /><i /><i /></span>
+      </div> : <div className={`anime-awakening-stage is-${version}`} aria-hidden="true">
         <img className="anime-eye-state anime-eye-state-closed" src={frame.eyeClosed} alt="" />
         <img className="anime-eye-state anime-eye-state-half" src={frame.eyeHalf} alt="" />
         <img className="anime-eye-state anime-eye-state-open" src={frame.eye} alt="" />
         <span className="anime-eye-burst" />
         <span className="anime-awakening-pressure" />
-      </div>
+      </div>}
     </div>;
   }
   return <div className="avatar-frame-artwork"><img className="avatar-frame-overlay" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" /></div>;

@@ -676,6 +676,22 @@ body.theme-light .sidebar .nav-item.active:hover {
   bottom: -20px;
 }
 
+#tab-confession #cfs-hero-avatar-wrap.has-frame-anime-sukuna .anime-art-base {
+  width: 170%;
+  height: 170%;
+}
+
+#tab-confession #cfs-hero-avatar-wrap.has-frame-anime-sukuna .sukuna-domain-stage {
+  inset: -14%;
+}
+
+#tab-confession #cfs-hero-avatar-wrap.has-frame-anime-sukuna .anime-frame-character {
+  width: 86px;
+  height: 86px;
+  right: -34px;
+  bottom: -22px;
+}
+
 #tab-confession #cfs-hero-avatar-wrap .aidti-circuit-ring {
   width: 132px;
   height: 132px;
@@ -1403,6 +1419,18 @@ body.theme-dark .frame-equipped-state {
 
   #tab-confession .forum-hero-avatar-wrap {
     margin-bottom: 10px;
+  }
+
+  #tab-confession #cfs-hero-avatar-wrap.has-frame-anime-sukuna .anime-frame-character {
+    width: 80px;
+    height: 80px;
+    right: -34px;
+    bottom: -25px;
+  }
+
+  #tab-confession #cfs-hero-avatar-wrap.has-frame-anime-sukuna .sukuna-domain-seal {
+    width: 112px;
+    height: 112px;
   }
 
   #tab-confession #cfs-hero-avatar-wrap[class*="has-frame-scope-"] ~ .forum-hero-username {

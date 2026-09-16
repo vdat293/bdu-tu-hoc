@@ -6,7 +6,7 @@ const INTRO_EFFECTS = [
   'dragon-awaken', 'crystal-wings', 'mecha-assemble', 'phoenix-rise',
   'runner-up-dual', 'blade-cross', 'elite-pulse', 'th-quantum-compile',
   'th-dual-synapse', 'th-ternary-boot', 'th-protocol-lock',
-  'gojo-limitless-awaken', 'itachi-crow-genjutsu', 'aidti-data-awaken'
+  'gojo-limitless-awaken', 'itachi-crow-genjutsu', 'sukuna-malevolent-shrine', 'aidti-data-awaken'
 ];
 const INTRO_DURATION_MS = 2800;
 
@@ -38,6 +38,7 @@ function particleCount(frame, width) {
 function particleKind(frame, index) {
   if (frame.family === 'aidti-bdu') return index % 4 === 0 ? 'star' : 'spark';
   if (frame.family === 'anime-itachi') return index % 3 === 0 ? 'shard' : 'spark';
+  if (frame.family === 'anime-sukuna') return index % 2 === 0 ? 'shard' : 'spark';
   if (frame.family === 'anime-gojo') return index % 2 === 0 ? 'star' : 'spark';
   if (frame.family === 'khoa-th') return index % 4 === 0 ? 'shard' : 'spark';
   if (frame.introEffect === 'constellation-forge') return index % 3 === 0 ? 'star' : index % 7 === 0 ? 'shard' : 'spark';

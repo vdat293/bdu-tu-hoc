@@ -53,7 +53,10 @@ export async function request(path, {
   });
   const data = await parseResponse(response, responseType);
   const message = typeof data === 'object' && data?.message ? data.message : defaultMessage;
-  const isExpired = response.status === 401 || data?.code === 401 || /hết hạn|expired/i.test(message);
+  // A 401 from the login endpoint means incorrect credentials, not an expired
+  // authenticated session. Let the login form present a useful inline error.
+  const isLoginRequest = path === '/api/login';
+  const isExpired = !isLoginRequest && (response.status === 401 || data?.code === 401 || /hết hạn|expired/i.test(message));
   if (isExpired) {
     notifySessionExpired(message);
     throw new SessionExpiredError(message);
