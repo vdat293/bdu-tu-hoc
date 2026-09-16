@@ -18,6 +18,7 @@ const CourseLearningPage = lazy(() => import('../features/learning/CourseLearnin
 const ClansPage = lazy(() => import('../features/clans/ClansPage.jsx'));
 const ClanPage = lazy(() => import('../features/clans/ClanPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
+const AdminDashboardPage = lazy(() => import('../features/admin/AdminDashboardPage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
 function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
@@ -40,8 +41,11 @@ export default function AppRoutes() {
       <Route path="clans" element={<Lazy><ClansPage /></Lazy>} />
       <Route path="clans/:clanId" element={<Lazy><ClanPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
+      <Route path="admin" element={<Lazy><AdminDashboardPage /></Lazy>} />
+      <Route path="admin/dashboard" element={<Lazy><AdminDashboardPage /></Lazy>} />
       <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
     </Route>
+    <Route path="/admin-dashboard" element={<Lazy><AdminDashboardPage /></Lazy>} />
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
   </Routes>;
 }

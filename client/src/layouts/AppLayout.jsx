@@ -191,6 +191,20 @@ export default function AppLayout() {
               })}
             </div>
           ))}
+
+          {(auth.user?.roles?.includes('owner') || auth.user?.roles?.includes('identity_admin') || location.pathname.startsWith('/admin')) && (
+            <div className="nav-group">
+              <div className="nav-group-title">QUẢN TRỊ VIÊN</div>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `nav-item ${isActive || location.pathname.startsWith('/admin') ? 'active' : ''}`}
+              >
+                <span className="nav-icon">📊</span>
+                <span className="nav-text">Admin Dashboard</span>
+                <span className="badge-mini badge-pill-purple">Live</span>
+              </NavLink>
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-footer">

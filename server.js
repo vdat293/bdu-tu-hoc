@@ -16,6 +16,7 @@ import { CommunityRealtime } from './src/services/community-realtime.service.js'
 import { AvatarOverrideService } from './src/services/avatar-override.service.js';
 import { IdentityAdminService } from './src/services/identity-admin.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
+import { TrafficService } from './src/services/traffic.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +40,7 @@ if (!fs.existsSync(avatarStorageDir)) {
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(TrafficService.middleware());
 app.use('/media/avatars', express.static(avatarStorageDir, {
   dotfiles: 'deny',
   immutable: true,
@@ -135,6 +137,7 @@ server.listen(PORT, () => {
   console.log(`⚙️  Môi trường: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
   RankingSchedulerService.start();
+  TrafficService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {
     if (res?.synced) {
       console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);
@@ -147,8 +150,10 @@ server.listen(PORT, () => {
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   RankingSchedulerService.stop();
+  TrafficService.stop();
   EntertainmentGameService.stop();
   CommunityRealtime.close();
+  await TrafficService.flush().catch(() => {});
   server.close(async () => {
     await closeDatabase().catch(() => { });
     process.exit(0);
