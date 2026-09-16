@@ -5,6 +5,35 @@
 
 const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
 const DEFAULT_PROFILE_TIMEOUT_MS = 20_000;
+const PROFILE_IMAGE_TIMEOUT_MS = 5_000;
+const PROFILE_FALLBACK_KEYS = [
+  'ds_thong_tin_sinh_vien',
+  'thong_tin_sinh_vien',
+  'student',
+  'sinh_vien'
+];
+const PROFILE_ACADEMIC_KEYS = [
+  'ngay_sinh',
+  'ngay_thang_nam_sinh',
+  'gioi_tinh',
+  'ten_gioi_tinh',
+  'lop',
+  'lop_hanh_chinh',
+  'ten_lop',
+  'ten_lop_hanh_chinh',
+  'ma_lop',
+  'nganh',
+  'ten_nganh',
+  'ten_nganh_dao_tao',
+  'ten_chuyen_nganh',
+  'khoa',
+  'ten_khoa',
+  'ten_khoa_quan_ly',
+  'ma_khoa',
+  'ten_tinh_trang',
+  'trang_thai_hoc',
+  'hien_dien_sv'
+];
 const SCHEDULE_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 // The portal normally provides period numbers rather than clock times. Keep
@@ -338,12 +367,80 @@ function selectRelevantSchedule(rawData, now) {
   };
 }
 
-function profileTimeoutSignal() {
+function profileTimeoutSignal(timeoutOverride) {
   const configured = Number.parseInt(process.env.BDU_PROFILE_TIMEOUT_MS || '', 10);
-  const timeoutMs = Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_PROFILE_TIMEOUT_MS;
+  const timeoutMs = Number.isSafeInteger(timeoutOverride) && timeoutOverride > 0
+    ? timeoutOverride
+    : (Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_PROFILE_TIMEOUT_MS);
   return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
     ? AbortSignal.timeout(timeoutMs)
     : undefined;
+}
+
+function profileRecordFromPayload(payload, depth = 0) {
+  if (payload === null || payload === undefined || depth > 8) return null;
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const record = profileRecordFromPayload(item, depth + 1);
+      if (record) return record;
+    }
+    return null;
+  }
+  if (typeof payload !== 'object') return null;
+
+  for (const key of PROFILE_FALLBACK_KEYS) {
+    if (!(key in payload)) continue;
+    const record = profileRecordFromPayload(payload[key], depth + 1);
+    if (record) return record;
+  }
+
+  const keys = Object.keys(payload);
+  if (keys.some((key) => PROFILE_ACADEMIC_KEYS.includes(key)) || keys.some((key) => [
+    'ho_ten', 'ho_va_ten', 'ten_day_du', 'ten_sinh_vien', 'name', 'ma_sinh_vien', 'ma_sv', 'userName'
+  ].includes(key))) {
+    return payload;
+  }
+
+  if (payload.data && payload.data !== payload) return profileRecordFromPayload(payload.data, depth + 1);
+  return null;
+}
+
+function profileNeedsFallback(payload) {
+  const record = profileRecordFromPayload(payload);
+  if (!record) return true;
+  return !PROFILE_ACADEMIC_KEYS.some((key) => {
+    const value = record[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  });
+}
+
+function mergeProfilePayloads(primary, fallback) {
+  if (!fallback) return primary;
+  const primaryRecord = profileRecordFromPayload(primary);
+  const fallbackRecord = profileRecordFromPayload(fallback);
+  if (!fallbackRecord) return primary || fallback;
+  if (!primaryRecord) return fallback;
+
+  const mergedRecord = { ...fallbackRecord };
+  for (const [key, value] of Object.entries(primaryRecord)) {
+    if (value !== null && value !== undefined && String(value).trim() !== '') mergedRecord[key] = value;
+  }
+
+  const mergeRoot = (root) => {
+    if (Array.isArray(root)) return [mergedRecord, ...root.slice(1)];
+    if (!root || typeof root !== 'object') return mergedRecord;
+    const holder = PROFILE_FALLBACK_KEYS.find((key) => key in root);
+    if (!holder) return { ...root, ...mergedRecord };
+    return {
+      ...root,
+      [holder]: Array.isArray(root[holder]) ? [mergedRecord, ...root[holder].slice(1)] : mergedRecord
+    };
+  };
+
+  if (primary && typeof primary === 'object' && 'data' in primary) {
+    return { ...primary, data: mergeRoot(primary.data) };
+  }
+  return mergeRoot(primary);
 }
 
 function invalidSessionError() {
@@ -565,7 +662,8 @@ export const BduService = {
           'idpc': '0',
           'Content-Type': 'text/plain'
         },
-        body: ''
+        body: '',
+        signal: profileTimeoutSignal(PROFILE_IMAGE_TIMEOUT_MS)
       });
 
       if (!response.ok) return null;
@@ -597,28 +695,52 @@ export const BduService = {
       throw err;
     }
 
-    const profileUrl = idsv
-      ? `${BDU_BASE_URL}/sms/w-locdsthongtinhhscanhan?IDSV=${encodeURIComponent(idsv)}`
-      : `${BDU_BASE_URL}/dkmh/w-locsinhvieninfo`;
-    const profileMethod = idsv ? 'GET' : 'POST';
+    const authHeaders = {
+      'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+      'Accept': 'application/json, text/plain, */*',
+      'idpc': '0'
+    };
+    const fetchCurrentProfile = () => fetchProfilePayload(`${BDU_BASE_URL}/dkmh/w-locsinhvieninfo`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'text/plain' },
+      body: ''
+    });
 
-    // Fetch profile and photo in parallel. Newer sessions provide IDSV and use
-    // the same endpoint as the official profile page; older sessions fall back
-    // to the current-user endpoint, which does not require IDSV.
-    const [profileRes, imageBase64] = await Promise.all([
-      fetchProfilePayload(profileUrl, {
-        method: profileMethod,
-        headers: {
-          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
-          'Accept': 'application/json, text/plain, */*',
-          'idpc': '0',
-          ...(profileMethod === 'POST' ? { 'Content-Type': 'text/plain' } : {})
-        },
-        ...(profileMethod === 'POST' ? { body: '' } : {})
-      }),
-      maSV ? this.getStudentImage(token, maSV) : Promise.resolve(null)
-    ]);
+    const imagePromise = maSV
+      ? this.getStudentImage(token, maSV)
+      : Promise.resolve(null);
+    let profileRes;
+    if (idsv) {
+      let primaryError;
+      try {
+        profileRes = await fetchProfilePayload(
+          `${BDU_BASE_URL}/sms/w-locdsthongtinhhscanhan?IDSV=${encodeURIComponent(idsv)}`,
+          { method: 'GET', headers: authHeaders }
+        );
+      } catch (error) {
+        if (error.status === 401) throw error;
+        primaryError = error;
+      }
 
+      // The IDSV endpoint intermittently returns a 200 response with only a
+      // partial object. Ask the current-user endpoint for the missing fields
+      // instead of allowing the UI to replace a real profile with `---`.
+      if (!profileRes || profileNeedsFallback(profileRes)) {
+        try {
+          const fallback = await fetchCurrentProfile();
+          profileRes = mergeProfilePayloads(profileRes, fallback);
+        } catch (fallbackError) {
+          if (!profileRes && primaryError) throw primaryError;
+          if (!profileRes && fallbackError.status === 401) throw fallbackError;
+        }
+      }
+    } else {
+      profileRes = await fetchCurrentProfile();
+    }
+
+    // The image endpoint is optional. It must never make an otherwise valid
+    // profile disappear or wait indefinitely when the portal is slow.
+    const imageBase64 = await imagePromise;
     const data = profileRes || {};
 
     // Attach student photo if fetched or found in payload

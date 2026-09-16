@@ -4,10 +4,55 @@ import { getMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 
+const PROFILE_RECORD_KEYS = ['ds_thong_tin_sinh_vien', 'thong_tin_sinh_vien', 'student', 'sinh_vien'];
+const PROFILE_FIELD_KEYS = new Set([
+  'ho_ten', 'ho_va_ten', 'ten_day_du', 'ten_sinh_vien', 'name',
+  'ma_sinh_vien', 'ma_sv', 'mssv', 'userName', 'username', 'user_name',
+  'ngay_sinh', 'ngay_thang_nam_sinh', 'gioi_tinh', 'ten_gioi_tinh',
+  'lop', 'lop_hanh_chinh', 'ma_lop', 'nganh', 'ten_nganh', 'khoa', 'ten_khoa',
+  'student_image', 'hinh_anh', 'url_hinh_anh', 'image', 'anh_the', 'avatar'
+]);
+
+function parseProfileValue(value) {
+  if (typeof value !== 'string') return value;
+  const raw = value.trim();
+  if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) return value;
+  try { return JSON.parse(raw); } catch { return value; }
+}
+
 function profileRecord(response) {
-  const raw = response?.data || response;
-  const record = raw?.ds_thong_tin_sinh_vien || raw?.thong_tin_sinh_vien || raw?.student || raw?.sinh_vien;
-  return Array.isArray(raw) ? raw[0] : Array.isArray(record) ? record[0] : record || raw || {};
+  const queue = [parseProfileValue(response)];
+  const seen = new Set();
+
+  while (queue.length) {
+    const current = parseProfileValue(queue.shift());
+    if (!current || (typeof current !== 'object' && !Array.isArray(current))) continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    // The proxy attaches `student_image` at the response root. Inspect the
+    // actual data/record container first, otherwise that metadata object would
+    // win and every academic field would look empty.
+    const nested = [];
+    for (const key of PROFILE_RECORD_KEYS) {
+      if (key in current) nested.push(current[key]);
+    }
+    if ('data' in current) nested.push(current.data);
+    if (nested.length) {
+      queue.unshift(...nested);
+      continue;
+    }
+
+    const keys = Object.keys(current);
+    if (keys.some((key) => PROFILE_FIELD_KEYS.has(key))) return current;
+  }
+
+  return {};
 }
 
 function field(profile, keys, fallback = '---') {
@@ -63,7 +108,10 @@ export default function InfoPage() {
   const profile = useQuery({
     queryKey: ['profile', auth.user?.mssv],
     queryFn: ({ signal }) => getProfile(auth.token, { idsv: auth.user?.idsv, mssv: auth.user?.mssv, signal }),
-    enabled: Boolean(auth.token)
+    enabled: Boolean(auth.token),
+    retry: (failureCount, error) => error?.status !== 401 && failureCount < 2,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true
   });
 
   const presentation = useQuery({
@@ -72,19 +120,27 @@ export default function InfoPage() {
     enabled: Boolean(auth.token)
   });
 
-  const person = profileRecord(profile.data);
-  const fullName = field(person, ['ho_ten', 'ho_va_ten', 'ten_day_du', 'name'], auth.user?.name || 'Sinh viên BDU');
-  const mssv = field(person, ['ma_sinh_vien', 'ma_sv', 'userName'], auth.user?.mssv || '---');
-  const dob = field(person, ['ngay_sinh', 'ngay_thang_nam_sinh']);
-  const gender = field(person, ['gioi_tinh', 'ten_gioi_tinh']);
-  const faculty = field(person, ['ten_khoa', 'ten_khoa_quan_ly', 'khoa']);
-  const major = field(person, ['ten_chuyen_nganh', 'ten_nganh', 'nganh']);
-  const className = field(person, ['ten_lop', 'ten_lop_hanh_chinh', 'lop']);
-  const status = field(person, ['ten_tinh_trang', 'tinh_trang_hoc', 'trang_thai'], 'Đang học');
-  const cohort = field(person, ['nien_khoa', 'ten_nien_khoa', 'khoa_hoc']);
-  const advisor = field(person, ['ten_co_van_hoc_tap', 'ho_ten_co_van_hoc_tap', 'ten_cvht'], 'Chưa cập nhật');
-  const advisorId = field(person, ['ma_co_van_hoc_tap', 'ma_cvht'], '--');
-  const photo = profile.data?.student_image || person.hinh_anh || person.url_hinh_anh || person.image || person.anh_the;
+  const storedProfile = presentation.data || {};
+  const person = { ...storedProfile, ...profileRecord(profile.data) };
+  const fullName = field(person, ['ho_ten', 'ho_va_ten', 'ten_day_du', 'ten_sinh_vien', 'name'], auth.user?.name || 'Sinh viên BDU');
+  const mssv = field(person, ['ma_sinh_vien', 'ma_sv', 'mssv', 'userName', 'username', 'user_name'], auth.user?.mssv || '---');
+  const dob = field(person, ['ngay_sinh', 'ngay_thang_nam_sinh', 'birth_date']);
+  const gender = field(person, ['gioi_tinh', 'ten_gioi_tinh', 'gioi_tinh_name']);
+  const faculty = field(person, ['ten_khoa', 'ten_khoa_quan_ly', 'khoa', 'khoa_quan_ly', 'faculty_name', 'student_faculty_code']);
+  const major = field(person, ['ten_chuyen_nganh', 'ten_nganh', 'ten_nganh_dao_tao', 'nganh_dao_tao', 'nganh', 'major_name']);
+  const className = field(person, ['ten_lop', 'ten_lop_hanh_chinh', 'lop_hanh_chinh', 'lop', 'ma_lop', 'student_class_code']);
+  const status = field(person, ['ten_tinh_trang', 'tinh_trang_hoc', 'trang_thai_hoc', 'hien_dien_sv', 'trang_thai'], 'Đang học');
+  const cohort = field(person, ['nien_khoa', 'ten_nien_khoa', 'khoa_hoc', 'nien_khoa_dao_tao', 'student_cohort']);
+  const advisor = field(person, ['ten_co_van_hoc_tap', 'ho_ten_co_van_hoc_tap', 'ten_cvht', 'ho_ten_cvht', 'ten_giang_vien'], 'Chưa cập nhật');
+  const advisorId = field(person, ['ma_co_van_hoc_tap', 'ma_cvht', 'tai_khoan_cvht', 'ma_giang_vien'], '--');
+  const photo = profile.data?.student_image
+    || person.student_image
+    || person.avatar_url
+    || person.hinh_anh
+    || person.url_hinh_anh
+    || person.image
+    || person.anh_the
+    || person.avatar;
 
   const copyMssv = () => {
     if (mssv && mssv !== '---') {

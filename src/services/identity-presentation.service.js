@@ -517,6 +517,11 @@ function mapPresentationRow(row) {
     avatar_url: row.avatar_override_url || row.bdu_avatar_url || null,
     avatar_source: row.avatar_override_url ? 'override' : (row.bdu_avatar_url ? 'bdu' : 'initials'),
     avatar_updated_at: row.avatar_override_updated_at || null,
+    // Keep the last successfully synced academic snapshot available to the
+    // profile screen when the BDU portal briefly returns a partial response.
+    student_class_code: row.student_class_code || row.ranking_class_code || null,
+    student_faculty_code: row.student_faculty_code || row.ranking_faculty_code || null,
+    student_cohort: row.student_cohort || row.ranking_cohort || null,
     max_titles: MAX_DISPLAYED_TITLES,
     can_create_clan: Boolean(hasTtcds),
     available_titles: availableTitles.map(({ priority, ...title }) => title),

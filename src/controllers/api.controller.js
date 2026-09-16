@@ -320,8 +320,30 @@ export const ApiController = {
   },
 
   // 7. Tools: Survey Live Stream (SSE)
+  async getSurveyForms(req, res) {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      const data = await SurveyService.listAvailableSurveys({ token });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Survey forms error:', err.message);
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể tải danh sách khảo sát.' });
+    }
+  },
+
   async streamSurvey(req, res) {
-    const { token, mssv, ratingLevel } = req.query;
+    const { token, mssv, ratingLevel, genderLevel, attendanceLevel, feedback, feedbackMode } = req.query;
+    let selectedSurveys = null;
+    let feedbackScenarios = null;
+    let courseRatings = null;
+    try {
+      if (req.query.selected) selectedSurveys = JSON.parse(req.query.selected);
+      if (req.query.feedbackScenarios) feedbackScenarios = JSON.parse(req.query.feedbackScenarios);
+      if (req.query.courseRatings) courseRatings = JSON.parse(req.query.courseRatings);
+    } catch {
+      selectedSurveys = null;
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -333,15 +355,22 @@ export const ApiController = {
     };
 
     try {
-      await SurveyService.runAutoSurvey({
+      const result = await SurveyService.runAutoSurvey({
         token,
         mssv,
         ratingLevel: ratingLevel || '5',
+        genderLevel: genderLevel || '0',
+        attendanceLevel: attendanceLevel || '1',
+        feedback: feedback || '',
+        feedbackScenarios,
+        feedbackMode: feedbackMode || 'random',
+        courseRatings: courseRatings || {},
+        selectedSurveys,
         onLog: (logData) => {
-          sendEvent({ type: 'log', ...logData });
+          sendEvent({ type: 'log', logType: logData.type, message: logData.message, timestamp: logData.timestamp });
         }
       });
-      sendEvent({ type: 'done', message: 'Toàn bộ tiến trình khảo sát đã kết thúc thành công.' });
+      sendEvent({ type: result.success ? 'done' : 'error', message: result.message, result });
       res.end();
     } catch (err) {
       sendEvent({ type: 'error', message: err.message || 'Lỗi khi thực hiện khảo sát.' });

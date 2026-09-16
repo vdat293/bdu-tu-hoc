@@ -33,6 +33,37 @@ try {
   assert.equal(result.data.lop, '27TH03');
 
   console.log('✓ Profile request uses the official IDSV endpoint and preserves returned data');
+
+  const fallbackUrls = [];
+  globalThis.fetch = async (url) => {
+    fallbackUrls.push(url);
+    if (url.includes('w-locdsthongtinhhscanhan')) {
+      return {
+        status: 200,
+        async json() {
+          return { result: true, code: 200, data: { ho_ten: 'Sinh viên kiểm thử', ma_sv: '24050126' } };
+        }
+      };
+    }
+    if (url.includes('w-locthongtinimagesinhvien')) return { ok: false, status: 503 };
+    return {
+      status: 200,
+      async json() {
+        return {
+          result: true,
+          code: 200,
+          data: { lop: '27TH03', nganh: 'Công nghệ thông tin', khoa: 'Khoa Tin học' }
+        };
+      }
+    };
+  };
+
+  const repaired = await BduService.getProfile('test-token', '-123456789', '24050126');
+  assert.ok(fallbackUrls.some(url => url.includes('/dkmh/w-locsinhvieninfo')));
+  assert.equal(repaired.data.lop, '27TH03');
+  assert.equal(repaired.data.khoa, 'Khoa Tin học');
+  assert.equal(repaired.data.ma_sv, '24050126');
+  console.log('✓ Partial IDSV profile is repaired from the current-user endpoint');
 } finally {
   globalThis.fetch = originalFetch;
 }

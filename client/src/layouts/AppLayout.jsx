@@ -289,7 +289,7 @@ export default function AppLayout() {
         </header>
 
         {/* Scrollable Main Content */}
-        <main id="main-content" ref={mainRef} tabIndex={-1} className="dashboard-body">
+        <main id="main-content" ref={mainRef} tabIndex={-1} className={`dashboard-body${location.pathname === '/survey' ? ' dashboard-body-survey' : ''}`}>
           <AppErrorBoundary>
             <Outlet />
           </AppErrorBoundary>

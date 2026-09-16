@@ -56,6 +56,7 @@ router.post('/wordfmt/format', upload.single('document'), ApiController.formatDo
 router.get('/wordfmt/download/:filename', ApiController.downloadFormattedDocx);
 
 // 3. Survey Automation Tool (Server-Sent Events)
+router.get('/survey/forms', ApiController.getSurveyForms);
 router.get('/survey/stream', ApiController.streamSurvey);
 
 // 4. Moodle English Exercise Automation

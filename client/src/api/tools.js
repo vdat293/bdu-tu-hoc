@@ -5,6 +5,15 @@ export async function formatDocx(token, formData, { signal } = {}) {
   return data;
 }
 
+export async function getSurveyForms(token, { signal } = {}) {
+  const data = await request('/api/survey/forms', {
+    token,
+    signal,
+    defaultMessage: 'Không thể tải danh sách môn khảo sát.'
+  });
+  return unwrap(data, data)?.items || [];
+}
+
 export async function loginEnglish(credentials, { signal } = {}) {
   const data = await request('/api/english/login', { method: 'POST', body: credentials, signal, defaultMessage: 'Không thể đăng nhập Moodle.' });
   return unwrap(data, data);

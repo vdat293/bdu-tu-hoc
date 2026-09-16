@@ -14,7 +14,7 @@ export function useViewportDialog(isOpen, onClose, dialogRef, initialFocusRef, r
 
   useEffect(() => {
     if (!isOpen) return undefined;
-    restoreFocusRef.current = returnFocusRef.current || (typeof document.activeElement?.focus === 'function' ? document.activeElement : null);
+    restoreFocusRef.current = returnFocusRef?.current || (typeof document.activeElement?.focus === 'function' ? document.activeElement : null);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => {
