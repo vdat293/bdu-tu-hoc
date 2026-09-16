@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="description" content="BDU Admin Dashboard · Hệ thống giám sát lưu lượng và phân tích nhật ký máy chủ AWS VPS" />
+  <title>BDU OPS Dashboard · Lưu Lượng & Giám Sát VPS</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/admin/admin.css?v=20260916-v2" />
+  <script src="/admin/chart.min.js"></script>
+</head>
+<body>
+  <div id="admin-app" class="admin-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-badge">⚡</div>
+        <div class="brand-text">
+          <span class="brand-title">BDU OPS</span>
+          <span class="brand-sub">Traffic & VPS Monitor</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="menu-label">QUẢN TRỊ HỆ THỐNG</div>
+        <button type="button" class="nav-btn active" data-tab="overview">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Tổng Quan Lưu Lượng</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="charts">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label">Biểu Đồ & Xu Hướng</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="logs">
+          <span class="nav-icon">📜</span>
+          <span class="nav-label">Nhật Ký Truy Cập</span>
+          <span class="badge-pill" id="badge-total-logs">0</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="users">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Sinh Viên Đã Vào Web</span>
+          <span class="badge-pill" id="badge-active-students">--</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="system">
+          <span class="nav-icon">🖥️</span>
+          <span class="nav-label">Sức Khỏe VPS & RAM</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="vps-status-pill">
+          <span class="status-dot"></span>
+          <span class="status-text">AWS VPS Online</span>
+        </div>
+        <div class="admin-auth-info">
+          <span class="auth-role" id="display-auth-status">Admin Key: Đã lưu</span>
+          <button type="button" class="btn-change-key" id="btn-open-auth-modal" title="Đổi mã khóa Admin">Đổi khóa</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Container -->
+    <div class="admin-main-wrapper">
+      <!-- Topbar Header -->
+      <header class="admin-topbar">
+        <div class="topbar-left">
+          <button type="button" class="btn-sidebar-toggle" id="btn-toggle-sidebar" aria-label="Menu">
+            ☰
+          </button>
+          <div class="topbar-title-block">
+            <h1 class="page-title" id="page-title">Tổng Quan Lưu Lượng</h1>
+            <p class="page-subtitle">Giám sát thời gian thực lưu lượng người dùng và hiệu năng Express trên AWS VPS</p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- Time Range Buttons -->
+          <div class="time-range-group" id="time-range-group">
+            <button type="button" class="range-pill" data-range="1h">1H</button>
+            <button type="button" class="range-pill" data-range="6h">6H</button>
+            <button type="button" class="range-pill active" data-range="24h">24H</button>
+            <button type="button" class="range-pill" data-range="7d">7D</button>
+            <button type="button" class="range-pill" data-range="30d">30D</button>
+            <button type="button" class="range-pill" data-range="all">ALL</button>
+          </div>
+
+          <!-- Auto Refresh Selector -->
+          <div class="refresh-selector">
+            <span class="refresh-label">Tự làm mới:</span>
+            <select id="select-refresh-rate" class="admin-select">
+              <option value="0">Tắt</option>
+              <option value="5000">5 giây</option>
+              <option value="15000" selected>15 giây</option>
+              <option value="30000">30 giây</option>
+              <option value="60000">1 phút</option>
+            </select>
+          </div>
+
+          <!-- Manual Refresh -->
+          <button type="button" class="btn-refresh" id="btn-manual-refresh" title="Làm mới tức thì">
+            ↻ Làm Mới
+          </button>
+
+          <!-- Theme Toggle -->
+          <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Đổi giao diện Sáng/Tối">
+            🌙
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Content Area with Views -->
+      <main class="admin-content" id="admin-content">
+        <!-- 1. Overview Tab -->
+        <section class="tab-pane active" id="pane-overview">
+          <!-- KPI Cards Grid -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Tổng Lượt Yêu Cầu</span>
+                <span class="kpi-icon icon-blue">⚡</span>
+              </div>
+              <div class="kpi-value" id="kpi-total-requests">--</div>
+              <div class="kpi-sub">
+                <span class="kpi-growth" id="kpi-growth">■ 0%</span>
+                <span class="kpi-desc">so với chu kỳ trước</span>
+              </div>
+              <div class="kpi-micro-badges">
+                <span class="micro-badge badge-2xx" id="kpi-2xx">2xx: 0</span>
+                <span class="micro-badge badge-4xx" id="kpi-4xx">4xx: 0</span>
+                <span class="micro-badge badge-5xx" id="kpi-5xx">5xx: 0</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Sinh Viên Hoạt Động</span>
+                <span class="kpi-icon icon-purple">👥</span>
+              </div>
+              <div class="kpi-value" id="kpi-unique-mssv">--</div>
+              <div class="kpi-sub">
+                <span class="kpi-highlight" id="kpi-unique-users">--</span>
+                <span class="kpi-desc">tổng thiết bị & IP duy nhất</span>
+              </div>
+              <div class="kpi-footer-note">Tài khoản sinh viên BDU xác thực</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Độ Trễ Phản Hồi TB</span>
+                <span class="kpi-icon icon-green">⏱</span>
+              </div>
+              <div class="kpi-value" id="kpi-avg-latency">-- ms</div>
+              <div class="kpi-sub">
+                <span class="latency-indicator" id="kpi-latency-status">● Đang tính toán</span>
+              </div>
+              <div class="kpi-footer-note">Đo trực tiếp tại Express Gateway</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Tỷ Lệ Yêu Cầu Lỗi</span>
+                <span class="kpi-icon icon-amber">🛡</span>
+              </div>
+              <div class="kpi-value" id="kpi-error-rate">-- %</div>
+              <div class="kpi-sub">
+                <span class="error-status-badge" id="kpi-error-status">Ổn định</span>
+                <span class="kpi-desc">yêu cầu HTTP 4xx / 5xx</span>
+              </div>
+              <div class="kpi-footer-note">Bao gồm lỗi xác thực và 500</div>
+            </div>
+          </div>
+
+          <!-- Quick Charts Preview in Overview -->
+          <div class="charts-overview-row">
+            <div class="panel-card chart-card-large">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Lưu Lượng Yêu Cầu Theo Thời Gian</h2>
+                  <p class="card-subtitle">Số lượng request, phản hồi lỗi và biến động độ trễ</p>
+                </div>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="chart-timeline-preview"></canvas>
+              </div>
+            </div>
+
+            <div class="panel-card chart-card-small">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Top Tuyến Đường & API</h2>
+                  <p class="card-subtitle">Tính năng được sử dụng nhiều nhất</p>
+                </div>
+              </div>
+              <div class="endpoints-list" id="endpoints-list-preview">
+                <div class="loading-state">Đang tải dữ liệu...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Charts & Analytics Tab -->
+        <section class="tab-pane" id="pane-charts">
+          <div class="panel-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Biểu Đồ Chi Tiết Lưu Lượng & Lỗi (Timeline)</h2>
+                <p class="card-subtitle">Phân tích chuỗi thời gian truy cập máy chủ</p>
+              </div>
+            </div>
+            <div class="chart-wrapper" style="height: 380px;">
+              <canvas id="chart-timeline-detailed"></canvas>
+            </div>
+          </div>
+
+          <div class="charts-overview-row">
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Phân Bố Thiết Bị & Nền Tảng</h2>
+                  <p class="card-subtitle">Mobile vs Desktop vs Tablet</p>
+                </div>
+              </div>
+              <div class="devices-grid" id="devices-summary-grid">
+                <!-- Device cards dynamically inserted -->
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Hệ Điều Hành & Trình Duyệt</h2>
+                  <p class="card-subtitle">Tỷ lệ môi trường khách truy cập</p>
+                </div>
+              </div>
+              <div class="os-browser-lists" id="os-browser-summary">
+                <!-- OS / Browser pills dynamically inserted -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Access Logs Tab -->
+        <section class="tab-pane" id="pane-logs">
+          <div class="panel-card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Nhật Ký Yêu Cầu Chi Tiết (HTTP Logs)</h2>
+                <p class="card-subtitle">Tra cứu chi tiết từng request, mã trạng thái, IP và lỗi</p>
+              </div>
+              <div class="header-right-meta">
+                <span class="count-badge" id="logs-total-count">0 bản ghi</span>
+              </div>
+            </div>
+
+            <!-- Filter Toolbar -->
+            <div class="logs-filter-toolbar">
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="input-log-search" placeholder="Tìm theo đường dẫn, MSSV, IP hoặc thông báo lỗi..." />
+                <button type="button" id="btn-clear-search" class="btn-clear" style="display: none;">✕</button>
+              </div>
+
+              <div class="filter-group">
+                <span class="filter-label">Mã HTTP:</span>
+                <button type="button" class="filter-btn active" data-status="all">Tất cả</button>
+                <button type="button" class="filter-btn" data-status="2xx">2xx</button>
+                <button type="button" class="filter-btn" data-status="3xx">3xx</button>
+                <button type="button" class="filter-btn" data-status="4xx">4xx</button>
+                <button type="button" class="filter-btn" data-status="5xx">5xx</button>
+              </div>
+
+              <div class="filter-group">
+                <span class="filter-label">Method:</span>
+                <button type="button" class="filter-btn active" data-method="all">Tất cả</button>
+                <button type="button" class="filter-btn" data-method="GET">GET</button>
+                <button type="button" class="filter-btn" data-method="POST">POST</button>
+                <button type="button" class="filter-btn" data-method="PUT">PUT</button>
+                <button type="button" class="filter-btn" data-method="DELETE">DELETE</button>
+              </div>
+            </div>
+
+            <div id="active-mssv-tag-row" class="active-tag-row" style="display: none;">
+              <span class="tag-pill">
+                Đang lọc sinh viên: <strong id="active-filter-mssv">--</strong>
+                <button type="button" id="btn-remove-mssv-filter">✕ Bỏ lọc</button>
+              </span>
+            </div>
+
+            <!-- Logs Table -->
+            <div class="table-container">
+              <table class="admin-data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 140px;">Thời Gian</th>
+                    <th style="width: 80px;">Method</th>
+                    <th>Đường Dẫn (Path)</th>
+                    <th style="width: 90px;">Mã HTTP</th>
+                    <th style="width: 90px;">Độ Trễ</th>
+                    <th style="width: 140px;">Sinh Viên</th>
+                    <th style="width: 140px;">IP / Thiết Bị</th>
+                    <th style="width: 70px; text-align: center;">Chi Tiết</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-table-body">
+                  <tr><td colspan="8" class="text-center-muted">Đang tải nhật ký...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-footer">
+              <div class="page-info" id="pagination-info">Trang 1 / 1</div>
+              <div class="page-buttons">
+                <button type="button" class="btn-page" id="btn-page-prev">◀ Trước</button>
+                <button type="button" class="btn-page" id="btn-page-next">Sau ▶</button>
+                <select id="select-log-limit" class="admin-select">
+                  <option value="25">25 dòng</option>
+                  <option value="50" selected>50 dòng</option>
+                  <option value="100">100 dòng</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Quản Lý Sinh Viên Đã Vào Web (Bảng students trên VPS) -->
+        <section class="tab-pane" id="pane-users">
+          <!-- Mini KPI Cards for Visitors -->
+          <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
+            <div class="kpi-card">
+              <div class="kpi-icon-wrap" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">👥</div>
+              <div class="kpi-content">
+                <span class="kpi-label">Đã Vào Web (Kích Hoạt)</span>
+                <span class="kpi-value" id="kpi-visited-active">--</span>
+                <span class="kpi-trend positive" id="kpi-visited-rate">Bảng students trên VPS</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-wrap" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">📅</div>
+              <div class="kpi-content">
+                <span class="kpi-label">Đăng Nhập Hôm Nay</span>
+                <span class="kpi-value" id="kpi-visited-today">--</span>
+                <span class="kpi-trend neutral">Tính từ 00:00 hôm nay</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-wrap" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">📈</div>
+              <div class="kpi-content">
+                <span class="kpi-label">Đăng Nhập 7 Ngày Qua</span>
+                <span class="kpi-value" id="kpi-visited-7days">--</span>
+                <span class="kpi-trend positive">Sinh viên tích cực tuần này</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-wrap" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">🎓</div>
+              <div class="kpi-content">
+                <span class="kpi-label">Tổng Sinh Viên Trong CSDL</span>
+                <span class="kpi-value" id="kpi-visited-total">--</span>
+                <span class="kpi-trend neutral">Hồ sơ CSDL PostgreSQL</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+              <div>
+                <h2 class="card-title">Danh Sách Sinh Viên Đã Vào Web</h2>
+                <p class="card-subtitle">Dữ liệu thực từ bảng <code>students</code> kết hợp nhật ký <code>traffic_logs</code> trên máy chủ AWS</p>
+              </div>
+
+              <!-- Visitor Filter Controls -->
+              <div class="table-filter-bar" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div class="search-input-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="input-visited-search" class="admin-input" placeholder="Tìm theo MSSV, Tên hoặc Lớp..." style="min-width: 240px;" />
+                </div>
+
+                <select id="select-visited-filter" class="admin-select">
+                  <option value="active" selected>Chỉ sinh viên đã vào web</option>
+                  <option value="all">Tất cả sinh viên trong CSDL</option>
+                </select>
+
+                <select id="select-visited-sort" class="admin-select">
+                  <option value="last_login_at:desc" selected>Vào gần nhất (Mới nhất)</option>
+                  <option value="first_login_at:asc">Lần đầu vào (Sớm nhất)</option>
+                  <option value="total_requests:desc">Nhiều lượt request nhất</option>
+                  <option value="full_name:asc">Tên sinh viên (A-Z)</option>
+                  <option value="mssv:asc">MSSV tăng dần</option>
+                </select>
+
+                <button type="button" class="btn-refresh" id="btn-refresh-visited" title="Làm mới dữ liệu">🔄 Làm Mới</button>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="admin-data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 50px;">STT</th>
+                    <th style="min-width: 110px;">MSSV</th>
+                    <th style="min-width: 170px;">Họ & Tên</th>
+                    <th style="min-width: 110px;">Lớp / Khoa</th>
+                    <th style="min-width: 150px;">Lần Đầu Vào Web</th>
+                    <th style="min-width: 150px;">Lần Vào Gần Nhất</th>
+                    <th style="min-width: 100px; text-align: center;">Lượt Request</th>
+                    <th style="min-width: 100px; text-align: center;">Trạng Thái</th>
+                    <th style="text-align: right; min-width: 110px;">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="visited-students-table-body">
+                  <tr><td colspan="9" class="text-center-muted">Đang tải danh sách sinh viên...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Visited Students Pagination -->
+            <div class="pagination-bar" id="visited-pagination-bar" style="margin-top: 16px;">
+              <span class="pagination-info" id="visited-pagination-info">Đang hiển thị...</span>
+              <div class="pagination-buttons">
+                <button type="button" class="btn-page" id="btn-visited-prev" disabled>← Trang Trước</button>
+                <span class="page-current" id="visited-page-current">1 / 1</span>
+                <button type="button" class="btn-page" id="btn-visited-next" disabled>Trang Sau →</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. VPS Health & Maintenance Tab -->
+        <section class="tab-pane" id="pane-system">
+          <div class="panel-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Sức Khỏe Máy Chủ AWS VPS</h2>
+                <p class="card-subtitle">Node.js runtime, bộ nhớ đệm và kết nối WebSocket</p>
+              </div>
+              <button type="button" class="btn-purge-trigger" id="btn-open-purge-modal">
+                🧹 Dọn Dẹp Log Cũ
+              </button>
+            </div>
+
+            <div class="system-metrics-row" id="system-metrics-container">
+              <div class="sys-card">
+                <span class="sys-label">Thời Gian Hoạt Động (Uptime)</span>
+                <span class="sys-val" id="sys-uptime">--</span>
+                <span class="sys-sub" id="sys-platform">Node --</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">Bộ Nhớ RAM Node (RSS)</span>
+                <span class="sys-val" id="sys-ram">-- MB</span>
+                <span class="sys-sub" id="sys-heap">Heap: -- / -- MB</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">WebSocket Trực Tuyến</span>
+                <span class="sys-val text-green" id="sys-ws">● 0 sockets</span>
+                <span class="sys-sub" id="sys-rooms">0 phòng hoạt động</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">Lưu Trữ Log Trong DB</span>
+                <span class="sys-val" id="sys-db-logs">--</span>
+                <span class="sys-sub" id="sys-buffer">Bộ đệm RAM: 0 items</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Chính Sách Lưu Trữ & An Toàn Ổ Đĩa VPS</h2>
+                <p class="card-subtitle">Cơ chế In-Memory Batch Buffer bảo vệ tài nguyên</p>
+              </div>
+            </div>
+            <div class="maintenance-info-content">
+              <p>• <strong>Batch Buffer Queue:</strong> Các request log được gom trong bộ nhớ RAM và định kỳ ghi xuống PostgreSQL mỗi 3 giây hoặc khi đủ 50 items. Nhờ vậy, máy chủ AWS VPS không bị nghẽn I/O khi sinh viên tra cứu điểm/lịch học đồng thời.</p>
+              <p>• <strong>Tự động loại trừ Asset tĩnh:</strong> Các file CSS, JS, ảnh và avatar có mã phản hồi thành công (&lt; 400) được tự động bỏ qua để giữ bảng log tinh gọn, tập trung 100% vào logic nghiệp vụ và người dùng.</p>
+              <p>• <strong>Tự động Dọn Dẹp:</strong> Hệ thống tự động xóa log cũ hơn 14 ngày mỗi 24 giờ. Bạn cũng có thể chủ động bấm nút "Dọn Dẹp Log Cũ" ở góc trên để giải phóng dung lượng ngay tức thì.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal 1: Request Inspector / Log Detail Modal -->
+  <div class="modal-overlay" id="modal-log-detail" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="modal-log-title">Chi Tiết Nhật Ký Yêu Cầu</h3>
+          <span class="modal-sub" id="modal-log-time">--</span>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-log-modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-log-body">
+        <!-- Log details dynamically injected -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-outline" id="btn-filter-this-student">🔍 Lọc tất cả log của sinh viên này</button>
+        <button type="button" class="btn-action-primary" id="btn-modal-dismiss">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Admin Auth / Key Gate Modal -->
+  <div class="modal-overlay" id="modal-auth-gate" style="display: none;">
+    <div class="modal-card modal-card-auth">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">🔐 Xác Thực Quản Trị Viên</h3>
+          <span class="modal-sub">Truy cập Admin Dashboard trên AWS VPS</span>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-auth-modal" style="display: none;">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="auth-desc">Hệ thống sử dụng tài khoản theo cấu hình <strong>SYSTEM_OWNER_MSSV=24050126</strong> trong <code>.env</code>. Bạn có thể nhập trực tiếp MSSV này hoặc mã khóa admin để mở khóa Dashboard.</p>
+        <form id="form-admin-auth">
+          <div class="form-group">
+            <label for="input-admin-key">Mã Khóa / MSSV Quản Trị Viên:</label>
+            <input type="text" id="input-admin-key" placeholder="Nhập 24050126 hoặc mã key..." required autocomplete="username" />
+          </div>
+          <div id="auth-error-msg" class="auth-error" style="display: none;"></div>
+          <button type="submit" class="btn-auth-submit">Xác Thực & Mở Khóa Dashboard</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Purge Logs Modal -->
+  <div class="modal-overlay" id="modal-purge-logs" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">🧹 Dọn Dẹp Bản Ghi Log Cũ</h3>
+          <span class="modal-sub">Giải phóng dung lượng database trên AWS VPS</span>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-purge-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>Chọn mốc thời gian để xóa các bản ghi log cũ hơn:</p>
+        <div class="purge-options-list">
+          <label class="purge-radio-option">
+            <input type="radio" name="purgeRadio" value="7" />
+            <div>
+              <strong>Cũ hơn 7 ngày</strong>
+              <span>Giữ lại 7 ngày gần nhất</span>
+            </div>
+          </label>
+          <label class="purge-radio-option">
+            <input type="radio" name="purgeRadio" value="14" checked />
+            <div>
+              <strong>Cũ hơn 14 ngày (Khuyên dùng)</strong>
+              <span>Giữ lại 2 tuần gần nhất</span>
+            </div>
+          </label>
+          <label class="purge-radio-option">
+            <input type="radio" name="purgeRadio" value="30" />
+            <div>
+              <strong>Cũ hơn 30 ngày</strong>
+              <span>Giữ lại 1 tháng gần nhất</span>
+            </div>
+          </label>
+        </div>
+        <div id="purge-alert-msg" class="purge-alert" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-outline" id="btn-cancel-purge">Hủy</button>
+        <button type="button" class="btn-action-danger" id="btn-confirm-purge">Xác Nhận Xóa Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Region -->
+  <div class="admin-toast-container" id="admin-toast-container"></div>
+
+  <script type="module" src="/admin/admin.js?v=20260916-v2"></script>
+</body>
+</html>

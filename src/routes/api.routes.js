@@ -6,6 +6,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import { ApiController } from '../controllers/api.controller.js';
+import { AdminDashboardController } from '../controllers/admin-dashboard.controller.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
 
 const router = express.Router();
@@ -104,6 +105,19 @@ router.get('/admin/avatars', ApiController.getAdminAvatars);
 router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
 router.post('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, avatarUpload.single('avatar'), ApiController.uploadAdminAvatar);
 router.delete('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, ApiController.deleteAdminAvatar);
+
+// Admin Traffic & Logs Dashboard
+router.post('/admin/dashboard/login', AdminDashboardController.login);
+router.use('/admin/dashboard', AdminDashboardController.requireAdmin);
+router.get('/admin/dashboard/overview', AdminDashboardController.getOverview);
+router.get('/admin/dashboard/timeline', AdminDashboardController.getTimeline);
+router.get('/admin/dashboard/endpoints', AdminDashboardController.getEndpoints);
+router.get('/admin/dashboard/users', AdminDashboardController.getUsers);
+router.get('/admin/dashboard/visited-students', AdminDashboardController.getVisitedStudents);
+router.get('/admin/dashboard/devices', AdminDashboardController.getDevices);
+router.get('/admin/dashboard/logs', AdminDashboardController.getLogs);
+router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
+router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 
 // 6. Góc Tự Học Số (Community Study Hub & Clans)
 router.get('/community/posts', ApiController.getCommunityPosts);
