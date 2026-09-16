@@ -84,4 +84,34 @@ describe('SurveyPage Modals', () => {
     fireEvent.click(closeBtn);
     expect(document.querySelector('#modal-survey-course-picker.modal-backdrop')).toBeNull();
   });
+
+  it('updates completed course state live when runner emits completedKeys', async () => {
+    let subscriber = null;
+    const { subscribeSurvey } = await import('../../client/src/features/survey/runner.js');
+    subscribeSurvey.mockImplementation((listener) => {
+      subscriber = listener;
+      return () => {};
+    });
+
+    render(<SurveyPage />);
+
+    const loadBtn = screen.getByRole('button', { name: /Lấy danh sách/i });
+    fireEvent.click(loadBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/2\/2 môn được chọn/i)).toBeInTheDocument();
+    });
+
+    // Simulate course-1 completion from runner SSE
+    subscriber({
+      status: 'running',
+      completedKeys: ['course-1'],
+      logs: [{ message: 'Hoàn thành An ninh mạng', type: 'success', at: '12:00:00' }]
+    });
+
+    // Count should automatically decrement from 2/2 to 1/1 without F5
+    await waitFor(() => {
+      expect(screen.getByText(/1\/1 môn được chọn/i)).toBeInTheDocument();
+    });
+  });
 });

@@ -368,6 +368,9 @@ export const ApiController = {
         selectedSurveys,
         onLog: (logData) => {
           sendEvent({ type: 'log', logType: logData.type, message: logData.message, timestamp: logData.timestamp });
+        },
+        onCourseDone: (courseData) => {
+          sendEvent({ type: 'course_done', ...courseData });
         }
       });
       sendEvent({ type: result.success ? 'done' : 'error', message: result.message, result });

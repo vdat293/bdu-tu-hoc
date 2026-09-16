@@ -78,11 +78,63 @@ export default function SurveyPage() {
 
   const settingsDialogRef = useRef(null);
   const coursePickerDialogRef = useRef(null);
+  const terminalRef = useRef(null);
+  const processedKeysRef = useRef(new Set());
+  const lastFinishedStatusRef = useRef(null);
 
   useViewportDialog(showSettingsModal, () => setShowSettingsModal(false), settingsDialogRef);
   useViewportDialog(showCoursePicker, () => setShowCoursePicker(false), coursePickerDialogRef);
 
   useEffect(() => subscribeSurvey(setRun), []);
+
+  // Auto-scroll terminal log to bottom on new log entries
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [run?.logs]);
+
+  // Live update courses as each subject completes
+  useEffect(() => {
+    const completedKeys = run?.completedKeys;
+    if (!Array.isArray(completedKeys) || completedKeys.length === 0) return;
+
+    let hasNew = false;
+    completedKeys.forEach((key) => {
+      if (!processedKeysRef.current.has(key)) {
+        processedKeysRef.current.add(key);
+        hasNew = true;
+      }
+    });
+
+    if (hasNew) {
+      setCourses((prev) => {
+        if (!prev) return prev;
+        return prev.map((course) => {
+          if (processedKeysRef.current.has(course.surveyKey)) {
+            return { ...course, completed: true };
+          }
+          return course;
+        });
+      });
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        completedKeys.forEach((key) => next.delete(key));
+        return next;
+      });
+    }
+  }, [run?.completedKeys]);
+
+  // When run finishes (success), automatically re-fetch from BDU server
+  useEffect(() => {
+    if (run?.status === 'success' && lastFinishedStatusRef.current !== run) {
+      lastFinishedStatusRef.current = run;
+      const timer = window.setTimeout(() => {
+        loadCourses();
+      }, 1200);
+      return () => window.clearTimeout(timer);
+    }
+  }, [run?.status, run]);
 
   const loadCourses = async () => {
     if (!auth.token || loadingCourses) return;
@@ -165,6 +217,7 @@ export default function SurveyPage() {
 
   const start = () => {
     if (isRunning || selectedCourses.length === 0) return;
+    processedKeysRef.current = new Set();
     startSurvey({
       token: auth.token,
       mssv: auth.user?.mssv || '',
@@ -285,7 +338,7 @@ export default function SurveyPage() {
             <span className="terminal-title">SURVEY_BOT_CONSOLE // LIVE LOG</span>
             <button type="button" id="btn-clear-terminal" className="btn-terminal-clear" onClick={clearLog}>Xóa Log</button>
           </div>
-          <div id="survey-terminal" className="terminal-body" style={{ minHeight: '0', maxHeight: 'none', overflowY: 'auto' }}>
+          <div id="survey-terminal" ref={terminalRef} className="terminal-body" style={{ minHeight: '0', maxHeight: 'none', overflowY: 'auto' }}>
             <div className="term-line term-info"><span className="term-time">[00:00:00]</span> Đang chờ danh sách form khảo sát BDU…</div>
             {run?.logs?.map((item, index) => (
               <div className={`term-line term-${item.type || 'info'}`} key={index}>

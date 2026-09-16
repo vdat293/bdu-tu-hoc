@@ -18,10 +18,46 @@ export function startSurvey({ token, mssv, ratingLevel, genderLevel, attendanceL
     selected: JSON.stringify(selectedSurveys || [])
   });
   const source = new EventSource(`/api/survey/stream?${params}`);
-  activeRun = { status: 'running', logs: [], close: () => source.close() };
-  const log = (message, type = 'info') => { activeRun = { ...activeRun, logs: [...activeRun.logs, { message, type, at: new Date().toLocaleTimeString('vi-VN') }].slice(-300) }; publish(); };
-  source.onmessage = (event) => { try { const data = JSON.parse(event.data); if (data.type === 'log') log(data.message, data.logType || 'info'); else if (data.type === 'done') { log(data.message, 'success'); activeRun = { ...activeRun, status: 'success' }; source.close(); publish(); } else if (data.type === 'error') { log(data.message, 'warning'); activeRun = { ...activeRun, status: 'error' }; source.close(); publish(); } } catch { log('Nhận được log không hợp lệ từ máy chủ.', 'warning'); } };
-  source.onerror = () => { if (activeRun?.status === 'running') { log('Kết nối khảo sát đã mất; chưa xác định kết quả backend.', 'warning'); activeRun = { ...activeRun, status: 'disconnected' }; publish(); source.close(); } };
+  activeRun = { status: 'running', logs: [], completedKeys: [], close: () => source.close() };
+  const log = (message, type = 'info') => {
+    activeRun = {
+      ...activeRun,
+      logs: [...activeRun.logs, { message, type, at: new Date().toLocaleTimeString('vi-VN') }].slice(-300)
+    };
+    publish();
+  };
+  source.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'log') {
+        log(data.message, data.logType || 'info');
+      } else if (data.type === 'course_done') {
+        const nextKeys = activeRun.completedKeys ? [...activeRun.completedKeys, data.surveyKey] : [data.surveyKey];
+        activeRun = { ...activeRun, completedKeys: nextKeys };
+        publish();
+      } else if (data.type === 'done') {
+        log(data.message, 'success');
+        activeRun = { ...activeRun, status: 'success', result: data.result, finishedAt: Date.now() };
+        source.close();
+        publish();
+      } else if (data.type === 'error') {
+        log(data.message, 'warning');
+        activeRun = { ...activeRun, status: 'error', finishedAt: Date.now() };
+        source.close();
+        publish();
+      }
+    } catch {
+      log('Nhận được log không hợp lệ từ máy chủ.', 'warning');
+    }
+  };
+  source.onerror = () => {
+    if (activeRun?.status === 'running') {
+      log('Kết nối khảo sát đã mất; chưa xác định kết quả backend.', 'warning');
+      activeRun = { ...activeRun, status: 'disconnected', finishedAt: Date.now() };
+      publish();
+      source.close();
+    }
+  };
   publish();
   return activeRun;
 }

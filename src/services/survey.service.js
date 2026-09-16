@@ -237,7 +237,7 @@ export const SurveyService = {
     return postJson(SUBMIT_ENDPOINT, token, { filter, ds_tra_loi: answers });
   },
 
-  async runAutoSurvey({ token, mssv, ratingLevel = '5', genderLevel = '0', attendanceLevel = '1', feedback, feedbackScenarios, feedbackMode = 'random', courseRatings = {}, selectedSurveys, onLog }) {
+  async runAutoSurvey({ token, mssv, ratingLevel = '5', genderLevel = '0', attendanceLevel = '1', feedback, feedbackScenarios, feedbackMode = 'random', courseRatings = {}, selectedSurveys, onLog, onCourseDone }) {
     const log = (message, type = 'info') => {
       if (onLog) onLog({ message, type, timestamp: new Date().toLocaleTimeString('vi-VN') });
     };
@@ -301,6 +301,17 @@ export const SurveyService = {
         log(`📋 Mức đánh giá: ${effectiveRating} ⭐ | Đã nhận ${questionCount} câu hỏi, dựng ds_tra_loi; đang gửi phiếu...`, 'muted');
         await this.submitAnswers({ token, survey, answers });
         processed += 1;
+        if (typeof onCourseDone === 'function') {
+          onCourseDone({
+            surveyKey: survey.surveyKey,
+            subjectId: survey.subjectId,
+            formId: survey.formId,
+            courseName: survey.courseName,
+            courseCode: survey.courseCode,
+            index: index + 1,
+            total: targets.length
+          });
+        }
         log(`✅ w-luutraloidanhgia → hoàn thành môn ${subjectLabel} (${effectiveRating} ⭐).`, 'success');
       } catch (error) {
         failures.push({ survey, message: error.message });
