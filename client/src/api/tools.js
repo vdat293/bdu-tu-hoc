@@ -14,6 +14,26 @@ export async function getSurveyForms(token, { signal } = {}) {
   return unwrap(data, data)?.items || [];
 }
 
+export async function createSurveyRun(token, options, { signal } = {}) {
+  const data = await request('/api/survey/runs', {
+    method: 'POST',
+    token,
+    body: options,
+    signal,
+    defaultMessage: 'Không thể khởi chạy khảo sát.'
+  });
+  return unwrap(data, data);
+}
+
+export async function getSurveyRunStatus(token, runId, { signal } = {}) {
+  const data = await request(`/api/survey/runs/${encodeURIComponent(runId)}`, {
+    token,
+    signal,
+    defaultMessage: 'Không thể kiểm tra trạng thái khảo sát.'
+  });
+  return unwrap(data, data);
+}
+
 export async function loginEnglish(credentials, { signal } = {}) {
   const data = await request('/api/english/login', { method: 'POST', body: credentials, signal, defaultMessage: 'Không thể đăng nhập Moodle.' });
   return unwrap(data, data);

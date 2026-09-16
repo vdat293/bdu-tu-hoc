@@ -18,7 +18,7 @@ export function useViewportDialog(isOpen, onClose, dialogRef, initialFocusRef, r
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => {
-      (initialFocusRef.current || focusableElements(dialogRef.current)[0] || dialogRef.current)?.focus();
+      (initialFocusRef?.current || focusableElements(dialogRef.current)[0] || dialogRef.current)?.focus();
     }, 0);
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {

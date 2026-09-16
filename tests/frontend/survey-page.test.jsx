@@ -21,7 +21,9 @@ vi.mock('../../client/src/api/tools.js', () => ({
 }));
 
 vi.mock('../../client/src/features/survey/runner.js', () => ({
+  clearSurveyLogs: vi.fn(),
   getSurveyRun: vi.fn(() => ({ status: 'idle', logs: [] })),
+  restoreSurveyRun: vi.fn(() => Promise.resolve(null)),
   subscribeSurvey: vi.fn(() => () => {}),
   startSurvey: vi.fn()
 }));

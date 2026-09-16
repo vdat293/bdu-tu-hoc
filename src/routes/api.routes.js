@@ -57,6 +57,12 @@ router.get('/wordfmt/download/:filename', ApiController.downloadFormattedDocx);
 
 // 3. Survey Automation Tool (Server-Sent Events)
 router.get('/survey/forms', ApiController.getSurveyForms);
+router.post('/survey/runs', ApiController.startSurveyRun);
+router.get('/survey/runs/:runId', ApiController.getSurveyRun);
+// Keep the SSE path neutral so browser content filters do not mistake it for
+// an external tracking/survey endpoint. It only observes an existing run.
+router.get('/tool-runs/:runId/events', ApiController.streamSurveyRun);
+// Legacy static portal compatibility. The React portal uses the run API above.
 router.get('/survey/stream', ApiController.streamSurvey);
 
 // 4. Moodle English Exercise Automation

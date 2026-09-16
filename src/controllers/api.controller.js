@@ -18,6 +18,7 @@ import { CommunityRealtime } from '../services/community-realtime.service.js';
 import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
+import { SurveyRunService } from '../services/survey-run.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -379,6 +380,74 @@ export const ApiController = {
       sendEvent({ type: 'error', message: err.message || 'Lỗi khi thực hiện khảo sát.' });
       res.end();
     }
+  },
+
+  // Survey runs are created with an authenticated POST. SSE only observes an
+  // existing run, so reconnecting a stream can never submit a survey twice.
+  async startSurveyRun(req, res) {
+    try {
+      const authorization = req.headers.authorization || '';
+      const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : authorization.trim();
+      const mssv = await BduIdentityService.resolveVerifiedMssv(authorization);
+      const { run, reused } = SurveyRunService.start({
+        mssv,
+        token,
+        options: {
+          ratingLevel: req.body?.ratingLevel || '5',
+          genderLevel: req.body?.genderLevel || '0',
+          attendanceLevel: req.body?.attendanceLevel || '1',
+          feedback: req.body?.feedback || '',
+          feedbackScenarios: Array.isArray(req.body?.feedbackScenarios) ? req.body.feedbackScenarios : [],
+          feedbackMode: req.body?.feedbackMode || 'random',
+          courseRatings: req.body?.courseRatings && typeof req.body.courseRatings === 'object' ? req.body.courseRatings : {},
+          selectedSurveys: Array.isArray(req.body?.selectedSurveys) ? req.body.selectedSurveys : null
+        }
+      });
+      return res.status(reused ? 200 : 202).json({ result: true, data: { ...run, reused } });
+    } catch (err) {
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể khởi chạy khảo sát.'
+      });
+    }
+  },
+
+  async getSurveyRun(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+      const run = SurveyRunService.getForStudent(req.params.runId, mssv);
+      if (!run) return res.status(404).json({ result: false, message: 'Không tìm thấy lượt khảo sát hoặc lượt này đã hết hạn.' });
+      return res.json({ result: true, data: run });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể kiểm tra trạng thái khảo sát.' });
+    }
+  },
+
+  async streamSurveyRun(req, res) {
+    // EventSource cannot attach Authorization. A random, short-lived run ID is
+    // therefore the stream capability; status reads remain bearer-protected.
+    if (!SurveyRunService.hasRun(req.params.runId)) {
+      return res.status(404).json({ result: false, message: 'Không tìm thấy lượt khảo sát hoặc lượt này đã hết hạn.' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    res.write(': connected\n\n');
+
+    const write = (event) => {
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    const unsubscribe = SurveyRunService.subscribe(req.params.runId, write);
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write(': heartbeat\n\n');
+    }, 15_000);
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   },
 
   // 8. Tools: Moodle English exercise automation

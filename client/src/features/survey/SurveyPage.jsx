@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { getProfile } from '../../api/academics.js';
 import { getSurveyForms } from '../../api/tools.js';
-import { getSurveyRun, startSurvey, subscribeSurvey } from './runner.js';
+import { clearSurveyLogs, getSurveyRun, restoreSurveyRun, startSurvey, subscribeSurvey } from './runner.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const FEEDBACK_SCENARIOS = [
@@ -87,6 +87,12 @@ export default function SurveyPage() {
 
   useEffect(() => subscribeSurvey(setRun), []);
 
+  // A page refresh must reconnect to the already-created backend run, never
+  // create a second survey request just to restore the terminal output.
+  useEffect(() => {
+    if (auth.token) restoreSurveyRun(auth.token);
+  }, [auth.token]);
+
   // Auto-scroll terminal log to bottom on new log entries
   useEffect(() => {
     if (terminalRef.current) {
@@ -163,7 +169,7 @@ export default function SurveyPage() {
     }
   };
 
-  const isRunning = run?.status === 'running';
+  const isRunning = ['starting', 'queued', 'running'].includes(run?.status);
   const pendingCourses = useMemo(() => (courses || []).filter((course) => !course.completed), [courses]);
   const selectedCourses = useMemo(
     () => pendingCourses.filter((course) => selectedKeys.has(course.surveyKey)),
@@ -215,28 +221,34 @@ export default function SurveyPage() {
     setSelectedKeys(allSelected ? new Set() : new Set(pendingCourses.map((course) => course.surveyKey)));
   };
 
-  const start = () => {
+  const start = async () => {
     if (isRunning || selectedCourses.length === 0) return;
     processedKeysRef.current = new Set();
-    startSurvey({
-      token: auth.token,
-      mssv: auth.user?.mssv || '',
-      ratingLevel: rating,
-      genderLevel: gender,
-      attendanceLevel: '1',
-      feedback,
-      feedbackScenarios: feedbackScenario === 'random'
-        ? FEEDBACK_SCENARIOS.map((scenario) => scenario.text)
-        : [feedback],
-      feedbackMode: feedbackScenario === 'random' ? 'random' : 'ordered',
-      courseRatings,
-      selectedSurveys: selectedCourses.map((course) => course.surveyKey)
-    });
-    notify(`Đã khởi chạy khảo sát cho ${selectedCourses.length} môn.`, 'info');
+    try {
+      const runState = await startSurvey({
+        token: auth.token,
+        mssv: auth.user?.mssv || '',
+        ratingLevel: rating,
+        genderLevel: gender,
+        attendanceLevel: '1',
+        feedback,
+        feedbackScenarios: feedbackScenario === 'random'
+          ? FEEDBACK_SCENARIOS.map((scenario) => scenario.text)
+          : [feedback],
+        feedbackMode: feedbackScenario === 'random' ? 'random' : 'ordered',
+        courseRatings,
+        selectedSurveys: selectedCourses.map((course) => course.surveyKey)
+      });
+      notify(runState?.reused
+        ? 'Khảo sát đang chạy trên backend; đã kết nối lại theo dõi tiến trình.'
+        : `Đã khởi chạy khảo sát cho ${selectedCourses.length} môn.`, 'info');
+    } catch (error) {
+      notify(error.message || 'Không thể khởi chạy khảo sát.', 'error');
+    }
   };
 
   const clearLog = () => {
-    setRun((current) => (current ? { ...current, logs: [] } : current));
+    clearSurveyLogs();
   };
 
   return (
@@ -327,7 +339,7 @@ export default function SurveyPage() {
           </div>
 
           <button type="button" id="btn-start-survey" className="btn btn-primary btn-block btn-lg" onClick={start} disabled={isRunning || selectedCourses.length === 0}>
-            <span className="btn-text">{isRunning ? 'Đang chạy khảo sát…' : `Bắt đầu khảo sát (${selectedCourses.length} môn)`}</span>
+            <span className="btn-text">{run?.status === 'starting' ? 'Đang khởi tạo khảo sát…' : isRunning ? 'Đang chạy khảo sát…' : `Bắt đầu khảo sát (${selectedCourses.length} môn)`}</span>
           </button>
           </>}
         </div>
