@@ -18,8 +18,5 @@ export function findRouteMeta(pathname) {
   const canonical = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (canonical.startsWith('/learning/')) return { title: 'Không gian môn học' };
   if (canonical.startsWith('/clans/')) return { title: 'Kênh CLB' };
-  if (canonical === '/admin' || canonical.startsWith('/admin/') || canonical === '/admin-dashboard') {
-    return { title: 'Admin Dashboard • Lưu Lượng & Logs' };
-  }
   return routeMeta[canonical] || { title: 'BDU Tự Học' };
 }
