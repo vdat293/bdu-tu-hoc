@@ -48,6 +48,18 @@ try {
   const zipTL = new AdmZip(outTieuLuan);
   const $tl = load(zipTL.readAsText('word/document.xml'), { xml: true });
 
+  // The official BDU page setup is 2 cm top, 3 cm left, 2 cm bottom, 2 cm right.
+  // No section, including the cover, may override the binding-side 3 cm margin.
+  assert.ok($tl('w\\:sectPr').length > 0, 'Tài liệu tiểu luận phải có section properties');
+  $tl('w\\:sectPr').each((_, el) => {
+    const margins = $tl(el).find('w\\:pgMar');
+    assert.deepEqual(
+      ['w:top', 'w:left', 'w:bottom', 'w:right'].map(name => margins.attr(name)),
+      ['1134', '1701', '1134', '1134'],
+      'Bìa tiểu luận phải dùng lề 2–3–2–2'
+    );
+  });
+
   // Verify tieu_luan has EXACTLY 1 cover border twistedLines1
   assert.equal(
     $tl('w\\:pgBorders w\\:top[w\\:val="twistedLines1"]').length,

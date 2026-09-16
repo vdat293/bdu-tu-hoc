@@ -260,10 +260,12 @@ export function analyzeDocxStructure(inputPath) {
     }
     rec.region = region; rec.chapter = currentChapter; rec.part = currentPart;
     if (region === 'proposal' && rec.role !== 'proposal_title') rec.role = 'proposal';
+    if (region === 'appendix' && rec.role !== 'major_title') rec.role = 'appendix';
     if (region === 'cover') rec.role = 'cover';
   });
   const chapters = records.filter(r => r.role === 'chapter');
   const hasProposal = records.some(r => r.role === 'proposal_title');
+  const hasAppendix = records.some(r => r.region === 'appendix');
   const hasIntroduction = records.some(r => r.role === 'intro_title');
   const hasParts = records.some(r => r.role === 'part_title');
   const automaticHeadings = records.filter(r => ['chapter','heading'].includes(r.role) && r.numbering?.marker).length;
@@ -274,9 +276,9 @@ export function analyzeDocxStructure(inputPath) {
     if (previous[0]?.name === 'w:tbl' && (/TRUONG|BO GIAO DUC|KHOA|VIEN|CONG HOA|QUOC HIEU/iu.test(keyOf(textOf(previous))))) rec.startElement = previous[0];
   }
   const documentType = records.find(r => r.role === 'cover' && /^(ĐỒ ÁN|KHÓA LUẬN|TIỂU LUẬN)/iu.test(r.text))?.text;
-  return { archive, $, body, records, chapters, warnings, hasProposal, hasIntroduction, hasParts, automaticHeadings,
-    documentType, requiresStructuredFormatting: hasProposal || hasIntroduction || hasParts || automaticHeadings > 0 || records.some(r=>r.inIndex),
-    summary: { chapterCount: chapters.length, chapters: chapters.map(r => r.displayText), hasProposal, hasIntroduction,
+  return { archive, $, body, records, chapters, warnings, hasProposal, hasAppendix, hasIntroduction, hasParts, automaticHeadings,
+    documentType, requiresStructuredFormatting: hasProposal || hasAppendix || hasIntroduction || hasParts || automaticHeadings > 0 || records.some(r=>r.inIndex),
+    summary: { chapterCount: chapters.length, chapters: chapters.map(r => r.displayText), hasProposal, hasAppendix, hasIntroduction,
       hasParts, automaticHeadings, protectedIndexParagraphs: records.filter(r => r.inIndex).length,
       chapterSummariesPreserved: records.filter(r => r.role === 'chapter_summary').length, warnings } };
 }
@@ -464,6 +466,8 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
         const numMatch = text.match(/^CHƯƠNG\s+(\d+)/iu);
         if (numMatch) currentChapter = Number(numMatch[1]);
         else if (rec?.chapter) currentChapter = rec.chapter;
+      } else if (rec?.role === 'major_title' || ['appendix', 'references', 'conclusion', 'cover', 'proposal', 'front'].includes(rec?.region)) {
+        currentChapter = null;
       } else if (rec?.chapter != null) {
         currentChapter = rec.chapter;
       }
@@ -477,7 +481,7 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
       processedVisuals.add(table);
 
       const rec = records.find(r => r.insideTable && $(r.element).parents(tag('tbl')).toArray().includes(table));
-      if (rec && ['cover', 'proposal', 'front'].includes(rec.region)) continue;
+      if (rec && ['cover', 'proposal', 'front', 'appendix', 'references', 'conclusion'].includes(rec.region)) continue;
 
       const prev = getPrevMeaningful(table);
       const next = getNextMeaningful(table);
@@ -525,7 +529,7 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
         processedVisuals.add(child);
 
         const rec = records.find(r => r.element === child);
-        if (rec && ['cover', 'proposal', 'front'].includes(rec.region)) continue;
+        if (rec && ['cover', 'proposal', 'front', 'appendix', 'references', 'conclusion'].includes(rec.region)) continue;
 
         const prev = getPrevMeaningful(child);
         const next = getNextMeaningful(child);
@@ -643,12 +647,17 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   $(tag('document')).attr('xmlns:r', R);
   const originalNumbering = archive.readAsText('word/numbering.xml');
   const originalProposal = records.filter(r=>r.region==='proposal' && !r.inIndex && r.text).map(r=>r.text);
-  const preserved = new Set(records.filter(r => r.region==='proposal' || ['cover','embedded'].includes(r.role)).map(r => r.element));
-  // Keep complete proposal tables through every shared normalization pass.
+  const originalAppendix = records.filter(r=>r.region==='appendix' && !r.inIndex && r.text).map(r=>r.text);
+  const preserved = new Set(records.filter(r => r.region==='proposal' || (r.region==='appendix' && r.role!=='major_title') || ['cover','embedded'].includes(r.role)).map(r => r.element));
+  // Keep complete proposal and appendix tables through every shared normalization pass.
   // Restoring serialized subtrees also protects merged cells, drawings and links.
-  const protectedTables = preserveProposal ? body.children(tag('tbl')).toArray().filter(e =>
+  const proposalTables = preserveProposal ? body.children(tag('tbl')).toArray().filter(e =>
     records.some(r => r.region==='proposal' && $(r.element).parents(tag('tbl')).toArray().includes(e))
   ).map(e => ({element:e, xml:xmlOf($,e)})) : [];
+  const appendixTables = body.children(tag('tbl')).toArray().filter(e =>
+    records.some(r => r.region==='appendix' && $(r.element).parents(tag('tbl')).toArray().includes(e))
+  ).map(e => ({element:e, xml:xmlOf($,e)}));
+  const protectedTables = [...proposalTables, ...appendixTables];
   const generatedIndexes = new Set();
   const tocCode = 'TOC \\t "WFIntroTitle,1,WFIntroHeading,2,WFPartTitle,1,WFMajorTitle,1,WFHeading1,1,WFHeading2,2,WFHeading3,3,WFHeading4,4" \\h';
   let restoredIndexes = 0;
@@ -721,7 +730,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   let tablesCentered=0, drawingParagraphsCentered=0, wideTablesDetected=0, tablesResized=0;
   const tableWidth = cm(21 - (profile.page?.margins_cm?.left ?? 3) - (profile.page?.margins_cm?.right ?? 2));
   const proposalLeads=new Set(records.map(r=>r.startElement).filter(Boolean));
-  const protectedTable = table => proposalLeads.has(table)||records.some(r=>r.insideTable && ['cover','proposal'].includes(r.region) && $(r.element).parents(tag('tbl')).toArray().includes(table));
+  const protectedTable = table => proposalLeads.has(table)||records.some(r=>r.insideTable && ['cover','proposal','appendix'].includes(r.region) && $(r.element).parents(tag('tbl')).toArray().includes(table));
   body.find(tag('tbl')).each((_,table)=> {
     if(protectedTable(table))return;
     // Front-matter signature/comment layouts are not data tables.
@@ -856,6 +865,51 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     }
     starts.push(...generatedIndexStarts);
   }
+  // Auto-generate List of Figures (DANH MỤC HÌNH ẢNH) and List of Tables (DANH MỤC BẢNG)
+  // if not already present in the source but corresponding content exists.
+  const hasFiguresIndex = replacements.has('figures') || starts.some(s => /^(?:DANH MUC|MUC LUC) (?:CAC )?(?:HINH|HINH ANH|HINH VE)\b/.test(keyOf(s.title)));
+  const hasTablesIndex = replacements.has('tables') || starts.some(s => /^(?:DANH MUC|MUC LUC) (?:CAC )?(?:BANG|BANG BIEU)\b/.test(keyOf(s.title)));
+  const hasFigureContent = records.some(r => r.role === 'figure_caption');
+  const hasTableContent = records.some(r => r.role === 'table_caption');
+
+  const missingIndexes = [];
+  if (!hasFiguresIndex && (hasFigureContent || requested.has('figures'))) {
+    missingIndexes.push({ kind: 'figures', label: 'DANH MỤC HÌNH ẢNH', field: 'TOC \\c "Hinh" \\h' });
+  }
+  if (!hasTablesIndex && (hasTableContent || requested.has('tables'))) {
+    missingIndexes.push({ kind: 'tables', label: 'DANH MỤC BẢNG', field: 'TOC \\c "Bang" \\h' });
+  }
+
+  if (missingIndexes.length > 0) {
+    const tocStart = starts.find(s => keyOf(s.title) === 'MUC LUC');
+    let anchorNode = null;
+    if (tocStart) {
+      const sortedStarts = [...starts].sort((a, b) => body.children().toArray().indexOf(a.node) - body.children().toArray().indexOf(b.node));
+      const tocIdx = sortedStarts.indexOf(tocStart);
+      if (tocIdx >= 0 && tocIdx + 1 < sortedStarts.length) {
+        anchorNode = sortedStarts[tocIdx + 1].node;
+      }
+    }
+    if (!anchorNode) {
+      const firstBodyStart = starts.find(s => ['chapter', 'intro_title', 'part_title', 'major_title'].includes(s.role));
+      if (firstBodyStart) {
+        anchorNode = firstBodyStart.node;
+      }
+    }
+
+    for (const def of missingIndexes) {
+      const replacement = $(paragraph(def.label, 'WFFrontTitle') + fieldControl(def.field));
+      if (anchorNode) {
+        $(anchorNode).before(replacement);
+      } else {
+        body.append(replacement);
+      }
+      const newStart = { node: replacement[0], role: 'front_title', title: def.label };
+      starts.push(newStart);
+      generatedIndexStarts.push(newStart);
+    }
+  }
+
   const indexPagesRebuilt = generatedIndexStarts.length;
   // Move the entire thanks block, including tables and controls, before TOC.
   const thanks=starts.find(s=>keyOf(s.title)==='LOI CAM ON');
@@ -999,9 +1053,12 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const verified = analyzeDocxStructure(outputPath);
   const chapterStructure = JSON.stringify(verified.chapters.map(r=>r.number)) === JSON.stringify(analysis.chapters.map(r=>r.number));
   const proposalPreserved = !preserveProposal || JSON.stringify(verified.records.filter(r=>r.region==='proposal'&&!r.inIndex&&r.text).map(r=>r.text)) === JSON.stringify(originalProposal);
-  const proposalTablesPreserved = !preserveProposal || protectedTables.every(entry=>documentXml.includes(entry.xml));
+  const proposalTablesPreserved = !preserveProposal || proposalTables.every(entry=>documentXml.includes(entry.xml));
   const proposalBlockPreserved = !proposalBlock || documentXml.includes(proposalBlock.xml);
-  if(!chapterStructure || !proposalPreserved || !proposalTablesPreserved || !proposalBlockPreserved) throw new Error('Kiểm tra sau định dạng phát hiện thay đổi cấu trúc chương hoặc nội dung đề cương.');
+  const hasAppendix = analysis.hasAppendix || records.some(r => r.region === 'appendix');
+  const appendixPreserved = !hasAppendix || JSON.stringify(verified.records.filter(r=>r.region==='appendix'&&!r.inIndex&&r.text).map(r=>r.text)) === JSON.stringify(originalAppendix);
+  const appendixTablesPreserved = appendixTables.every(entry => documentXml.includes(entry.xml));
+  if(!chapterStructure || !proposalPreserved || !proposalTablesPreserved || !proposalBlockPreserved || !appendixPreserved || !appendixTablesPreserved) throw new Error('Kiểm tra sau định dạng phát hiện thay đổi cấu trúc chương, nội dung đề cương hoặc nội dung phụ lục.');
   const $out=verified.$, sections=$out(tag('sectPr')).toArray();
   const expectedMargins=profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
   const a4Portrait=sections.every(s=>Number(child($out(s),'pgSz').attr('w:w'))===11906 && Number(child($out(s),'pgSz').attr('w:h'))===16838);
@@ -1019,7 +1076,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const wordprocessingPropertyOrder=normalizeWordprocessingPropertyOrder(documentXml).xml===documentXml;
   return { success:true, outputPath, fileSize:fs.statSync(outputPath).size,
     report: { appliedProfile:{profileId:profile.profile_id,sourceRevision:profile.source_revision},
-      structure:{...analysis.summary,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
+      structure:{...analysis.summary,hasAppendix,appendixPreserved,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
         indexPagesRebuilt, leadingPageBordersDetected, borderedLeadingCoverPagesReplaced, tableFontSizePt:13,
         headerFooterFont, headerFooterSizePt,
@@ -1027,9 +1084,10 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,
           smartQuotesPreserved:true,referenceHyperlinksRemoved:stripReferenceHyperlinks(documentXml).stats.hyperlinksRemoved===0,
-          longDashesNormalized:!verified.records.some(r=>!['cover','proposal'].includes(r.region)&&/[–—]/.test(r.text)),
+          longDashesNormalized:!verified.records.some(r=>!['cover','proposal','appendix'].includes(r.region)&&/[–—]/.test(r.text)),
           wideTablesFitPortrait:wideTablesDetected===0,wordCompatibleAnchors,wordprocessingPropertyOrder,headingStructure:chapterStructure,headingIndentation,
-          proposalPreserved,proposalTablesPreserved,proposalBlockPreserved,proposalSkipped:shouldSkipProposal },
+          proposalPreserved,proposalTablesPreserved,proposalBlockPreserved,proposalSkipped:shouldSkipProposal,
+          appendixPreserved,appendixTablesPreserved },
         tablesCentered, drawingParagraphsCentered, wideTablesDetected, tablesResized, acknowledgementFramesAdded,
         tabbedTablesConverted: tabbedTableResult.tablesConverted, tabbedTableRowsConverted: tabbedTableResult.rowsConverted,
         bodyTextCase: bodyTextResult.stats.bodyTextCase, bodyTextNodesNormalized: bodyTextResult.stats.bodyTextNodesNormalized,

@@ -2427,6 +2427,7 @@ function initWordFmtTool() {
           const structureLines = structure ? [
             `Nhận diện ${Number(structure.chapterCount)} chương thực; ${Number(structure.protectedIndexParagraphs)} đoạn mục lục được bảo vệ.`,
             structure.hasProposal ? 'Đề cương: giữ nguyên nội dung và định dạng nguồn; không tính vào số chương.' : '',
+            structure.hasAppendix ? 'Phụ lục: mặc định giữ nguyên cấu trúc, bảng và nội dung gốc.' : '',
             structure.hasIntroduction ? 'Mở đầu được xử lý riêng, không đánh số chương.' : '',
             structure.hasParts ? 'Giữ tiêu đề PHẦN NỘI DUNG; các chương bên trong dùng hệ Heading 1–4.' : '',
             structure.chapterSummariesPreserved ? `Giữ ${Number(structure.chapterSummariesPreserved)} đoạn giới thiệu chương là nội dung thường.` : '',

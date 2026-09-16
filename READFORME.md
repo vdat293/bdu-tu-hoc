@@ -138,7 +138,7 @@ Back-End chạy trên nền tảng **Node.js (Express.js)**, đóng vai trò là
 2. **[FE]**: Gửi file kèm các tùy chọn bìa qua `POST /api/tools/format-word`.
 3. **[BE]**: `multer` nhận file lưu vào thư mục `temp/`.
 4. **[BE]**: `src/server/modules/tools/` gọi binary CLI `bin/wordfmt/wordfmt.exe` với các tham số tương ứng.
-5. **[C# Engine]**: Đọc OpenXML, chỉnh lề 2-2-3-2 cm, đổi Times New Roman 13, chuẩn hóa Heading H1-H4, tạo mục lục tự động, xuất ra file kết quả.
+5. **[C# Engine]**: Đọc OpenXML, chỉnh lề trên 2 cm, trái 3 cm, dưới 2 cm, phải 2 cm, đổi Times New Roman 13, chuẩn hóa Heading H1-H4, tạo mục lục tự động, xuất ra file kết quả.
 6. **[BE]**: Trả file đã format về trình duyệt cho sinh viên tải xuống tự động.
 
 ---

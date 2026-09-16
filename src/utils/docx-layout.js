@@ -181,7 +181,7 @@ export function convertTabbedTableBlocks($, body, options = {}) {
     const next = $(last).next()[0];
     if (typeof options.shouldConvert === 'function' && !options.shouldConvert(first, block)) continue;
     if (!isLikelyTabbedTable($, block, previous, next)) continue;
-    const table = buildTabbedTable($, block);
+    const table = buildTabbedTable($, block, width);
     $(first).before(table);
     block.forEach(row => $(row.paragraph).remove());
     tablesConverted += 1;
@@ -364,7 +364,7 @@ export function normalizeStructuredCaptions($, records, warnings) {
   }
   let referencesUpdated=0;
   for(const rec of records) {
-    if(rec.inIndex||rec.region==='proposal'||rec.region==='cover'||/_caption$/.test(rec.role))continue;
+    if(rec.inIndex||rec.region==='proposal'||rec.region==='appendix'||rec.region==='cover'||/_caption$/.test(rec.role))continue;
     const p=$(rec.element), s=text(p), replacements=[];
     const targetFor=(kind,number)=>{
       const candidates=mappings.get(`${kind} ${number}`)||[];

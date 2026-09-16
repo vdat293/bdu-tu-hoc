@@ -107,6 +107,14 @@ export function buildCompletionCards(result, choices) {
     });
   }
 
+  if (structure?.hasAppendix === true || compliance?.appendixPreserved === true) {
+    cards.push({
+      tone: 'info',
+      title: 'Phụ lục',
+      description: 'Phần phụ lục được mặc định giữ nguyên cấu trúc và nội dung gốc.'
+    });
+  }
+
   const verifiedChecks = [
     compliance?.a4Portrait === true && 'khổ A4',
     compliance?.margins === true && 'lề trang',
@@ -637,7 +645,7 @@ export default function WordFmtPage() {
                 </label>
                 <label className="feature-item">
                   <input type="checkbox" checked disabled />
-                  <span><strong>Mục lục & Danh mục Bảng/Hình:</strong> Nếu đã có, thay bằng trường chuẩn do tool tạo; không tự thêm mục mới</span>
+                  <span><strong>Mục lục & Danh mục Bảng/Hình:</strong> Tự động tạo và cập nhật danh mục Bảng, Hình và Mục lục chuẩn BDU</span>
                 </label>
               </div>
             </div>

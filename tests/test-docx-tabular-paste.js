@@ -54,6 +54,15 @@ try {
   assert.equal($raw('w\\:tbl').find('w\\:tab').length, 0, 'converted cells must not retain layout tabs');
   assert.equal($raw('w\\:body').children('w\\:p').filter((_, p) => $raw(p).find('w\\:tab').length).length, 1, 'short ambiguous tabbed prose stays unchanged');
 
+  const customWidthXml = `<w:document xmlns:w="${W}"><w:body>
+    ${tabParagraph(['A', 'B'])}
+    ${tabParagraph(['1', '2'])}
+    ${tabParagraph(['3', '4'])}
+  </w:body></w:document>`;
+  const $customWidth = load(customWidthXml, { xml: true });
+  convertTabbedTableBlocks($customWidth, $customWidth('w\\:body'), { width: 8000 });
+  assert.equal($customWidth('w\\:tbl').first().find('w\\:tblW').attr('w:w'), '8000', 'bảng chuyển từ tab phải dùng đúng chiều rộng vùng in');
+
   const body = [
     paragraph('CHƯƠNG 1: Kiểm thử bảng tab'),
     paragraph('Bảng 1.1. Bảng được dán từ LLM'),

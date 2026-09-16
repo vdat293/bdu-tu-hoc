@@ -487,7 +487,7 @@ export function stripReferenceHyperlinks(documentXml) {
       return paragraphXml;
     }
 
-    if (insideReferences && HEADING_STYLE_IDS.has(styleId) && lookupText) {
+    if (insideReferences && (HEADING_STYLE_IDS.has(styleId) || styleId === 'WFMajorTitle' || lookupText === 'PHU LUC' || lookupText === 'APPENDIX') && lookupText) {
       insideReferences = false;
     }
     if (!insideReferences) return paragraphXml;

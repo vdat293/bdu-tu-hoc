@@ -90,6 +90,30 @@ try {
   assert.match(alternateIndexXml,/TOC \\c &quot;Hinh&quot; \\h/,'Mục lục hình is recognized as an existing figure index');
   assert.match(alternateIndexXml,/TOC \\c &quot;Bang&quot; \\h/,'Mục lục bảng is recognized as an existing table index');
   assert.doesNotMatch(alternateIndexXml,/Nội dung hình cũ|Nội dung bảng cũ/,'alternate stale index content is removed');
+
+  const autoFigureTableFixture = fixture(
+    'auto-figure-table',
+    p('TIỂU LUẬN')
+      + p('MỤC LỤC')
+      + index(p('CHƯƠNG 1. Mở đầu1'))
+      + p('CHƯƠNG 1. MỞ ĐẦU', 'Heading1')
+      + p('Bảng 1-1: Bảng kiểm thử định dạng')
+      + p('Hình 1-1: Hình kiểm thử định dạng'),
+    numbering
+  );
+  const autoFigureTableOut = path.join(temp, 'auto-figure-table-out.docx');
+  formatStructuredDocx(autoFigureTableFixture, autoFigureTableOut, options);
+  const autoXml = new AdmZip(autoFigureTableOut).readAsText('word/document.xml');
+  assert.match(autoXml, /DANH MỤC HÌNH ẢNH/, 'auto-generates DANH MỤC HÌNH ẢNH when figure captions exist');
+  assert.match(autoXml, /DANH MỤC BẢNG/, 'auto-generates DANH MỤC BẢNG when table captions exist');
+  assert.match(autoXml, /TOC \\c &quot;Hinh&quot; \\h/);
+  assert.match(autoXml, /TOC \\c &quot;Bang&quot; \\h/);
+  const tocPos = autoXml.indexOf('MỤC LỤC');
+  const figPos = autoXml.indexOf('DANH MỤC HÌNH ẢNH');
+  const tblPos = autoXml.indexOf('DANH MỤC BẢNG');
+  const chPos = autoXml.indexOf('CHƯƠNG 1. MỞ ĐẦU');
+  assert.ok(tocPos < figPos && figPos < tblPos && tblPos < chPos, 'front matter order: TOC < figures < tables < chapter');
+
   const checked=await WordFmtService.checkDocx(source);
   assert.equal(checked.structure.chapterCount,2);
   assert.doesNotMatch(checked.output,/99\.1/);
@@ -166,8 +190,48 @@ try {
   assert.equal(m$('w\\:tblStyle').first().attr('w:val'),'TableGrid','table style is TableGrid');
   assert.equal(m$('w\\:tcBorders').length,0,'cells must not contain tcBorders');
   assert.equal(m$('w\\:tcMar').length,0,'cells must not contain tcMar');
+  const appendixTable = wideTable('Dữ liệu phụ lục — giữ nguyên 100%');
+  const appendixSource = fixture(
+    'appendix-before-references',
+    p('MỞ ĐẦU')
+      + p('CHƯƠNG 1: Tổng quan')
+      + p('Nội dung chương 1')
+      + p('KẾT LUẬN')
+      + p('Nội dung kết luận')
+      + p('PHỤ LỤC')
+      + p('A. Nguồn mã và hồ sơ dự án')
+      + p('GitHub repository: https://github.com/vdat293/web-du-lich')
+      + p('Bảng PL-1. Danh mục bổ sung để nghiệm thu')
+      + appendixTable
+      + p('TÀI LIỆU THAM KHẢO')
+      + p('[1] Tài liệu tham khảo số một')
+  );
+  const appAnalysis = analyzeDocxStructure(appendixSource);
+  assert.equal(appAnalysis.hasAppendix, true);
+  assert.equal(appAnalysis.summary.hasAppendix, true);
+  assert.equal(appAnalysis.records.find(r => r.text === 'PHỤ LỤC')?.role, 'major_title');
+  assert.equal(appAnalysis.records.find(r => r.text === 'PHỤ LỤC')?.region, 'appendix');
+  assert.equal(appAnalysis.records.find(r => r.text === 'A. Nguồn mã và hồ sơ dự án')?.role, 'appendix');
+  assert.equal(appAnalysis.records.find(r => r.text === 'A. Nguồn mã và hồ sơ dự án')?.region, 'appendix');
+
+  const appOut = path.join(temp, 'appendix-out.docx');
+  const appResult = formatStructuredDocx(appendixSource, appOut, options);
+  assert.equal(appResult.report.structure.hasAppendix, true);
+  assert.equal(appResult.report.structure.appendixPreserved, true);
+  assert.equal(appResult.report.outputNormalization.compliance.appendixPreserved, true);
+  assert.equal(appResult.report.outputNormalization.compliance.appendixTablesPreserved, true);
+
+  const appZip = new AdmZip(appOut);
+  const appDocXml = appZip.readAsText('word/document.xml');
+  const app$ = load(appDocXml, { xml: true });
+  assert.doesNotMatch(appDocXml, /Bảng 1-\s*.*\[Nhập tên bảng\]/, 'Must not inject chapter caption into appendix');
+  assert.doesNotMatch(appDocXml, /\[Nhập tên bảng\]/, 'Must not add any placeholder caption to appendix');
+  assert.ok(appDocXml.includes('Dữ liệu phụ lục — giữ nguyên 100%'), 'Appendix table content preserved');
+  assert.ok(appDocXml.includes('Bảng PL-1. Danh mục bổ sung để nghiệm thu'), 'Appendix custom caption preserved');
+  assert.ok(appDocXml.indexOf('PHỤ LỤC') < appDocXml.indexOf('TÀI LIỆU THAM KHẢO'), 'Appendix must remain before references');
+
   fs.unlinkSync(result.outputPath);
-  console.log('✅ Structured DOCX: TOC protection, proposal, chapter summaries, numbering overrides/inheritance, parts, indentation, headers, pagination and second run.');
+  console.log('✅ Structured DOCX: TOC protection, proposal, appendix preservation, chapter summaries, numbering overrides/inheritance, parts, indentation, headers, pagination and second run.');
 } finally {
   for(const name of fs.readdirSync(temp))fs.unlinkSync(path.join(temp,name));
   fs.rmdirSync(temp);

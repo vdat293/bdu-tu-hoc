@@ -65,9 +65,14 @@ try {
   assert.match(documentXml, /<w:i w:val="1"\/>[\s\S]*Tên sách cần in nghiêng/);
 
   const thanks = documentXml.indexOf('LỜI CẢM ƠN');
+  const figures = documentXml.indexOf('DANH MỤC HÌNH ẢNH');
+  const tables = documentXml.indexOf('DANH MỤC BẢNG');
   const chapter = documentXml.indexOf('CHƯƠNG 1. GIỚI THIỆU TỔNG QUAN');
-  assert.ok(thanks < chapter);
-  assert.doesNotMatch(documentXml, /MỤC LỤC|DANH MỤC HÌNH ẢNH|DANH MỤC BẢNG/);
+  assert.ok(thanks < figures && figures < tables && tables < chapter);
+  assert.match(documentXml, /DANH MỤC HÌNH ẢNH/);
+  assert.match(documentXml, /DANH MỤC BẢNG/);
+  assert.match(documentXml, /TOC \\c &quot;Hinh&quot; \\h/);
+  assert.match(documentXml, /TOC \\c &quot;Bang&quot; \\h/);
 
   assert.match(documentXml, /Người hướng dẫn:/);
   assert.match(documentXml, /Sinh viên thực hiện:/);
