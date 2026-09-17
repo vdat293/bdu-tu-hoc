@@ -688,6 +688,11 @@ export const CommunityService = {
       if (!canDelete && postRow.scope === 'clan' && postRow.scope_id && /^\d+$/.test(postRow.scope_id)) {
         canDelete = await PermissionService.canInClan(cleanRequester, postRow.scope_id, 'clan:post_delete_any');
       }
+      // Kiểm duyệt toàn hệ thống (vai trò moderator): cần thiết cho bài nhập tự
+      // động từ Facebook vì tác giả là bút danh giả lập, không thể tự đăng nhập.
+      if (!canDelete) {
+        canDelete = await PermissionService.can(cleanRequester, 'community:post_delete_any');
+      }
 
       if (!canDelete) {
         throw httpError('Bạn không có quyền xóa bài viết này.', 403);
@@ -1203,6 +1208,9 @@ export const CommunityService = {
     if (!canModerate && cleanViewer && row.scope === 'clan') {
       canModerate = await PermissionService.canInClan(cleanViewer, row.scope_id, 'clan:comment_delete_any');
     }
+    if (!canModerate && cleanViewer) {
+      canModerate = await PermissionService.can(cleanViewer, 'community:comment_delete_any');
+    }
     return mapCommentRow(row, cleanViewer, { canModerate });
   },
 
@@ -1243,6 +1251,9 @@ export const CommunityService = {
     let canModerate = Boolean(cleanViewerMssv && result.rows[0].post_author_mssv === cleanViewerMssv);
     if (!canModerate && cleanViewerMssv && result.rows[0].scope === 'clan') {
       canModerate = await PermissionService.canInClan(cleanViewerMssv, result.rows[0].scope_id, 'clan:comment_delete_any');
+    }
+    if (!canModerate && cleanViewerMssv) {
+      canModerate = await PermissionService.can(cleanViewerMssv, 'community:comment_delete_any');
     }
     const comments = result.rows.map((row) => mapCommentRow(row, cleanViewerMssv, { canModerate }));
     return enrichCommunityIdentities(comments);

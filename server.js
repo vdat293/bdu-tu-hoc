@@ -17,6 +17,7 @@ import { AvatarOverrideService } from './src/services/avatar-override.service.js
 import { IdentityAdminService } from './src/services/identity-admin.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
+import { FacebookImportService } from './src/services/facebook-import.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const avatarStorageDir = AvatarOverrideService.getStorageDir();
+const fbImportMediaDir = path.resolve(__dirname, process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import');
 const clientDistDir = path.join(__dirname, 'dist', 'client');
 const clientIndexPath = path.join(clientDistDir, 'index.html');
 const hasReactClientBuild = fs.existsSync(clientIndexPath);
@@ -35,6 +37,10 @@ if (!fs.existsSync(tempDir)) {
 }
 if (!fs.existsSync(avatarStorageDir)) {
   fs.mkdirSync(avatarStorageDir, { recursive: true, mode: 0o750 });
+}
+// Ảnh kéo từ Facebook được lưu cục bộ vì URL CDN của Facebook có chữ ký hết hạn.
+if (!fs.existsSync(fbImportMediaDir)) {
+  fs.mkdirSync(fbImportMediaDir, { recursive: true, mode: 0o750 });
 }
 
 // Middleware
@@ -50,6 +56,14 @@ app.use('/media/avatars', express.static(avatarStorageDir, {
   }
 }));
 app.use('/media/avatars', (req, res) => res.status(404).json({ result: false, message: 'Không tìm thấy ảnh đại diện.' }));
+app.use('/media/fb-import', express.static(fbImportMediaDir, {
+  dotfiles: 'deny',
+  immutable: true,
+  maxAge: '30d',
+  setHeaders(res) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
 // The React build has its own immutable namespace. Legacy public assets and
 // the standalone admin surface remain available during the migration.
 app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
@@ -154,6 +168,7 @@ server.listen(PORT, () => {
   console.log(`======================================================\n`);
   RankingSchedulerService.start();
   TrafficService.start();
+  FacebookImportService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {
     if (res?.synced) {
       console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);
@@ -168,6 +183,7 @@ async function shutdown(signal) {
   RankingSchedulerService.stop();
   TrafficService.stop();
   EntertainmentGameService.stop();
+  await FacebookImportService.stop().catch(() => {});
   CommunityRealtime.close();
   await TrafficService.flush().catch(() => {});
   server.close(async () => {

@@ -11,6 +11,8 @@ outside-src/
 data/*.sql
 data/*.dump
 data/avatars/
+data/fb-profile/
+data/fb-import/
 dist/
 .vite/
 .playwright-mcp/

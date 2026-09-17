@@ -19,6 +19,8 @@ import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
 import { SurveyRunService } from '../services/survey-run.service.js';
+import { PermissionService } from '../services/permission.service.js';
+import { FacebookImportService } from '../services/facebook-import.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -738,6 +740,34 @@ export const ApiController = {
       return next();
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, message: err.message || 'Không có quyền quản trị.' });
+    }
+  },
+
+  async requireCommunityModerator(req, res, next) {
+    try {
+      const actor = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await PermissionService.require(actor, 'community:mod_access', 'Bạn không có quyền kiểm duyệt bảng tin.');
+      req.communityModeratorMssv = actor;
+      return next();
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message || 'Không có quyền kiểm duyệt.' });
+    }
+  },
+
+  async getFacebookImportStatus(req, res) {
+    return res.json({ result: true, data: FacebookImportService.getStatus() });
+  },
+
+  async runFacebookImport(req, res) {
+    try {
+      const data = await FacebookImportService.runOnce({ trigger: req.communityModeratorMssv || 'admin' });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Facebook import error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể kéo bài viết từ Facebook.'
+      });
     }
   },
 

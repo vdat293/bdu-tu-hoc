@@ -28,6 +28,20 @@ import {
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import {
+  ChevronDownIcon,
+  CommentIcon,
+  DotsIcon,
+  EmojiIcon,
+  GifIcon,
+  GlobeIcon,
+  PhotoIcon,
+  SendIcon,
+  ShareIcon,
+  StickerIcon,
+  ThumbIcon,
+  TrashIcon
+} from './facebook-icons.jsx';
 
 function postsFrom(data) {
   return Array.isArray(data?.posts) ? data.posts : Array.isArray(data) ? data : [];
@@ -54,6 +68,46 @@ export function invalidateForumFallbackQueries(client, queryKey) {
     client.invalidateQueries({ queryKey, exact: true, refetchType: 'active' }),
     client.invalidateQueries({ refetchType: 'active', predicate: isForumCommentsQuery })
   ]);
+}
+
+/**
+ * Nghe sự kiện realtime của server (`bdu:realtime`) để cập nhật bảng tin.
+ *
+ * Trước đây client có mở socket nhưng không ai dùng event, nên khi socket khoẻ
+ * thì feed lại đứng im (polling dự phòng chỉ chạy khi socket hỏng). Ở đây chỉ
+ * làm mới những gì thật sự liên quan: bài mới/xoá thì làm mới feed; bình luận và
+ * cảm xúc thì làm mới đúng thread đang mở, và chỉ làm mới feed khi bài đó đang
+ * nằm trong danh sách hiển thị.
+ */
+function useCommunityRealtimeSync(client) {
+  useEffect(() => {
+    const handle = (event) => {
+      const message = event?.detail;
+      const type = String(message?.type || '');
+      if (!type.startsWith('community.')) return;
+      const data = message?.data || {};
+
+      if (type === 'community.post.created' || type === 'community.post.deleted') {
+        client.invalidateQueries({ queryKey: ['confession'] });
+        return;
+      }
+
+      if (!data.postId) return;
+      const postId = String(data.postId);
+
+      if (type.startsWith('community.comment.')) {
+        client.invalidateQueries({ queryKey: ['post-comments', postId] });
+      }
+
+      const isVisibleInFeed = client
+        .getQueriesData({ queryKey: ['confession'] })
+        .some(([, data2]) => postsFrom(data2).some((post) => String(post.id) === postId));
+      if (isVisibleInFeed) client.invalidateQueries({ queryKey: ['confession'] });
+    };
+
+    window.addEventListener('bdu:realtime', handle);
+    return () => window.removeEventListener('bdu:realtime', handle);
+  }, [client]);
 }
 
 function realtimeStatusMeta(status) {
@@ -168,6 +222,32 @@ function profilePhotoFrom(response) {
     || '';
 }
 
+/** Facebook hiển thị thời gian kiểu "6 giờ", "51 phút", không kèm chữ "trước". */function formatFacebookTime(dateStr) {
+  return formatRelativeTime(dateStr).replace(' trước', '');
+}
+
+function attachmentHost(url) {
+  try {
+    return new URL(String(url || ''), window.location.origin).hostname.replace(/^www\./, '') || 'liên kết';
+  } catch {
+    return 'liên kết';
+  }
+}
+
+/**
+ * Link preview kiểu Facebook: nền xám, domain in hoa, tiêu đề đậm.
+ */
+function FacebookLinkPreview({ attachment }) {
+  const targetUrl = attachment.direct_url || attachment.url || '#';
+  return (
+    <a className="fbc-link-card" href={targetUrl} target="_blank" rel="noopener noreferrer">
+      <span className="fbc-link-host">{attachmentHost(targetUrl)}</span>
+      <span className="fbc-link-title">{attachment.title || 'Liên kết tham khảo'}</span>
+      <span className="fbc-link-cta">Mở liên kết</span>
+    </a>
+  );
+}
+
 function AttachmentRenderer({ attachment }) {
   if (!attachment) return null;
   const targetUrl = attachment.direct_url || attachment.url || '#';
@@ -176,26 +256,19 @@ function AttachmentRenderer({ attachment }) {
 
   if (isVideo && attachment.embed_url) {
     return (
-      <div className="attachment-preview-box" style={{ marginTop: '12px' }}>
-        <div className="attachment-preview-header">
-          <span className="attachment-type-badge">{attachment.type === 'youtube' ? 'Video YouTube' : 'Video Drive'}</span>
-          <span className="attachment-title">{attachment.title || 'Video đính kèm'}</span>
-          <div className="attachment-actions">
-            {attachment.download_url && (
-              <a href={attachment.download_url} target="_blank" rel="noopener noreferrer" className="attachment-action-link">
-                Tải về
-              </a>
-            )}
-            <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="attachment-action-link">
-              Mở liên kết ↗
-            </a>
-          </div>
+      <div className="fbc-embed">
+        <div className="fbc-embed-bar">
+          <span className="fbc-embed-badge">{attachment.type === 'youtube' ? 'YouTube' : 'Video Drive'}</span>
+          <span className="fbc-embed-title">{attachment.title || 'Video đính kèm'}</span>
+          {attachment.download_url && (
+            <a href={attachment.download_url} target="_blank" rel="noopener noreferrer">Tải về</a>
+          )}
+          <a href={targetUrl} target="_blank" rel="noopener noreferrer">Mở ↗</a>
         </div>
-        <div className="embed-iframe-wrapper" style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '8px' }}>
+        <div className="fbc-embed-frame">
           <iframe
             src={attachment.embed_url}
             title={attachment.title || 'Video'}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
             allowFullScreen
             loading="lazy"
           />
@@ -206,53 +279,104 @@ function AttachmentRenderer({ attachment }) {
 
   if (isDrive) {
     return (
-      <div className="classroom-attachment-card" style={{ marginTop: '10px' }}>
-        <div className="classroom-card-main-link" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '20px' }}>📁</span>
-            <div>
-              <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>{attachment.title || 'Tài liệu Google Drive'}</h5>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>drive.google.com</span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {attachment.download_url && (
-              <a href={attachment.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: '12px' }}>
-                Tải về
-              </a>
-            )}
-            <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ padding: '4px 10px', fontSize: '12px' }}>
-              Xem ↗
-            </a>
-          </div>
-        </div>
-      </div>
+      <a className="fbc-link-card" href={targetUrl} target="_blank" rel="noopener noreferrer">
+        <span className="fbc-link-host">{attachmentHost(targetUrl)}</span>
+        <span className="fbc-link-title">{attachment.title || 'Tài liệu Google Drive'}</span>
+        <span className="fbc-link-cta">
+          {attachment.download_url ? 'Xem · Tải về' : 'Mở liên kết'}
+        </span>
+      </a>
     );
   }
 
+  return <FacebookLinkPreview attachment={attachment} />;
+}
+
+/**
+ * Ảnh gom thành lưới như Facebook; các đính kèm khác render riêng.
+ * Link bài gốc Facebook không hiện thành thẻ nữa — nó nằm ở tên tác giả.
+ */
+function PostAttachments({ attachments, sourceUrl = null }) {
+  const list = (Array.isArray(attachments) ? attachments : [])
+    .filter(Boolean)
+    .filter((item) => !(sourceUrl && item.url === sourceUrl));
+  if (!list.length) return null;
+
+  const photos = list.filter((item) => item.type === 'image' && item.url);
+  const others = list.filter((item) => !(item.type === 'image' && item.url));
+
   return (
-    <div className="classroom-attachment-card" style={{ marginTop: '10px' }}>
-      <a
-        href={targetUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', border: '1px solid var(--border-color)', textDecoration: 'none', color: 'var(--text-main)' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px' }}>🔗</span>
-          <div>
-            <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>{attachment.title || 'Liên kết tham khảo'}</h5>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Liên kết ngoài</span>
-          </div>
+    <>
+      {photos.length > 0 && (
+        <div className={`fbc-photo-grid is-count-${Math.min(photos.length, 4)}`}>
+          {photos.map((photo, index) => (
+            <a
+              key={`${photo.url}-${index}`}
+              className="fbc-photo"
+              href={photo.direct_url || photo.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img src={photo.url} alt={photo.title || 'Ảnh bài viết'} loading="lazy" decoding="async" />
+            </a>
+          ))}
         </div>
-        <span style={{ fontSize: '12px', color: 'var(--bdu-light)' }}>Mở ↗</span>
-      </a>
+      )}
+      {others.length > 0 && (
+        <div className="fbc-attachments">
+          {others.map((item, index) => <AttachmentRenderer key={`${item.url}-${index}`} attachment={item} />)}
+        </div>
+      )}
+    </>
+  );
+}
+
+function commentAuthorName(comment) {
+  if (comment?.author?.is_anonymous) return 'Sinh viên giấu tên';
+  return comment?.author?.name || 'Sinh viên BDU';
+}
+
+function CommentAvatar({ comment }) {
+  const name = commentAuthorName(comment);
+  if (comment?.author?.is_anonymous) {
+    return <span className="fbc-avatar fbc-avatar-anon" aria-hidden="true">?</span>;
+  }
+  return (
+    <span className="fbc-avatar">
+      <AvatarContent user={comment?.author} alt={`Ảnh của ${name}`} />
+    </span>
+  );
+}
+
+function CommentItem({ comment, isReply = false, onReply }) {
+  const name = commentAuthorName(comment);
+  return (
+    <div className={`fbc-comment ${isReply ? 'is-reply' : ''} ${comment.is_deleted ? 'is-deleted' : ''}`}>
+      <CommentAvatar comment={comment} />
+      <div className="fbc-comment-body">
+        <div className="fbc-bubble">
+          <span className="fbc-bubble-name">{name}</span>
+          <span className="fbc-bubble-text">{comment.content}</span>
+        </div>
+        <div className="fbc-comment-meta">
+          {onReply && !comment.is_deleted ? (
+            <>
+              <button type="button" className="fbc-meta-action" onClick={() => onReply(comment)}>Trả lời</button>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
+          <span className="fbc-meta-time">{formatFacebookTime(comment.created_at)}</span>
+        </div>
+      </div>
     </div>
   );
 }
 
-function PostCommentsInline({ postId, token }) {
+function PostCommentsInline({ postId, token, viewer, presentation, composerInputRef = null }) {
   const [newComment, setNewComment] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [expandedThreads, setExpandedThreads] = useState({});
   const client = useQueryClient();
   const { notify } = useToasts();
   useRealtimeRoom(postId ? `community-post:${postId}` : null, Boolean(token));
@@ -264,9 +388,14 @@ function PostCommentsInline({ postId, token }) {
   });
 
   const commentMutation = useMutation({
-    mutationFn: () => addCommunityPostComment(token, postId, { content: newComment.trim() }),
+    mutationFn: () => addCommunityPostComment(token, postId, {
+      content: newComment.trim(),
+      ...(replyTarget ? { parentId: replyTarget.id } : {}),
+      isAnonymous
+    }),
     onSuccess: () => {
       setNewComment('');
+      setReplyTarget(null);
       client.invalidateQueries({ queryKey: ['post-comments', String(postId)] });
       client.invalidateQueries({ queryKey: ['confession'] });
       notify('Đã gửi bình luận.', 'success');
@@ -274,77 +403,332 @@ function PostCommentsInline({ postId, token }) {
     onError: (error) => notify(error.message, 'error')
   });
 
-  const comments = Array.isArray(commentsQuery.data?.comments) ? commentsQuery.data.comments : Array.isArray(commentsQuery.data) ? commentsQuery.data : [];
+  // API trả về danh sách phẳng; gom reply về đúng bình luận gốc như Facebook.
+  const threads = useMemo(() => {
+    const data = commentsQuery.data;
+    const list = Array.isArray(data?.comments) ? data.comments : Array.isArray(data) ? data : [];
+    const roots = list.filter((comment) => !comment.parent_id);
+    const repliesByRoot = new Map();
+    list.forEach((comment) => {
+      if (!comment.parent_id) return;
+      const key = String(comment.parent_id);
+      if (!repliesByRoot.has(key)) repliesByRoot.set(key, []);
+      repliesByRoot.get(key).push(comment);
+    });
+    return roots.map((root) => ({ root, replies: repliesByRoot.get(String(root.id)) || [] }));
+  }, [commentsQuery.data]);
+
+  const toggleThread = (rootId) => setExpandedThreads((current) => ({ ...current, [rootId]: !current[rootId] }));
+  const replyLabel = replyTarget ? commentAuthorName(replyTarget) : '';
 
   return (
-    <div className="post-comments-section" style={{ display: 'block', marginTop: '14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+    <div className="fbc-comments">
+      {commentsQuery.isLoading ? (
+        <div className="fbc-comments-empty">Đang tải bình luận...</div>
+      ) : threads.length === 0 ? (
+        <div className="fbc-comments-empty">Chưa có bình luận nào. Hãy là người đầu tiên!</div>
+      ) : (
+        threads.map(({ root, replies }) => {
+          const expanded = Boolean(expandedThreads[root.id]);
+          const visibleReplies = expanded ? replies : replies.slice(0, 2);
+          return (
+            <div className="fbc-thread" key={root.id}>
+              <CommentItem comment={root} onReply={setReplyTarget} />
+
+              {replies.length > 2 && (
+                <button
+                  type="button"
+                  className="fbc-replies-toggle"
+                  onClick={() => toggleThread(root.id)}
+                  aria-expanded={expanded}
+                >
+                  <ChevronDownIcon className={expanded ? 'is-open' : ''} />
+                  {expanded ? 'Ẩn câu trả lời' : `Xem ${replies.length} câu trả lời`}
+                </button>
+              )}
+
+              {visibleReplies.length > 0 && (
+                <div className="fbc-replies">
+                  {visibleReplies.map((reply) => (
+                    <CommentItem key={reply.id} comment={reply} isReply onReply={setReplyTarget} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
+        className="fbc-composer"
+        onSubmit={(event) => {
+          event.preventDefault();
           if (newComment.trim()) commentMutation.mutate();
         }}
-        className="comment-input-row"
-        style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}
       >
-        <input
-          type="text"
-          className="form-input comment-text-input"
-          placeholder="Viết bình luận hoặc trao đổi..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          maxLength={2000}
-        />
-        <button
-          type="submit"
-          className="btn btn-primary btn-sm btn-submit-comment"
-          disabled={commentMutation.isPending || !newComment.trim()}
-        >
-          Gửi
-        </button>
-      </form>
-
-      <div className="comments-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {commentsQuery.isLoading ? (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Đang tải bình luận...</div>
-        ) : comments.length === 0 ? (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Chưa có bình luận nào. Hãy là người đầu tiên!</div>
-        ) : (
-          comments.map((comment) => (
-            <div
-              key={comment.id}
-              style={{
-                display: 'flex',
-                gap: '10px',
-                padding: '8px 12px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)'
-              }}
-            >
-              <div
-                className="avatar-circle"
-                style={{ width: '28px', height: '28px', fontSize: '11px', flexShrink: 0 }}
-              >
-                {comment.author?.is_anonymous ? '?' : getInitials(comment.author?.name || 'SV')}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <strong style={{ fontSize: '12px', color: 'var(--text-main)' }}>
-                    {comment.author?.is_anonymous ? 'Sinh viên giấu tên' : comment.author?.name || 'Sinh viên BDU'}
-                  </strong>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {formatRelativeTime(comment.created_at)}
-                  </span>
-                </div>
-                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: 'var(--text-dim)', whiteSpace: 'pre-line' }}>
-                  {comment.content}
-                </p>
-              </div>
+        <span className={`fbc-avatar ${isAnonymous ? 'fbc-avatar-anon' : ''}`.trim()}>
+          {isAnonymous ? '?' : <AvatarContent user={viewer} presentation={presentation} alt="Ảnh của bạn" />}
+        </span>
+        <div className="fbc-composer-field">
+          {replyTarget && (
+            <div className="fbc-reply-chip">
+              <span>Đang trả lời <strong>{replyLabel}</strong></span>
+              <button type="button" onClick={() => setReplyTarget(null)} aria-label="Huỷ trả lời">×</button>
             </div>
-          ))
-        )}
-      </div>
+          )}
+          <div className="fbc-composer-row">
+            <input
+              type="text"
+              className="fbc-composer-input"
+              placeholder={replyTarget ? `Trả lời ${replyLabel}...` : 'Viết bình luận...'}
+              value={newComment}
+              onChange={(event) => setNewComment(event.target.value)}
+              maxLength={2000}
+              aria-label="Nội dung bình luận"
+              ref={composerInputRef}
+            />
+            <button
+              type="button"
+              className={`fbc-anon-toggle ${isAnonymous ? 'is-on' : ''}`}
+              onClick={() => setIsAnonymous((current) => !current)}
+              aria-pressed={isAnonymous}
+              title="Bình luận dưới tên Sinh viên giấu tên"
+            >
+              <span className="fbc-anon-mark" aria-hidden="true">{isAnonymous ? '✓' : ''}</span>
+              Ẩn danh
+            </button>
+            <span className="fbc-composer-tools" aria-hidden="true">
+              <EmojiIcon size={19} />
+              <PhotoIcon size={19} />
+              <GifIcon size={19} />
+              <StickerIcon size={19} />
+            </span>
+            <button
+              type="submit"
+              className="fbc-send"
+              disabled={commentMutation.isPending || !newComment.trim()}
+              aria-label="Gửi bình luận"
+            >
+              <SendIcon size={17} />
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
+  );
+}
+
+export function facebookSourceUrl(post) {
+  const list = Array.isArray(post?.attachments) ? post.attachments : [];
+  const source = list.find(
+    (item) => item?.type === 'link' && /^https?:\/\/(www\.)?facebook\.com\//i.test(String(item.url || ''))
+  );
+  return source?.url || null;
+}
+
+/**
+ * Tên tác giả: với bài nhập từ Facebook thì bấm vào tên là mở bài gốc, thay cho
+ * thẻ link "Bài gốc trên Facebook" trông như hyperlink của Word.
+ */
+function PostAuthorName({ post, name, isAnon }) {
+  const source = isAnon ? null : facebookSourceUrl(post);
+  if (!source) return <strong className="fbc-post-name">{name}</strong>;
+  return (
+    <a
+      className="fbc-post-name fbc-name-link"
+      href={source}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Mở bài gốc trên Facebook"
+    >
+      {name}
+    </a>
+  );
+}
+
+function PostHeaderBlock({ post, authorName, isAnon, author, postFrame, authorTitles, children }) {
+  // Giữ class `forum-avatar` vì toàn bộ hình học khung (Sukuna, artwork, hiệu
+  // ứng toả sáng) được CSS legacy bám vào `.forum-avatar.has-inline-frame`.
+  // `fbc-avatar` chỉ lo phần giao diện kiểu Facebook.
+  return (
+    <div className="fbc-post-head">
+      <div className={`forum-avatar fbc-avatar fbc-avatar-post ${isAnon ? 'fbc-avatar-anon' : ''} ${postFrame ? `has-inline-frame has-frame-${postFrame.tier} has-frame-scope-${postFrame.scope} ${postFrame.family ? `has-frame-${postFrame.family}` : ''}` : ''}`.trim()}>
+        {isAnon ? '?' : <AvatarContent user={author} alt={`Ảnh của ${authorName}`} />}
+        {postFrame && <FrameArtwork frame={postFrame} />}
+      </div>
+
+      <div className="fbc-post-who">
+        <div className="fbc-post-name-line">
+          <PostAuthorName post={post} name={authorName} isAnon={isAnon} />
+          {isAnon
+            ? <span className="fbc-tag is-anon">Ẩn danh</span>
+            : <TitleBadges titles={authorTitles} className="identity-title-forum" />}
+        </div>
+        <div className="fbc-post-meta">
+          <span>{formatFacebookTime(post.created_at)}</span>
+          <span className="fbc-meta-dot" aria-hidden="true">·</span>
+          <GlobeIcon size={12} />
+          <span className="fbc-sr-only">Công khai trong trường</span>
+        </div>
+      </div>
+
+      <div className="fbc-post-head-right">{children}</div>
+    </div>
+  );
+}
+
+function PostContent({ post }) {
+  return (
+    <>
+      {post.title && post.title !== 'BDU Confession' && (
+        <h4 className="fbc-post-title">{post.title}</h4>
+      )}
+      {post.content && <p className="fbc-post-text">{post.content}</p>}
+      <PostAttachments attachments={post.attachments} sourceUrl={facebookSourceUrl(post)} />
+    </>
+  );
+}
+
+function PostStats({ post, onOpenComments }) {
+  const likeCount = Number(post.like_count || 0);
+  const commentCount = Number(post.comment_count || 0);
+  return (
+    <div className="fbc-counts">
+      <span className="fbc-counts-like">
+        {likeCount > 0 && (
+          <>
+            <span className="fbc-reaction-bubble"><ThumbIcon size={12} filled /></span>
+            <span>{likeCount}</span>
+          </>
+        )}
+      </span>
+      <span className="fbc-counts-right">
+        {commentCount > 0 && (
+          <button type="button" className="fbc-count-btn" onClick={onOpenComments}>
+            {commentCount} bình luận
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function PostActionBar({ post, isLiked, likePending, onLike, onOpenComments, onShare, commentsOpen = false }) {
+  return (
+    <div className="fbc-action-bar">
+      <button
+        type="button"
+        className={`fbc-action ${isLiked ? 'is-liked' : ''}`}
+        onClick={onLike}
+        disabled={likePending}
+        aria-pressed={isLiked}
+      >
+        <ThumbIcon size={19} filled={isLiked} />
+        <span>{isLiked ? 'Đã thích' : 'Thích'}</span>
+      </button>
+
+      <button
+        type="button"
+        className={`fbc-action ${commentsOpen ? 'is-active' : ''}`}
+        onClick={onOpenComments}
+      >
+        <CommentIcon size={19} />
+        <span>Bình luận</span>
+      </button>
+
+      <button type="button" className="fbc-action" onClick={onShare}>
+        <ShareIcon size={19} />
+        <span>Chia sẻ</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Popup chi tiết bài viết kiểu Facebook: tiêu đề "Bài viết của ...", nội dung
+ * cuộn được, bình luận ở dưới và ô soạn bình luận dính đáy popup.
+ */
+function PostDetailModal({
+  post,
+  token,
+  viewer,
+  presentation,
+  onClose,
+  onLike,
+  onShare,
+  likePending,
+  dialogRef,
+  closeButtonRef,
+  composerInputRef
+}) {
+  if (!post) return null;
+
+  const isAnon = Boolean(post.author?.is_anonymous);
+  const authorName = isAnon ? 'Sinh viên giấu tên' : post.author?.name || 'Sinh viên BDU';
+  const author = postAvatarUser(post, viewer, presentation);
+  const postFrame = !isAnon && getEquippedFrame(post.author?.equipped_frame_id)?.family === 'anime-sukuna'
+    ? getEquippedFrame(post.author?.equipped_frame_id)
+    : null;
+  const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
+  const focusComposer = () => composerInputRef.current?.focus();
+
+  return (
+    <ViewportModal
+      id="fbc-post-modal"
+      title={`Bài viết của ${authorName}`}
+      labelledBy="fbc-post-modal-title"
+      onClose={onClose}
+      dialogRef={dialogRef}
+      className="fbc-modal"
+    >
+      <div className="fbc-modal-head">
+        <h4 className="fbc-modal-title" id="fbc-post-modal-title">Bài viết của {authorName}</h4>
+        <button
+          ref={closeButtonRef}
+          type="button"
+          className="fbc-icon-btn fbc-modal-close"
+          onClick={onClose}
+          aria-label="Đóng bài viết"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="fbc-modal-body">
+        <PostHeaderBlock
+          post={post}
+          authorName={authorName}
+          isAnon={isAnon}
+          author={author}
+          postFrame={postFrame}
+          authorTitles={titlesForPost(post, viewer, presentation)}
+        >
+          <span className="fbc-scope-pill">{scopeLabel}</span>
+        </PostHeaderBlock>
+
+        <PostContent post={post} />
+        <PostStats post={post} onOpenComments={focusComposer} />
+        <PostActionBar
+          post={post}
+          isLiked={Boolean(post.is_liked)}
+          likePending={likePending}
+          onLike={onLike}
+          onOpenComments={focusComposer}
+          onShare={onShare}
+          commentsOpen
+        />
+
+        <div className="fbc-comments-wrapper">
+          <PostCommentsInline
+            postId={post.id}
+            token={token}
+            viewer={viewer}
+            presentation={presentation}
+            composerInputRef={composerInputRef}
+          />
+        </div>
+      </div>
+    </ViewportModal>
   );
 }
 
@@ -360,7 +744,12 @@ export default function ConfessionPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFrameModal, setShowFrameModal] = useState(false);
   const [showTitleModal, setShowTitleModal] = useState(false);
-  const [expandedComments, setExpandedComments] = useState({});
+  const [postMenuId, setPostMenuId] = useState(null);
+  const [openPostId, setOpenPostId] = useState(null);
+  const postDialogRef = useRef(null);
+  const postCloseButtonRef = useRef(null);
+  const postOpenerRef = useRef(null);
+  const postComposerInputRef = useRef(null);
   const [titleSelection, setTitleSelection] = useState([]);
   const titleDialogRef = useRef(null);
   const titleCloseButtonRef = useRef(null);
@@ -418,6 +807,7 @@ export default function ConfessionPage() {
   });
 
   useRealtimeRoom('forum', Boolean(auth.token));
+  useCommunityRealtimeSync(client);
   // The primary query owns the first snapshot. This only supplies a bounded
   // cadence while the live gateway remains unavailable.
   useForumRealtimeFallback({ token: auth.token, status: realtimeStatus, client, queryKey });
@@ -559,9 +949,37 @@ export default function ConfessionPage() {
     setShowCreateModal(true);
   };
 
-  const toggleComments = (postId) => {
-    setExpandedComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
+  const closePostModal = useCallback(() => setOpenPostId(null), []);
+  const openPostComments = useCallback((postId, event) => {
+    postOpenerRef.current = event?.currentTarget || document.activeElement;
+    setOpenPostId(postId);
+  }, []);
+
+  const sharePost = async (postId) => {
+    const url = `${window.location.origin}/confession?post=${postId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      notify('Đã sao chép liên kết bài viết.', 'success');
+    } catch {
+      notify(url, 'info');
+    }
   };
+
+  // Menu "..." của bài viết đóng khi bấm ra ngoài, giống Facebook.
+  useEffect(() => {
+    if (!postMenuId) return undefined;
+    const close = () => setPostMenuId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [postMenuId]);
+
+  const openPost = openPostId === null
+    ? null
+    : posts.find((item) => String(item.id) === String(openPostId)) || null;
+
+  // Popup bài viết khoá cuộn trang, trả focus về nút đã mở, đóng bằng Escape.
+  useViewportDialog(openPost, closePostModal, postDialogRef, postCloseButtonRef, postOpenerRef);
+
   const realtimeMeta = realtimeStatusMeta(realtimeStatus);
 
   return (
@@ -764,7 +1182,6 @@ export default function ConfessionPage() {
                 const isAnon = Boolean(post.author?.is_anonymous);
                 const authorName = isAnon ? 'Sinh viên giấu tên' : post.author?.name || 'Sinh viên BDU';
                 const isLiked = Boolean(post.is_liked);
-                const showCommentThread = Boolean(expandedComments[post.id]);
                 const author = postAvatarUser(post, identityUser, presentation);
                 const equippedPostFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
                 // Only the Sukuna signature is allowed on forum avatars for now;
@@ -774,78 +1191,59 @@ export default function ConfessionPage() {
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
 
                 return (
-                  <article className="forum-post-card glass-panel" key={post.id} data-post-id={post.id}>
-                    <div className="forum-post-header">
-                      <div className="forum-user-col">
-                        <div className={`forum-avatar ${isAnon ? 'anon' : ''} ${postFrame ? `has-inline-frame has-frame-${postFrame.tier} has-frame-scope-${postFrame.scope} ${postFrame.family ? `has-frame-${postFrame.family}` : ''}` : ''}`.trim()}>
-                          {isAnon ? '?' : <AvatarContent user={author} alt={`Ảnh của ${authorName}`} />}
-                          {postFrame && <FrameArtwork frame={postFrame} />}
-                        </div>
-                        <div className="forum-user-details">
-                          <div className="forum-author-name-line">
-                            <strong className="forum-author-name">{authorName}</strong>
-                            {isAnon ? <span className="forum-post-rank-tag is-anon">Ẩn danh</span> : <TitleBadges titles={authorTitles} className="identity-title-forum" />}
-                          </div>
-                          <span className="forum-post-time">{formatRelativeTime(post.created_at)}</span>
-                        </div>
-                      </div>
-                      <div className="forum-post-header-actions">
-                        <span className="forum-post-scope-pill">{scopeLabel}</span>
-                        {post.is_mine && (
+                  <article className="forum-post-card fbc-post" key={post.id} data-post-id={post.id}>
+                    <PostHeaderBlock
+                      post={post}
+                      authorName={authorName}
+                      isAnon={isAnon}
+                      author={author}
+                      postFrame={postFrame}
+                      authorTitles={authorTitles}
+                    >
+                      <span className="fbc-scope-pill">{scopeLabel}</span>
+                      {post.is_mine && (
+                        <div className="fbc-menu-wrap">
                           <button
                             type="button"
-                            className="btn-delete-post"
-                            onClick={() => {
-                              if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(post.id);
-                            }}
-                            disabled={remove.isPending}
-                            title="Xóa bài viết"
-                            aria-label="Xóa bài viết"
+                            className={`fbc-icon-btn ${postMenuId === post.id ? 'is-open' : ''}`}
+                            onClick={() => setPostMenuId((current) => (current === post.id ? null : post.id))}
+                            title="Tuỳ chọn bài viết"
+                            aria-label="Tuỳ chọn bài viết"
+                            aria-expanded={postMenuId === post.id}
                           >
-                            <span>Xóa</span>
+                            <DotsIcon size={18} />
                           </button>
-                        )}
-                      </div>
-                    </div>
+                          {postMenuId === post.id && (
+                            <div className="fbc-menu" role="menu">
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="fbc-menu-item is-danger"
+                                onClick={() => {
+                                  setPostMenuId(null);
+                                  if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(post.id);
+                                }}
+                                disabled={remove.isPending}
+                              >
+                                <TrashIcon size={16} />
+                                Xóa bài viết
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </PostHeaderBlock>
 
-                    <h4 className="forum-post-title">{post.title || 'Nội dung bài viết'}</h4>
-                    <p className="forum-post-body">{post.content}</p>
-
-                    {Array.isArray(post.attachments) && post.attachments.length > 0 && (
-                      <div className="post-attachments-list">
-                        {post.attachments.map((att, idx) => (
-                          <AttachmentRenderer key={idx} attachment={att} />
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="forum-post-bottom-bar">
-                      <div className="forum-actions-left">
-                        <button
-                          type="button"
-                          className={`forum-action-btn btn-toggle-like ${isLiked ? 'liked' : ''}`}
-                          onClick={() => like.mutate(post.id)}
-                          disabled={like.isPending}
-                        >
-                          <span>{isLiked ? 'Đã thích' : 'Thích'}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`forum-action-btn btn-toggle-comments ${showCommentThread ? 'active' : ''}`}
-                          onClick={() => toggleComments(post.id)}
-                        >
-                          <span>Bình luận</span>
-                        </button>
-                      </div>
-                      <div className="forum-counts-right">
-                        <span className="like-count-num">{post.like_count || 0}</span> lượt thích • <span className="comment-count-num">{post.comment_count || 0}</span> bình luận
-                      </div>
-                    </div>
-
-                    {showCommentThread && (
-                      <div className="forum-comments-wrapper"><PostCommentsInline postId={post.id} token={auth.token} /></div>
-                    )}
+                    <PostContent post={post} />
+                    <PostStats post={post} onOpenComments={(event) => openPostComments(post.id, event)} />
+                    <PostActionBar
+                      post={post}
+                      isLiked={isLiked}
+                      likePending={like.isPending}
+                      onLike={() => like.mutate(post.id)}
+                      onOpenComments={(event) => openPostComments(post.id, event)}
+                      onShare={() => sharePost(post.id)}
+                    />
                   </article>
                 );
               })
@@ -853,8 +1251,24 @@ export default function ConfessionPage() {
           </div>
         </div>
 
-        {/* Right Column: Sidebar Widgets */}
-        <div className="forum-sidebar-column">
+        {/* Popup chi tiết bài viết kiểu Facebook */}
+        {openPost && (
+          <PostDetailModal
+            post={openPost}
+            token={auth.token}
+            viewer={identityUser}
+            presentation={presentation}
+            onClose={closePostModal}
+            onLike={() => like.mutate(openPost.id)}
+            onShare={() => sharePost(openPost.id)}
+            likePending={like.isPending}
+            dialogRef={postDialogRef}
+            closeButtonRef={postCloseButtonRef}
+            composerInputRef={postComposerInputRef}
+          />
+        )}
+
+        {/* Right Column: Sidebar Widgets */}        <div className="forum-sidebar-column">
           {/* Widget 1: Student Profile Card */}
           <div className="forum-widget glass-panel">
             <div className="forum-widget-header widget-header-primary">

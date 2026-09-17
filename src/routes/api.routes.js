@@ -103,6 +103,10 @@ router.delete('/admin/identity/grants/:grantId', ApiController.revokeAdminIdenti
 router.get('/admin/identity/audit', ApiController.getAdminIdentityAudit);
 router.post('/admin/system-roles', ApiController.grantAdminSystemRole);
 router.delete('/admin/system-roles/:mssv/:role', ApiController.revokeAdminSystemRole);
+
+// Kéo bài viết từ nhóm Facebook về Confession (kiểm duyệt viên)
+router.get('/admin/facebook-import/status', ApiController.requireCommunityModerator, ApiController.getFacebookImportStatus);
+router.post('/admin/facebook-import/run', ApiController.requireCommunityModerator, ApiController.runFacebookImport);
 router.get('/admin/avatars', ApiController.getAdminAvatars);
 router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
 router.post('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, avatarUpload.single('avatar'), ApiController.uploadAdminAvatar);
