@@ -1,19 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { getProfile } from '../../api/academics.js';
 import { getSurveyForms } from '../../api/tools.js';
 import { clearSurveyLogs, getSurveyRun, restoreSurveyRun, startSurvey, subscribeSurvey } from './runner.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
-
-const FEEDBACK_SCENARIOS = [
-  { id: 'enthusiastic', label: 'Nhiệt tình & dễ hiểu', text: 'Giảng viên dạy nhiệt tình, phương pháp sinh động, tài liệu đầy đủ và hỗ trợ giải đáp thắc mắc của sinh viên rất tốt.' },
-  { id: 'structured', label: 'Mạch lạc & có hệ thống', text: 'Nội dung được trình bày mạch lạc, bám sát mục tiêu môn học. Giảng viên hướng dẫn rõ ràng và tạo điều kiện để sinh viên theo kịp bài.' },
-  { id: 'practical', label: 'Gắn với thực tế', text: 'Giảng viên kết hợp lý thuyết với ví dụ thực tế, giúp sinh viên dễ hiểu và thấy rõ ứng dụng của kiến thức trong môn học.' },
-  { id: 'supportive', label: 'Hỗ trợ sinh viên', text: 'Giảng viên thân thiện, sẵn sàng giải đáp câu hỏi và khuyến khích sinh viên chủ động trao đổi trong quá trình học tập.' },
-  { id: 'balanced', label: 'Đánh giá cân bằng', text: 'Nhìn chung môn học được tổ chức tốt, nội dung phù hợp và giảng viên có tinh thần trách nhiệm trong giảng dạy.' }
-];
-
-const DEFAULT_FEEDBACK = FEEDBACK_SCENARIOS[0].text;
 
 function findGenderValue(value, depth = 0) {
   if (value && typeof value === 'object' && depth < 4) {
@@ -64,10 +54,7 @@ export default function SurveyPage() {
   const [rating, setRating] = useState('5');
   const [courseRatings, setCourseRatings] = useState({});
   const [gender, setGender] = useState('0');
-  const [feedback, setFeedback] = useState(DEFAULT_FEEDBACK);
-  const [feedbackScenario, setFeedbackScenario] = useState('random');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('ratings');
   const [showCoursePicker, setShowCoursePicker] = useState(false);
   const [courses, setCourses] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(() => new Set());
@@ -131,18 +118,7 @@ export default function SurveyPage() {
     }
   }, [run?.completedKeys]);
 
-  // When run finishes (success), automatically re-fetch from BDU server
-  useEffect(() => {
-    if (run?.status === 'success' && lastFinishedStatusRef.current !== run) {
-      lastFinishedStatusRef.current = run;
-      const timer = window.setTimeout(() => {
-        loadCourses();
-      }, 1200);
-      return () => window.clearTimeout(timer);
-    }
-  }, [run?.status, run]);
-
-  const loadCourses = async () => {
+  const loadCourses = useCallback(async () => {
     if (!auth.token || loadingCourses) return;
     setLoadingCourses(true);
     setCourseError('');
@@ -167,7 +143,18 @@ export default function SurveyPage() {
     } finally {
       setLoadingCourses(false);
     }
-  };
+  }, [auth.token, auth.user?.gender, auth.user?.gioi_tinh, auth.user?.idsv, auth.user?.mssv, loadingCourses, notify]);
+
+  // When run finishes (success), automatically re-fetch from BDU server
+  useEffect(() => {
+    if (run?.status === 'success' && lastFinishedStatusRef.current !== run) {
+      lastFinishedStatusRef.current = run;
+      const timer = window.setTimeout(() => {
+        loadCourses();
+      }, 1200);
+      return () => window.clearTimeout(timer);
+    }
+  }, [loadCourses, run?.status, run]);
 
   const isRunning = ['starting', 'queued', 'running'].includes(run?.status);
   const pendingCourses = useMemo(() => (courses || []).filter((course) => !course.completed), [courses]);
@@ -231,11 +218,6 @@ export default function SurveyPage() {
         ratingLevel: rating,
         genderLevel: gender,
         attendanceLevel: '1',
-        feedback,
-        feedbackScenarios: feedbackScenario === 'random'
-          ? FEEDBACK_SCENARIOS.map((scenario) => scenario.text)
-          : [feedback],
-        feedbackMode: feedbackScenario === 'random' ? 'random' : 'ordered',
         courseRatings,
         selectedSurveys: selectedCourses.map((course) => course.surveyKey)
       });
@@ -292,7 +274,7 @@ export default function SurveyPage() {
               className={`survey-settings-gear-btn ${showSettingsModal || customCount > 0 ? 'active' : ''}`}
               onClick={() => setShowSettingsModal(true)}
               aria-label="Cấu hình chi tiết khảo sát"
-              title="Tùy chỉnh mức hài lòng riêng cho từng môn & Kịch bản nhận xét"
+              title="Tùy chỉnh mức hài lòng riêng cho từng môn"
             >
               <span className="survey-gear-icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -300,7 +282,7 @@ export default function SurveyPage() {
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
               </span>
-              <span className="survey-gear-label">Tùy chỉnh riêng & Nhận xét</span>
+              <span className="survey-gear-label">Tùy chỉnh theo môn</span>
             </button>
           </div>
 
@@ -414,117 +396,55 @@ export default function SurveyPage() {
             <button type="button" className="survey-modal-close" onClick={() => setShowSettingsModal(false)} aria-label="Đóng">×</button>
           </div>
 
-          <div className="survey-settings-tabs">
-            <button
-              type="button"
-              className={`survey-tab-pill ${settingsTab === 'ratings' ? 'active' : ''}`}
-              onClick={() => setSettingsTab('ratings')}
-            >
-              <span>⭐ Mức hài lòng từng môn</span>
-              <span className="survey-tab-badge">{selectedCourses.length} môn chọn</span>
-            </button>
-            <button
-              type="button"
-              className={`survey-tab-pill ${settingsTab === 'feedback' ? 'active' : ''}`}
-              onClick={() => setSettingsTab('feedback')}
-            >
-              <span>💬 Kịch bản nhận xét</span>
-            </button>
-          </div>
-
-          {settingsTab === 'ratings' && (
-            <div className="survey-settings-tab-pane">
-              <div className="survey-quick-actions-bar">
-                <span className="quick-actions-label">Đặt nhanh tất cả:</span>
-                <div className="quick-actions-pills">
-                  <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('5')}>Tất cả 5 ⭐</button>
-                  <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('4')}>Tất cả 4 ⭐</button>
-                  <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('3')}>Tất cả 3 ⭐</button>
-                </div>
+          <div className="survey-settings-content">
+            <div className="survey-quick-actions-bar">
+              <span className="quick-actions-label">Đặt nhanh tất cả:</span>
+              <div className="quick-actions-pills">
+                <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('5')}>Tất cả 5 ⭐</button>
+                <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('4')}>Tất cả 4 ⭐</button>
+                <button type="button" className="btn-quick-pill" onClick={() => setAllRatings('3')}>Tất cả 3 ⭐</button>
               </div>
+            </div>
 
-              <div className="survey-course-ratings-list">
-                {pendingCourses.length === 0 && (
-                  <div className="survey-empty-state">Không có môn nào đang chờ khảo sát.</div>
-                )}
-                {pendingCourses.map((course) => {
-                  const isSelected = selectedKeys.has(course.surveyKey);
-                  const currentScore = getCourseRating(course.surveyKey);
-                  return (
-                    <div className={`survey-course-rating-card ${isSelected ? 'selected' : 'unselected'}`} key={course.surveyKey}>
-                      <div className="course-rating-meta">
-                        <div className="course-rating-title-line">
-                          <span className={`course-status-indicator ${isSelected ? 'active' : ''}`}></span>
-                          <strong>{course.courseName || course.courseCode || 'Môn chưa đặt tên'}</strong>
-                        </div>
-                        <div className="course-rating-sub">
-                          <span>{course.courseCode}</span>
-                          {course.lecturer && <span> · GV: {course.lecturer}</span>}
-                          {!isSelected && <span className="course-unselected-tag">(Chưa chọn khảo sát)</span>}
-                        </div>
+            <div className="survey-course-ratings-list">
+              {pendingCourses.length === 0 && (
+                <div className="survey-empty-state">Không có môn nào đang chờ khảo sát.</div>
+              )}
+              {pendingCourses.map((course) => {
+                const isSelected = selectedKeys.has(course.surveyKey);
+                const currentScore = getCourseRating(course.surveyKey);
+                return (
+                  <div className={`survey-course-rating-card ${isSelected ? 'selected' : 'unselected'}`} key={course.surveyKey}>
+                    <div className="course-rating-meta">
+                      <div className="course-rating-title-line">
+                        <span className={`course-status-indicator ${isSelected ? 'active' : ''}`}></span>
+                        <strong>{course.courseName || course.courseCode || 'Môn chưa đặt tên'}</strong>
                       </div>
-
-                      <div className="course-rating-score-group" aria-label={`Chọn mức đánh giá cho ${course.courseName}`}>
-                        {['3', '4', '5'].map((val) => (
-                          <button
-                            type="button"
-                            key={val}
-                            disabled={!isSelected || isRunning}
-                            className={`score-choice-pill ${currentScore === val ? 'active' : ''}`}
-                            onClick={() => setSingleCourseRating(course.surveyKey, val)}
-                          >
-                            {val} ⭐
-                          </button>
-                        ))}
+                      <div className="course-rating-sub">
+                        <span>{course.courseCode}</span>
+                        {course.lecturer && <span> · GV: {course.lecturer}</span>}
+                        {!isSelected && <span className="course-unselected-tag">(Chưa chọn khảo sát)</span>}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="course-rating-score-group" aria-label={`Chọn mức đánh giá cho ${course.courseName}`}>
+                      {['3', '4', '5'].map((val) => (
+                        <button
+                          type="button"
+                          key={val}
+                          disabled={!isSelected || isRunning}
+                          className={`score-choice-pill ${currentScore === val ? 'active' : ''}`}
+                          onClick={() => setSingleCourseRating(course.surveyKey, val)}
+                        >
+                          {val} ⭐
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-
-          {settingsTab === 'feedback' && (
-            <div className="survey-settings-tab-pane">
-              <div className="survey-feedback-intro-box">
-                <span aria-hidden="true">💡</span>
-                <p>Nội dung này được tự động gửi vào các câu tự luận cuối phiếu (Câu 41 - 44: Ưu điểm, Điều chưa hài lòng, Đề xuất cho GV & Nhà trường).</p>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="modal-feedback-scenario">Kịch bản nhận xét</label>
-                <select
-                  id="modal-feedback-scenario"
-                  className="form-select survey-feedback-select"
-                  value={feedbackScenario}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setFeedbackScenario(value);
-                    if (value !== 'random') setFeedback(FEEDBACK_SCENARIOS.find((scenario) => scenario.id === value)?.text || DEFAULT_FEEDBACK);
-                  }}
-                >
-                  <option value="random">🎲 Ngẫu nhiên {FEEDBACK_SCENARIOS.length} kịch bản (mỗi môn một kiểu khác nhau)</option>
-                  {FEEDBACK_SCENARIOS.map((scenario) => (
-                    <option value={scenario.id} key={scenario.id}>{scenario.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="modal-feedback-textarea">
-                  {feedbackScenario === 'random' ? 'Mẫu nhận xét tham khảo' : 'Nội dung nhận xét cụ thể'}
-                </label>
-                <textarea
-                  id="modal-feedback-textarea"
-                  className="form-textarea"
-                  rows={4}
-                  value={feedback}
-                  onChange={(event) => setFeedback(event.target.value)}
-                  placeholder="Nhập nội dung nhận xét hoặc đề xuất cho giảng viên..."
-                />
-              </div>
-            </div>
-          )}
+            <p className="survey-settings-note">Câu 41–44 tự động trả lời “Không”. Cấu hình tự động chỉ hỗ trợ mức hài lòng theo từng môn.</p>
+          </div>
 
           <div className="survey-modal-footer">
             <div className="survey-modal-footer-stats">

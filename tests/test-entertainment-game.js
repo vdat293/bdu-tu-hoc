@@ -52,12 +52,74 @@ caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 6 }, 1); // X (co
 assert.equal(caroBlocked.result, null); // NOT a win because blocked at both ends!
 assert.equal(caroBlocked.winner_seat, null);
 
+// Caro: 5 quân chỉ bị chặn MỘT đầu vẫn thắng.
+let caroOneEnd = initialState('caro');
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 7, column: 3 }, 1);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 0, column: 0 }, 2);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 7, column: 4 }, 1);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 0, column: 1 }, 2);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 7, column: 5 }, 1);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 0, column: 2 }, 2);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 7, column: 6 }, 1);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 0, column: 3 }, 2);
+caroOneEnd = applyMove('caro', caroOneEnd, { row: 7, column: 7 }, 1); // O X X X X X _
+assert.equal(caroOneEnd.winner_seat, 1, '5 quân chặn một đầu phải thắng');
+assert.equal(caroOneEnd.winning_cells.length, 5);
+
+// Caro: 6 quân liên tiếp thắng kể cả khi bị chặn hai đầu. Chuỗi được tạo bằng
+// cách lấp khe nên không có thế 5 quân nào xuất hiện trước đó.
+let caroSix = initialState('caro');
+const caroSixMoves = [
+  [1, 5, 1], [0, 5, 2],
+  [2, 5, 1], [7, 5, 2],
+  [3, 5, 1], [0, 0, 2],
+  [5, 5, 1], [0, 1, 2],
+  [6, 5, 1], [0, 2, 2],
+  [4, 5, 1] // O X X X X X X O theo cột 5 => 6 quân, thắng
+];
+for (const [row, column, seat] of caroSixMoves) caroSix = applyMove('caro', caroSix, { row, column }, seat);
+assert.equal(caroSix.result, 'win', '6 quân liên tiếp phải thắng dù bị chặn hai đầu');
+
+// Caro: 5 quân sát biên (một đầu là thành bàn) vẫn thắng vì chỉ quân đối
+// phương mới tính là chặn.
+let caroWall = initialState('caro');
+const caroWallMoves = [
+  [0, 0, 1], [1, 0, 2],
+  [0, 1, 1], [1, 1, 2],
+  [0, 2, 1], [1, 2, 2],
+  [0, 3, 1], [1, 3, 2],
+  [0, 4, 1]
+];
+for (const [row, column, seat] of caroWallMoves) caroWall = applyMove('caro', caroWall, { row, column }, seat);
+assert.equal(caroWall.winner_seat, 1, '5 quân sát biên vẫn phải thắng');
+
+// Caro: lấp khe để tạo chuỗi 6 quân liên tiếp giữa hai quân chặn vẫn thắng.
+let caroBreakBlock = initialState('caro');
+const caroBreakMoves = [
+  [7, 1, 1], [7, 0, 2],
+  [7, 2, 1], [7, 7, 2],
+  [7, 3, 1], [0, 0, 2],
+  [7, 5, 1], [0, 1, 2],
+  [7, 6, 1], [0, 2, 2],
+  [7, 4, 1] // O X X X X X X O => 6 quân, thắng
+];
+for (const [row, column, seat] of caroBreakMoves) caroBreakBlock = applyMove('caro', caroBreakBlock, { row, column }, seat);
+assert.equal(caroBreakBlock.result, 'win', '6 quân liên tiếp luôn thắng');
+
 // Test Resignation
 let chessResign = initialState('chess');
 chessResign = applyMove('chess', chessResign, { resign: true }, 1);
 assert.equal(chessResign.result, 'win');
 assert.equal(chessResign.winner_seat, 2);
 assert.equal(chessResign.resigned_seat, 1);
+
+// Đầu hàng không phụ thuộc lượt: seat 2 được xin thua khi đang là lượt seat 1.
+let caroResign = initialState('caro');
+caroResign = applyMove('caro', caroResign, { row: 7, column: 7 }, 1); // giờ là lượt seat 2
+caroResign = applyMove('caro', caroResign, { resign: true }, 2);
+assert.equal(caroResign.winner_seat, 1, 'đối thủ phải thắng khi seat 2 đầu hàng');
+assert.equal(caroResign.resigned_seat, 2);
+assert.throws(() => applyMove('caro', caroResign, { resign: true }, 1), /đã kết thúc/i, 'không thể đầu hàng khi ván đã kết thúc');
 
 // Test Xiangqi Board Cannon Count
 const xq = initialState('xiangqi');

@@ -13,3 +13,5 @@ data/*.dump
 data/avatars/
 dist/
 .vite/
+.playwright-mcp/
+scratch/

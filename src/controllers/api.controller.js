@@ -334,13 +334,11 @@ export const ApiController = {
   },
 
   async streamSurvey(req, res) {
-    const { token, mssv, ratingLevel, genderLevel, attendanceLevel, feedback, feedbackMode } = req.query;
+    const { token, mssv, ratingLevel, genderLevel, attendanceLevel } = req.query;
     let selectedSurveys = null;
-    let feedbackScenarios = null;
     let courseRatings = null;
     try {
       if (req.query.selected) selectedSurveys = JSON.parse(req.query.selected);
-      if (req.query.feedbackScenarios) feedbackScenarios = JSON.parse(req.query.feedbackScenarios);
       if (req.query.courseRatings) courseRatings = JSON.parse(req.query.courseRatings);
     } catch {
       selectedSurveys = null;
@@ -362,9 +360,6 @@ export const ApiController = {
         ratingLevel: ratingLevel || '5',
         genderLevel: genderLevel || '0',
         attendanceLevel: attendanceLevel || '1',
-        feedback: feedback || '',
-        feedbackScenarios,
-        feedbackMode: feedbackMode || 'random',
         courseRatings: courseRatings || {},
         selectedSurveys,
         onLog: (logData) => {
@@ -396,9 +391,6 @@ export const ApiController = {
           ratingLevel: req.body?.ratingLevel || '5',
           genderLevel: req.body?.genderLevel || '0',
           attendanceLevel: req.body?.attendanceLevel || '1',
-          feedback: req.body?.feedback || '',
-          feedbackScenarios: Array.isArray(req.body?.feedbackScenarios) ? req.body.feedbackScenarios : [],
-          feedbackMode: req.body?.feedbackMode || 'random',
           courseRatings: req.body?.courseRatings && typeof req.body.courseRatings === 'object' ? req.body.courseRatings : {},
           selectedSurveys: Array.isArray(req.body?.selectedSurveys) ? req.body.selectedSurveys : null
         }
@@ -459,6 +451,15 @@ export const ApiController = {
     }
   },
 
+  async getEnglishCourses(req, res) {
+    try {
+      const data = await EnglishExerciseService.courses(req.params.sessionId);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
   async getEnglishActivities(req, res) {
     try {
       const data = await EnglishExerciseService.activities(req.params.sessionId, req.query.courseId);
@@ -471,6 +472,15 @@ export const ApiController = {
   startEnglishExercise(req, res) {
     try {
       const data = EnglishExerciseService.start(req.params.sessionId, req.body || {});
+      return res.status(202).json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  startEnglishCourseFinish(req, res) {
+    try {
+      const data = EnglishExerciseService.startFinish(req.params.sessionId, req.body || {});
       return res.status(202).json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, message: err.message });
@@ -493,10 +503,17 @@ export const ApiController = {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Content-Encoding', 'none');
     res.flushHeaders();
     try {
       const unsubscribe = EnglishExerciseService.subscribe(req.params.sessionId, res);
-      const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 20_000);
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(': heartbeat\n\n');
+          if (typeof res.flush === 'function') res.flush();
+        } catch {}
+      }, 15_000);
       req.on('close', () => {
         clearInterval(heartbeat);
         unsubscribe();

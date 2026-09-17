@@ -1,39 +1,51 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import AdmZip from 'adm-zip';
-import { load } from 'cheerio';
+import { MoodleClient } from './src/services/moodle.service.js';
+import * as cheerio from 'cheerio';
 
-const tempDir = './temp';
-const files = fs.readdirSync(tempDir).filter(f => f.endsWith('.docx')).map(f => ({
-  name: f,
-  mtime: fs.statSync(path.join(tempDir, f)).mtimeMs
-})).sort((a,b) => b.mtime - a.mtime);
+async function run() {
+  const client = new MoodleClient();
+  await client.login('24050126', 'BDU240258');
 
-const docxPath = process.argv[2] || (files.length > 0 ? path.join(tempDir, files[0].name) : null);
+  console.log('\n--- Inspecting SCORM 21429 (Unit 7 Journeys: Vocabulary Focus) ---');
+  const viewRes = await client.request('/mod/scorm/view.php?id=21429');
+  const $ = cheerio.load(viewRes.data);
 
-if (!docxPath || !fs.existsSync(docxPath)) {
-  console.log('DOCX file not found:', docxPath);
-  process.exit(1);
+  console.log('Page Title:', $('h1, .page-header-headings').first().text().trim());
+
+  // Check form inputs and links
+  const forms = $('form').map((_, el) => ({
+    action: $(el).attr('action'),
+    inputs: $(el).find('input').map((_, i) => ({ name: $(i).attr('name'), value: $(i).attr('value') })).get()
+  })).get();
+  console.log('Forms:', JSON.stringify(forms, null, 2));
+
+  const playerLink = $('a[href*="player.php"]').attr('href');
+  console.log('Player link:', playerLink);
+
+  // If launch form exists, launch it
+  const launchForm = $('form[action*="player.php"]').first();
+  if (launchForm.length > 0) {
+    const action = launchForm.attr('action');
+    const params = new URLSearchParams();
+    launchForm.find('input').each((_, el) => {
+      const name = $(el).attr('name');
+      if (name) params.set(name, $(el).val() || '');
+    });
+    console.log('Posting launch form to:', action, params.toString());
+    const launchRes = await client.request(action, {
+      method: 'POST',
+      data: params.toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const $player = cheerio.load(launchRes.data);
+    console.log('Player title:', $player('title').text().trim());
+    const scripts = $player('script').map((_, el) => $player(el).html()).get();
+    for (const s of scripts) {
+      if (!s) continue;
+      if (s.includes('scoid') || s.includes('datamodel') || s.includes('cmi') || s.includes('scorm')) {
+        console.log('[MATCHED PLAYER SCRIPT]:\n', s.slice(0, 700));
+      }
+    }
+  }
 }
 
-console.log('Inspecting file:', docxPath);
-const zip = new AdmZip(docxPath);
-const docXml = zip.readAsText('word/document.xml');
-const $ = load(docXml, { xml: true });
-
-$('w\\:p').slice(0, 20).each((i, el) => {
-  const text = $(el).text().trim();
-  if (text) console.log(`[p ${i}] ${text}`);
-});
-
-
-
-
-
-
-
-
-
-
-
-
+run().catch(err => console.error('ERROR:', err));

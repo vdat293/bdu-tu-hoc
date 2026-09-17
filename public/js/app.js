@@ -2591,12 +2591,13 @@ function initEnglishExerciseBot() {
       return;
     }
     const option = activitySelect.selectedOptions[0];
-    if (!option?.value || option.dataset.type !== 'quiz') {
-      showToast('Vui lòng chọn một quiz Moodle được hỗ trợ.', 'error');
+    if (!option?.value) {
+      showToast('Vui lòng chọn một hoạt động Moodle.', 'error');
       return;
     }
+    const actType = option.dataset.type || 'quiz';
     const autoSubmit = Boolean(document.getElementById('english-auto-submit')?.checked);
-    if (autoSubmit) {
+    if (actType === 'quiz' && autoSubmit) {
       const accepted = window.confirm(
         'TỰ ĐỘNG NỘP BÀI có thể ảnh hưởng điểm và số lượt thi. Bạn xác nhận tạo/tiếp tục lượt làm, điền đáp án và nộp quiz này?'
       );
@@ -2677,8 +2678,8 @@ function connectEnglishLogStream(sessionId) {
   source.onmessage = event => {
     try {
       const data = JSON.parse(event.data);
-      if (data.type === 'log') {
-        appendEnglishLog(data.message, data.type, data.timestamp);
+      if (data.type === 'log' || ['info', 'action', 'success', 'warning', 'error', 'question'].includes(data.type)) {
+        appendEnglishLog(data.message, data.logType || data.type, data.timestamp);
       } else if (data.type === 'done') {
         setEnglishRunning(false);
         const result = data.result || {};
@@ -2709,20 +2710,16 @@ function renderEnglishActivities(activities) {
   select.textContent = '';
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = activities.length ? 'Chọn một quiz để chạy' : 'Không tìm thấy hoạt động';
+  placeholder.textContent = activities.length ? 'Chọn một bài tập / hoạt động' : 'Không tìm thấy hoạt động';
   select.appendChild(placeholder);
   activities.forEach(activity => {
     const option = document.createElement('option');
     option.value = activity.cmid;
     option.dataset.type = activity.type;
     option.textContent = `[${activity.type.toUpperCase()}] ${activity.title}`;
-    if (activity.type !== 'quiz') {
-      option.disabled = true;
-      option.textContent += ' — chưa hỗ trợ tự động';
-    }
     select.appendChild(option);
   });
-  select.disabled = !activities.some(activity => activity.type === 'quiz');
+  select.disabled = activities.length === 0;
   updateEnglishStartAvailability();
 }
 
@@ -7459,9 +7456,11 @@ function renderConfessionCardHtml(post) {
   // Khung & nhãn xếp hạng học thuật (thay thế hoàn toàn 14 sao)
   const frameInfo = getAcademicAvatarFrame(AppState.academicRanking);
   const postFrameKey = String(post.author?.equipped_frame_id || '').replace(/^frame:/, '').trim();
-  const postFrame = !isAnon && postFrameKey.startsWith('anime-')
+  // Chỉ khung Sukuna được phép hiển thị trên avatar bài đăng; các khung khác
+  // vẫn chỉ xuất hiện ở banner/hồ sơ cho tới khi giao diện feed ổn định hơn.
+  const postFrame = !isAnon && postFrameKey === 'anime-sukuna'
     ? buildAnimeSignatureFrameConfig(postFrameKey)
-    : (isCurrentAuthor ? frameInfo : null);
+    : null;
   const inlineFrameMarkup = postFrame ? renderAcademicFrameMarkup(postFrame) : '';
   let rankTagHtml = '';
   if (isAnon) {

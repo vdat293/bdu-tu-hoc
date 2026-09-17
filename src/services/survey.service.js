@@ -3,7 +3,7 @@ const FORM_ENDPOINT = `${BDU_BASE_URL}/zms/w-locdsformdanhgia`;
 const QUESTIONS_ENDPOINT = `${BDU_BASE_URL}/zms/w-locdscauhoidanhgia`;
 const SUBMIT_ENDPOINT = `${BDU_BASE_URL}/zms/w-luutraloidanhgia`;
 
-const DEFAULT_FEEDBACK = 'Giảng viên dạy nhiệt tình, phương pháp sinh động, tài liệu đầy đủ và hỗ trợ giải đáp thắc mắc của sinh viên rất tốt.';
+const DEFAULT_TEXT_RESPONSE = 'Không';
 
 function bearer(token) {
   const value = String(token || '').trim();
@@ -158,12 +158,11 @@ function chooseScaleValue(scale, preferred, fallback = null) {
   return options.length > 0 ? options[options.length - 1].gia_tri_thang_diem : fallback;
 }
 
-function buildAnswers(groups, { ratingLevel = '5', genderLevel = '0', attendanceLevel = '1', feedback = DEFAULT_FEEDBACK } = {}) {
+function buildAnswers(groups, { ratingLevel = '5', genderLevel = '0', attendanceLevel = '1' } = {}) {
   const answers = [{}];
   const rating = Number(ratingLevel) || 5;
   const gender = Number.isFinite(Number(genderLevel)) ? Number(genderLevel) : 0;
   const attendance = Number.isFinite(Number(attendanceLevel)) ? Number(attendanceLevel) : 1;
-  const comment = String(feedback || DEFAULT_FEEDBACK).trim() || DEFAULT_FEEDBACK;
 
   for (const group of groups) {
     const scale = group?.thang_do?.ds_thang_diem || [];
@@ -174,7 +173,7 @@ function buildAnswers(groups, { ratingLevel = '5', genderLevel = '0', attendance
       let other = '';
 
       if (isText) {
-        other = comment;
+        other = DEFAULT_TEXT_RESPONSE;
       } else if (order === 1) {
         value = chooseScaleValue(scale, gender, 0);
       } else if (order === 2) {
@@ -237,7 +236,7 @@ export const SurveyService = {
     return postJson(SUBMIT_ENDPOINT, token, { filter, ds_tra_loi: answers });
   },
 
-  async runAutoSurvey({ token, mssv, ratingLevel = '5', genderLevel = '0', attendanceLevel = '1', feedback, feedbackScenarios, feedbackMode = 'random', courseRatings = {}, selectedSurveys, onLog, onCourseDone }) {
+  async runAutoSurvey({ token, mssv, ratingLevel = '5', genderLevel = '0', attendanceLevel = '1', courseRatings = {}, selectedSurveys, onLog, onCourseDone }) {
     const log = (message, type = 'info') => {
       if (onLog) onLog({ message, type, timestamp: new Date().toLocaleTimeString('vi-VN') });
     };
@@ -279,9 +278,6 @@ export const SurveyService = {
 
     let processed = 0;
     const failures = [];
-    const comments = Array.isArray(feedbackScenarios) && feedbackScenarios.length > 0
-      ? feedbackScenarios.filter((item) => String(item || '').trim())
-      : [feedback || DEFAULT_FEEDBACK];
     for (const [index, survey] of targets.entries()) {
       try {
         const subjectLabel = survey.courseName || survey.courseCode || survey.subjectId;
@@ -293,10 +289,7 @@ export const SurveyService = {
         const answers = buildAnswers(groups, {
           ratingLevel: effectiveRating,
           genderLevel,
-          attendanceLevel,
-          feedback: feedbackMode === 'random'
-            ? comments[Math.floor(Math.random() * comments.length)]
-            : comments[index % comments.length]
+          attendanceLevel
         });
         log(`📋 Mức đánh giá: ${effectiveRating} ⭐ | Đã nhận ${questionCount} câu hỏi, dựng ds_tra_loi; đang gửi phiếu...`, 'muted');
         await this.submitAnswers({ token, survey, answers });

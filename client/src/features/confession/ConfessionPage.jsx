@@ -766,7 +766,10 @@ export default function ConfessionPage() {
                 const isLiked = Boolean(post.is_liked);
                 const showCommentThread = Boolean(expandedComments[post.id]);
                 const author = postAvatarUser(post, identityUser, presentation);
-                const postFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
+                const equippedPostFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
+                // Only the Sukuna signature is allowed on forum avatars for now;
+                // every other equipped frame stays on the hero/identity surfaces.
+                const postFrame = equippedPostFrame?.family === 'anime-sukuna' ? equippedPostFrame : null;
                 const authorTitles = titlesForPost(post, auth.user, presentation);
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
 

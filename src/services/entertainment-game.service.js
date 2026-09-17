@@ -9,6 +9,7 @@ const DEFAULT_ROOM_TTL_SECONDS = 2 * 60 * 60;
 const MIN_ROOM_TTL_SECONDS = 60;
 const MAX_ROOM_TTL_SECONDS = 24 * 60 * 60;
 const MAX_PAGE_SIZE = 100;
+const REMATCH_TIMEOUT_SECONDS = 12;
 
 function cleanMssv(value) {
   return String(value ?? '').trim().toUpperCase();
@@ -507,7 +508,9 @@ function applyGo(state, move, seat) {
 
 export function applyMove(gameType, state, move, seat) {
   if (move?.resign === true) {
-    assertSeat(state, move, seat);
+    // Đầu hàng không phụ thuộc lượt đi: người chơi có thể xin thua cả khi
+    // đang chờ đối thủ suy nghĩ. Chỉ chặn khi ván đã kết thúc.
+    if (state.result || state.winner_seat) throw error('Ván đấu đã kết thúc.', 409, 'GAME_FINISHED');
     const opponentSeat = Number(seat) === 1 ? 2 : 1;
     const next = clone(state);
     next.winner_seat = opponentSeat;
@@ -661,12 +664,15 @@ export const EntertainmentGameService = {
     return transaction(async (client) => {
       const found = await roomAndPlayers(roomRef, client, true); const room = found.room; const players = found.players; const player = players.find((item) => item.mssv === actor);
       if (!player) throw error('Bạn không phải người chơi trong phòng này.', 403, 'PLAYER_FORBIDDEN');
-      if (room.status !== 'active') throw error('Phòng chưa bắt đầu hoặc đã kết thúc.', 409, 'ROOM_NOT_ACTIVE');
       const cleanClientMoveId = clientMoveId ? String(clientMoveId).trim().slice(0, 128) : null;
+      // Kiểm tra idempotency TRƯỚC khi chặn theo trạng thái phòng: một nước đi
+      // đã commit (kể cả nước quyết định kết thúc ván) phải trả lại đúng kết quả
+      // khi client retry, thay vì báo lỗi "phòng đã kết thúc".
       if (cleanClientMoveId) {
-        const duplicate = await client.query('SELECT move_number, move, resulting_state FROM game_room_moves WHERE room_id = $1 AND client_move_id = $2', [room.id, cleanClientMoveId]);
-        if (duplicate.rowCount) return { id: String(room.id), room_code: room.room_code, move_number: Number(duplicate.rows[0].move_number), move: duplicate.rows[0].move, state: duplicate.rows[0].resulting_state, state_version: Number(duplicate.rows[0].move_number), idempotent: true, status: room.status };
+        const duplicate = await client.query('SELECT move_number, actor_mssv, move, resulting_state FROM game_room_moves WHERE room_id = $1 AND client_move_id = $2', [room.id, cleanClientMoveId]);
+        if (duplicate.rowCount && duplicate.rows[0].actor_mssv === actor) return { id: String(room.id), room_code: room.room_code, move_number: Number(duplicate.rows[0].move_number), move: duplicate.rows[0].move, state: duplicate.rows[0].resulting_state, state_version: Number(duplicate.rows[0].move_number), idempotent: true, status: room.status };
       }
+      if (room.status !== 'active') throw error('Phòng chưa bắt đầu hoặc đã kết thúc.', 409, 'ROOM_NOT_ACTIVE');
       const nextState = applyMove(room.game_type, room.state, move, Number(player.seat)); const moveNumber = Number(room.state_version) + 1;
       const nextStatus = nextState.result ? 'finished' : 'active';
       const updated = await client.query(`UPDATE game_rooms SET state = $2::jsonb, state_version = $3, status = $4, winner_seat = $5, result = $6, finished_at = CASE WHEN $4 = 'finished' THEN NOW() ELSE NULL END, last_activity_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`, [room.id, JSON.stringify(nextState), moveNumber, nextStatus, nextState.winner_seat, nextState.result]);
@@ -700,12 +706,12 @@ export const EntertainmentGameService = {
           if (typeof this.onRoomClosed === 'function') {
             this.onRoomClosed(code, {
               reason: 'rematch_timeout',
-              message: 'Hết 10 giây chờ đánh lại. Phòng đã tự động đóng.'
+              message: `Hết ${REMATCH_TIMEOUT_SECONDS} giây chờ đánh lại. Phòng đã tự động đóng.`
             });
           }
         }
       } catch {}
-    }, 12_000);
+    }, REMATCH_TIMEOUT_SECONDS * 1000);
     timer.unref?.();
     this.rematchTimers.set(code, timer);
   },
@@ -758,6 +764,12 @@ export const EntertainmentGameService = {
       this.rematchRequests.set(code, votes);
     }
     votes.add(actor);
+
+    if (votes.size < 2) {
+      // Một người đã đồng ý: gia hạn thêm một chu kỳ để đối thủ kịp quyết định,
+      // tránh việc phòng tự đóng ngay sau khi có phiếu đầu tiên.
+      this.startRematchCountdown(code);
+    }
 
     if (votes.size >= 2) {
       this.clearRematchTimer(code);

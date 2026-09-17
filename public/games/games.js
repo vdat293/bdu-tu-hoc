@@ -8,6 +8,8 @@ const GAMES = [
 const GAME_MAP = Object.fromEntries(GAMES.map((game) => [game.id, game]));
 const CHESS = { br: '♜', bn: '♞', bb: '♝', bq: '♛', bk: '♚', bp: '♟', wr: '♖', wn: '♘', wb: '♗', wq: '♕', wk: '♔', wp: '♙' };
 const XIANGQI = { br: '車', bn: '馬', bb: '象', ba: '士', bk: '將', bc: '砲', bp: '卒', rr: '俥', rn: '傌', rb: '相', ra: '仕', rk: '帥', rc: '炮', rp: '兵' };
+// Phải khớp REMATCH_TIMEOUT_SECONDS trong entertainment-game.service.js.
+const REMATCH_SECONDS = 12;
 
 const ui = {
   rooms: [],
@@ -27,7 +29,8 @@ const ui = {
   rematchRemaining: 0,
   rematchVoted: false,
   hideFinishOverlay: false,
-  opponentWantsRematch: false
+  opponentWantsRematch: false,
+  movePending: false
 };
 
 function $(selector) { return document.querySelector(selector); }
@@ -67,7 +70,12 @@ async function api(path, options = {}) {
   });
   let payload = null;
   try { payload = await response.json(); } catch { payload = null; }
-  if (!response.ok || payload?.result === false) throw new Error(payload?.message || 'Thao tác không thành công.');
+  if (!response.ok || payload?.result === false) {
+    const error = new Error(payload?.message || 'Thao tác không thành công.');
+    error.code = payload?.code || '';
+    error.status = response.status;
+    throw error;
+  }
   return dataValue(payload);
 }
 
@@ -125,7 +133,7 @@ function clearRematchCountdown() {
   ui.hideFinishOverlay = false;
 }
 
-function startRematchCountdown(seconds = 10) {
+function startRematchCountdown(seconds = REMATCH_SECONDS) {
   if (ui.rematchTimer) return;
   ui.rematchRemaining = seconds;
   ui.rematchVoted = false;
@@ -133,7 +141,7 @@ function startRematchCountdown(seconds = 10) {
     ui.rematchRemaining -= 1;
     if (ui.rematchRemaining <= 0) {
       clearRematchCountdown();
-      showToast('Hết 10 giây chờ đánh lại. Phòng đã tự động đóng.');
+      showToast(`Hết ${REMATCH_SECONDS} giây chờ đánh lại. Phòng đã tự động đóng.`);
       if (ui.room && ui.role === 'player') {
         api(`/api/entertainment/rooms/${encodeURIComponent(roomRef(ui.room))}/leave`, { method: 'POST' }).catch(() => {});
       }
@@ -223,7 +231,8 @@ function renderBoard(room) {
   const isSpectator = ui.role === 'spectator' || !me;
   const winnerSeat = Number(state.winner_seat || room.winner_seat || 0);
   const isFinished = roomStatus(room) === 'finished' || Boolean(state.result);
-  const canPlay = !isSpectator && !isFinished && me && currentSeat === Number(me.seat);
+  const isPlayable = roomStatus(room) === 'playing' && !Boolean(state.result);
+  const canPlay = !isSpectator && isPlayable && !ui.movePending && me && currentSeat === Number(me.seat);
   const lastMove = ui.moves.at(-1)?.move || ui.moves.at(-1)?.payload || null;
   const winningCells = state.winning_cells || [];
   const isWinningCell = (r, c) => winningCells.some(([wr, wc]) => wr === r && wc === c);
@@ -745,7 +754,7 @@ function renderRoom() {
   const isFinished = status === 'finished' || Boolean(state.result);
 
   if (isFinished && !ui.rematchTimer) {
-    startRematchCountdown(10);
+    startRematchCountdown();
   }
 
   const winnerPlayer = winnerSeat ? (players || []).find((p) => Number(p.seat) === winnerSeat) : null;
@@ -1086,32 +1095,22 @@ async function openRoom(ref, requestedRole = 'auto', inviteCode = '') {
       : (searchParams.get('role') || (searchParams.get('spectate') === '1' ? 'spectator' : 'auto'));
 
     let room = await api(`/api/entertainment/rooms/${encodeURIComponent(target)}${effectiveRole === 'spectator' ? '?role=spectator' : ''}`);
-    const me = currentUserIsPlayer(room);
 
     let isSpectator = false;
     if (effectiveRole === 'spectator') {
       isSpectator = true;
-    } else if (effectiveRole === 'player') {
-      if (!me && roomStatus(room) === 'waiting') {
-        room = await api(`/api/entertainment/rooms/${encodeURIComponent(target)}/join`, {
-          method: 'POST',
-          body: { inviteCode: inviteCode || searchParams.get('code') || undefined }
-        });
-      }
-      isSpectator = false;
     } else {
-      // auto role:
-      if (me) {
-        isSpectator = false;
-      } else if (roomStatus(room) === 'waiting' && (room.players || []).length < 2) {
+      const me = currentUserIsPlayer(room);
+      const canTakeSeat = !me && roomStatus(room) === 'waiting' && (room.players || []).length < 2;
+      if (canTakeSeat && (effectiveRole === 'player' || effectiveRole === 'auto')) {
         room = await api(`/api/entertainment/rooms/${encodeURIComponent(target)}/join`, {
           method: 'POST',
           body: { inviteCode: inviteCode || searchParams.get('code') || undefined }
         });
-        isSpectator = false;
-      } else {
-        isSpectator = true;
       }
+      // Vai trò phải phản ánh tư cách thành viên thật: link "đấu thủ" mở khi
+      // phòng đã đủ người sẽ chỉ còn quyền xem, không được giả làm người chơi.
+      isSpectator = !currentUserIsPlayer(room);
     }
 
     ui.room = room;
@@ -1159,7 +1158,11 @@ async function createRoom(event) {
 }
 
 async function submitMove(move) {
-  if (!ui.room) return;
+  if (!ui.room || ui.movePending) return;
+  if (roomStatus(ui.room) !== 'playing' || roomState(ui.room).result) return;
+  // Khóa trong lúc chờ máy chủ xác nhận: tránh gửi trùng nước khi người chơi
+  // bấm nhanh hai ô, dẫn tới toast lỗi "chưa đến lượt" sai lệch.
+  ui.movePending = true;
   const clientMoveId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   ui.selected = null;
   try {
@@ -1177,17 +1180,19 @@ async function submitMove(move) {
     };
     await loadMoves(ui.room);
     if (ui.room.status === 'finished' || result?.state?.result || result?.result) {
-      startRematchCountdown(10);
+      startRematchCountdown();
     }
     render();
   } catch (error) {
     showToast(error.message);
+  } finally {
+    ui.movePending = false;
   }
 }
 
 function onCellClick(event) {
   const cell = event.target.closest('.cell');
-  if (!cell || !ui.room || ui.role === 'spectator') return;
+  if (!cell || !ui.room || ui.role === 'spectator' || ui.movePending) return;
   const game = gameOf(ui.room);
   const row = Number(cell.dataset.row);
   const column = Number(cell.dataset.column);
@@ -1309,12 +1314,30 @@ function connectRealtime() {
       render();
       return;
     }
+    if (message.type === 'error') {
+      // Lỗi realtime trước đây bị bỏ qua hoàn toàn nên người chơi tưởng ván
+      // vẫn đang đồng bộ trong khi socket đã mất quyền theo dõi phòng.
+      if (message.code === 'AUTH_REQUIRED' || message.code === 'AUTH_INVALID') {
+        showToast('Phiên realtime không hợp lệ. Hãy tải lại trang và đăng nhập lại.');
+      } else if (message.code === 'ROOM_FORBIDDEN' || message.code === 'ROOM_INVALID') {
+        // Snapshot sẽ không tới nữa; đồng bộ lại bằng HTTP để phát hiện phòng đã đóng.
+        if (ui.room) refreshRoom();
+      } else {
+        showToast(message.message || 'Lỗi realtime.');
+      }
+      return;
+    }
     if (message.type === 'game.snapshot') {
-      ui.room = message.data?.room || message.data || ui.room;
+      if (!ui.room) return;
+      const snapshot = message.data?.room || message.data || null;
+      if (snapshot && roomRef(snapshot) && roomRef(snapshot) !== roomRef(ui.room)) return;
+      ui.room = snapshot || ui.room;
       loadMoves(ui.room).then(render);
       return;
     }
     if (message.type === 'game.move.applied') {
+      if (!ui.room) return;
+      if (message.data?.room_code && message.data.room_code !== roomRef(ui.room) && message.data.room_code !== ui.room.id) return;
       if (message.data?.state) {
         ui.room = {
           ...ui.room,
@@ -1332,7 +1355,7 @@ function connectRealtime() {
         ui.moves = [...ui.moves, incomingMove];
       }
       if (ui.room.status === 'finished' || message.data?.state?.result || message.data?.result) {
-        startRematchCountdown(10);
+        startRematchCountdown();
       }
       render();
       return;
@@ -1345,6 +1368,8 @@ function connectRealtime() {
       return;
     }
     if (message.type === 'game.room.closed') {
+      if (!ui.room) return;
+      if (message.data?.room_code && message.data.room_code !== roomRef(ui.room) && message.data.room_code !== ui.room.id) return;
       clearRematchCountdown();
       showToast(message.data?.message || 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.');
       ui.room = null;
@@ -1359,7 +1384,8 @@ function connectRealtime() {
     }
     if (message.type === 'game.rematch.requested') {
       const myMssv = session()?.user?.mssv;
-      if (message.data?.actor && myMssv && String(message.data.actor).toUpperCase() !== String(myMssv).toUpperCase()) {
+      const opponentVoted = message.data?.actor && myMssv ? String(message.data.actor).toUpperCase() !== String(myMssv).toUpperCase() : false;
+      if (opponentVoted) {
         ui.opponentWantsRematch = true;
       }
       if (message.data?.votes && Array.isArray(message.data.votes)) {
@@ -1367,6 +1393,8 @@ function connectRealtime() {
           ui.rematchVoted = true;
         }
       }
+      // Mọi phiếu mới đều làm mới thời gian chờ, khớp với bộ đếm phía máy chủ.
+      if (ui.rematchTimer) ui.rematchRemaining = REMATCH_SECONDS;
       if (!ui.rematchVoted) {
         showToast('🔥 Đối thủ muốn chơi lại! Bấm "Chơi lại" để bắt đầu ván mới.');
       }
@@ -1413,10 +1441,26 @@ async function refreshRoom() {
     ui.room = await api(`/api/entertainment/rooms/${encodeURIComponent(roomRef(ui.room))}${roleParam}`);
     await loadMoves(ui.room);
     if (ui.room.status === 'finished' || roomState(ui.room).result) {
-      startRematchCountdown(10);
+      startRematchCountdown();
     }
     render();
   } catch (error) {
+    if (error.code === 'ROOM_NOT_FOUND') {
+      // Phòng đã bị đóng ở nơi khác (đối thủ rời, hết hạn, timeout đánh lại):
+      // đưa người dùng về lobby thay vì mắc kẹt ở bàn cờ cũ.
+      clearRematchCountdown();
+      showToast('Phòng đã đóng. Bạn đã trở về sảnh chơi.');
+      ui.room = null;
+      ui.challenge = null;
+      ui.modal = null;
+      ui.realtime = 'lobby';
+      ui.moves = [];
+      if (ui.socket) { try { ui.socket.close(); } catch {} }
+      history.pushState({}, '', '/games');
+      render();
+      loadRooms();
+      return;
+    }
     showToast(error.message);
   }
 }
@@ -1503,6 +1547,9 @@ function bind() {
           showToast('🎉 Ván mới bắt đầu! Hai đối thủ đã sẵn sàng.');
           render();
         } else {
+          // Phiếu của mình gia hạn thêm một chu kỳ chờ đối thủ (khớp với việc
+          // máy chủ reset bộ đếm khi có phiếu đầu tiên).
+          if (ui.rematchTimer) ui.rematchRemaining = REMATCH_SECONDS;
           showToast('Đã gửi yêu cầu chơi lại. Đang chờ đối thủ đồng ý...');
         }
       } catch (error) {
@@ -1557,23 +1604,9 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
-window.addEventListener('beforeunload', () => {
-  if (ui.room && ui.role === 'player') {
-    const token = session()?.token;
-    if (token) {
-      try {
-        fetch(`/api/entertainment/rooms/${encodeURIComponent(roomRef(ui.room))}/leave`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          keepalive: true
-        });
-      } catch {}
-    }
-  }
-});
+// Không gọi /leave khi unload: F5 hoặc chuyển tab sẽ xóa mất ván đấu của cả
+// hai người. Việc dọn phòng khi đóng tab do máy chủ xử lý qua thời gian ân hạn
+// mất kết nối (GAME_DISCONNECT_GRACE_MS), còn rời chủ động dùng nút "Rời phòng".
 
 (async function boot() {
   const info = pathInfo();

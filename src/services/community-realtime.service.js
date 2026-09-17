@@ -10,6 +10,9 @@ const MAX_PAYLOAD = 16 * 1024;
 const WS_OPEN = 1;
 const DEFAULT_AUTH_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_BUFFERED_BYTES = 512 * 1024;
+// Khoảng ân hạn trước khi một phòng bị đóng vì người chơi mất kết nối.
+// Phải đủ dài để một lần F5 / rớt mạng chớp nhoáng không phá ván đấu.
+const DEFAULT_GAME_DISCONNECT_GRACE_MS = 30_000;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -22,6 +25,11 @@ function authTimeoutMs() {
 
 function maxBufferedBytes() {
   return positiveInteger(process.env.WS_MAX_BUFFERED_BYTES, DEFAULT_MAX_BUFFERED_BYTES);
+}
+
+function disconnectGraceMs() {
+  const parsed = Number.parseInt(String(process.env.GAME_DISCONNECT_GRACE_MS || ''), 10);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_GAME_DISCONNECT_GRACE_MS;
 }
 
 function firstHeaderValue(value) {
@@ -236,9 +244,10 @@ class CommunityRealtimeGateway {
     if (!this.isClientAttached(client)) return;
     const isInvalidAuth = error?.status === 401 || error?.code === 'AUTH_INVALID';
     const isUnavailable = error?.retryable || error?.status >= 500 || error?.code === 'AUTH_UNAVAILABLE';
+    const isClientError = Number(error?.status) >= 400 && Number(error?.status) < 500;
     jsonSend(client.ws, {
       type: 'error',
-      code: isInvalidAuth ? 'AUTH_INVALID' : (isUnavailable ? 'AUTH_UNAVAILABLE' : 'INTERNAL_ERROR'),
+      code: isInvalidAuth ? 'AUTH_INVALID' : (isUnavailable ? 'AUTH_UNAVAILABLE' : (isClientError && error?.code ? error.code : 'INTERNAL_ERROR')),
       message: error?.message || 'Lỗi xử lý socket.'
     });
     if (isInvalidAuth) {
@@ -306,6 +315,13 @@ class CommunityRealtimeGateway {
     if (message.type === 'game.join' || message.type === 'game_join') {
       const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
       const result = await EntertainmentGameService.joinRoom(roomRef, client.mssv, { inviteCode: message.inviteCode || message.invite_code || message.code });
+      // Người vào phòng qua socket phải được subscribe ngay, nếu không họ sẽ
+      // không nhận được bất kỳ nước đi / sự kiện nào của phòng.
+      if (result?.room_code) {
+        const key = gameRoom(result.room_code);
+        client.requestedRooms.add(key);
+        this.join(client, key);
+      }
       if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.join.accepted', data: result });
       this.publishGameRoomUpdated(result);
       return;
@@ -313,6 +329,7 @@ class CommunityRealtimeGateway {
     if (message.type === 'game.leave' || message.type === 'game_leave') {
       const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
       const result = await EntertainmentGameService.leaveRoom(roomRef, client.mssv);
+      this.detachFromGameRoom(client, result.room_code);
       if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.leave.accepted', data: result });
       if (result.deleted) {
         this.publishGameRoomClosed(result.room_code, {
@@ -335,11 +352,14 @@ class CommunityRealtimeGateway {
       return;
     }
     if (message.type === 'subscribe') {
-      const room = String(message.room || '').trim();
-      if (!room) {
+      const requested = String(message.room || '').trim();
+      if (!requested) {
         jsonSend(client.ws, { type: 'error', code: 'ROOM_INVALID', message: 'Room không hợp lệ.' });
         return;
       }
+      // Alias `game-room:X` / `game:X` phải quy về cùng một room key, nếu không
+      // client sẽ subscribe nhầm phòng và bỏ lỡ mọi broadcast nước đi.
+      const room = this.canonicalRoom(requested);
       client.requestedRooms.add(room);
       if (await this.canJoin(client, room)) {
         // `unsubscribe` may arrive while canJoin is waiting on PostgreSQL.
@@ -347,7 +367,7 @@ class CommunityRealtimeGateway {
         if (!this.isClientAttached(client) || !client.requestedRooms.has(room)) return;
         this.join(client, room);
         if (this.isClientAttached(client)) {
-          jsonSend(client.ws, { type: 'subscribed', room });
+          jsonSend(client.ws, { type: 'subscribed', room: requested });
           if (this.isGameRoom(room)) {
             try {
               const snapshot = await EntertainmentGameService.getRoom(this.gameRoomRef(room), { mssv: client.mssv });
@@ -358,12 +378,12 @@ class CommunityRealtimeGateway {
           }
         }
       } else {
-        if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', room, message: 'Không có quyền theo dõi room này.' });
+        if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', room: requested, message: 'Không có quyền theo dõi room này.' });
       }
       return;
     }
     if (message.type === 'unsubscribe') {
-      const room = String(message.room || '').trim();
+      const room = this.canonicalRoom(String(message.room || '').trim());
       client.requestedRooms.delete(room);
       this.leave(client, room);
       return;
@@ -373,13 +393,18 @@ class CommunityRealtimeGateway {
 
   async canJoin(client, room) {
     if (room === 'forum') return true;
+    // `this.query` cho phép test bơm truy vấn giả; production luôn dùng pool thật.
+    const runQuery = typeof this.query === 'function' ? this.query : query;
     if (this.isGameRoom(room)) {
       const roomRef = this.gameRoomRef(room);
-      const result = await query(`
+      // Phòng 'finished' vẫn phải cho người chơi và khán giả subscribe lại:
+      // nếu không, reconnect sau khi ván kết thúc sẽ mất snapshot và mọi sự
+      // kiện đánh lại (rematch) vì không còn nhận được broadcast nào.
+      const result = await runQuery(`
         SELECT r.visibility, r.allow_spectators, p.mssv
         FROM game_rooms r
         LEFT JOIN game_room_players p ON p.room_id = r.id AND p.mssv = $2 AND p.left_at IS NULL
-        WHERE (r.room_code = $1 OR r.id::text = $1) AND r.status IN ('waiting', 'active')
+        WHERE (r.room_code = $1 OR r.id::text = $1) AND r.status IN ('waiting', 'active', 'finished')
         LIMIT 1
       `, [roomRef, client.mssv]);
       if (!result.rowCount) return false;
@@ -456,39 +481,52 @@ class CommunityRealtimeGateway {
     return true;
   }
 
-  leave(client, room) {
-    if (!room || !client.rooms.has(room)) return;
+  detachRoom(client, room) {
+    if (!room || !client.rooms.has(room)) return false;
     client.rooms.delete(room);
     const members = this.rooms.get(room);
     members?.delete(client);
     if (members && members.size === 0) this.rooms.delete(room);
-    if (this.isGameRoom(room)) {
-      this.publishGameSpectatorCount(this.gameRoomRef(room));
-      if (client.mssv) {
-        const roomRef = this.gameRoomRef(room);
-        const mssv = client.mssv;
-        setTimeout(async () => {
-          try {
-            const currentRoomClients = this.rooms.get(room);
-            const stillConnected = currentRoomClients && [...currentRoomClients].some((c) => c.mssv === mssv);
-            if (!stillConnected) {
-              const res = await query(
-                `SELECT r.id, r.room_code FROM game_rooms r JOIN game_room_players p ON p.room_id = r.id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.mssv = $2 AND p.left_at IS NULL`,
-                [roomRef, mssv]
-              );
-              if (res.rowCount > 0) {
-                await query(`DELETE FROM game_rooms WHERE id = $1`, [res.rows[0].id]);
-                EntertainmentGameService.clearRematchTimer?.(res.rows[0].room_code);
-                this.publishGameRoomClosed(res.rows[0].room_code, {
-                  reason: 'player_left',
-                  actor: mssv,
-                  message: 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.'
-                });
-              }
+    if (this.isGameRoom(room)) this.publishGameSpectatorCount(this.gameRoomRef(room));
+    return true;
+  }
+
+  // Rời phòng bằng API/socket tường minh: bỏ subscription ngay, không kích
+  // hoạt cơ chế xóa phòng sau khi mất kết nối.
+  detachFromGameRoom(client, roomCode) {
+    const code = String(roomCode || '').trim();
+    if (!code) return;
+    const key = gameRoom(code);
+    client.requestedRooms.delete(key);
+    this.detachRoom(client, key);
+  }
+
+  leave(client, room) {
+    if (!this.detachRoom(client, room)) return;
+    if (this.isGameRoom(room) && client.mssv) {
+      const roomRef = this.gameRoomRef(room);
+      const mssv = client.mssv;
+      setTimeout(async () => {
+        try {
+          const currentRoomClients = this.rooms.get(room);
+          const stillConnected = currentRoomClients && [...currentRoomClients].some((c) => c.mssv === mssv);
+          if (!stillConnected) {
+            const res = await query(
+              `SELECT r.id, r.room_code FROM game_rooms r JOIN game_room_players p ON p.room_id = r.id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.mssv = $2 AND p.left_at IS NULL`,
+              [roomRef, mssv]
+            );
+            if (res.rowCount > 0) {
+              await query(`DELETE FROM game_rooms WHERE id = $1`, [res.rows[0].id]);
+              EntertainmentGameService.clearRematchTimer?.(res.rows[0].room_code);
+              this.publishGameRoomClosed(res.rows[0].room_code, {
+                reason: 'player_left',
+                actor: mssv,
+                message: 'Một trong hai đối thủ đã mất kết nối quá lâu. Phòng đã tự động đóng.'
+              });
             }
-          } catch {}
-        }, 4000);
-      }
+          }
+        } catch {}
+      }, disconnectGraceMs());
     }
   }
 
@@ -592,6 +630,11 @@ class CommunityRealtimeGateway {
 
   gameRoomRef(room) {
     return String(room || '').trim().replace(/^game(?::|-room:)/i, '');
+  }
+
+  canonicalRoom(room) {
+    const raw = String(room || '').trim();
+    return this.isGameRoom(raw) ? gameRoom(this.gameRoomRef(raw)) : raw;
   }
 
   publishGameRoomUpdated(room) {
@@ -743,5 +786,5 @@ EntertainmentGameService.getSpectatorCount = (roomCode, players) => CommunityRea
 EntertainmentGameService.onRoomClosed = (roomCode, data) => CommunityRealtime.publishGameRoomClosed(roomCode, data);
 export const CommunityRealtimeInternals = {
   WS_PATH, communityPostRoom, coursePostRoom, clanRoom, courseRoom, gameRoom, scopeRoom,
-  isAllowedOrigin, trustsProxyHeaders, authTimeoutMs, maxBufferedBytes
+  isAllowedOrigin, trustsProxyHeaders, authTimeoutMs, maxBufferedBytes, disconnectGraceMs
 };

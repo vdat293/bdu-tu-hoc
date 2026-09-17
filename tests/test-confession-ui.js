@@ -48,5 +48,7 @@ assert.match(aidtiRuneRule, /animation:\s*none/, 'Vòng dữ liệu AIDTI không
 assert.match(miniAvatarImageRule, /width:\s*100%/, 'Ảnh xem trước khung phải bị giới hạn theo ô avatar.');
 assert.match(miniAvatarImageRule, /height:\s*100%/, 'Ảnh xem trước khung phải bị giới hạn theo ô avatar.');
 assert.match(miniAvatarImageRule, /object-fit:\s*cover/, 'Ảnh xem trước khung phải được cắt gọn trong vòng tròn.');
+assert.match(forumRenderer, /postFrameKey === 'anime-sukuna'/, 'Avatar bài đăng chỉ hiển thị khung Sukuna; mọi khung khác để dành cho banner/hồ sơ.');
+assert.doesNotMatch(forumRenderer, /isCurrentAuthor \? frameInfo : null/, 'Không được tự gắn khung xếp hạng của người xem lên avatar bài đăng.');
 
 console.log('✓ Confession dùng modal xóa tùy biến, giao diện text-first và surface dễ đọc.');

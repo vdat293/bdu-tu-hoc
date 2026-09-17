@@ -14817,9 +14817,16 @@ h3,
   transition: opacity .42s ease-out, transform .42s ease-out;
 }
 
-.mini-avatar-wrap.has-frame-anime-sukuna .sukuna-domain-stage,
 .mini-avatar-wrap.has-frame-anime-sukuna .anime-frame-character {
   opacity: 1;
+}
+
+/* The domain stage (seal portrait, crest, sparks) is the intro reveal only.
+   Like the settled hero, inline and mini avatars keep just the shrine ring
+   and the chibi so the real avatar is never buried under the seal art. */
+.mini-avatar-wrap.has-frame-anime-sukuna .sukuna-domain-stage,
+.forum-avatar.has-inline-frame .sukuna-domain-stage {
+  display: none;
 }
 
 .sukuna-domain-crest,
@@ -14913,6 +14920,7 @@ h3,
 .sukuna-domain-sparks i:nth-child(6) { left: 57%; top: 88%; transform: rotate(-16deg); }
 
 .forum-avatar.has-inline-frame {
+  position: relative;
   overflow: visible;
   z-index: 1;
 }
@@ -14941,8 +14949,11 @@ h3,
   bottom: -22px;
 }
 
-.forum-avatar.has-inline-frame .sukuna-domain-stage {
-  inset: -24%;
+/* Match the hero's settled 170% shrine ring on the compact forum avatar
+   instead of the generic 320% used by the Gojo/Itachi apertures. */
+.forum-avatar.has-inline-frame.has-frame-anime-sukuna .anime-frame-art {
+  width: 170%;
+  height: 170%;
 }
 
 /* The shrine backdrop is split into full-canvas transparent bands. Each band
@@ -14976,15 +14987,18 @@ h3,
 .frame-cinematic-active.frame-effect-sukuna-malevolent-shrine .sukuna-hero-layer-03 { animation-delay: 240ms; }
 .frame-cinematic-active.frame-effect-sukuna-malevolent-shrine .sukuna-hero-layer-04 { animation-delay: 360ms; }
 
+/* Giữ độ rực lửa của lãnh địa sau khi intro kết thúc: giảm lớp phủ đen và
+   đẩy nhẹ độ bão hoà/độ sáng để màu đỏ không bị chìm thành đen. */
 .hero-frame-family-anime-sukuna .forum-banner-bg,
 .forum-hero-banner[data-frame-family="anime-sukuna"] .forum-banner-bg {
   background-image:
-    linear-gradient(90deg, rgba(2, 3, 5, .74), rgba(16, 3, 5, .42) 46%, rgba(2, 3, 5, .76)),
-    linear-gradient(0deg, rgba(2, 3, 5, .5), transparent 42%, rgba(127, 29, 29, .22)),
+    linear-gradient(90deg, rgba(2, 3, 5, .54), rgba(40, 8, 10, .24) 46%, rgba(2, 3, 5, .58)),
+    linear-gradient(0deg, rgba(2, 3, 5, .34), transparent 44%, rgba(150, 30, 30, .17)),
     url('/assets/images/sukuna-ngutrutu-confession-hero.png');
   background-size: cover;
   background-position: center;
-  opacity: .95;
+  filter: saturate(1.2) brightness(1.12) contrast(1.03);
+  opacity: 1;
 }
 
 .hero-frame-family-anime-sukuna .hero-brand-watermark,

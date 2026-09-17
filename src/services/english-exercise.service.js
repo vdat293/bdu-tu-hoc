@@ -95,8 +95,7 @@ export function learnEnglishAnswersFromReview(html) {
     const block = $(element);
     const question = block.find('.qtext').text().trim();
     let answer = block.find('.rightanswer').text().trim()
-      .replace(/^The correct answer is:\s*/i, '')
-      .replace(/^Đáp án đúng là:\s*/i, '')
+      .replace(/^(The correct answer is|The correct answers are|Đáp án đúng là|Các đáp án đúng là):\s*/i, '')
       .trim();
     if (!answer) {
       answer = block.find('.answer .correct').first().closest('label, div, tr').text().trim();
@@ -117,19 +116,22 @@ function getSession(id) {
 }
 
 function send(response, data) {
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
+  try {
+    response.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (typeof response.flush === 'function') response.flush();
+  } catch {}
 }
 
 function log(session, message, type = 'info') {
   const entry = {
     id: crypto.randomUUID(),
     timestamp: new Date().toLocaleTimeString('vi-VN'),
-    type,
+    logType: type,
     message
   };
   session.logs.push(entry);
   if (session.logs.length > 300) session.logs.shift();
-  session.subscribers.forEach(response => send(response, { type: 'log', ...entry }));
+  session.subscribers.forEach(response => send(response, { type: 'log', logType: type, message, timestamp: entry.timestamp, id: entry.id }));
 }
 
 export function matchEnglishOption(options, answer) {
@@ -137,6 +139,20 @@ export function matchEnglishOption(options, answer) {
   const selectable = options.filter(option => option.inputType !== 'text');
   const exact = selectable.find(option => normalizeEnglishQuestion(option.text) === wanted);
   if (exact) return exact;
+
+  for (const option of selectable) {
+    if (option.selectOptions && Array.isArray(option.selectOptions)) {
+      const matchedOpt = option.selectOptions.find(opt => normalizeEnglishQuestion(opt.text) === wanted)
+        || option.selectOptions.find(opt => {
+          const t = normalizeEnglishQuestion(opt.text);
+          return wanted.length > 2 && t.length > 2 && (t.includes(wanted) || wanted.includes(t));
+        });
+      if (matchedOpt) {
+        return { name: option.name, value: matchedOpt.value, text: matchedOpt.text };
+      }
+    }
+  }
+
   return selectable.find(option => {
     const text = normalizeEnglishQuestion(option.text);
     return wanted.length > 2 && text.length > 2 && (text.includes(wanted) || wanted.includes(text));
@@ -228,6 +244,7 @@ async function runQuiz(session, job, config) {
   }
 
   if (answered === 0) {
+    log(session, 'Gợi ý: Moodle chưa có đáp án của bài quiz này trong ngân hàng. Hãy làm thủ công 1 lần hoặc nộp bài để bot tự học đáp án từ trang review!', 'info');
     throw new Error('Không có câu nào khớp ngân hàng đáp án nên hệ thống từ chối tự nộp bài trắng.');
   }
   log(session, 'Đang nộp bài theo tùy chọn Tự động nộp đã được xác nhận.');
@@ -243,18 +260,118 @@ async function runQuiz(session, job, config) {
   return { answered, skipped, submitted: true, learned, attemptId: attempt.attemptId };
 }
 
+async function runAutoFinishCourse(session, job, config) {
+  const courseId = String(config.courseId);
+  const curCourseBefore = session.courses?.find(c => String(c.id) === courseId);
+  const initialProgress = curCourseBefore?.progress ?? null;
+
+  log(session, `======================================================`, 'info');
+  log(session, `🚀 BẮT ĐẦU DUYỆT KHÓA HỌC: "${curCourseBefore?.fullname || '#' + courseId}"`, 'info');
+  if (initialProgress !== null) {
+    log(session, `📊 Mức độ hoàn thành hiện tại: ${initialProgress}%`, 'info');
+  }
+  const activities = await session.client.getCourseActivities(courseId, job.controller.signal);
+  log(session, `📋 Danh sách: Tìm thấy ${activities.length} hoạt động trong khóa.`, activities.length ? 'info' : 'warning');
+  log(session, `======================================================`, 'info');
+
+  let quizzesDone = 0;
+  let itemsVisited = 0;
+  let errorsCount = 0;
+
+  for (let i = 0; i < activities.length; i++) {
+    assertRunning(job);
+    const act = activities[i];
+    const pct = Math.round(((i + 1) / activities.length) * 100);
+    log(session, `[${i + 1}/${activities.length} - ${pct}%] Đang xử lý [${act.type.toUpperCase()}] "${act.title}"...`, 'action');
+
+    if (act.type === 'quiz') {
+      try {
+        const quizRes = await runQuiz(session, job, { cmid: act.cmid, autoSubmit: config.autoSubmit, delaySeconds: config.delaySeconds });
+        quizzesDone++;
+        log(session, `  └─ ✅ Đã hoàn thành Quiz "${act.title}" (Điền ${quizRes.answered} câu).`, 'success');
+      } catch (err) {
+        errorsCount++;
+        log(session, `  └─ ⚠️ Bỏ qua Quiz "${act.title}": ${err.message}`, 'warning');
+      }
+    } else {
+      try {
+        const res = await session.client.visitActivity(act.type, act.cmid, job.controller.signal);
+        itemsVisited++;
+        if (res.hvpScoreSent) {
+          log(session, `  └─ ✅ [HVP 100/100] Đã nộp điểm hoàn thành cho "${act.title}".`, 'success');
+        } else if (res.manualCompleted) {
+          log(session, `  └─ ✅ [CHECKED] Đã đánh dấu hoàn thành "${act.title}".`, 'success');
+        } else {
+          log(session, `  └─ ✅ [VISITED] Đã duyệt hoàn thành "${act.title}".`, 'success');
+        }
+      } catch (err) {
+        errorsCount++;
+        log(session, `  └─ ⚠️ Lỗi khi duyệt "${act.title}": ${err.message}`, 'warning');
+      }
+    }
+    await wait(config.delaySeconds * 1000, job);
+  }
+
+  log(session, `======================================================`, 'info');
+  log(session, `🎉 TỔNG KẾT KHÓA HỌC: Xử lý xong ${activities.length} hoạt động (${itemsVisited} nội dung/HVP, ${quizzesDone} bài quiz, ${errorsCount} lỗi/bỏ qua).`, 'success');
+
+  try {
+    const updatedCourses = await session.client.getEnrolledCourses(job.controller.signal);
+    session.courses = updatedCourses;
+    const curCourseAfter = updatedCourses.find(c => String(c.id) === courseId);
+    if (curCourseAfter) {
+      const newPct = curCourseAfter.progress !== null ? curCourseAfter.progress : 'N/A';
+      const diff = initialProgress !== null && curCourseAfter.progress !== null ? (curCourseAfter.progress - initialProgress) : 0;
+      const diffText = diff > 0 ? ` (+${diff}%)` : '';
+      log(session, `📈 TIẾN ĐỘ MỚI TRÊN MOODLE: ${newPct}%${diffText}`, 'success');
+    }
+    session.subscribers.forEach(response => send(response, { type: 'courses_updated', courses: updatedCourses }));
+  } catch (err) {
+    log(session, `Chưa thể cập nhật lại % tiến độ: ${err.message}`, 'warning');
+  }
+}
+
+async function runAutoFinishAllCourses(session, job, config) {
+  log(session, '🚀 BẮT ĐẦU TỰ ĐỘNG DUYỆT & HOÀN THÀNH TẤT CẢ KHÓA HỌC...', 'info');
+  const courses = await session.client.getEnrolledCourses(job.controller.signal);
+  session.courses = courses;
+  log(session, `Tìm thấy tổng cộng ${courses.length} khóa học. Sẽ tiến hành xử lý tuần tự từng khóa học.`, 'info');
+
+  for (let idx = 0; idx < courses.length; idx++) {
+    assertRunning(job);
+    const course = courses[idx];
+    log(session, `\n--- [Khóa ${idx + 1}/${courses.length}] "${course.fullname}" (Hiện tại: ${course.progress}%) ---`, 'info');
+    try {
+      await runAutoFinishCourse(session, job, { ...config, courseId: course.id });
+    } catch (err) {
+      if (err.code === 'CANCELLED') throw err;
+      log(session, `Bỏ qua lỗi khóa học #${course.id}: ${err.message}`, 'error');
+    }
+  }
+
+  log(session, '🎉 ĐÃ HOÀN THÀNH DUYỆT & TỰ ĐỘNG HOÀN THÀNH TẤT CẢ KHÓA HỌC!', 'success');
+}
+
 export const EnglishExerciseService = {
-  async login({ username, password, courseId = '281' }) {
+  async login({ username, password, courseId }) {
     if (!username || !password) {
       throw Object.assign(new Error('Vui lòng nhập tài khoản và mật khẩu Moodle.'), { status: 400 });
     }
     const client = new MoodleClient();
     await client.login(String(username).trim(), String(password));
+    let courses = [];
+    try {
+      courses = await client.getEnrolledCourses();
+    } catch (err) {
+      console.error('[Moodle] Lỗi quét danh sách khóa học:', err.message);
+    }
+    const defaultCourseId = String(courseId || courses[0]?.id || '281');
     const session = {
       id: crypto.randomUUID(),
       client,
       username: String(username).trim(),
-      courseId: String(courseId || '281'),
+      courseId: defaultCourseId,
+      courses,
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
       logs: [],
@@ -262,8 +379,17 @@ export const EnglishExerciseService = {
       job: null
     };
     sessions.set(session.id, session);
-    log(session, `Đăng nhập Moodle thành công: ${session.username}.`, 'success');
-    return { sessionId: session.id, username: session.username, courseId: session.courseId };
+    log(session, `Đăng nhập Moodle thành công: ${session.username}. Tìm thấy ${courses.length} khóa học.`, 'success');
+    return { sessionId: session.id, username: session.username, courseId: session.courseId, courses: session.courses };
+  },
+
+  async courses(id) {
+    const session = getSession(id);
+    log(session, 'Đang cập nhật danh sách khóa học...');
+    const courses = await session.client.getEnrolledCourses();
+    session.courses = courses;
+    log(session, `Đã cập nhật ${courses.length} khóa học.`, 'success');
+    return courses;
   },
 
   async activities(id, courseId) {
@@ -278,22 +404,80 @@ export const EnglishExerciseService = {
   start(id, input) {
     const session = getSession(id);
     if (session.job) throw Object.assign(new Error('Đang có một bài tập được xử lý.'), { status: 409 });
-    if (!input.cmid) throw Object.assign(new Error('Vui lòng chọn một bài quiz.'), { status: 400 });
-    if (input.type && input.type !== 'quiz') {
-      throw Object.assign(new Error('Hiện hỗ trợ quiz Moodle; SCORM/iContent cần mở trực tiếp.'), { status: 400 });
-    }
+    if (!input.cmid) throw Object.assign(new Error('Vui lòng chọn một bài tập.'), { status: 400 });
     const job = { id: crypto.randomUUID(), cancelled: false, controller: new AbortController() };
     session.job = job;
     const config = {
       cmid: String(input.cmid),
+      type: String(input.type || 'quiz').toLowerCase(),
       delaySeconds: Math.min(10, Math.max(0, Number(input.delaySeconds) || 0)),
       autoSubmit: input.autoSubmit === true
     };
     queueMicrotask(async () => {
       try {
-        log(session, `Bắt đầu xử lý quiz #${config.cmid}.`);
-        const result = await runQuiz(session, job, config);
-        session.subscribers.forEach(response => send(response, { type: 'done', result }));
+        if (config.type === 'quiz') {
+          log(session, `🚀 Bắt đầu xử lý bài Quiz #${config.cmid}...`, 'action');
+          const result = await runQuiz(session, job, config);
+          session.subscribers.forEach(response => send(response, { type: 'done', result }));
+        } else {
+          log(session, `⚡ Đang xử lý hoạt động [${config.type.toUpperCase()}] #${config.cmid}...`, 'action');
+          const res = await session.client.visitActivity(config.type, config.cmid, job.controller.signal);
+          if (res.hvpScoreSent) {
+            log(session, `✅ Đã nộp điểm 100/100 thành công cho bài [HVP] #${config.cmid}!`, 'success');
+          } else if (res.manualCompleted) {
+            log(session, `✅ Đã đánh dấu hoàn thành cho hoạt động [${config.type.toUpperCase()}] #${config.cmid}!`, 'success');
+          } else {
+            log(session, `✅ Đã duyệt hoàn thành [${config.type.toUpperCase()}] #${config.cmid}.`, 'success');
+          }
+
+          try {
+            const updatedCourses = await session.client.getEnrolledCourses(job.controller.signal);
+            session.courses = updatedCourses;
+            const cur = updatedCourses.find(c => String(c.id) === String(session.courseId));
+            if (cur) {
+              log(session, `📈 Tiến độ mới của khóa: ${cur.progress}%`, 'success');
+            }
+            session.subscribers.forEach(response => send(response, { type: 'courses_updated', courses: updatedCourses }));
+          } catch {}
+
+          session.subscribers.forEach(response => send(response, { type: 'done', result: { visited: true, cmid: config.cmid, type: config.type } }));
+        }
+      } catch (error) {
+        const stopped = error.code === 'CANCELLED' || error.name === 'CanceledError';
+        log(session, stopped ? 'Tiến trình đã dừng.' : `Lỗi: ${error.message}`, stopped ? 'warning' : 'error');
+        session.subscribers.forEach(response => send(response, {
+          type: stopped ? 'stopped' : 'error',
+          message: error.message
+        }));
+      } finally {
+        if (session.job === job) session.job = null;
+      }
+    });
+    return { jobId: job.id };
+  },
+
+  startFinish(id, input) {
+    const session = getSession(id);
+    if (session.job) throw Object.assign(new Error('Đang có một tiến trình bài tập đang chạy.'), { status: 409 });
+    const job = { id: crypto.randomUUID(), cancelled: false, controller: new AbortController() };
+    session.job = job;
+    const config = {
+      courseId: input.courseId ? String(input.courseId) : null,
+      allCourses: input.allCourses === true,
+      delaySeconds: Math.min(10, Math.max(0, Number(input.delaySeconds) || 0)),
+      autoSubmit: input.autoSubmit !== false
+    };
+
+    queueMicrotask(async () => {
+      try {
+        if (config.allCourses) {
+          await runAutoFinishAllCourses(session, job, config);
+        } else if (config.courseId) {
+          await runAutoFinishCourse(session, job, config);
+        } else {
+          throw new Error('Vui lòng chọn một khóa học hoặc chọn duyệt tất cả khóa học.');
+        }
+        session.subscribers.forEach(response => send(response, { type: 'done' }));
       } catch (error) {
         const stopped = error.code === 'CANCELLED' || error.name === 'CanceledError';
         log(session, stopped ? 'Tiến trình đã dừng.' : `Lỗi: ${error.message}`, stopped ? 'warning' : 'error');

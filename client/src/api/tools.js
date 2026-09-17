@@ -39,6 +39,11 @@ export async function loginEnglish(credentials, { signal } = {}) {
   return unwrap(data, data);
 }
 
+export async function getEnglishCourses(sessionId, { signal } = {}) {
+  const data = await request(`/api/english/${encodeURIComponent(sessionId)}/courses`, { signal, defaultMessage: 'Không thể tải danh sách khóa học.' });
+  return unwrap(data, data);
+}
+
 export async function getEnglishActivities(sessionId, courseId, { signal } = {}) {
   const data = await request(`/api/english/${encodeURIComponent(sessionId)}/activities?courseId=${encodeURIComponent(courseId)}`, { signal, defaultMessage: 'Không thể quét danh sách bài tập.' });
   return unwrap(data, data);
@@ -46,6 +51,11 @@ export async function getEnglishActivities(sessionId, courseId, { signal } = {})
 
 export async function startEnglishExercise(sessionId, options) {
   const data = await request(`/api/english/${encodeURIComponent(sessionId)}/start`, { method: 'POST', body: options, defaultMessage: 'Không thể khởi chạy bài tập.' });
+  return unwrap(data, data);
+}
+
+export async function startEnglishCourseFinish(sessionId, options) {
+  const data = await request(`/api/english/${encodeURIComponent(sessionId)}/finish-course`, { method: 'POST', body: options, defaultMessage: 'Không thể khởi chạy tự động hoàn thành khóa học.' });
   return unwrap(data, data);
 }
 
