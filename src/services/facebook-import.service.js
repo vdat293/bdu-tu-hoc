@@ -91,7 +91,11 @@ export function importConfig() {
     profileDir: path.resolve(ROOT_DIR, process.env.FB_IMPORT_PROFILE_DIR || 'data/fb-profile'),
     mediaDir: path.resolve(ROOT_DIR, process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import'),
     mediaUrlBase: String(process.env.FB_IMPORT_MEDIA_URL_BASE || '/media/fb-import').replace(/\/+$/, ''),
-    browserChannel: String(process.env.FB_IMPORT_BROWSER_CHANNEL || 'chrome').trim(),
+    // The Docker image uses Playwright's bundled Chromium when this is empty.
+    // Local `npm run fb:login` still defaults to the user's installed Chrome.
+    browserChannel: process.env.FB_IMPORT_BROWSER_CHANNEL === undefined
+      ? 'chrome'
+      : String(process.env.FB_IMPORT_BROWSER_CHANNEL).trim(),
     executablePath: String(process.env.FB_IMPORT_EXECUTABLE_PATH || '').trim() || null,
     headless: boolEnv('FB_IMPORT_HEADLESS', true),
     facebookUsername: String(process.env.FB_IMPORT_USERNAME || '').trim(),
@@ -850,9 +854,9 @@ export async function ensureFacebookSession(context, page, config) {
 async function launchBrowser(config) {
   let chromium;
   try {
-    ({ chromium } = await import('playwright-core'));
+    ({ chromium } = await import('playwright'));
   } catch {
-    throw httpError('Chưa cài playwright-core. Chạy: npm install playwright-core', 503);
+    throw httpError('Chưa cài Playwright. Chạy: npm install playwright', 503);
   }
 
   fs.mkdirSync(config.profileDir, { recursive: true, mode: 0o700 });

@@ -24,21 +24,15 @@ WORKDIR /app
 # Copy the Node.js runtime and npm from the official Node image.
 COPY --from=node-runtime /usr/local /usr/local
 
-# Facebook import uses playwright-core, which intentionally does not download a
-# browser. Ship Chromium in the production image so the optional importer has a
-# deterministic executable when it is enabled on the VPS.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium fonts-noto-color-emoji \
-  && rm -rf /var/lib/apt/lists/*
-
 # Set environment
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV FB_IMPORT_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install Node dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+  && npx playwright install --with-deps chromium
 
 # Copy application files, including the prebuilt bin/wordfmt binary.
 COPY . .
