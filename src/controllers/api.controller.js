@@ -15,6 +15,8 @@ import { IdentityPresentationService } from '../services/identity-presentation.s
 import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { AvatarOverrideService } from '../services/avatar-override.service.js';
 import { CommunityRealtime } from '../services/community-realtime.service.js';
+import { MentionService } from '../services/mention.service.js';
+import { NotificationService } from '../services/notification.service.js';
 import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
@@ -23,6 +25,25 @@ import { PermissionService } from '../services/permission.service.js';
 import { FacebookImportService } from '../services/facebook-import.service.js';
 import path from 'path';
 import fs from 'fs';
+
+function publishMentionNotifications(created) {
+  if (!Array.isArray(created)) return;
+  for (const item of created) {
+    try {
+      CommunityRealtime.publishNotification(item?.recipient_mssv, {
+        id: item?.id,
+        type: item?.type,
+        actor_mssv: item?.actor_mssv,
+        actor_name: item?.actor_name || item?.actor_mssv,
+        post_id: item?.post_id != null ? String(item.post_id) : null,
+        comment_id: item?.comment_id != null ? String(item.comment_id) : null,
+        created_at: item?.created_at
+      });
+    } catch (error) {
+      console.warn('[notifications] Không thể publish realtime:', error.message);
+    }
+  }
+}
 
 export const ApiController = {
   // 1. Auth: Login
@@ -1224,6 +1245,18 @@ export const ApiController = {
         poll
       });
       CommunityRealtime.publishPostCreated(post);
+      if (post?.category === 'confession') {
+        try {
+          const created = await MentionService.syncPostMentions(null, {
+            postId: post.id,
+            content: `${title || ''}\n${content || ''}`,
+            actorMssv: mssv
+          });
+          publishMentionNotifications(created);
+        } catch (mentionError) {
+          console.warn('[mentions] Bỏ qua đồng bộ tag confession:', mentionError.message);
+        }
+      }
       return res.status(201).json({ result: true, data: post });
     } catch (err) {
       console.error('Create community post error:', err.message);
@@ -1262,6 +1295,19 @@ export const ApiController = {
         attachments
       });
       CommunityRealtime.publishPostUpdated(data);
+      if (data?.category === 'confession' && (title !== undefined || content !== undefined)
+        && typeof data?.content === 'string') {
+        try {
+          const created = await MentionService.syncPostMentions(null, {
+            postId: data.id,
+            content: `${data.title || ''}\n${data.content || ''}`,
+            actorMssv: mssv
+          });
+          publishMentionNotifications(created);
+        } catch (mentionError) {
+          console.warn('[mentions] Bỏ qua đồng bộ tag confession:', mentionError.message);
+        }
+      }
       return res.json({ result: true, data });
     } catch (err) {
       console.error('Update community post error:', err.message);
@@ -1390,6 +1436,25 @@ export const ApiController = {
         scope: post?.scope,
         scopeId: post?.scope_id
       });
+      if (post?.category === 'confession') {
+        try {
+          const created = await MentionService.syncCommentMentions(null, {
+            postId: req.params.id,
+            commentId: comment?.id,
+            content,
+            actorMssv: mssv
+          });
+          const reply = await MentionService.createReplyNotification(null, {
+            postId: req.params.id,
+            commentId: comment?.id,
+            parentId: comment?.parent_id,
+            actorMssv: mssv
+          });
+          publishMentionNotifications([...created, ...(reply ? [reply] : [])]);
+        } catch (mentionError) {
+          console.warn('[mentions] Bỏ qua đồng bộ tag confession:', mentionError.message);
+        }
+      }
       return res.status(201).json({ result: true, data: comment });
     } catch (err) {
       console.error('Add comment error:', err.message);
@@ -1418,6 +1483,19 @@ export const ApiController = {
         scope: post?.scope,
         scopeId: post?.scope_id
       });
+      if (post?.category === 'confession') {
+        try {
+          const created = await MentionService.syncCommentMentions(null, {
+            postId: req.params.id,
+            commentId: comment?.id,
+            content: req.body?.content,
+            actorMssv: mssv
+          });
+          publishMentionNotifications(created);
+        } catch (mentionError) {
+          console.warn('[mentions] Bỏ qua đồng bộ tag confession:', mentionError.message);
+        }
+      }
       return res.json({ result: true, data: comment });
     } catch (err) {
       console.error('Edit comment error:', err.message);
@@ -1447,6 +1525,77 @@ export const ApiController = {
     } catch (err) {
       console.error('Delete comment error:', err.message);
       return res.status(err.status || 500).json({ result: false, message: err.message || 'Không thể xóa bình luận.' });
+    }
+  },
+
+  async searchActiveStudents(req, res) {
+    try {
+      await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await StudentService.searchActiveStudents(req.query?.q, req.query?.limit);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Search active students error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể tìm kiếm sinh viên.'
+      });
+    }
+  },
+
+  async getNotifications(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { limit, offset } = req.query || {};
+      const { items, total, limit: safeLimit, offset: safeOffset } = await NotificationService.listNotifications(mssv, { limit, offset });
+      return res.json({ result: true, data: items, total, limit: safeLimit, offset: safeOffset });
+    } catch (err) {
+      console.error('Get notifications error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể tải thông báo.'
+      });
+    }
+  },
+
+  async getUnreadNotificationCount(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const unread = await NotificationService.getUnreadCount(mssv);
+      return res.json({ result: true, data: { unread } });
+    } catch (err) {
+      console.error('Get unread notification count error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể tải số thông báo chưa đọc.'
+      });
+    }
+  },
+
+  async markNotificationRead(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await NotificationService.markRead(mssv, req.params.id);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Mark notification read error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể đánh dấu đã đọc.'
+      });
+    }
+  },
+
+  async markAllNotificationsRead(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await NotificationService.markAllRead(mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Mark all notifications read error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể đánh dấu đã đọc tất cả.'
+      });
     }
   },
 

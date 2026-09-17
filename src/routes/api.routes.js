@@ -91,6 +91,13 @@ router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiControlle
 router.get('/students/me/presentation', ApiController.getMyIdentityPresentation);
 router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
 router.put('/students/me/cosmetics/frame', ApiController.updateMyEquippedFrame);
+router.get('/students/search', ApiController.searchActiveStudents);
+
+// Thông báo tag/reply confession
+router.get('/notifications', ApiController.getNotifications);
+router.get('/notifications/unread-count', ApiController.getUnreadNotificationCount);
+router.post('/notifications/read-all', ApiController.markAllNotificationsRead);
+router.post('/notifications/:id/read', ApiController.markNotificationRead);
 
 // Identity entitlement administration (server-side role checked)
 router.get('/admin/identity/items', ApiController.getAdminIdentityItems);

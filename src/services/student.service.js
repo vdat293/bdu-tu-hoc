@@ -74,6 +74,32 @@ export const StudentService = {
   },
 
   /**
+   * Gợi ý tag user (@MSSV) trong confession: chỉ user đã active.
+   * Khớp tiền tố MSSV hoặc chuỗi con trong họ tên, ưu tiên đăng nhập gần nhất.
+   */
+  async searchActiveStudents(q, limit = 8) {
+    const cleanQuery = String(q || '').trim();
+    if (cleanQuery.length < 2) {
+      const error = new Error('Từ khoá tìm kiếm phải có ít nhất 2 ký tự.');
+      error.status = 400;
+      throw error;
+    }
+    if (!isDatabaseConfigured()) return [];
+    const safeLimit = Math.trunc(Math.max(1, Math.min(20, Number(limit) || 8)));
+    const escaped = cleanQuery.replace(/[\\%_]/g, (char) => `\\${char}`);
+    const sql = `
+      SELECT mssv, full_name
+      FROM students
+      WHERE is_active = TRUE
+        AND (mssv ILIKE $1 ESCAPE '\\' OR full_name ILIKE $2 ESCAPE '\\')
+      ORDER BY last_login_at DESC NULLS LAST, full_name ASC
+      LIMIT $3;
+    `;
+    const result = await query(sql, [`${escaped}%`, `%${escaped}%`, safeLimit]);
+    return result.rows;
+  },
+
+  /**
    * Kiểm tra sinh viên có quyền tạo CLB hay không (sở hữu nametag #TTCDS hoặc là Owner)
    */
   async canCreateClan(mssv) {

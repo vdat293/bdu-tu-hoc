@@ -29,7 +29,7 @@ export function useRealtimeStatus() { return useContext(RealtimeContext)?.status
 // have happened while the connection was down.
 const REALTIME_RECOVERY_QUERY_ROOTS = new Set([
   'clan', 'clan-post-comments', 'clans', 'confession', 'course-posts',
-  'identity-presentation', 'post-comments'
+  'identity-presentation', 'notifications', 'notifications-unread', 'post-comments'
 ]);
 
 export function isRealtimeRecoveryQuery(query) {
@@ -83,7 +83,10 @@ export function syncRealtimeCache(client, event) {
   const data = event?.data || {};
   const scope = String(data.scope || '').toLowerCase();
   const work = [];
-  if (type.startsWith('community.')) {
+  if (type === 'notification.created') {
+    work.push(invalidateQueryPrefix(client, ['notifications']));
+    work.push(invalidateQueryPrefix(client, ['notifications-unread']));
+  } else if (type.startsWith('community.')) {
     if (scope === 'school' || scope === 'faculty' || scope === 'institute' || !scope) {
       work.push(invalidateQueryPrefix(client, ['confession']));
     } else if (scope === 'course') {

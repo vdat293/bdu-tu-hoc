@@ -702,6 +702,21 @@ class CommunityRealtimeGateway {
     }
   }
 
+  publishNotification(recipientMssv, payload) {
+    const clean = normalizeMssv(recipientMssv);
+    if (!clean) return;
+    for (const client of this.clients) {
+      if (client.mssv === clean) {
+        jsonSend(client.ws, {
+          type: 'notification.created',
+          eventId: crypto.randomUUID(),
+          occurredAt: new Date().toISOString(),
+          data: payload
+        });
+      }
+    }
+  }
+
   publishIdentityChanged(mssv, changes = {}) {
     const clean = normalizeMssv(mssv);
     for (const client of this.clients) {

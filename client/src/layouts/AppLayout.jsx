@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { navigation, findRouteMeta } from '../app/navigation.js';
 import { useAuth } from '../app/providers.jsx';
+import NotificationBell from '../components/notifications/NotificationBell.jsx';
 
 const navGroups = [
   { title: 'CỔNG SINH VIÊN', items: navigation.slice(0, 4) },
@@ -255,6 +256,8 @@ export default function AppLayout() {
               <span>Tìm nhanh...</span>
               <kbd>Ctrl K</kbd>
             </button>
+
+            {auth.status === 'authenticated' && <NotificationBell />}
 
             <button
               type="button"

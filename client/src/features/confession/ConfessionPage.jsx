@@ -28,6 +28,8 @@ import {
   TitleBadges
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
+import MentionAutocomplete from './MentionAutocomplete.jsx';
+import { renderContentWithMentions } from './renderMentions.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import {
   ChevronDownIcon,
@@ -358,7 +360,7 @@ function CommentItem({ comment, isReply = false, onReply }) {
       <div className="fbc-comment-body">
         <div className="fbc-bubble">
           <span className="fbc-bubble-name">{name}</span>
-          <span className="fbc-bubble-text">{comment.content}</span>
+          <span className="fbc-bubble-text">{renderContentWithMentions(comment.content, comment.mentions)}</span>
         </div>
         <div className="fbc-comment-meta">
           {onReply && !comment.is_deleted ? (
@@ -379,9 +381,18 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
   const [expandedThreads, setExpandedThreads] = useState({});
+  const mentionInputRef = useRef(null);
   const client = useQueryClient();
   const { notify } = useToasts();
   useRealtimeRoom(postId ? `community-post:${postId}` : null, Boolean(token));
+
+  // Giữ khả năng focus từ popup chi tiết bài viết (composerInputRef) đồng thời
+  // cho MentionAutocomplete theo dõi caret để gợi ý @MSSV.
+  const mergeCommentInputRefs = (node) => {
+    mentionInputRef.current = node;
+    if (typeof composerInputRef === 'function') composerInputRef(node);
+    else if (composerInputRef && typeof composerInputRef === 'object') composerInputRef.current = node;
+  };
 
   const commentsQuery = useQuery({
     queryKey: ['post-comments', String(postId)],
@@ -479,16 +490,15 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
             </div>
           )}
           <div className="fbc-composer-row">
-            <input
-              type="text"
-              className="fbc-composer-input"
-              placeholder={replyTarget ? `Trả lời ${replyLabel}...` : 'Viết bình luận...'}
-              value={newComment}
-              onChange={(event) => setNewComment(event.target.value)}
-              maxLength={2000}
-              aria-label="Nội dung bình luận"
-              ref={composerInputRef}
-            />
+            <MentionAutocomplete value={newComment} onChange={setNewComment} token={token} inputRef={mergeCommentInputRefs} dropUp>
+              <input
+                type="text"
+                className="fbc-composer-input"
+                placeholder={replyTarget ? `Trả lời ${replyLabel}...` : 'Viết bình luận...'}
+                maxLength={2000}
+                aria-label="Nội dung bình luận"
+              />
+            </MentionAutocomplete>
             <button
               type="button"
               className={`fbc-anon-toggle ${isAnonymous ? 'is-on' : ''}`}
@@ -644,7 +654,7 @@ function PostContent({ post }) {
       {post.title && post.title !== 'BDU Confession' && (
         <h4 className="fbc-post-title">{post.title}</h4>
       )}
-      {post.content && <p className="fbc-post-text">{post.content}</p>}
+      {post.content && <p className="fbc-post-text">{renderContentWithMentions(post.content, post.mentions)}</p>}
       <PostAttachments attachments={post.attachments} sourceUrl={facebookSourceUrl(post)} />
     </>
   );
@@ -818,6 +828,8 @@ export default function ConfessionPage() {
   const postCloseButtonRef = useRef(null);
   const postOpenerRef = useRef(null);
   const postComposerInputRef = useRef(null);
+  const composerTextareaRef = useRef(null);
+  const editTextareaRef = useRef(null);
   const [titleSelection, setTitleSelection] = useState([]);
   const titleDialogRef = useRef(null);
   const titleCloseButtonRef = useRef(null);
@@ -1016,6 +1028,24 @@ export default function ConfessionPage() {
     next.set('filter', value);
     setParams(next, { replace: false });
   };
+
+  // Deep-link từ chuông thông báo: /confession?postId=...&commentId=...
+  // (giữ tương thích link chia sẻ cũ ?post=...). Đợi feed load rồi mới
+  // scroll tới bài, highlight tạm; có commentId thì mở luôn popup chi tiết.
+  const deepPostId = params.get('postId') || params.get('post');
+  const deepCommentId = params.get('commentId');
+  useEffect(() => {
+    if (!deepPostId || query.isLoading || posts.length === 0) return undefined;
+    if (deepCommentId) setOpenPostId(deepPostId);
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(`cfs-post-${deepPostId}`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('is-highlighted');
+      window.setTimeout(() => target.classList.remove('is-highlighted'), 2600);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [deepPostId, deepCommentId, posts.length, query.isLoading]);
 
   const presentation = presentationQuery.data;
   const displayName = getIdentityName(auth.user, presentation);
@@ -1313,7 +1343,7 @@ export default function ConfessionPage() {
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
 
                 return (
-                  <article className="forum-post-card fbc-post" key={post.id} data-post-id={post.id}>
+                  <article id={`cfs-post-${post.id}`} className="forum-post-card fbc-post" key={post.id} data-post-id={post.id}>
                     <PostHeaderBlock
                       post={post}
                       authorName={authorName}
@@ -1629,16 +1659,21 @@ export default function ConfessionPage() {
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               />
-              <textarea
-                id="cfs-post-content"
-                className="fb-content-textarea"
-                rows={4}
-                maxLength={10000}
-                placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự..."
+              <MentionAutocomplete
                 value={draft.content}
-                onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                required
-              />
+                onChange={(next) => setDraft((prev) => ({ ...prev, content: next }))}
+                token={auth.token}
+                inputRef={composerTextareaRef}
+              >
+                <textarea
+                  id="cfs-post-content"
+                  className="fb-content-textarea"
+                  rows={4}
+                  maxLength={10000}
+                  placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự... (gõ @ để tag bạn bè)"
+                  required
+                />
+              </MentionAutocomplete>
             </div>
 
             <div id="fb-attachment-card" className="fb-attachment-card" style={{ marginTop: '12px' }}>
@@ -1786,16 +1821,21 @@ export default function ConfessionPage() {
                 value={editDraft.title}
                 onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
               />
-              <textarea
-                id="cfs-edit-content"
-                className="fb-content-textarea"
-                rows={4}
-                maxLength={10000}
-                placeholder="Nội dung bài viết..."
+              <MentionAutocomplete
                 value={editDraft.content}
-                onChange={(e) => setEditDraft((prev) => ({ ...prev, content: e.target.value }))}
-                required
-              />
+                onChange={(next) => setEditDraft((prev) => ({ ...prev, content: next }))}
+                token={auth.token}
+                inputRef={editTextareaRef}
+              >
+                <textarea
+                  id="cfs-edit-content"
+                  className="fb-content-textarea"
+                  rows={4}
+                  maxLength={10000}
+                  placeholder="Nội dung bài viết... (gõ @ để tag bạn bè)"
+                  required
+                />
+              </MentionAutocomplete>
             </div>
           </div>
 

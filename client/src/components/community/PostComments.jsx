@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addCommunityPostComment,
@@ -8,15 +8,18 @@ import {
 } from '../../api/community.js';
 import { useToasts } from '../../app/providers.jsx';
 import { AsyncState } from '../feedback/Loading.jsx';
+import MentionAutocomplete from '../../features/confession/MentionAutocomplete.jsx';
+import { renderContentWithMentions } from '../../features/confession/renderMentions.jsx';
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString('vi-VN') : '';
 }
 
-export default function PostComments({ token, postId, courseCode = null }) {
+export default function PostComments({ token, postId, courseCode = null, enableMentions = false }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState(null);
+  const commentBoxRef = useRef(null);
   const client = useQueryClient();
   const { notify } = useToasts();
   const queryKey = ['post-comments', courseCode || 'community', postId];
@@ -62,7 +65,7 @@ export default function PostComments({ token, postId, courseCode = null }) {
         <strong>{comment.author?.is_anonymous ? 'Sinh viên giấu tên' : comment.author?.name || 'Sinh viên BDU'}</strong>
         <small>{formatDate(comment.created_at)}{comment.edited_at ? ' · đã sửa' : ''}</small>
       </div>
-      <p>{comment.content}</p>
+      <p>{enableMentions ? renderContentWithMentions(comment.content, comment.mentions) : comment.content}</p>
       <button type="button" className="button link-button" onClick={() => setReplyTo(comment)}>Trả lời</button>
       {(children.get(String(comment.id)) || []).map((child) => renderComment(child, depth + 1))}
     </div>
@@ -78,7 +81,13 @@ export default function PostComments({ token, postId, courseCode = null }) {
       </AsyncState>
       {replyTo && <div className="reply-context">Đang trả lời {replyTo.author?.name || 'bình luận'} <button type="button" className="button link-button" onClick={() => setReplyTo(null)}>Hủy</button></div>}
       <form className="comment-form" onSubmit={submit}>
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows="2" maxLength="4000" placeholder={replyTo ? 'Viết câu trả lời…' : 'Viết bình luận…'} aria-label="Nội dung bình luận" />
+        {enableMentions ? (
+          <MentionAutocomplete value={draft} onChange={setDraft} token={token} inputRef={commentBoxRef}>
+            <textarea rows="2" maxLength="4000" placeholder={replyTo ? 'Viết câu trả lời…' : 'Viết bình luận…'} aria-label="Nội dung bình luận" />
+          </MentionAutocomplete>
+        ) : (
+          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows="2" maxLength="4000" placeholder={replyTo ? 'Viết câu trả lời…' : 'Viết bình luận…'} aria-label="Nội dung bình luận" />
+        )}
         <button type="submit" className="button secondary" disabled={add.isPending || !draft.trim()}>Gửi</button>
       </form>
     </div>}

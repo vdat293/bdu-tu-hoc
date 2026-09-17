@@ -3231,3 +3231,137 @@ body.theme-dark .survey-settings-note {
     font-size: 10px;
   }
 }
+
+/* ==========================================================================
+   CONFESSION — TAG @MENTION SINH VIÊN
+   Gõ @ trong composer / ô bình luận để tag bạn bè (MSSV lưu trong content).
+   Chip hiển thị @FullName khi response kèm `mentions` hoặc đã lưu cache.
+   ========================================================================== */
+:is(#tab-confession, #fbc-post-modal) .cfs-mention,
+.comment-form .cfs-mention {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary, #1877f2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:is(#tab-confession, #fbc-post-modal) button.cfs-mention:hover,
+.comment-form .cfs-mention:hover {
+  text-decoration: underline;
+}
+
+:is(#tab-confession, #fbc-post-modal) .cfs-mention.is-static,
+.comment-form .cfs-mention.is-static {
+  cursor: default;
+  text-decoration: none;
+}
+
+/* Wrapper bọc input/textarea để neo dropdown gợi ý, không phá layout cũ. */
+.cfs-mention-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cfs-mention-wrap > input,
+.cfs-mention-wrap > textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Dropdown gợi ý kiểu Facebook: avatar initials + tên + MSSV. */
+.cfs-mention-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 240px;
+  max-width: min(320px, 90vw);
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #e4e6eb;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+}
+
+.cfs-mention-wrap.is-drop-up .cfs-mention-list {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.cfs-mention-list > li {
+  margin: 0;
+  padding: 0;
+}
+
+.cfs-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfs-mention-item.is-active,
+.cfs-mention-item:hover {
+  background: #f0f2f5;
+}
+
+.cfs-mention-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2f7cf6, #1877f2);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  overflow: hidden;
+}
+
+.cfs-mention-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cfs-mention-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #050505;
+}
+
+.cfs-mention-mssv {
+  font-size: 12px;
+  color: #65676b;
+}
+
+.cfs-mention-empty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #65676b;
+}

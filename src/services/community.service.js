@@ -114,6 +114,57 @@ async function enrichCommunityIdentities(records) {
 }
 
 /**
+ * Gắn mentions cho confession posts/comments từ bảng confession_mentions.
+ * Trả về cùng mảng, mỗi item thêm `mentions: [{mssv, full_name}]`.
+ * Không throw khi bảng chưa migrate — fallback [] để feed cũ vẫn chạy.
+ */
+async function attachMentionsToPosts(posts) {
+  if (!Array.isArray(posts) || !posts.length) return posts;
+  try {
+    const ids = posts.map((p) => p.id).filter(Boolean);
+    if (!ids.length) return posts;
+    const res = await query(
+      `SELECT m.post_id, m.mentioned_mssv AS mssv, COALESCE(s.full_name, m.mentioned_mssv) AS full_name
+       FROM confession_mentions m LEFT JOIN students s ON s.mssv = m.mentioned_mssv
+       WHERE m.post_id = ANY($1::bigint[]) AND m.comment_id IS NULL`,
+      [ids.map(String)]
+    );
+    const byPost = new Map();
+    for (const row of res.rows || []) {
+      const key = String(row.post_id);
+      if (!byPost.has(key)) byPost.set(key, []);
+      byPost.get(key).push({ mssv: row.mssv, full_name: row.full_name });
+    }
+    return posts.map((p) => ({ ...p, mentions: byPost.get(String(p.id)) || [] }));
+  } catch {
+    return posts.map((p) => ({ ...p, mentions: p.mentions || [] }));
+  }
+}
+
+async function attachMentionsToComments(comments) {
+  if (!Array.isArray(comments) || !comments.length) return comments;
+  try {
+    const ids = comments.map((c) => c.id).filter(Boolean);
+    if (!ids.length) return comments;
+    const res = await query(
+      `SELECT m.comment_id, m.mentioned_mssv AS mssv, COALESCE(s.full_name, m.mentioned_mssv) AS full_name
+       FROM confession_mentions m LEFT JOIN students s ON s.mssv = m.mentioned_mssv
+       WHERE m.comment_id = ANY($1::bigint[])`,
+      [ids.map(String)]
+    );
+    const byComment = new Map();
+    for (const row of res.rows || []) {
+      const key = String(row.comment_id);
+      if (!byComment.has(key)) byComment.set(key, []);
+      byComment.get(key).push({ mssv: row.mssv, full_name: row.full_name });
+    }
+    return comments.map((c) => ({ ...c, mentions: byComment.get(String(c.id)) || [] }));
+  } catch {
+    return comments.map((c) => ({ ...c, mentions: c.mentions || [] }));
+  }
+}
+
+/**
  * Nạp chi tiết bình chọn (Poll options, tỷ lệ %, trạng thái đã vote) cho danh sách bài viết
  */
 async function attachPollsToPosts(posts, viewerMssv = null) {
@@ -607,10 +658,11 @@ export const CommunityService = {
 
     const enriched = await enrichCommunityIdentities(posts);
     const withPolls = await attachPollsToPosts(enriched, cleanViewerMssv);
+    const withMentions = await attachMentionsToPosts(withPolls);
 
     return {
       total,
-      posts: withPolls,
+      posts: withMentions,
       limit: safeLimit,
       offset: safeOffset
     };
@@ -700,7 +752,8 @@ export const CommunityService = {
     };
     const enriched = await enrichCommunityIdentities([post]);
     const withPolls = await attachPollsToPosts(enriched, cleanViewerMssv);
-    return withPolls[0] || null;
+    const withMentions = await attachMentionsToPosts(withPolls);
+    return withMentions[0] || null;
   },
 
   /**
@@ -1330,7 +1383,10 @@ export const CommunityService = {
     if (!canModerate && cleanViewer) {
       canModerate = await PermissionService.can(cleanViewer, 'community:comment_delete_any');
     }
-    return mapCommentRow(row, cleanViewer, { canModerate });
+    const mapped = mapCommentRow(row, cleanViewer, { canModerate });
+    const withMentions = await attachMentionsToComments([mapped]);
+    const enriched = await enrichCommunityIdentities(withMentions);
+    return enriched[0] || null;
   },
 
   /**
@@ -1375,6 +1431,7 @@ export const CommunityService = {
       canModerate = await PermissionService.can(cleanViewerMssv, 'community:comment_delete_any');
     }
     const comments = result.rows.map((row) => mapCommentRow(row, cleanViewerMssv, { canModerate }));
-    return enrichCommunityIdentities(comments);
+    const withMentions = await attachMentionsToComments(comments);
+    return enrichCommunityIdentities(withMentions);
   }
 };
