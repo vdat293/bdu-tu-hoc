@@ -1082,7 +1082,9 @@ export default function ConfessionPage() {
 
   const openComposer = (focusField = 'content', forceAnon = true, event) => {
     createOpenerRef.current = event?.currentTarget || document.activeElement;
-    setDraft((prev) => ({ ...prev, isAnonymous: forceAnon, category: forceAnon ? 'confession' : 'discussion' }));
+    // Bài từ trang Confession luôn là category 'confession'; ẩn danh hay không
+    // do riêng cờ isAnonymous quyết định (backend chỉ xử lý tag khi confession).
+    setDraft((prev) => ({ ...prev, isAnonymous: forceAnon, category: 'confession' }));
     setShowCreateModal(true);
   };
 
@@ -1638,7 +1640,7 @@ export default function ConfessionPage() {
                       setDraft((prev) => ({
                         ...prev,
                         isAnonymous: !prev.isAnonymous,
-                        category: !prev.isAnonymous ? 'confession' : 'discussion'
+                        category: 'confession'
                       }))
                     }
                     title="Bật/Tắt chế độ Confession ẩn danh"
@@ -1739,7 +1741,7 @@ export default function ConfessionPage() {
                     setDraft((prev) => ({
                       ...prev,
                       isAnonymous: !prev.isAnonymous,
-                      category: !prev.isAnonymous ? 'confession' : 'discussion'
+                      category: 'confession'
                     }))
                   }
                 >
