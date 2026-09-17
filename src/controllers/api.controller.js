@@ -1249,6 +1249,29 @@ export const ApiController = {
     }
   },
 
+  async updateCommunityPost(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { title, content, isAnonymous, attachments } = req.body || {};
+      const data = await CommunityService.updatePost({
+        postId: req.params.id,
+        requesterMssv: mssv,
+        title,
+        content,
+        isAnonymous,
+        attachments
+      });
+      CommunityRealtime.publishPostUpdated(data);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Update community post error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể chỉnh sửa bài viết.'
+      });
+    }
+  },
+
   async toggleClanPostPin(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);

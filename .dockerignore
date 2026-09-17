@@ -9,3 +9,10 @@ npm-debug.log
 !.env.example
 .acc
 dist
+# Dữ liệu runtime chỉ được mount vào container, không đưa vào image.
+# fb-profile do container tạo với quyền root nên còn làm hỏng bước build context.
+data
+backups
+.playwright-mcp
+scratch
+.vite

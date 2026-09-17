@@ -161,28 +161,6 @@ export default function LoginPage() {
         <p className="login-note">
           Kết nối trực tiếp với hệ thống BDU. Mật khẩu không được lưu trữ.
         </p>
-        <div style={{ marginTop: '14px', textAlign: 'center' }}>
-          <a
-            href="/admin"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12.5px',
-              fontWeight: '500',
-              color: 'var(--text-muted, #71717a)',
-              textDecoration: 'none',
-              padding: '4px 10px',
-              borderRadius: '6px',
-              background: 'rgba(0, 0, 0, 0.04)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.color = '#c92a2a')}
-            onMouseOut={(e) => (e.currentTarget.style.color = 'var(--text-muted, #71717a)')}
-          >
-            <span>⚡</span> Cổng Quản Trị Hệ Thống (Admin Dashboard)
-          </a>
-        </div>
       </div>
     </div>
   );

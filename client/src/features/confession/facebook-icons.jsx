@@ -130,3 +130,12 @@ export function TrashIcon({ size = 18, className = '' }) {
     </Icon>
   );
 }
+
+export function EditIcon({ size = 18, className = '' }) {
+  return (
+    <Icon size={size} className={className} fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M4 20h4.2l9.9-9.9a2.1 2.1 0 0 0 0-2.97l-1.23-1.23a2.1 2.1 0 0 0-2.97 0L4 15.8V20Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m13.2 6.6 4.2 4.2" strokeLinecap="round" />
+    </Icon>
+  );
+}

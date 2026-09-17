@@ -529,6 +529,7 @@ export const CommunityService = {
         COALESCE(p.is_pinned, false) AS is_pinned,
         p.created_at,
         p.updated_at,
+        p.edited_at,
         s.full_name AS raw_author_name,
         p.author_mssv AS raw_author_mssv,
         sc.role AS author_clan_role,
@@ -551,11 +552,32 @@ export const CommunityService = {
 
     const listResult = await query(listSql, params);
 
-    const posts = listResult.rows.map((row) => {
-      const isAuthor = cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv;
-      const maskIdentity = row.is_anonymous && !isAuthor;
+    // Quyền kiểm duyệt toàn hệ thống chỉ cần tra một lần cho cả trang; riêng
+    // quyền theo CLB thì cache theo scope_id để không nổ truy vấn mỗi bài.
+    const moderation = cleanViewerMssv
+      ? await PermissionService.canAll(cleanViewerMssv, ['community:post_update_any', 'community:post_delete_any'])
+      : {};
+    const canEditAny = Boolean(moderation['community:post_update_any']);
+    const canDeleteAny = Boolean(moderation['community:post_delete_any']);
+    const clanCapabilityCache = new Map();
+    const canDeleteInClan = (clanId) => {
+      const key = String(clanId);
+      if (!clanCapabilityCache.has(key)) {
+        clanCapabilityCache.set(key, PermissionService.canInClan(cleanViewerMssv, key, 'clan:post_delete_any'));
+      }
+      return clanCapabilityCache.get(key);
+    };
 
-      return {
+    const posts = [];
+    for (const row of listResult.rows) {
+      const isAuthor = Boolean(cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv);
+      const maskIdentity = row.is_anonymous && !isAuthor;
+      let canDelete = Boolean(isAuthor || canDeleteAny);
+      if (!canDelete && cleanViewerMssv && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
+        canDelete = await canDeleteInClan(row.scope_id);
+      }
+
+      posts.push({
         id: row.id,
         title: row.title,
         content: row.content,
@@ -569,16 +591,19 @@ export const CommunityService = {
         comment_count: row.comment_count,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        edited_at: row.edited_at || null,
         is_liked: row.is_liked_by_viewer,
         is_mine: Boolean(isAuthor),
+        can_edit: Boolean(isAuthor || canEditAny),
+        can_delete: canDelete,
         author: {
           mssv: maskIdentity ? null : row.raw_author_mssv,
           name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
           clan_role: maskIdentity ? null : row.author_clan_role,
           is_anonymous: row.is_anonymous
         }
-      };
-    });
+      });
+    }
 
     const enriched = await enrichCommunityIdentities(posts);
     const withPolls = await attachPollsToPosts(enriched, cleanViewerMssv);
@@ -614,6 +639,7 @@ export const CommunityService = {
         COALESCE(p.is_pinned, false) AS is_pinned,
         p.created_at,
         p.updated_at,
+        p.edited_at,
         s.full_name AS raw_author_name,
         p.author_mssv AS raw_author_mssv,
         sc.role AS author_clan_role,
@@ -636,6 +662,15 @@ export const CommunityService = {
     if (!(await canAccessPost(row, cleanViewerMssv))) return null;
     const isAuthor = cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv;
     const maskIdentity = row.is_anonymous && !isAuthor;
+    const moderation = cleanViewerMssv
+      ? await PermissionService.canAll(cleanViewerMssv, ['community:post_update_any', 'community:post_delete_any'])
+      : {};
+    const canEditAny = Boolean(moderation['community:post_update_any']);
+    const canDeleteAny = Boolean(moderation['community:post_delete_any']);
+    let canDelete = Boolean(isAuthor || canDeleteAny);
+    if (!canDelete && cleanViewerMssv && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
+      canDelete = await PermissionService.canInClan(cleanViewerMssv, row.scope_id, 'clan:post_delete_any');
+    }
 
     const post = {
       id: row.id,
@@ -651,8 +686,11 @@ export const CommunityService = {
       comment_count: row.comment_count,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      edited_at: row.edited_at || null,
       is_liked: row.is_liked_by_viewer,
       is_mine: Boolean(isAuthor),
+      can_edit: Boolean(isAuthor || canEditAny),
+      can_delete: canDelete,
       author: {
         mssv: maskIdentity ? null : row.raw_author_mssv,
         name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
@@ -712,6 +750,87 @@ export const CommunityService = {
         scope_id: postRow.scope_id
       };
     });
+  },
+
+  /**
+   * Chỉnh sửa bài viết.
+   * - Tác giả bài viết có quyền sửa bài của mình.
+   * - Quản trị viên có capability `community:post_update_any` sửa được mọi bài
+   *   (bao gồm bài nhập tự động từ Facebook với bút danh giả lập).
+   */
+  async updatePost({ postId, requesterMssv, title, content, isAnonymous, attachments }) {
+    if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
+    const cleanPostId = normalizePostId(postId);
+    const cleanRequester = normalizeMssv(requesterMssv);
+    if (!cleanPostId || !cleanRequester) throw httpError('Post ID và người yêu cầu là bắt buộc.');
+
+    const cleanTitle = title === undefined ? null : String(title || '').trim();
+    const cleanContent = content === undefined ? null : String(content || '').trim();
+    if (cleanTitle !== null && !cleanTitle) throw httpError('Tiêu đề bài viết không được để trống.');
+    if (cleanTitle !== null && cleanTitle.length > MAX_TITLE_LENGTH) throw httpError(`Tiêu đề không được vượt quá ${MAX_TITLE_LENGTH} ký tự.`);
+    if (cleanContent !== null && !cleanContent) throw httpError('Nội dung bài viết không được để trống.');
+    if (cleanContent !== null && cleanContent.length > MAX_CONTENT_LENGTH) throw httpError(`Nội dung không được vượt quá ${MAX_CONTENT_LENGTH} ký tự.`);
+    if (attachments !== undefined && !Array.isArray(attachments)) throw httpError('Danh sách tệp đính kèm không hợp lệ.');
+    if (Array.isArray(attachments) && attachments.length > MAX_ATTACHMENTS) {
+      throw httpError(`Mỗi bài viết chỉ được đính kèm tối đa ${MAX_ATTACHMENTS} liên kết.`);
+    }
+
+    let parsedAttachments = null;
+    if (Array.isArray(attachments)) {
+      parsedAttachments = attachments.map((item) => {
+        if (typeof item === 'string') return parseDriveOrMediaUrl(item);
+        if (item && typeof item === 'object' && item.url) {
+          return parseDriveOrMediaUrl(item.url, item.title, item.type);
+        }
+        return null;
+      });
+      if (parsedAttachments.some((item) => !item)) {
+        throw httpError('Liên kết đính kèm không hợp lệ. Chỉ chấp nhận URL http hoặc https.');
+      }
+    }
+
+    const updatedRow = await transaction(async (client) => {
+      const postResult = await client.query(
+        'SELECT id, author_mssv, scope, scope_id, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
+        [cleanPostId]
+      );
+      if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
+      const postRow = postResult.rows[0];
+      if (postRow.deleted_at) throw httpError('Bài viết đã bị xoá và không thể chỉnh sửa.', 410);
+
+      const isAuthor = postRow.author_mssv === cleanRequester;
+      const canEdit = isAuthor || (await PermissionService.can(cleanRequester, 'community:post_update_any'));
+      if (!canEdit) throw httpError('Bạn không có quyền chỉnh sửa bài viết này.', 403);
+
+      const updated = await client.query(`
+        UPDATE community_posts
+        SET title = COALESCE($2, title),
+            content = COALESCE($3, content),
+            is_anonymous = COALESCE($4, is_anonymous),
+            attachments = COALESCE($5::jsonb, attachments),
+            edited_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, scope, scope_id, edited_at;
+      `, [
+        cleanPostId,
+        cleanTitle,
+        cleanContent,
+        isAnonymous === undefined ? null : normalizeBoolean(isAnonymous),
+        parsedAttachments ? JSON.stringify(parsedAttachments) : null
+      ]);
+
+      return updated.rows[0];
+    });
+
+    // Đọc lại sau khi commit để bản ghi hiển thị đúng nội dung vừa lưu.
+    const post = await this.getPostById(cleanPostId, cleanRequester);
+    return post || {
+      id: updatedRow.id,
+      scope: updatedRow.scope,
+      scope_id: updatedRow.scope_id,
+      edited_at: updatedRow.edited_at
+    };
   },
 
   /**

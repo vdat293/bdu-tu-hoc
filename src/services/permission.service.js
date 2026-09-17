@@ -209,6 +209,19 @@ export const PermissionService = {
   },
 
   /**
+   * Kiểm tra nhiều capability toàn hệ thống cùng lúc nhưng chỉ nạp capabilities
+   * một lần (tránh nhân truy vấn khi giao diện cần nhiều cờ quyền).
+   * Trả về object dạng { [capability]: boolean }.
+   */
+  async canAll(mssv, capabilities = []) {
+    const cleanMssv = normalizeMssv(mssv);
+    if (!cleanMssv || !Array.isArray(capabilities) || capabilities.length === 0) return {};
+
+    const caps = await this.getGlobalCapabilities(cleanMssv);
+    return Object.fromEntries(capabilities.map((capability) => [capability, matchCapability(caps, capability)]));
+  },
+
+  /**
    * Kiểm tra capability trong ngữ cảnh một CLB cụ thể (ví dụ: 'clan:review_join', 'clan:disband')
    */
   async canInClan(mssv, clanId, capability) {

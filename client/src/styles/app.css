@@ -912,7 +912,22 @@ body.theme-light .sidebar .nav-item.active:hover {
   .quiz-settings-grid { grid-template-columns: 1fr; }
   .quiz-manual-options, .quiz-manual-actions { grid-template-columns: 1fr; }
   .modal-backdrop { padding: 10px; }
-  .clan-create-dialog, .fb-composer-dialog { max-height: calc(100vh - 20px); overflow-y: auto; }
+  .clan-create-dialog { max-height: calc(100vh - 20px); overflow-y: auto; }
+}
+
+/* Modal tạo/sửa bài viết: giữ khung trong màn hình, chỉ phần thân cuộn để
+   header và nút Đăng/Lưu luôn nhìn thấy khi nội dung dài. */
+.fb-composer-dialog {
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fb-composer-dialog .fb-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Confession identity layout: one centered flow for every frame family. The
@@ -3056,10 +3071,13 @@ body.theme-dark .survey-settings-note {
 }
 
 /* ---------- Popup chi tiết bài viết ---------- */
-#fbc-post-modal.modal-dialog.fbc-modal {
+/* `ViewportModal` gắn id lên lớp backdrop, nên phải bám vào dialog con; viết
+   class .modal-dialog ngay sau id sẽ không bao giờ khớp, popup mất giới hạn
+   chiều cao và phình dài theo số bình luận. */
+#fbc-post-modal > .modal-dialog.fbc-modal {
   width: min(680px, 96vw);
   max-width: 680px;
-  max-height: 92vh;
+  max-height: calc(100vh - 40px);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -3135,11 +3153,11 @@ body.theme-dark .survey-settings-note {
 }
 
 @media (max-width: 520px) {
-  #fbc-post-modal.modal-dialog.fbc-modal {
+  #fbc-post-modal > .modal-dialog.fbc-modal {
     width: 100vw;
     max-width: 100vw;
-    max-height: 100vh;
-    height: 100vh;
+    max-height: 100%;
+    height: 100%;
     border-radius: 0;
   }
 }

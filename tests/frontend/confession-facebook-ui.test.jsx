@@ -36,6 +36,7 @@ const commentFixtures = [
 ];
 
 const addCommunityPostComment = vi.fn(() => Promise.resolve({}));
+const updateCommunityPost = vi.fn(() => Promise.resolve({}));
 
 vi.mock('../../client/src/app/providers.jsx', () => ({
   useAuth: () => ({ token: 'test-token', user: { name: 'Sinh viên kiểm thử', mssv: 'TEST0001', idsv: '1' } }),
@@ -50,7 +51,8 @@ vi.mock('../../client/src/api/community.js', () => ({
   deleteCommunityPost: vi.fn(),
   getCommunityPostComments: vi.fn(() => Promise.resolve(commentFixtures)),
   getCommunityPosts: vi.fn(() => Promise.resolve({ posts: [post] })),
-  toggleCommunityPostLike: vi.fn()
+  toggleCommunityPostLike: vi.fn(),
+  updateCommunityPost: (...args) => updateCommunityPost(...args)
 }));
 
 vi.mock('../../client/src/api/identity.js', () => ({
@@ -87,6 +89,7 @@ async function openComments() {
 afterEach(() => {
   cleanup();
   addCommunityPostComment.mockClear();
+  updateCommunityPost.mockClear();
 });
 
 describe('Confession kiểu Facebook', () => {
@@ -213,6 +216,19 @@ describe('Confession kiểu Facebook', () => {
     expect(css).toMatch(/\.fbc-avatar\.has-inline-frame\s*\{[^}]*overflow:\s*visible/);
   });
 
+  it('giới hạn chiều cao popup chi tiết bài viết để thread dài không phình khỏi màn hình', () => {
+    const css = fs.readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '../../client/src/styles/app.css'),
+      'utf8'
+    );
+    // `ViewportModal` đặt id ở backdrop nên selector phải bám dialog con; nếu viết
+    // id dính liền class .modal-dialog thì max-height không bao giờ được áp dụng.
+    expect(css).not.toMatch(/#fbc-post-modal\.modal-dialog/);
+    expect(css).toMatch(/#fbc-post-modal > \.modal-dialog\.fbc-modal\s*\{[^}]*max-height:\s*calc\(100vh - 40px\)/s);
+    expect(css).toMatch(/#fbc-post-modal > \.modal-dialog\.fbc-modal\s*\{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.fb-composer-dialog\s*\{[^}]*max-height:\s*calc\(100vh - 40px\)/s);
+  });
+
   it('bật ẩn danh thì bình luận gửi kèm isAnonymous và avatar đổi thành ?', async () => {
     renderPage();
     const modal = await openComments();
@@ -270,9 +286,71 @@ describe('Confession kiểu Facebook', () => {
     await waitFor(() => expect(screen.queryByRole('menuitem', { name: /Xóa bài viết/ })).not.toBeInTheDocument());
   });
 
+  it('cú click lan từ vùng menu "..." ra document không tự đóng menu vừa mở', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    getCommunityPosts.mockResolvedValueOnce({ posts: [{ ...post, is_mine: true }] });
+
+    renderPage();
+    await screen.findByText(post.content);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn bài viết' }));
+    expect(screen.getByRole('menuitem', { name: /Xóa bài viết/ })).toBeInTheDocument();
+
+    // Trình duyệt thật gắn listener đóng menu ngay khi effect chạy, rồi chính cú
+    // click mở menu lan tiếp tới document và đóng nó. Click trong .fbc-menu-wrap
+    // phải được bỏ qua để menu trụ lại.
+    fireEvent.click(document.querySelector('.fbc-menu-wrap'));
+    expect(screen.getByRole('menuitem', { name: /Xóa bài viết/ })).toBeInTheDocument();
+  });
+
   it('không hiện menu "..." trên bài của người khác', async () => {
     renderPage();
     await screen.findByText(post.content);
     expect(screen.queryByRole('button', { name: 'Tuỳ chọn bài viết' })).not.toBeInTheDocument();
+  });
+
+  it('quản trị viên thấy menu sửa/xoá trên bài của người khác', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    getCommunityPosts.mockResolvedValueOnce({ posts: [{ ...post, can_edit: true, can_delete: true }] });
+
+    renderPage();
+    await screen.findByText(post.content);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn bài viết' }));
+    expect(screen.getByRole('menuitem', { name: /Chỉnh sửa bài viết/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Xóa bài viết/ })).toBeInTheDocument();
+  });
+
+  it('lưu chỉnh sửa bài viết của người khác và đóng hộp thoại', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    getCommunityPosts.mockResolvedValueOnce({ posts: [{ ...post, can_edit: true, can_delete: true }] });
+
+    renderPage();
+    await screen.findByText(post.content);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn bài viết' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Chỉnh sửa bài viết/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Chỉnh sửa bài viết' });
+    const contentInput = within(dialog).getByDisplayValue(post.content);
+    fireEvent.change(contentInput, { target: { value: 'Nội dung đã được quản trị viên chỉnh sửa' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(updateCommunityPost).toHaveBeenCalledTimes(1));
+    expect(updateCommunityPost).toHaveBeenCalledWith('test-token', 10, {
+      title: 'BDU Confession',
+      content: 'Nội dung đã được quản trị viên chỉnh sửa',
+      isAnonymous: false
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa bài viết' })).not.toBeInTheDocument());
+  });
+
+  it('hiển thị nhãn "Đã chỉnh sửa" khi bài viết có edited_at', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    getCommunityPosts.mockResolvedValueOnce({ posts: [{ ...post, edited_at: new Date().toISOString() }] });
+
+    renderPage();
+    await screen.findByText(post.content);
+    expect(screen.getByText('Đã chỉnh sửa')).toBeInTheDocument();
   });
 });

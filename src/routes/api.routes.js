@@ -129,6 +129,7 @@ router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 router.get('/community/posts', ApiController.getCommunityPosts);
 router.post('/community/posts', ApiController.createCommunityPost);
 router.get('/community/posts/:id', ApiController.getCommunityPost);
+router.patch('/community/posts/:id', ApiController.updateCommunityPost);
 router.delete('/community/posts/:id', ApiController.deleteCommunityPost);
 router.post('/community/posts/:id/pin', ApiController.toggleClanPostPin);
 router.post('/community/posts/:id/like', ApiController.toggleCommunityPostLike);

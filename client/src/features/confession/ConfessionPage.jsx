@@ -8,7 +8,8 @@ import {
   getCommunityPosts,
   toggleCommunityPostLike,
   getCommunityPostComments,
-  addCommunityPostComment
+  addCommunityPostComment,
+  updateCommunityPost
 } from '../../api/community.js';
 import { getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
@@ -32,6 +33,7 @@ import {
   ChevronDownIcon,
   CommentIcon,
   DotsIcon,
+  EditIcon,
   EmojiIcon,
   GifIcon,
   GlobeIcon,
@@ -566,6 +568,12 @@ function PostHeaderBlock({ post, authorName, isAnon, author, postFrame, authorTi
         </div>
         <div className="fbc-post-meta">
           <span>{formatFacebookTime(post.created_at)}</span>
+          {post.edited_at && (
+            <>
+              <span className="fbc-meta-dot" aria-hidden="true">·</span>
+              <span>Đã chỉnh sửa</span>
+            </>
+          )}
           <span className="fbc-meta-dot" aria-hidden="true">·</span>
           <GlobeIcon size={12} />
           <span className="fbc-sr-only">Công khai trong trường</span>
@@ -573,6 +581,59 @@ function PostHeaderBlock({ post, authorName, isAnon, author, postFrame, authorTi
       </div>
 
       <div className="fbc-post-head-right">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Menu "..." của bài viết. Tác giả thấy nút với bài của mình; quản trị viên
+ * (capability `community:post_update_any` / `community:post_delete_any`) thấy
+ * nút trên toàn bộ bài viết.
+ */
+function PostOptionsMenu({ post, open, onToggle, onEdit, onDelete, pending }) {
+  const canEdit = Boolean(post.is_mine || post.can_edit);
+  const canDelete = Boolean(post.is_mine || post.can_delete);
+  if (!canEdit && !canDelete) return null;
+
+  return (
+    <div className="fbc-menu-wrap">
+      <button
+        type="button"
+        className={`fbc-icon-btn ${open ? 'is-open' : ''}`}
+        onClick={onToggle}
+        title="Tuỳ chọn bài viết"
+        aria-label="Tuỳ chọn bài viết"
+        aria-expanded={open}
+      >
+        <DotsIcon size={18} />
+      </button>
+      {open && (
+        <div className="fbc-menu" role="menu">
+          {canEdit && (
+            <button
+              type="button"
+              role="menuitem"
+              className="fbc-menu-item"
+              onClick={onEdit}
+            >
+              <EditIcon size={16} />
+              Chỉnh sửa bài viết
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              role="menuitem"
+              className="fbc-menu-item is-danger"
+              onClick={onDelete}
+              disabled={pending}
+            >
+              <TrashIcon size={16} />
+              Xóa bài viết
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -659,7 +720,8 @@ function PostDetailModal({
   likePending,
   dialogRef,
   closeButtonRef,
-  composerInputRef
+  composerInputRef,
+  optionsMenu = null
 }) {
   if (!post) return null;
 
@@ -704,6 +766,7 @@ function PostDetailModal({
           authorTitles={titlesForPost(post, viewer, presentation)}
         >
           <span className="fbc-scope-pill">{scopeLabel}</span>
+          {optionsMenu}
         </PostHeaderBlock>
 
         <PostContent post={post} />
@@ -746,6 +809,11 @@ export default function ConfessionPage() {
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [postMenuId, setPostMenuId] = useState(null);
   const [openPostId, setOpenPostId] = useState(null);
+  const [editPostId, setEditPostId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ title: '', content: '', isAnonymous: true });
+  const editDialogRef = useRef(null);
+  const editCloseButtonRef = useRef(null);
+  const editOpenerRef = useRef(null);
   const postDialogRef = useRef(null);
   const postCloseButtonRef = useRef(null);
   const postOpenerRef = useRef(null);
@@ -767,6 +835,7 @@ export default function ConfessionPage() {
 
   const closeTitleCustomizer = useCallback(() => setShowTitleModal(false), []);
   const closeFramePicker = useCallback(() => setShowFrameModal(false), []);
+  const closeEditPost = useCallback(() => setEditPostId(null), []);
   const openFramePicker = useCallback((event) => {
     frameOpenerRef.current = event?.currentTarget || null;
     setShowFrameModal(true);
@@ -775,6 +844,7 @@ export default function ConfessionPage() {
   useViewportDialog(showTitleModal, closeTitleCustomizer, titleDialogRef, titleCloseButtonRef, titleOpenerRef);
   useViewportDialog(showFrameModal, closeFramePicker, frameDialogRef, frameCloseButtonRef, frameOpenerRef);
   useViewportDialog(showCreateModal, () => setShowCreateModal(false), createDialogRef, createCloseButtonRef, createOpenerRef);
+  useViewportDialog(editPostId !== null, closeEditPost, editDialogRef, editCloseButtonRef, editOpenerRef);
 
   // Composer draft
   const [draft, setDraft] = useState({
@@ -897,6 +967,43 @@ export default function ConfessionPage() {
     onError: (error) => notify(error.message, 'error')
   });
 
+  const update = useMutation({
+    mutationFn: ({ postId, changes }) => updateCommunityPost(auth.token, postId, changes),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['confession'] });
+      notify('Đã cập nhật bài viết.', 'success');
+    },
+    onError: (error) => notify(error.message, 'error')
+  });
+
+  const openEditPost = useCallback((post, event = null) => {
+    editOpenerRef.current = event?.currentTarget || document.activeElement;
+    setEditDraft({
+      title: post.title && post.title !== 'BDU Confession' ? post.title : '',
+      content: post.content || '',
+      isAnonymous: Boolean(post.is_anonymous ?? post.author?.is_anonymous)
+    });
+    setPostMenuId(null);
+    setEditPostId(post.id);
+  }, []);
+
+  const submitEditPost = () => {
+    if (editPostId === null) return;
+    const content = editDraft.content.trim();
+    if (!content) {
+      notify('Vui lòng nhập nội dung bài viết.', 'warning');
+      return;
+    }
+    update.mutate({
+      postId: editPostId,
+      changes: {
+        title: editDraft.title.trim() || 'BDU Confession',
+        content,
+        isAnonymous: editDraft.isAnonymous
+      }
+    }, { onSuccess: () => setEditPostId(null) });
+  };
+
   const rawPosts = useMemo(() => postsFrom(query.data), [query.data]);
   const posts = useMemo(() => {
     if (filter === 'mine') return rawPosts.filter((p) => Boolean(p.is_mine));
@@ -966,9 +1073,15 @@ export default function ConfessionPage() {
   };
 
   // Menu "..." của bài viết đóng khi bấm ra ngoài, giống Facebook.
+  // Bỏ qua click phát sinh bên trong menu: cùng một cú click mở menu còn lan
+  // tới `document` sau khi React gắn listener, nếu không chặn sẽ đóng menu vừa
+  // mở (MutationObserver trong trình duyệt thật thấy menu-added rồi menu-removed).
   useEffect(() => {
     if (!postMenuId) return undefined;
-    const close = () => setPostMenuId(null);
+    const close = (event) => {
+      if (event.target instanceof Element && event.target.closest('.fbc-menu-wrap')) return;
+      setPostMenuId(null);
+    };
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, [postMenuId]);
@@ -976,6 +1089,15 @@ export default function ConfessionPage() {
   const openPost = openPostId === null
     ? null
     : posts.find((item) => String(item.id) === String(openPostId)) || null;
+
+  const editingPost = editPostId === null
+    ? null
+    : posts.find((item) => String(item.id) === String(editPostId))
+    || (openPost && String(openPost.id) === String(editPostId) ? openPost : null);
+  const editAuthor = editingPost ? postAvatarUser(editingPost, identityUser, presentation) : identityUser;
+  const editAuthorName = editDraft.isAnonymous
+    ? 'Sinh viên giấu tên (Confession)'
+    : (editingPost?.author?.name || displayName);
 
   // Popup bài viết khoá cuộn trang, trả focus về nút đã mở, đóng bằng Escape.
   useViewportDialog(openPost, closePostModal, postDialogRef, postCloseButtonRef, postOpenerRef);
@@ -1201,37 +1323,17 @@ export default function ConfessionPage() {
                       authorTitles={authorTitles}
                     >
                       <span className="fbc-scope-pill">{scopeLabel}</span>
-                      {post.is_mine && (
-                        <div className="fbc-menu-wrap">
-                          <button
-                            type="button"
-                            className={`fbc-icon-btn ${postMenuId === post.id ? 'is-open' : ''}`}
-                            onClick={() => setPostMenuId((current) => (current === post.id ? null : post.id))}
-                            title="Tuỳ chọn bài viết"
-                            aria-label="Tuỳ chọn bài viết"
-                            aria-expanded={postMenuId === post.id}
-                          >
-                            <DotsIcon size={18} />
-                          </button>
-                          {postMenuId === post.id && (
-                            <div className="fbc-menu" role="menu">
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="fbc-menu-item is-danger"
-                                onClick={() => {
-                                  setPostMenuId(null);
-                                  if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(post.id);
-                                }}
-                                disabled={remove.isPending}
-                              >
-                                <TrashIcon size={16} />
-                                Xóa bài viết
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <PostOptionsMenu
+                        post={post}
+                        open={postMenuId === post.id}
+                        onToggle={() => setPostMenuId((current) => (current === post.id ? null : post.id))}
+                        onEdit={(event) => openEditPost(post, event)}
+                        onDelete={() => {
+                          setPostMenuId(null);
+                          if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(post.id);
+                        }}
+                        pending={remove.isPending}
+                      />
                     </PostHeaderBlock>
 
                     <PostContent post={post} />
@@ -1265,6 +1367,19 @@ export default function ConfessionPage() {
             dialogRef={postDialogRef}
             closeButtonRef={postCloseButtonRef}
             composerInputRef={postComposerInputRef}
+            optionsMenu={(
+              <PostOptionsMenu
+                post={openPost}
+                open={postMenuId === openPost.id}
+                onToggle={() => setPostMenuId((current) => (current === openPost.id ? null : openPost.id))}
+                onEdit={(event) => openEditPost(openPost, event)}
+                onDelete={() => {
+                  setPostMenuId(null);
+                  if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(openPost.id);
+                }}
+                pending={remove.isPending}
+              />
+            )}
           />
         )}
 
@@ -1614,6 +1729,85 @@ export default function ConfessionPage() {
               disabled={create.isPending || !draft.content.trim()}
             >
               {create.isPending ? 'Đang đăng...' : 'Đăng'}
+            </button>
+          </div>
+        </ViewportModal>
+      )}
+
+      {/* Modal: Chỉnh sửa bài viết (tác giả hoặc quản trị viên) */}
+      {editPostId !== null && (
+        <ViewportModal id="modal-edit-confession" title="Chỉnh sửa bài viết" onClose={closeEditPost} dialogRef={editDialogRef} className="fb-composer-dialog">
+          <div className="fb-modal-header">
+            <h3 id="confession-editor-title" className="fb-modal-title">Chỉnh sửa bài viết</h3>
+            <button
+              ref={editCloseButtonRef}
+              type="button"
+              id="btn-close-cfs-edit-modal"
+              className="fb-modal-close-btn"
+              title="Đóng"
+              aria-label="Đóng hộp thoại chỉnh sửa bài viết"
+              onClick={closeEditPost}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="fb-modal-body">
+            <div className="fb-composer-author-row">
+              <div id="fb-modal-edit-avatar" className="fb-author-avatar">
+                {editDraft.isAnonymous ? '?' : <AvatarContent user={editAuthor} alt={`Ảnh của ${editAuthorName}`} />}
+              </div>
+              <div className="fb-author-info">
+                <div id="fb-modal-edit-author-name" className="fb-author-name">
+                  {editAuthorName}
+                </div>
+                <div className="fb-author-pills">
+                  <button
+                    type="button"
+                    id="fb-btn-edit-toggle-anon"
+                    className={`fb-pill-btn ${editDraft.isAnonymous ? 'active' : ''}`}
+                    onClick={() => setEditDraft((prev) => ({ ...prev, isAnonymous: !prev.isAnonymous }))}
+                    aria-pressed={editDraft.isAnonymous}
+                    title="Bật/Tắt chế độ Confession ẩn danh"
+                  >
+                    <span>Ẩn danh: {editDraft.isAnonymous ? 'Bật' : 'Tắt'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="fb-inputs-area">
+              <input
+                type="text"
+                id="cfs-edit-title"
+                className="fb-title-input"
+                maxLength={180}
+                placeholder="Tiêu đề bài viết (tùy chọn)..."
+                value={editDraft.title}
+                onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
+              />
+              <textarea
+                id="cfs-edit-content"
+                className="fb-content-textarea"
+                rows={4}
+                maxLength={10000}
+                placeholder="Nội dung bài viết..."
+                value={editDraft.content}
+                onChange={(e) => setEditDraft((prev) => ({ ...prev, content: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="fb-modal-footer">
+            <button
+              type="button"
+              id="btn-submit-cfs-edit"
+              className="btn btn-primary fb-submit-post-btn"
+              onClick={submitEditPost}
+              disabled={update.isPending || !editDraft.content.trim()}
+            >
+              {update.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
             </button>
           </div>
         </ViewportModal>
