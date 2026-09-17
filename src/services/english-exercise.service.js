@@ -297,7 +297,9 @@ async function runAutoFinishCourse(session, job, config) {
       try {
         const res = await session.client.visitActivity(act.type, act.cmid, job.controller.signal);
         itemsVisited++;
-        if (res.hvpScoreSent) {
+        if (res.scormCompleted || (act.type === 'scorm' && res.hvpScoreSent)) {
+          log(session, `  └─ ✅ [SCORM 100%] Đã nộp điểm 100% và hoàn thành bài "${act.title}".`, 'success');
+        } else if (res.hvpScoreSent) {
           log(session, `  └─ ✅ [HVP 100/100] Đã nộp điểm hoàn thành cho "${act.title}".`, 'success');
         } else if (res.manualCompleted) {
           log(session, `  └─ ✅ [CHECKED] Đã đánh dấu hoàn thành "${act.title}".`, 'success');
@@ -352,6 +354,131 @@ async function runAutoFinishAllCourses(session, job, config) {
   log(session, '🎉 ĐÃ HOÀN THÀNH DUYỆT & TỰ ĐỘNG HOÀN THÀNH TẤT CẢ KHÓA HỌC!', 'success');
 }
 
+export class EnglishExerciseQueueManager {
+  constructor(maxConcurrency = Math.max(1, Number(process.env.MAX_CONCURRENT_ENGLISH_JOBS) || 5)) {
+    this.maxConcurrency = maxConcurrency;
+    this.runningJobs = new Map();
+    this.waitingQueue = [];
+  }
+
+  get runningCount() {
+    return this.runningJobs.size;
+  }
+
+  get waitingCount() {
+    return this.waitingQueue.length;
+  }
+
+  getQueuePosition(jobId) {
+    const idx = this.waitingQueue.findIndex(j => j.id === jobId);
+    return idx >= 0 ? idx + 1 : 0;
+  }
+
+  enqueue(job) {
+    if (this.runningJobs.size < this.maxConcurrency) {
+      this._startJob(job);
+    } else {
+      job.status = 'queued';
+      this.waitingQueue.push(job);
+      const pos = this.waitingQueue.length;
+      log(
+        job.session,
+        `⏳ [HÀNG CHỜ] Hệ thống đang chạy tối đa ${this.maxConcurrency} luồng. Bạn đang ở vị trí #${pos} trong hàng chờ. Xin vui lòng chờ...`,
+        'warning'
+      );
+      this._notifyJobQueue(job, pos);
+    }
+  }
+
+  _notifyJobQueue(job, position) {
+    job.session.subscribers.forEach(response => send(response, {
+      type: 'queue_update',
+      status: job.status,
+      position,
+      totalWaiting: this.waitingQueue.length,
+      runningCount: this.runningJobs.size,
+      maxConcurrency: this.maxConcurrency
+    }));
+  }
+
+  _startJob(job) {
+    job.status = 'running';
+    this.runningJobs.set(job.id, job);
+
+    log(
+      job.session,
+      `🚀 [BẮT ĐẦU] Bắt đầu thực thi bài tập (Luồng ${this.runningJobs.size}/${this.maxConcurrency})...`,
+      'action'
+    );
+
+    this._notifyJobQueue(job, 0);
+
+    queueMicrotask(async () => {
+      try {
+        await job.runFn();
+      } catch (error) {
+        const stopped = error.code === 'CANCELLED' || error.name === 'CanceledError' || job.cancelled;
+        log(job.session, stopped ? 'Tiến trình đã dừng.' : `Lỗi: ${error.message}`, stopped ? 'warning' : 'error');
+        job.session.subscribers.forEach(response => send(response, {
+          type: stopped ? 'stopped' : 'error',
+          message: error.message
+        }));
+      } finally {
+        this.runningJobs.delete(job.id);
+        if (typeof job.onCleanup === 'function') {
+          job.onCleanup();
+        }
+        this._processNext();
+      }
+    });
+  }
+
+  _processNext() {
+    while (this.runningJobs.size < this.maxConcurrency && this.waitingQueue.length > 0) {
+      const nextJob = this.waitingQueue.shift();
+      this._broadcastWaitingPositions();
+      log(
+        nextJob.session,
+        `🟢 [ĐÃ ĐẾN LƯỢT] Đã đến lượt bạn! Bắt đầu tiến trình làm bài...`,
+        'action'
+      );
+      this._startJob(nextJob);
+    }
+  }
+
+  _broadcastWaitingPositions() {
+    this.waitingQueue.forEach((job, idx) => {
+      const pos = idx + 1;
+      this._notifyJobQueue(job, pos);
+      log(job.session, `⏳ [HÀNG CHỜ] Bạn hiện đã lên vị trí #${pos} trong hàng chờ. Xin vui lòng chờ...`, 'info');
+    });
+  }
+
+  cancel(jobId) {
+    const queueIdx = this.waitingQueue.findIndex(j => j.id === jobId);
+    if (queueIdx >= 0) {
+      const [removed] = this.waitingQueue.splice(queueIdx, 1);
+      removed.cancelled = true;
+      log(removed.session, `⏹️ Đã hủy tiến trình khỏi hàng chờ.`, 'warning');
+      removed.session.subscribers.forEach(response => send(response, { type: 'stopped' }));
+      if (typeof removed.onCleanup === 'function') removed.onCleanup();
+      this._broadcastWaitingPositions();
+      return true;
+    }
+
+    const running = this.runningJobs.get(jobId);
+    if (running) {
+      running.cancelled = true;
+      running.controller.abort();
+      return true;
+    }
+
+    return false;
+  }
+}
+
+export const englishExerciseQueue = new EnglishExerciseQueueManager();
+
 export const EnglishExerciseService = {
   async login({ username, password, courseId }) {
     if (!username || !password) {
@@ -403,9 +530,16 @@ export const EnglishExerciseService = {
 
   start(id, input) {
     const session = getSession(id);
-    if (session.job) throw Object.assign(new Error('Đang có một bài tập được xử lý.'), { status: 409 });
+    if (session.job) throw Object.assign(new Error('Đang có một bài tập được xử lý hoặc đang chờ trong hàng.'), { status: 409 });
     if (!input.cmid) throw Object.assign(new Error('Vui lòng chọn một bài tập.'), { status: 400 });
-    const job = { id: crypto.randomUUID(), cancelled: false, controller: new AbortController() };
+    const job = {
+      id: crypto.randomUUID(),
+      sessionId: id,
+      session,
+      cancelled: false,
+      controller: new AbortController(),
+      status: 'pending'
+    };
     session.job = job;
     const config = {
       cmid: String(input.cmid),
@@ -413,8 +547,10 @@ export const EnglishExerciseService = {
       delaySeconds: Math.min(10, Math.max(0, Number(input.delaySeconds) || 0)),
       autoSubmit: input.autoSubmit === true
     };
-    queueMicrotask(async () => {
-      try {
+
+    englishExerciseQueue.enqueue({
+      ...job,
+      runFn: async () => {
         if (config.type === 'quiz') {
           log(session, `🚀 Bắt đầu xử lý bài Quiz #${config.cmid}...`, 'action');
           const result = await runQuiz(session, job, config);
@@ -422,7 +558,9 @@ export const EnglishExerciseService = {
         } else {
           log(session, `⚡ Đang xử lý hoạt động [${config.type.toUpperCase()}] #${config.cmid}...`, 'action');
           const res = await session.client.visitActivity(config.type, config.cmid, job.controller.signal);
-          if (res.hvpScoreSent) {
+          if (res.scormCompleted || (config.type === 'scorm' && res.hvpScoreSent)) {
+            log(session, `✅ Đã nộp điểm 100% & hoàn thành trọn vẹn bài [SCORM] #${config.cmid}!`, 'success');
+          } else if (res.hvpScoreSent) {
             log(session, `✅ Đã nộp điểm 100/100 thành công cho bài [HVP] #${config.cmid}!`, 'success');
           } else if (res.manualCompleted) {
             log(session, `✅ Đã đánh dấu hoàn thành cho hoạt động [${config.type.toUpperCase()}] #${config.cmid}!`, 'success');
@@ -442,24 +580,26 @@ export const EnglishExerciseService = {
 
           session.subscribers.forEach(response => send(response, { type: 'done', result: { visited: true, cmid: config.cmid, type: config.type } }));
         }
-      } catch (error) {
-        const stopped = error.code === 'CANCELLED' || error.name === 'CanceledError';
-        log(session, stopped ? 'Tiến trình đã dừng.' : `Lỗi: ${error.message}`, stopped ? 'warning' : 'error');
-        session.subscribers.forEach(response => send(response, {
-          type: stopped ? 'stopped' : 'error',
-          message: error.message
-        }));
-      } finally {
+      },
+      onCleanup: () => {
         if (session.job === job) session.job = null;
       }
     });
+
     return { jobId: job.id };
   },
 
   startFinish(id, input) {
     const session = getSession(id);
-    if (session.job) throw Object.assign(new Error('Đang có một tiến trình bài tập đang chạy.'), { status: 409 });
-    const job = { id: crypto.randomUUID(), cancelled: false, controller: new AbortController() };
+    if (session.job) throw Object.assign(new Error('Đang có một tiến trình bài tập đang chạy hoặc đang chờ trong hàng.'), { status: 409 });
+    const job = {
+      id: crypto.randomUUID(),
+      sessionId: id,
+      session,
+      cancelled: false,
+      controller: new AbortController(),
+      status: 'pending'
+    };
     session.job = job;
     const config = {
       courseId: input.courseId ? String(input.courseId) : null,
@@ -468,8 +608,9 @@ export const EnglishExerciseService = {
       autoSubmit: input.autoSubmit !== false
     };
 
-    queueMicrotask(async () => {
-      try {
+    englishExerciseQueue.enqueue({
+      ...job,
+      runFn: async () => {
         if (config.allCourses) {
           await runAutoFinishAllCourses(session, job, config);
         } else if (config.courseId) {
@@ -478,34 +619,29 @@ export const EnglishExerciseService = {
           throw new Error('Vui lòng chọn một khóa học hoặc chọn duyệt tất cả khóa học.');
         }
         session.subscribers.forEach(response => send(response, { type: 'done' }));
-      } catch (error) {
-        const stopped = error.code === 'CANCELLED' || error.name === 'CanceledError';
-        log(session, stopped ? 'Tiến trình đã dừng.' : `Lỗi: ${error.message}`, stopped ? 'warning' : 'error');
-        session.subscribers.forEach(response => send(response, {
-          type: stopped ? 'stopped' : 'error',
-          message: error.message
-        }));
-      } finally {
+      },
+      onCleanup: () => {
         if (session.job === job) session.job = null;
       }
     });
+
     return { jobId: job.id };
   },
 
   stop(id) {
     const session = getSession(id);
     if (!session.job) return false;
-    session.job.cancelled = true;
-    session.job.controller.abort();
-    return true;
+    const ok = englishExerciseQueue.cancel(session.job.id);
+    session.job = null;
+    return ok;
   },
 
   close(id) {
     const session = sessions.get(id);
     if (!session) return false;
     if (session.job) {
-      session.job.cancelled = true;
-      session.job.controller.abort();
+      englishExerciseQueue.cancel(session.job.id);
+      session.job = null;
     }
     session.subscribers.forEach(response => response.end());
     sessions.delete(id);
@@ -516,7 +652,16 @@ export const EnglishExerciseService = {
     const session = getSession(id);
     session.subscribers.add(response);
     session.logs.forEach(entry => send(response, { type: 'log', ...entry }));
-    send(response, { type: 'ready', running: Boolean(session.job) });
+    const position = session.job ? englishExerciseQueue.getQueuePosition(session.job.id) : 0;
+    send(response, {
+      type: 'ready',
+      running: Boolean(session.job && position === 0),
+      queued: Boolean(session.job && position > 0),
+      position,
+      totalWaiting: englishExerciseQueue.waitingCount,
+      runningCount: englishExerciseQueue.runningCount,
+      maxConcurrency: englishExerciseQueue.maxConcurrency
+    });
     return () => session.subscribers.delete(response);
   },
 
@@ -537,7 +682,7 @@ export const EnglishExerciseService = {
   }
 };
 
-export const EnglishExerciseInternals = { runQuiz };
+export const EnglishExerciseInternals = { runQuiz, EnglishExerciseQueueManager, englishExerciseQueue };
 
 setInterval(() => {
   const now = Date.now();

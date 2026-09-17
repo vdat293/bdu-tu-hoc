@@ -214,19 +214,25 @@ export class MoodleClient {
       const scormid = aMatch ? aMatch[1] : '';
       if (!scormid) return false;
 
-      const attemptMatch = scripts.match(/attempt=(\d+)/);
-      const currentAttempt = attemptMatch ? attemptMatch[1] : '1';
+      const attMatch = scripts.match(/"\d+",\s*"(\d+)",\s*"normal"/) || scripts.match(/attempt=(\d+)/);
+      const currentAttempt = attMatch ? attMatch[1] : '1';
 
-      const sesskey = await this.getSesskey(signal);
+      const sMatch = scripts.match(/"([a-zA-Z0-9]{10})",\s*"\d+"/);
+      const sesskey = sMatch ? sMatch[1] : await this.getSesskey(signal);
       if (!sesskey) return false;
 
-      const numericScoid = Number(scoid);
-      const targetScoids = Array.from(new Set([numericScoid, numericScoid - 1, numericScoid + 1].filter(s => s > 0)));
-      const attemptsToTry = Array.from(new Set(['1', String(currentAttempt)]));
+      const scoMatches = scripts.match(/"(\d+)":\{"cmi\./g);
+      const allScoids = Array.from(new Set([
+        scoid,
+        ...(scoMatches ? scoMatches.map(m => m.match(/\d+/)[0]) : []),
+        String(Number(scoid) - 1),
+        String(Number(scoid) + 1)
+      ].filter(s => Number(s) > 0)));
 
+      const attemptsToTry = Array.from(new Set(['1', String(currentAttempt)]));
       let success = false;
 
-      for (const s of targetScoids) {
+      for (const s of allScoids) {
         for (const att of attemptsToTry) {
           const dmParams = new URLSearchParams({
             id: String(cmid),
@@ -235,35 +241,50 @@ export class MoodleClient {
             attempt: att,
             mode: 'normal',
             sesskey,
-            // SCORM 1.2
-            cmi_core_lesson_status: 'passed',
-            cmi_core_score_raw: '100',
-            cmi_core_score_min: '0',
-            cmi_core_score_max: '100',
-            cmi_core_session_time: '00:05:00',
-            cmi_core_total_time: '00:05:00',
-            cmi_core_lesson_location: '1',
-            cmi_core_exit: 'suspend',
-            'cmi.core.lesson_status': 'passed',
-            'cmi.core.score.raw': '100',
-            'cmi.core.score.min': '0',
-            'cmi.core.score.max': '100',
-            // SCORM 2004
+
+            // SCORM 2004 with Moodle double-underscore notation (critical for PHP parsing)
+            cmi__completion_status: 'completed',
+            cmi__success_status: 'passed',
+            cmi__score__raw: '100',
+            cmi__score__min: '0',
+            cmi__score__max: '100',
+            cmi__score__scaled: '1',
+            cmi__session_time: 'PT0H5M0S',
+            cmi__total_time: 'PT5M',
+            cmi__exit: 'normal',
+
+            // SCORM 1.2 with Moodle double-underscore notation
+            cmi__core__lesson_status: 'passed',
+            cmi__core__score__raw: '100',
+            cmi__core__score__min: '0',
+            cmi__core__score__max: '100',
+            cmi__core__session_time: '00:05:00',
+            cmi__core__total_time: '00:05:00',
+            cmi__core__exit: 'normal',
+
+            // Fallback flat and dot notations
             cmi_completion_status: 'completed',
             cmi_success_status: 'passed',
             cmi_score_raw: '100',
             cmi_score_min: '0',
             cmi_score_max: '100',
             cmi_score_scaled: '1.0',
-            cmi_progress_measure: '1.0',
             cmi_session_time: 'PT5M',
             cmi_total_time: 'PT5M',
-            cmi_exit: 'suspend',
-            cmi_location: '1',
+            cmi_exit: 'normal',
+            cmi_core_lesson_status: 'passed',
+            cmi_core_score_raw: '100',
+            cmi_core_score_min: '0',
+            cmi_core_score_max: '100',
+            cmi_core_session_time: '00:05:00',
+            cmi_core_total_time: '00:05:00',
+            cmi_core_exit: 'normal',
             'cmi.completion_status': 'completed',
             'cmi.success_status': 'passed',
             'cmi.score.raw': '100',
-            'cmi.score.scaled': '1.0'
+            'cmi.score.scaled': '1.0',
+            'cmi.core.lesson_status': 'passed',
+            'cmi.core.score.raw': '100'
           });
 
           const dmRes = await this.request('/mod/scorm/datamodel.php', {
@@ -277,7 +298,7 @@ export class MoodleClient {
             success = true;
           }
 
-          // Trigger prereqs update
+          // Trigger prereqs update to evaluate tracks and persist grade
           try {
             await this.request(
               `/mod/scorm/prereqs.php?a=${scormid}&scoid=${s}&attempt=${att}&mode=normal&currentorg=${encodeURIComponent(currentorg)}&sesskey=${sesskey}`,
@@ -304,13 +325,17 @@ export class MoodleClient {
     const $ = cheerio.load(response.data);
 
     let hvpScoreSent = false;
+    let scormCompleted = false;
     let manualCompleted = false;
 
     // If it's a SCORM module, execute SCORM completion API flow
     if (type === 'scorm') {
       try {
         const scormOk = await this.markScormCompleted(cmid, signal);
-        if (scormOk) hvpScoreSent = true;
+        if (scormOk) {
+          scormCompleted = true;
+          hvpScoreSent = true;
+        }
       } catch {}
     }
 
@@ -371,6 +396,7 @@ export class MoodleClient {
     }
 
     return {
+      scormCompleted,
       hvpScoreSent,
       manualCompleted,
       title: $('h1, .page-header-headings').first().text().trim(),

@@ -27,6 +27,7 @@ export default function EnglishPage() {
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [queueInfo, setQueueInfo] = useState({ queued: false, position: 0, totalWaiting: 0, runningCount: 0 });
 
   const [log, setLog] = useState([
     { time: new Date().toLocaleTimeString(), text: 'Sẵn sàng kết nối Moodle (bdu.vn247.org).', type: 'info' }
@@ -69,17 +70,43 @@ export default function EnglishPage() {
             ]);
           } else if (data.type === 'courses_updated' && Array.isArray(data.courses)) {
             setCourses(data.courses);
+          } else if (data.type === 'ready') {
+            if (data.running) {
+              setIsRunning(true);
+            }
+            if (data.queued && data.position > 0) {
+              setIsRunning(true);
+              setQueueInfo({ queued: true, position: data.position, totalWaiting: data.totalWaiting || 0, runningCount: data.runningCount || 0 });
+            } else {
+              setQueueInfo({ queued: false, position: 0, totalWaiting: data.totalWaiting || 0, runningCount: data.runningCount || 0 });
+            }
+          } else if (data.type === 'queue_update') {
+            if (data.status === 'queued') {
+              setIsRunning(true);
+              setQueueInfo({
+                queued: true,
+                position: data.position,
+                totalWaiting: data.totalWaiting,
+                runningCount: data.runningCount
+              });
+            } else if (data.status === 'running') {
+              setIsRunning(true);
+              setQueueInfo({ queued: false, position: 0, totalWaiting: data.totalWaiting, runningCount: data.runningCount });
+            }
           } else if (data.type === 'done') {
             setIsRunning(false);
             setBusy(false);
+            setQueueInfo({ queued: false, position: 0, totalWaiting: 0, runningCount: 0 });
             notify('Đã hoàn thành tiến trình làm bài!', 'success');
           } else if (data.type === 'stopped') {
             setIsRunning(false);
             setBusy(false);
+            setQueueInfo({ queued: false, position: 0, totalWaiting: 0, runningCount: 0 });
             notify('Đã dừng tiến trình.', 'warning');
           } else if (data.type === 'error') {
             setIsRunning(false);
             setBusy(false);
+            setQueueInfo({ queued: false, position: 0, totalWaiting: 0, runningCount: 0 });
             notify(`Lỗi: ${data.message}`, 'error');
           }
         } catch {}
@@ -759,11 +786,39 @@ export default function EnglishPage() {
                       }}
                       onClick={handleStopExercise}
                     >
-                      ⏹ Dừng tiến trình
+                      {queueInfo.queued ? '⏹ Hủy hàng chờ' : '⏹ Dừng tiến trình'}
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Queue Status Banner if in waiting queue */}
+              {queueInfo.queued && (
+                <div
+                  style={{
+                    marginBottom: '16px',
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '20px' }}>⏳</span>
+                    <span>
+                      Bạn đang ở vị trí <strong>#{queueInfo.position}</strong> trong hàng chờ ({queueInfo.runningCount}/5 luồng đang chạy). Hệ thống sẽ tự động bắt đầu khi đến lượt!
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '12px', opacity: 0.85, whiteSpace: 'nowrap' }}>Vui lòng giữ trang mở</span>
+                </div>
+              )}
 
               {/* Terminal Log Card */}
               <div className="terminal-card glass-panel english-terminal-card" style={{ borderRadius: '16px', overflow: 'hidden' }}>
