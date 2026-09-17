@@ -51,6 +51,9 @@ app.use('/media/avatars', express.static(avatarStorageDir, {
   dotfiles: 'deny',
   immutable: true,
   maxAge: '1y',
+  // 301 của serve-static là redirect cacheable, CDN phía trước có thể nhân bản
+  // thành vòng lặp với người dùng thật — luôn tắt redirect ở mọi mount tĩnh.
+  redirect: false,
   setHeaders(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
   }
@@ -60,6 +63,7 @@ app.use('/media/fb-import', express.static(fbImportMediaDir, {
   dotfiles: 'deny',
   immutable: true,
   maxAge: '30d',
+  redirect: false,
   setHeaders(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
   }
@@ -70,12 +74,12 @@ app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
   immutable: true,
   maxAge: '1y',
   fallthrough: false,
+  redirect: false,
   setHeaders(res) {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('X-Content-Type-Options', 'nosniff');
   }
 }));
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // Giải trí is a separate site, not a portal sidebar route. The portal only
 // links to this entry point; the wildcard keeps room/challenge deep links
@@ -83,6 +87,9 @@ app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 const gamesSiteDir = path.join(__dirname, 'public', 'games');
 app.use('/games', express.static(gamesSiteDir, {
   index: false,
+  // Không để serve-static tự 301 `/games` → `/games/`: mỗi vòng redirect là một
+  // cơ hội để proxy/CDN phía trước lặp chuyển hướng với người dùng thật.
+  redirect: false,
   fallthrough: true,
   setHeaders(res) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -105,6 +112,7 @@ app.get(['/admin-tool', '/admin-tool/'], (req, res) => {
 const adminSiteDir = path.join(__dirname, 'public', 'admin');
 app.use('/admin', express.static(adminSiteDir, {
   index: false,
+  redirect: false,
   fallthrough: true,
   setHeaders(res) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -116,6 +124,12 @@ app.get(['/admin', '/admin/', '/admin/*'], (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(adminSiteDir, 'index.html'));
 });
+
+// Mount public chung phải đứng SAU các mount chuyên biệt (/games, /admin,
+// /admin-tool, media). Nếu đứng trước, serve-static sẽ tự 301 `/games` →
+// `/games/` trước khi handler riêng kịp chạy; 301 là redirect cacheable nên
+// proxy/CDN phía trước có thể nhân bản và lặp vô hạn với người dùng thật.
+app.use(express.static(path.join(__dirname, 'public'), { index: false, redirect: false }));
 
 // Mount API routes
 app.use('/api', apiRoutes);

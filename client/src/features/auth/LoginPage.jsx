@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useToasts } from '../../app/providers.jsx';
-import { isInternalReturnTo } from './session.js';
+import { goToReturnTo, isInternalReturnTo } from './session.js';
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -20,9 +20,11 @@ export default function LoginPage() {
     ? location.state.returnTo
     : isInternalReturnTo(queryReturnTo) ? queryReturnTo : '/gpa';
 
+  const handleReturnTo = useCallback((target) => goToReturnTo(target, navigate), [navigate]);
+
   useEffect(() => {
-    if (auth.status === 'authenticated') navigate(returnTo, { replace: true });
-  }, [auth.status, navigate, returnTo]);
+    if (auth.status === 'authenticated') handleReturnTo(returnTo);
+  }, [auth.status, handleReturnTo, returnTo]);
 
   async function submit(event) {
     event.preventDefault();
@@ -39,7 +41,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await auth.login(trimmedUsername, password, remember);
-      navigate(returnTo, { replace: true });
+      handleReturnTo(returnTo);
     } catch (error) {
       const message = loginErrorMessage(error);
       setLoginError(message);

@@ -54,5 +54,41 @@ export function clearStoredSession() {
 }
 
 export function isInternalReturnTo(value) {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\');
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return false;
+  // Ký tự điều khiển (tab/newline) bị URL parser loại bỏ, nên `/\t/evil.example`
+  // sẽ phân giải thành `https://evil.example` — chặn thẳng trước khi so khớp.
+  const hasControlChar = Array.from(value).some((char) => {
+    const code = char.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+  if (hasControlChar) return false;
+  const path = value.split(/[?#]/, 1)[0];
+  if (path === '/login' || path.startsWith('/login/')) return false;
+  // Chốt cuối: sau khi phân giải theo origin hiện tại, đích phải vẫn cùng origin.
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    try {
+      if (new URL(value, window.location.origin).origin !== window.location.origin) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+// /games, /admin và /admin-tool là site tĩnh riêng, không nằm trong router của
+// portal. Điều hướng bằng router sẽ rơi vào trang 404 của cổng sinh viên, nên
+// các đường dẫn này phải được tải lại toàn trang.
+export function isStandaloneReturnTo(target) {
+  const path = String(target).split(/[?#]/, 1)[0];
+  return path === '/games' || path.startsWith('/games/')
+    || path === '/admin' || path.startsWith('/admin/')
+    || path === '/admin-tool' || path.startsWith('/admin-tool/');
+}
+
+export function goToReturnTo(target, navigate, hardNavigate = (url) => window.location.assign(url)) {
+  if (isStandaloneReturnTo(target)) {
+    hardNavigate(target);
+    return;
+  }
+  navigate(target, { replace: true });
 }

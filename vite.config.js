@@ -27,6 +27,7 @@ export default defineConfig({
       '/media': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/assets': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/css': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/games': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/admin-tool': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/admin': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/ws': { target: 'ws://127.0.0.1:3000', ws: true, changeOrigin: false }
