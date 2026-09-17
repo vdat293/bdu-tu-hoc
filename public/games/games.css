@@ -161,10 +161,15 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .board.chess .cell { background: #efd5a5; }
 .board.chess .cell.dark { background: #ae7f60; }
 .board.connect4 .cell { border-radius: 50%; background: #292d80; }
-.piece { position: relative; z-index: 1; display: grid; width: 77%; height: 77%; place-items: center; border-radius: 50%; color: #f5eee6; background: #29242e; font-size: clamp(7px,2.5vw,25px); font-weight: 800; line-height: 1; }
+/* `.piece` luôn tồn tại trong mọi ô (kể cả ô trống) nên mặc định phải trong suốt;
+   chỉ những ô thật sự có quân mới được tô màu. Trước đây mọi ô cờ vây / Connect 4
+   đều hiện một đĩa đen vì thiếu điều kiện này. */
+.piece { position: relative; z-index: 1; display: grid; width: 77%; height: 77%; place-items: center; border-radius: 50%; color: transparent; background: transparent; font-size: clamp(7px,2.5vw,25px); font-weight: 800; line-height: 1; }
 .board.chess .piece { width: 100%; height: 100%; border-radius: 0; color: #1e1d24; background: transparent; font-size: clamp(16px,5vw,48px); text-shadow: 0 2px rgba(255,255,255,.55); }
-.board.connect4 .piece { width: 72%; height: 72%; font-size: 0; background: #ee5169; }
-.board.connect4 .cell:nth-child(3n) .piece { background: #f5c957; }
+.board.go .piece { display: none; width: 76%; height: 76%; font-size: 0; }
+.board.go .cell.one .piece, .board.go .cell.two .piece { display: grid; }
+.board.connect4 .piece { display: none; width: 72%; height: 72%; font-size: 0; }
+.board.connect4 .cell.one .piece, .board.connect4 .cell.two .piece { display: grid; }
 .board-note { margin: 9px 0 0; color: var(--muted); font-size: 9px; text-align: center; }
 .side-panel { display: grid; gap: 12px; }
 .side-card { padding: 16px; }
@@ -539,13 +544,14 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   pointer-events: none;
 }
 .board-stage .board.connect4 .cell { border: 0; }
-.board-stage .board.connect4 .piece { width: 72%; height: 72%; }
-.board-stage .board.caro .piece { width: 100%; height: 100%; border-radius: 0; color: #2563eb; background: transparent; font-size: clamp(16px, 3vw, 31px); text-shadow: none; }
-.board-stage .board.caro .cell.two .piece { color: #dc2626; }
-.board-stage .board.go .piece { width: 76%; height: 76%; color: #1e293b; background: #334155; font-size: clamp(12px, 2.2vw, 22px); }
-.board-stage .board.go .cell.two .piece { color: #1e293b; background: #f8fafc; }
-.board-stage .board.connect4 .cell.one .piece { background: #2563eb; }
-.board-stage .board.connect4 .cell.two .piece { background: #dc2626; }
+.board-stage .board.connect4 .piece { width: 82%; height: 82%; }
+.board-stage .board.caro .piece { width: 100%; height: 100%; border-radius: 0; color: #2563eb; background: transparent; font-size: clamp(16px, 3vw, 31px); text-shadow: 0 2px 6px rgba(37,99,235,.22); }
+.board-stage .board.caro .cell.two .piece { color: #dc2626; text-shadow: 0 2px 6px rgba(220,38,38,.22); }
+.board-stage .board.go .piece { width: 76%; height: 76%; }
+.board-stage .board.go .cell.one .piece { background: radial-gradient(circle at 35% 28%, #5b6472, #111827 72%); box-shadow: 0 2px 5px rgba(0,0,0,.5), inset 0 -2px 4px rgba(0,0,0,.55); }
+.board-stage .board.go .cell.two .piece { background: radial-gradient(circle at 35% 28%, #ffffff, #d3dae3 74%); box-shadow: 0 2px 5px rgba(0,0,0,.32), inset 0 -2px 4px rgba(15,23,42,.2); }
+.board-stage .board.connect4 .cell.one .piece { background: radial-gradient(circle at 34% 28%, #8ec5ff, #2563eb 58%, #1e3a8a); box-shadow: inset 0 -4px 8px rgba(0,0,0,.32), 0 2px 6px rgba(37,99,235,.35); }
+.board-stage .board.connect4 .cell.two .piece { background: radial-gradient(circle at 34% 28%, #ffb8ad, #dc2626 58%, #7f1d1d); box-shadow: inset 0 -4px 8px rgba(0,0,0,.32), 0 2px 6px rgba(220,38,38,.3); }
 .board-note { padding: 0 12px; color: #64748b; }
 .side-panel { gap: 12px; }
 .side-card { padding: 17px; border-color: #dbeafe; border-radius: 14px; background: #fff; box-shadow: 0 8px 18px rgba(37,99,235,.05); }
@@ -1623,3 +1629,186 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 }
 
 
+/* ==========================================================================
+   UI/UX REFRESH v3 — chips, ghế đấu, bảng điều khiển, lịch sử nước đi
+   ========================================================================== */
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.button { min-height: 40px; border-radius: 12px; font-size: 12px; }
+.button-primary { background: linear-gradient(180deg, #3b82f6, #2563eb); box-shadow: 0 10px 20px rgba(37,99,235,.22); }
+.button-primary:hover:not(:disabled) { box-shadow: 0 16px 28px rgba(37,99,235,.3); }
+.button-secondary { background: #fff; }
+.button-danger { color: #b91c1c; border-color: #fecaca; background: #fff5f5; }
+.button-danger:hover:not(:disabled) { border-color: #dc2626; background: #fee2e2; }
+.button-resign { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.button-resign:hover:not(:disabled) { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
+
+/* --- Chips thông tin phòng --- */
+.chip { display: inline-flex; min-height: 24px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #dbeafe; border-radius: 999px; color: #1d4ed8; background: #f8fbff; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.chip-game { background: #eff6ff; }
+.chip-code { color: #1e3a8a; font-family: ui-monospace, monospace; }
+button.chip-code { cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+button.chip-code:hover { border-color: #2563eb; background: #dbeafe; }
+.chip-private { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.chip-public { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
+.chip-role { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
+
+/* --- Đầu trang phòng đấu --- */
+.room-head { align-items: center; padding: 18px 20px; }
+.room-head-main { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.room-game-badge { display: grid; width: 54px; height: 54px; flex: none; place-items: center; border-radius: 16px; color: #fff; background: linear-gradient(160deg, #3b82f6, #1d4ed8); font-size: 25px; box-shadow: 0 12px 22px rgba(37,99,235,.24); }
+.room-head-copy { min-width: 0; }
+.room-head-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.room-head h1 { margin: 0 0 4px; font-size: clamp(22px, 4vw, 33px); }
+.room-head p { color: #64748b; font-size: 11px; }
+.room-head-actions { align-items: center; }
+.room-head-actions .button { min-height: 38px; padding: 0 14px; }
+
+/* --- Ghế người chơi --- */
+.board-panel .seat { margin: 10px 12px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fbfe; }
+.board-panel .seat .seat-avatar { width: 38px; height: 38px; border-radius: 12px; font-size: 12px; }
+.seat-turn { border-color: #bfdbfe; background: linear-gradient(90deg, #eff6ff, #ffffff); box-shadow: inset 3px 0 0 #2563eb; }
+.seat-winner { border-color: #bbf7d0; background: #f0fdf4; }
+.seat-loser { opacity: .8; }
+.seat-empty { border-style: dashed; background: #fff; }
+.seat-avatar { position: relative; }
+.seat-live { position: absolute; right: -3px; bottom: -3px; display: none; width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; background: #22c55e; }
+.seat-turn .seat-live { display: block; animation: seatPulse 1.5s ease-out infinite; }
+@keyframes seatPulse {
+  0% { box-shadow: 0 0 0 0 rgba(37,99,235,.45); }
+  70% { box-shadow: 0 0 0 7px rgba(37,99,235,0); }
+  100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+}
+.seat-info { flex: 1; min-width: 0; }
+.seat-info small { display: flex; flex-wrap: wrap; gap: 3px 8px; }
+.seat-seat { color: #475569; font-weight: 700; }
+.seat-mssv { color: #94a3b8; font-family: ui-monospace, monospace; }
+.seat-piece { color: #2563eb; font-weight: 800; }
+.seat-state { color: #64748b; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.seat-state.is-turn { color: #2563eb; }
+.seat-score { min-width: 54px; padding: 5px 9px; border-radius: 9px; background: #f1f5f9; color: #94a3b8; font-size: 10px; font-weight: 900; text-align: center; }
+.seat-score.win { background: #dcfce7; color: #15803d; }
+.seat-score.loss { background: #fee2e2; color: #b91c1c; }
+.seat-score.draw { background: #e2e8f0; color: #475569; }
+
+/* --- Thanh trên bàn cờ --- */
+.room-top-bar { min-height: 46px; background: linear-gradient(90deg, #1d4ed8, #2563eb 55%, #3b82f6); }
+.room-top-game { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-top-game i { font-style: normal; opacity: .92; }
+.room-top-stats { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.top-chip { display: inline-flex; min-height: 25px; align-items: center; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 10px; font-weight: 800; }
+.top-chip strong { color: #fff; }
+
+/* --- Thẻ cột phải --- */
+.side-card { padding: 15px 16px; }
+.side-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+.side-card-head h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.side-count { min-width: 26px; padding: 2px 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: 900; text-align: center; }
+.side-card .section-head { margin-bottom: 10px; }
+.side-card.dark { background: linear-gradient(150deg, #1e3a8a, #1d4ed8); color: #fff; }
+.side-card.dark .eyebrow { color: #bfdbfe; }
+.side-card.dark h2 { color: #fff; }
+.side-card.dark p { color: #dbeafe; }
+.side-action { width: 100%; margin-top: 11px; }
+.player-list-empty { color: #94a3b8; }
+
+/* --- Lịch sử nước đi --- */
+.moves { display: grid; gap: 6px; max-height: 236px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.move-row { display: grid; grid-template-columns: 26px 24px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: #f8fbfe; font-size: 10px; }
+.move-row:last-child { background: #eff6ff; box-shadow: inset 0 0 0 1px #bfdbfe; }
+.move-no { color: #94a3b8; font-family: ui-monospace, monospace; font-weight: 800; }
+.move-actor { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 7px; background: #dbeafe; color: #1d4ed8; font-size: 9px; font-weight: 900; }
+.move-text { overflow: hidden; color: #1e293b; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.move-time { color: #94a3b8; font-size: 9px; }
+.moves-empty { color: #94a3b8; font-size: 10px; }
+
+/* --- Chỉ số sảnh chờ --- */
+.hero-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.hero-stat { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 12px; border: 1px solid #dbeafe; border-radius: 999px; background: #f8fbff; color: #64748b; font-size: 10px; font-weight: 800; }
+.hero-stat strong { color: #1d4ed8; font-size: 13px; }
+.filter span { margin-left: 4px; padding: 1px 6px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 9px; font-weight: 900; }
+.room-card-game { display: inline-flex; align-items: center; gap: 7px; }
+.room-card-game i { font-style: normal; }
+.room-seats { display: flex; align-items: center; gap: 5px; margin: 9px 0 2px; }
+.room-seat { width: 22px; height: 7px; border-radius: 999px; background: #e2e8f0; }
+.room-seat.filled { background: linear-gradient(90deg, #60a5fa, #2563eb); }
+.room-seats-label { margin-left: 4px; color: #64748b; font-size: 10px; font-weight: 700; }
+.room-expiry { color: #94a3b8; font-size: 9px; }
+.room-card--playing .room-card-top { color: #b45309; }
+
+/* --- Cờ vây: bàn gỗ, lưới rõ, quân tròn --- */
+.board-stage .board.go { background: linear-gradient(150deg, #ecd2a0, #dcb377 52%, #cb9a58); }
+.board-stage .board.go .cell::before { background: rgba(63,42,25,.45); }
+.board-stage .board.go .cell::after { background: rgba(63,42,25,.45); }
+.board-stage .board.go .cell.star-point::before { display: block; width: 100%; height: 1px; background: rgba(63,42,25,.45); }
+.board-stage .board.go .cell.star-point::after { display: block; width: 1px; height: 100%; background: rgba(63,42,25,.45); }
+.board-stage .board.go .cell.star-point { background-image: radial-gradient(circle, rgba(63,42,25,.8) 0 2.2px, transparent 2.6px); background-repeat: no-repeat; background-position: center; }
+.board-stage .board.go .cell:hover:not(:disabled) { background: rgba(255,255,255,.4); }
+.board-stage .board.go .cell.last-move::after { inset: 6%; width: auto; height: auto; border: 2px solid #2563eb; border-radius: 50%; background: transparent; box-shadow: 0 0 10px rgba(37,99,235,.45); }
+
+/* --- Connect 4: lỗ tròn + quân nổi --- */
+.board-stage .board.connect4 { padding: 10px; border-radius: 18px; background: linear-gradient(160deg, #3b60d1, #2743a8); box-shadow: inset 0 2px 0 rgba(255,255,255,.22), 0 16px 32px rgba(30,64,175,.25); }
+.board-stage .board.connect4 .cell { background: radial-gradient(circle at 50% 40%, #16225c, #233684 72%); box-shadow: inset 0 5px 9px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.16); }
+.board-stage .board.connect4 .cell:hover:not(:disabled) { background: radial-gradient(circle at 50% 40%, #1c2a70, #2b3f9c 72%); }
+.board-stage .board.connect4 .cell.last-move .piece { animation: connect4Drop .24s ease-out; }
+.board-stage .board.connect4 .cell.last-move::after { inset: 5%; width: auto; height: auto; border: 2px solid rgba(255,255,255,.75); border-radius: 50%; background: transparent; box-shadow: 0 0 12px rgba(255,255,255,.35); }
+@keyframes connect4Drop {
+  from { transform: translateY(-42%); opacity: .35; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* --- Cờ vua: ô chuẩn, quân đặc tô màu --- */
+.board-stage .board.chess { border-color: #4a3524; }
+.board-stage .board.chess .cell:not(.dark) { background: #f0d9b5; }
+.board-stage .board.chess .cell.dark { background: #b58863; }
+.board-stage .board.chess .piece { font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; font-size: clamp(18px, 5.4vw, 50px); line-height: 1; }
+/* Quân đen: silhouette đặc + đổ bóng. Quân trắng: viền đậm quanh glyph — dùng
+   chung một bộ glyph đặc nên hai màu luôn cùng hình dáng trên mọi hệ điều hành. */
+.board-stage .board.chess .cell .piece { color: #1f2937; -webkit-text-stroke: 0; text-shadow: 0 3px 6px rgba(0,0,0,.4); }
+.board-stage .board.chess .cell.piece-white .piece { color: #ffffff; -webkit-text-stroke: 1.3px #1f2937; text-shadow: 0 3px 6px rgba(0,0,0,.3); }
+.board-stage .board.chess .cell.selected .piece { transform: translateY(-2px) scale(1.04); }
+.board-stage .board.chess .cell.last-move { box-shadow: inset 0 0 0 3px rgba(37,99,235,.55); }
+
+/* --- Cờ caro: quân X/O đậm hơn --- */
+.board-stage .board.caro .cell { background: #fff; }
+.board-stage .board.caro .cell:hover:not(:disabled) { background: #eff6ff; }
+.board-stage .board.caro .piece { font-weight: 900; }
+
+@media (max-width: 940px) {
+  .room-head-actions { flex-wrap: wrap; }
+}
+
+@media (max-width: 650px) {
+  .room-head { display: block; padding: 15px; }
+  .room-head-main { align-items: flex-start; }
+  .room-game-badge { width: 44px; height: 44px; border-radius: 13px; font-size: 20px; }
+  .room-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; }
+  .room-head-actions .button { width: 100%; }
+  .board-panel .seat { margin: 8px; padding: 9px 10px; gap: 8px; }
+  .board-panel .seat .seat-avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 11px; }
+  .seat strong { max-width: 42vw; }
+  .seat-info small .seat-mssv { display: none; }
+  .seat-state { display: none; }
+  .seat-score { min-width: 46px; padding: 4px 7px; font-size: 9px; }
+  .board-stage { grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: 22px auto; width: 100%; }
+  .board-stage .board.caro, .board-stage .board.go, .board-stage .board.xiangqi { width: 100%; min-width: 0; justify-self: stretch; }
+  .board-coordinates--top { grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); width: 100%; }
+  .board-stage--caro .board-coordinates--top, .board-stage--go .board-coordinates--top, .board-stage--xiangqi .board-coordinates--top { width: 100%; justify-self: stretch; }
+  .board-coordinates--side { grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); }
+  .board-coordinates--top span, .board-coordinates--side span { font-size: 8px; }
+  .board-stage .board.chess { min-width: 0; }
+  .board-stage .board.connect4 { min-width: 0; padding: 7px; gap: 4px; }
+  .board-stage .board.go .piece, .board-stage .board.connect4 .piece { width: 78%; height: 78%; }
+  .hero-stats { gap: 6px; }
+  .hero-stat { padding: 5px 10px; }
+  .user-pill { max-width: 46vw; overflow: hidden; white-space: nowrap; }
+  .join-form button { white-space: nowrap; }
+  .brand-copy strong { font-size: 12px; line-height: 1.2; }
+  .brand-copy span { display: none; }
+  .move-row { grid-template-columns: 22px 20px minmax(0, 1fr) auto; }
+  .move-actor { width: 20px; height: 20px; }
+}

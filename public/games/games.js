@@ -1,13 +1,21 @@
 const GAMES = [
-  { id: 'caro', label: 'Cờ caro', icon: '✦', detail: 'Nối 5 ô liên tiếp' },
+  { id: 'caro', label: 'Cờ caro', icon: '✕', detail: 'Nối 5 ô liên tiếp' },
   { id: 'chess', label: 'Cờ vua', icon: '♞', detail: 'Luật cờ vua quốc tế' },
   { id: 'xiangqi', label: 'Cờ tướng', icon: '帥', detail: 'Bàn cờ 9 × 10' },
-  { id: 'go', label: 'Cờ vây', icon: '●', detail: 'Bàn cờ 9 × 9' },
+  { id: 'go', label: 'Cờ vây', icon: '○', detail: 'Bàn cờ 9 × 9' },
   { id: 'connect4', label: 'Connect 4', icon: '●', detail: 'Nối 4 quân cùng màu' }
 ];
 const GAME_MAP = Object.fromEntries(GAMES.map((game) => [game.id, game]));
-const CHESS = { br: '♜', bn: '♞', bb: '♝', bq: '♛', bk: '♚', bp: '♟', wr: '♖', wn: '♘', wb: '♗', wq: '♕', wk: '♔', wp: '♙' };
+// Cả hai màu dùng chung glyph đặc rồi tô màu bằng CSS: glyph rỗng (♙♖…) hiển
+// thị rất mảnh và lệch nét giữa các hệ điều hành, còn glyph đặc + viền giúp
+// quân trắng/đen đọc rõ trên cả ô sáng lẫn ô tối.
+const CHESS = { br: '♜', bn: '♞', bb: '♝', bq: '♛', bk: '♚', bp: '♟', wr: '♜', wn: '♞', wb: '♝', wq: '♛', wk: '♚', wp: '♟' };
 const XIANGQI = { br: '車', bn: '馬', bb: '象', ba: '士', bk: '將', bc: '砲', bp: '卒', rr: '俥', rn: '傌', rb: '相', ra: '仕', rk: '帥', rc: '炮', rp: '兵' };
+const PIECE_LABELS = {
+  chess: { br: 'Xe đen', bn: 'Mã đen', bb: 'Tượng đen', bq: 'Hậu đen', bk: 'Vua đen', bp: 'Tốt đen', wr: 'Xe trắng', wn: 'Mã trắng', wb: 'Tượng trắng', wq: 'Hậu trắng', wk: 'Vua trắng', wp: 'Tốt trắng' },
+  xiangqi: { br: 'Xe đen', bn: 'Mã đen', bb: 'Tượng đen', ba: 'Sĩ đen', bk: 'Tướng đen', bc: 'Pháo đen', bp: 'Tốt đen', rr: 'Xe đỏ', rn: 'Mã đỏ', rb: 'Tượng đỏ', ra: 'Sĩ đỏ', rk: 'Tướng đỏ', rc: 'Pháo đỏ', rp: 'Binh đỏ' }
+};
+const CHESS_FILES = 'abcdefgh';
 // Phải khớp REMATCH_TIMEOUT_SECONDS trong entertainment-game.service.js.
 const REMATCH_SECONDS = 12;
 
@@ -105,6 +113,61 @@ function dateTime(value) {
   if (!value) return 'chưa đặt';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function timeOnly(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function pieceLabel(value, gameId) {
+  if (value === null || value === undefined || value === '') return '';
+  if (gameId === 'chess' || gameId === 'xiangqi') return PIECE_LABELS[gameId]?.[value] || String(value);
+  if (gameId === 'go') return Number(value) === 1 ? 'Quân đen' : Number(value) === 2 ? 'Quân trắng' : '';
+  if (gameId === 'caro') return Number(value) === 1 ? 'Quân X' : Number(value) === 2 ? 'Quân O' : '';
+  if (gameId === 'connect4') return Number(value) === 1 ? 'Quân xanh' : Number(value) === 2 ? 'Quân đỏ' : '';
+  return String(value);
+}
+
+// Đổi toạ độ nội bộ (row/column) sang ký hiệu người chơi đọc được: cờ vua dùng
+// ô chuẩn e2/e4, các game lưới dùng hàng–cột. Nhờ vậy lịch sử nước đi không
+// còn hiện JSON thô.
+function squareLabel(point, gameId) {
+  if (!point || typeof point !== 'object') return '';
+  const row = Number(point.row);
+  const column = Number(point.column);
+  if (!Number.isInteger(row) || !Number.isInteger(column)) return '';
+  if (gameId === 'chess') return `${CHESS_FILES[column] || '?'}${8 - row}`;
+  return `H${row + 1}·C${column + 1}`;
+}
+
+function moveLabel(move, gameId) {
+  const entry = move?.move || move;
+  if (!entry || typeof entry !== 'object') return String(entry ?? '');
+  if (entry.resign === true) return 'Đầu hàng';
+  if (entry.pass === true) return 'Bỏ lượt';
+  if (gameId === 'connect4' && Number.isInteger(Number(entry.column))) return `Cột ${Number(entry.column) + 1}`;
+  if (entry.from && entry.to) return `${squareLabel(entry.from, gameId)} → ${squareLabel(entry.to, gameId)}`;
+  if (Number.isInteger(Number(entry.row)) && Number.isInteger(Number(entry.column))) {
+    return squareLabel(entry, gameId);
+  }
+  if (Number.isInteger(Number(entry.index))) return `Ô ${Number(entry.index) + 1}`;
+  return 'Nước đi';
+}
+
+function moveNotation(move, gameId) {
+  const notation = move?.state?.last_notation || move?.notation || move?.label;
+  return notation ? String(notation) : moveLabel(move, gameId);
+}
+
+function seatPieceTag(gameId, seat) {
+  const first = Number(seat) === 1;
+  if (gameId === 'chess') return first ? 'Quân trắng' : 'Quân đen';
+  if (gameId === 'xiangqi') return first ? 'Quân đỏ' : 'Quân đen';
+  if (gameId === 'go') return first ? 'Quân đen' : 'Quân trắng';
+  if (gameId === 'caro') return first ? 'Quân X' : 'Quân O';
+  if (gameId === 'connect4') return first ? 'Quân xanh' : 'Quân đỏ';
+  return '';
 }
 
 function statusMeta() {
@@ -237,11 +300,19 @@ function renderBoard(room) {
   const winningCells = state.winning_cells || [];
   const isWinningCell = (r, c) => winningCells.some(([wr, wc]) => wr === r && wc === c);
 
+  // Connect 4 chỉ đánh dấu đúng quân vừa thả (ô cao nhất còn quân trong cột),
+  // không tô cả cột khiến bàn cờ trông như đang lỗi.
+  const topFilledRow = (column) => {
+    for (let r = 0; r < rows; r += 1) if (board[r]?.[column]) return r;
+    return -1;
+  };
+  const lastColumn = Number(lastMove?.column);
+
   const cells = board.slice(0, rows).map((line, row) => Array.from({ length: columns }, (_, column) => {
     const value = line?.[column];
     const isSelected = ui.selected?.row === row && ui.selected?.column === column;
     const isLastMove = game.id === 'connect4'
-      ? Number(lastMove?.column) === column
+      ? (Number.isInteger(lastColumn) && lastColumn === column && value !== null && value !== undefined && row === topFilledRow(column))
       : (
           (Number(lastMove?.row) === row && Number(lastMove?.column) === column) ||
           (Number(lastMove?.to?.row) === row && Number(lastMove?.to?.column) === column)
@@ -292,7 +363,11 @@ function renderBoard(room) {
       }
     }
 
-    return `<button class="cell ${isCheckeredDark ? 'dark' : ''} ${isSelected ? 'selected' : ''} ${isLastMove ? 'last-move' : ''} ${isWin ? 'winning-cell' : ''} ${isStar && !value ? 'star-point' : ''} ${pieceColorClass} ${xqClass}" ${canPlay ? '' : 'disabled'} data-row="${row}" data-column="${column}" aria-label="${escapeHtml(game.label)}, hàng ${row + 1}, cột ${column + 1}${value ? `, quân ${escapeHtml(piece(value, game.id))}` : ', ô trống'}">${xqContent}<span class="piece">${escapeHtml(piece(value, game.id))}</span></button>`;
+    const squareName = game.id === 'chess'
+      ? `${CHESS_FILES[column] || '?'}${8 - row}`
+      : `hàng ${row + 1}, cột ${column + 1}`;
+    const pieceName = pieceLabel(value, game.id);
+    return `<button class="cell ${isCheckeredDark ? 'dark' : ''} ${isSelected ? 'selected' : ''} ${isLastMove ? 'last-move' : ''} ${isWin ? 'winning-cell' : ''} ${isStar && !value ? 'star-point' : ''} ${pieceColorClass} ${xqClass}" ${canPlay ? '' : 'disabled'} data-row="${row}" data-column="${column}" aria-label="${escapeHtml(game.label)}, ${squareName}${pieceName ? `, ${pieceName}` : ', ô trống'}">${xqContent}<span class="piece">${escapeHtml(piece(value, game.id))}</span></button>`;
   }).join('')).join('');
 
   const [label] = statusMeta();
@@ -626,10 +701,9 @@ function roomCard(room) {
     `;
 
   return `
-    <article class="room-card">
+    <article class="room-card room-card--${status}">
       <div class="room-card-top">
-        <span>${game.icon}</span>
-        <span>${game.label.toUpperCase()}</span>
+        <span class="room-card-game"><i aria-hidden="true">${game.icon}</i> ${game.label.toUpperCase()}</span>
         <span class="room-pill ${isPrivate ? 'pill-private' : 'pill-public'}">
           ${isPrivate ? '🔒 Riêng tư' : '🌐 Công khai'}
         </span>
@@ -640,9 +714,14 @@ function roomCard(room) {
           <h3>${escapeHtml(room.name || `Phòng ${game.label}`)}</h3>
           <span class="room-code">#${escapeHtml(ref)}</span>
         </div>
-        <p class="room-desc">${escapeHtml(game.detail)}${spectators ? ` · ${spectators} đang xem` : ''}</p>
+        <div class="room-seats" aria-label="${count}/2 người chơi">
+          <span class="room-seat ${count >= 1 ? 'filled' : ''}"></span>
+          <span class="room-seat ${count >= 2 ? 'filled' : ''}"></span>
+          <span class="room-seats-label">${count}/2 người chơi${spectators ? ` · ${spectators} khán giả` : ''}</span>
+        </div>
+        <p class="room-desc">${escapeHtml(game.detail)}</p>
         <div class="room-footer">
-          <span>${count}/2 người chơi</span>
+          <span class="room-expiry">Hết hạn ${dateTime(room.expires_at)}</span>
           ${actionButtons}
         </div>
       </div>
@@ -663,6 +742,13 @@ function lobbyHtml() {
     `;
   }
   const filtered = ui.rooms.filter((room) => ui.filter === 'all' || gameOf(room).id === ui.filter);
+  const stats = {
+    open: ui.rooms.filter((room) => roomStatus(room) !== 'finished' && roomStatus(room) !== 'expired').length,
+    playing: ui.rooms.filter((room) => roomStatus(room) === 'playing').length,
+    waiting: ui.rooms.filter((room) => roomStatus(room) === 'waiting').length,
+    spectators: ui.rooms.reduce((total, room) => total + Number(room.spectator_count || 0), 0)
+  };
+  const gameCounts = Object.fromEntries(GAMES.map((game) => [game.id, ui.rooms.filter((room) => gameOf(room).id === game.id).length]));
   return `
     <header class="hero">
       <div>
@@ -672,6 +758,11 @@ function lobbyHtml() {
         <div class="hero-actions">
           <button class="button button-primary" data-action="open-create">Mở phòng chơi ↗</button>
           <button class="button button-secondary" data-action="focus-join">Nhập mã phòng <span>⌘J</span></button>
+        </div>
+        <div class="hero-stats">
+          <span class="hero-stat"><strong>${stats.open}</strong> phòng đang mở</span>
+          <span class="hero-stat"><strong>${stats.playing}</strong> ván đang đấu</span>
+          <span class="hero-stat"><strong>${stats.spectators}</strong> khán giả</span>
         </div>
       </div>
       <div class="hero-art" aria-hidden="true">
@@ -700,7 +791,7 @@ function lobbyHtml() {
     </div>
     <div class="filters" role="tablist" aria-label="Lọc game">
       <button class="filter ${ui.filter === 'all' ? 'active' : ''}" data-filter="all">Tất cả <span>${ui.rooms.length}</span></button>
-      ${GAMES.map((game) => `<button class="filter ${ui.filter === game.id ? 'active' : ''}" data-filter="${game.id}">${game.icon} ${game.label}</button>`).join('')}
+      ${GAMES.map((game) => `<button class="filter ${ui.filter === game.id ? 'active' : ''}" data-filter="${game.id}">${game.icon} ${game.label} <span>${gameCounts[game.id] || 0}</span></button>`).join('')}
     </div>
     ${ui.loadError ? `
       <div class="error">
@@ -774,14 +865,68 @@ function renderRoom() {
 
   const moves = ui.moves.length ? ui.moves : (Array.isArray(state.moves) ? state.moves : []);
 
+  const renderSeat = (seat) => {
+    const player = (players || []).find((p) => Number(p.seat) === seat);
+    const fallbackName = seat === 2 && status === 'waiting' ? 'Đang chờ đối thủ…' : `Bàn ${seat}`;
+    const name = playerName(player, fallbackName);
+    const sub = player?.mssv && player.mssv !== name ? player.mssv : '';
+    const isTurn = !isFinished && status === 'playing' && Number(state.current_seat || state.turn) === seat;
+    const isWinner = winnerSeat === seat;
+    const isLoser = isFinished && winnerSeat && winnerSeat !== seat;
+    const stateText = isFinished
+      ? (isWinner ? 'Chiến thắng' : isLoser ? 'Thua cuộc' : 'Hòa ván')
+      : (isTurn ? 'Đang đi' : player ? 'Đang chờ' : 'Trống');
+    const scoreClass = isWinner ? 'win' : isLoser ? 'loss' : isFinished ? 'draw' : '';
+    const scoreText = isWinner ? 'THẮNG' : isLoser ? 'THUA' : isFinished ? 'HÒA' : '';
+    const missing = !player;
+    return `
+      <div class="seat ${isTurn ? 'seat-turn' : ''} ${isWinner ? 'seat-winner' : ''} ${isLoser ? 'seat-loser' : ''} ${missing ? 'seat-empty' : ''}">
+        <span class="seat-avatar ${seat === 2 ? 'alt' : ''}">${missing ? '?' : initials(name)}<i class="seat-live" aria-hidden="true"></i></span>
+        <div class="seat-info">
+          <strong>${escapeHtml(name)}</strong>
+          <small>
+            <span class="seat-seat">Bàn ${seat} · ${seat === 1 ? 'Chủ phòng' : 'Đối thủ'}</span>
+            ${sub ? `<span class="seat-mssv">${escapeHtml(sub)}</span>` : ''}
+            <span class="seat-piece">${seatPieceTag(game.id, seat)}</span>
+          </small>
+        </div>
+        <span class="seat-state ${isTurn ? 'is-turn' : ''}">${stateText}</span>
+        <span class="seat-score ${scoreClass}">${scoreText || '—'}</span>
+      </div>
+    `;
+  };
+
+  const recentMoves = moves.slice(-14);
+  const moveList = recentMoves.length ? recentMoves.map((move, index) => {
+    const number = Number(move.move_number) || (moves.length - recentMoves.length + index + 1);
+    const actor = (players || []).find((p) => String(p.mssv || '').toUpperCase() === String(move.actor_mssv || '').toUpperCase());
+    const actorName = actor ? playerName(actor) : '';
+    return `
+      <li class="move-row">
+        <span class="move-no">${String(number).padStart(2, '0')}</span>
+        <span class="move-actor" title="${escapeHtml(actorName || move.actor_mssv || '')}">${actorName ? initials(actorName) : '·'}</span>
+        <strong class="move-text">${escapeHtml(moveNotation(move, game.id))}</strong>
+        <small class="move-time">${timeOnly(move.created_at)}</small>
+      </li>
+    `;
+  }).join('') : '<li class="moves-empty">Chưa có nước đi nào.</li>';
+
   return `
     <div class="room-page">
       <button class="back-link" data-action="back-lobby">← Về lobby</button>
       <header class="room-head">
-        <div>
-          <span class="eyebrow">${game.label.toUpperCase()} · PHÒNG #${escapeHtml(roomRef(room))} · ${isPrivate ? '🔒 RIÊNG TƯ' : '🌐 CÔNG KHAI'}</span>
-          <h1>${escapeHtml(room.name || `Phòng ${game.label}`)}</h1>
-          <p>Mã phòng <strong>${escapeHtml(roomRef(room))}</strong> · ${ui.role === 'spectator' ? '👁️ Bạn đang xem realtime (Khán giả)' : '⚔️ Bạn đang tham gia ván đấu (Đấu thủ)'} · hết hạn ${dateTime(room.expires_at)}</p>
+        <div class="room-head-main">
+          <span class="room-game-badge" aria-hidden="true">${game.icon}</span>
+          <div class="room-head-copy">
+            <div class="room-head-meta">
+              <span class="chip chip-game">${escapeHtml(game.label)}</span>
+              <button type="button" class="chip chip-code" data-action="copy-room-code" data-code="${escapeHtml(roomRef(room))}" title="Sao chép mã phòng">#${escapeHtml(roomRef(room))} <span aria-hidden="true">⧉</span></button>
+              <span class="chip ${isPrivate ? 'chip-private' : 'chip-public'}">${isPrivate ? '🔒 Riêng tư' : '🌐 Công khai'}</span>
+              <span class="chip chip-role">${ui.role === 'spectator' ? '👁️ Khán giả' : '⚔️ Đấu thủ'}</span>
+            </div>
+            <h1>${escapeHtml(room.name || `Phòng ${game.label}`)}</h1>
+            <p>${isFinished ? 'Trận đấu đã kết thúc' : status === 'playing' ? 'Trận đấu đang diễn ra' : 'Đang chờ đối thủ vào phòng'} · hết hạn ${dateTime(room.expires_at)}</p>
+          </div>
         </div>
         <div class="room-head-actions">
           <button class="button button-primary" data-action="copy-opponent-link" data-url="${escapeHtml(urls.player)}">⚔️ Link đối thủ</button>
@@ -795,50 +940,17 @@ function renderRoom() {
       <div class="room-layout">
         <main class="board-panel">
           <div class="room-top-bar">
-            <span>Chế độ: 2 người chơi · ${ui.role === 'spectator' ? 'Khán giả xem trực tiếp' : 'Ván online'}</span>
-            <span>Nước đi: ${state.move_number || moves.length || 0}</span>
+            <span class="room-top-game"><i aria-hidden="true">${game.icon}</i> ${escapeHtml(game.label)} · ${ui.role === 'spectator' ? 'Khán giả xem trực tiếp' : 'Ván online'}</span>
+            <span class="room-top-stats">
+              ${Number(room.spectator_count || 0) > 0 ? `<span class="top-chip">👁️ ${Number(room.spectator_count || 0)}</span>` : ''}
+              <span class="top-chip top-chip--moves">Nước đi: <strong>${state.move_number || moves.length || 0}</strong></span>
+            </span>
           </div>
-          ${(() => {
-            const seat1Player = (players || []).find((p) => Number(p.seat) === 1);
-            const seat1Name = playerName(seat1Player, 'Bàn 1');
-            const seat1Sub = seat1Player?.mssv && seat1Player.mssv !== seat1Name ? `${seat1Player.mssv} · ` : '';
-            return `
-              <div class="seat ${winnerSeat === 1 ? 'seat-winner' : (isFinished && winnerSeat === 2 ? 'seat-loser' : '')}">
-                <div class="seat-info">
-                  <span class="seat-avatar">${initials(seat1Name)}</span>
-                  <span>
-                    <strong>${escapeHtml(seat1Name)}</strong>
-                    <small>${escapeHtml(seat1Sub)}Bàn 1 (Chủ phòng) · ${isFinished ? (winnerSeat === 1 ? '👑 Chiến thắng' : winnerSeat === 2 ? 'Thua cuộc' : 'Hòa ván') : (state.current_seat === 1 ? 'đang đi' : 'đã chờ')}</small>
-                  </span>
-                </div>
-                <span class="seat-score ${winnerSeat === 1 ? 'win' : (isFinished && winnerSeat === 2 ? 'loss' : (isFinished ? 'draw' : ''))}">
-                  ${winnerSeat === 1 ? 'THẮNG' : (isFinished && winnerSeat === 2 ? 'THUA' : (isFinished ? 'HÒA' : '—'))}
-                </span>
-              </div>
-            `;
-          })()}
+          ${renderSeat(1)}
 
           ${isWaitingOpponent ? renderWaitingOpponent(room) : renderBoard(room)}
 
-          ${(() => {
-            const seat2Player = (players || []).find((p) => Number(p.seat) === 2);
-            const seat2Name = playerName(seat2Player, status === 'waiting' ? 'Đang chờ đối thủ...' : 'Bàn 2');
-            const seat2Sub = seat2Player?.mssv && seat2Player.mssv !== seat2Name ? `${seat2Player.mssv} · ` : '';
-            return `
-              <div class="seat ${winnerSeat === 2 ? 'seat-winner' : (isFinished && winnerSeat === 1 ? 'seat-loser' : '')}">
-                <div class="seat-info">
-                  <span class="seat-avatar alt">${initials(seat2Name)}</span>
-                  <span>
-                    <strong>${escapeHtml(seat2Name)}</strong>
-                    <small>${escapeHtml(seat2Sub)}Bàn 2 (Đối thủ) · ${isFinished ? (winnerSeat === 2 ? '👑 Chiến thắng' : winnerSeat === 1 ? 'Thua cuộc' : 'Hòa ván') : (state.current_seat === 2 ? 'đang đi' : 'đã chờ')}</small>
-                  </span>
-                </div>
-                <span class="seat-score ${winnerSeat === 2 ? 'win' : (isFinished && winnerSeat === 1 ? 'loss' : (isFinished ? 'draw' : ''))}">
-                  ${winnerSeat === 2 ? 'THẮNG' : (isFinished && winnerSeat === 1 ? 'THUA' : (isFinished ? 'HÒA' : '—'))}
-                </span>
-              </div>
-            `;
-          })()}
+          ${renderSeat(2)}
 
           ${game.id === 'go' && ui.role === 'player' && status === 'playing' ? '<button class="button button-secondary board-pass" data-action="pass-go">Bỏ lượt (cờ vây)</button>' : ''}
         </main>
@@ -850,9 +962,9 @@ function renderRoom() {
             <p>${ui.role === 'spectator' ? 'Bạn đang ở chế độ khán giả. Mọi người trong phòng đều thấy cùng một snapshot.' : 'Mỗi nước đi được máy chủ kiểm tra rồi phát tới người chơi và khán giả.'}</p>
           </section>
           <section class="side-card">
-            <div class="section-head">
+            <div class="side-card-head">
               <h2>Trong phòng</h2>
-              <span>${players.length}/2 người chơi</span>
+              <span class="side-count">${players.length}/2</span>
             </div>
             <ul class="player-list">
               ${players.map((player) => {
@@ -868,30 +980,24 @@ function renderRoom() {
                     <i class="dot"></i>
                   </li>
                 `;
-              }).join('') || '<li>Đang chờ snapshot người chơi.</li>'}
+              }).join('') || '<li class="player-list-empty">Đang chờ snapshot người chơi.</li>'}
             </ul>
           </section>
           <section class="side-card">
-            <div class="section-head">
+            <div class="side-card-head">
               <h2>Lịch sử nước đi</h2>
-              <span>${state.move_number || moves.length || 0}</span>
+              <span class="side-count">${state.move_number || moves.length || 0}</span>
             </div>
-            <div class="moves">
-              ${moves.slice(-10).map((move, index) => `
-                <div>
-                  <span>${String(index + 1).padStart(2, '0')}</span>
-                  <strong>${escapeHtml(move.notation || move.label || JSON.stringify(move.move || move))}</strong>
-                  <small>${dateTime(move.created_at)}</small>
-                </div>
-              `).join('') || '<p>Chưa có nước đi nào.</p>'}
-            </div>
+            <ol class="moves" id="moves-list">${moveList}</ol>
           </section>
           <section class="side-card">
-            <span class="eyebrow">SPECTATOR MODE</span>
-            <h2>${Number(room.spectator_count || 0)} người đang xem</h2>
+            <div class="side-card-head">
+              <h2>Khán giả</h2>
+              <span class="side-count">${Number(room.spectator_count || 0)}</span>
+            </div>
             <p>${isPrivate ? 'Phòng riêng tư: Không cho phép khán giả bên ngoài xem.' : 'Link khán giả cho phép người ngoài theo dõi realtime nhưng không thể thao tác.'}</p>
             ${!isPrivate ? `
-              <button class="button button-secondary" data-action="copy-spectator-link" data-url="${escapeHtml(urls.spectator)}">Sao chép link khán giả</button>
+              <button class="button button-secondary side-action" data-action="copy-spectator-link" data-url="${escapeHtml(urls.spectator)}">Sao chép link khán giả</button>
             ` : ''}
           </section>
         </aside>
@@ -1038,17 +1144,21 @@ function render() {
       </main>
       <footer class="site-footer">BDU Game Lounge · Phòng chơi online realtime · State được lưu trên máy chủ VPS và có thể khôi phục sau reconnect.</footer>
       ${modalHtml()}
-      ${ui.toast ? `<div class="toast">${escapeHtml(ui.toast)}</div>` : ''}
+      ${ui.toast ? `<div class="toast" role="status" aria-live="polite">${escapeHtml(ui.toast)}</div>` : ''}
     </div>
   `;
   bind();
+  const movesList = $('#moves-list');
+  if (movesList) movesList.scrollTop = movesList.scrollHeight;
 }
 
 async function loadRooms() {
   const current = authOrRedirect();
   if (!current) return;
   try {
-    const result = await api(`/api/entertainment/rooms${ui.filter !== 'all' ? `?gameType=${encodeURIComponent(ui.filter)}` : ''}`);
+    // Luôn tải toàn bộ sảnh rồi lọc phía client: bộ đếm theo từng môn và việc
+    // đổi filter không cần chờ mạng, danh sách vẫn là một nguồn dữ liệu duy nhất.
+    const result = await api('/api/entertainment/rooms');
     ui.rooms = Array.isArray(result) ? result : result?.rooms || [];
     ui.loadError = '';
     ui.realtime = 'lobby';
@@ -1557,6 +1667,9 @@ function bind() {
         showToast(error.message);
         render();
       }
+    } else if (action === 'copy-room-code') {
+      await copy(button.dataset.code || roomRef(ui.room));
+      showToast(`Đã sao chép mã phòng #${button.dataset.code || roomRef(ui.room)}.`);
     } else if (action === 'copy-opponent-link') {
       const url = button.dataset.url || roomShareUrls(ui.room).player;
       await copy(url);
