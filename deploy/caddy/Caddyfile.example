@@ -1,0 +1,31 @@
+# BDU Tự Học – Caddy reverse proxy mẫu cho production (sv.bdu.io.vn).
+# Sao chép vào /etc/caddy/Caddyfile, thay hostname, rồi:
+#   sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# Lưu ý quan trọng: CDN/WAF phía trước (header `x-osh-dp`, cookie `__osh_v`)
+# brotli-nén cả luồng WebSocket khi trình duyệt gửi `Accept-Encoding: br`.
+# Frame WebSocket bị nén hỏng khiến Chrome báo "Invalid frame header": socket
+# mở được nhưng không nhận `hello`/`auth.ok`, và tính năng realtime rơi vào
+# polling dự phòng nên phản hồi rất chậm. Response 101 vì vậy phải mang
+# `Cache-Control: no-transform` (và `X-Accel-Buffering: no` cho Nginx) để proxy
+# không bao giờ biến đổi luồng đã nâng cấp. App Node cũng tự thêm hai header
+# này trong `CommunityRealtime.attach`, cấu hình dưới đây là lớp bảo hiểm khi
+# request chưa tới được app.
+
+sv.bdu.io.vn {
+	encode gzip zstd
+
+	@websocket {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	header @websocket Cache-Control "no-transform"
+	header @websocket X-Accel-Buffering "no"
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up -Forwarded
+	}
+}

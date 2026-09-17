@@ -156,6 +156,18 @@ Vì Compose chỉ bind cổng ứng dụng vào `127.0.0.1`, nó mặc định t
 nhận kết nối trực tiếp. Nếu frontend dùng origin khác, khai báo origin HTTPS chính
 xác trong `WS_ALLOWED_ORIGINS`, cách nhau bằng dấu phẩy.
 
+### CDN/WAF và WebSocket (bắt buộc `no-transform`)
+
+Nếu site nằm sau CDN/WAF có nén response (ví dụ proxy trả header `x-osh-dp`,
+cookie `__osh_v`), tầng đó có thể brotli/gzip-nén cả luồng WebSocket khi trình
+duyệt gửi `Accept-Encoding: br, gzip`. Frame WebSocket sau đó không còn hợp lệ:
+Chrome báo `Invalid frame header`, socket mở nhưng không nhận `hello`/`auth.ok`,
+và UI realtime rơi về polling dự phòng nên trông như "phản hồi rất chậm" so với
+môi trường local. Ứng dụng Node đã tự gắn `Cache-Control: no-transform` và
+`X-Accel-Buffering: no` vào response 101 của `/ws/community`; cấu hình proxy mẫu
+([`deploy/caddy/Caddyfile.example`](deploy/caddy/Caddyfile.example) hoặc Nginx)
+cũng nên lặp lại hai header này cho request Upgrade để fix không phụ thuộc một tầng.
+
 ### Nginx + TLS/WSS trên VPS
 
 Production React phải được build trong image (`docker compose up -d --build`) và

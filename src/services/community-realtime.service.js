@@ -166,6 +166,15 @@ class CommunityRealtimeGateway {
     this.httpServer = httpServer;
     this.wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
 
+    // CDN/proxy trong production từng brotli-nén cả luồng WebSocket khi trình
+    // duyệt gửi `Accept-Encoding: br`, làm frame bị hỏng ("Invalid frame header")
+    // và gây cảm giác socket phản hồi rất chậm. `no-transform` buộc mọi tầng
+    // trung gian giữ nguyên byte của kết nối đã nâng cấp.
+    this.wss.on('headers', (headers) => {
+      headers.push('Cache-Control: no-transform');
+      headers.push('X-Accel-Buffering: no');
+    });
+
     httpServer.on('upgrade', (request, socket, head) => {
       let url;
       try {
@@ -566,6 +575,14 @@ class CommunityRealtimeGateway {
   publishPostDeleted(post) {
     const rooms = [scopeRoom(post.scope, post.scope_id)];
     this.emitToRooms(rooms, 'community.post.deleted', {
+      postId: String(post.id), scope: post.scope, scopeId: post.scope_id || null,
+      courseCode: post.scope === 'course' ? normalizeCourseCode(post.scope_id) : null
+    });
+  }
+
+  publishPostUpdated(post) {
+    const rooms = [scopeRoom(post.scope, post.scope_id)];
+    this.emitToRooms(rooms, 'community.post.updated', {
       postId: String(post.id), scope: post.scope, scopeId: post.scope_id || null,
       courseCode: post.scope === 'course' ? normalizeCourseCode(post.scope_id) : null
     });

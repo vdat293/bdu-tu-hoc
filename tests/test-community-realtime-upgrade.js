@@ -79,10 +79,16 @@ const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/community`, {
     'X-Forwarded-Host': 'portal.example.edu.vn'
   }
 });
+let upgradeResponseHeaders = {};
+socket.on('upgrade', (res) => { upgradeResponseHeaders = res.headers; });
 const [hello] = await once(socket, 'message');
 assert.deepEqual(JSON.parse(hello.toString()), {
   type: 'hello', protocol: 1, requiresAuthMessage: true
 });
+// A CDN in front of production brotli-nén luồng WebSocket khi thiếu no-transform,
+// khiến frame hỏng và realtime trông như phản hồi rất chậm.
+assert.equal(upgradeResponseHeaders['cache-control'], 'no-transform', 'the upgrade response must opt out of proxy transformations');
+assert.equal(upgradeResponseHeaders['x-accel-buffering'], 'no', 'the upgrade response must disable proxy buffering');
 
 socket.send(JSON.stringify({ type: 'auth', token: 'realtime-test-token' }));
 const [authenticated] = await once(socket, 'message');

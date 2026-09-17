@@ -347,7 +347,10 @@ export const ApiController = {
     }
 
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    // CDN/WAF có thể nén hoặc đệm luồng streaming; giữ nguyên byte để log
+    // tiến độ hiện ra tức thời thay vì dồn thành từng cục.
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
