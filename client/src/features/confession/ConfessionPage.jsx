@@ -1079,7 +1079,7 @@ export default function ConfessionPage() {
   useEffect(() => {
     if (!postMenuId) return undefined;
     const close = (event) => {
-      if (event.target instanceof Element && event.target.closest('.fbc-menu-wrap')) return;
+      if (event.target?.closest?.('.fbc-menu-wrap')) return;
       setPostMenuId(null);
     };
     document.addEventListener('click', close);

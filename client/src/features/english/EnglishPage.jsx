@@ -109,7 +109,9 @@ export default function EnglishPage() {
             setQueueInfo({ queued: false, position: 0, totalWaiting: 0, runningCount: 0 });
             notify(`Lỗi: ${data.message}`, 'error');
           }
-        } catch {}
+        } catch {
+          // Stream đã đóng giữa chừng: trạng thái phiên sẽ được xử lý ở lần mở kế tiếp.
+        }
       }
     });
   }
@@ -297,7 +299,9 @@ export default function EnglishPage() {
     if (session) {
       try {
         await closeEnglishSession(session.sessionId);
-      } catch {}
+      } catch {
+        // Phiên có thể đã hết hạn trên máy chủ; đăng xuất cục bộ vẫn phải chạy.
+      }
     }
     if (cleanupStreamRef.current) cleanupStreamRef.current();
     setSession(null);
