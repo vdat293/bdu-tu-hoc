@@ -46,12 +46,24 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
 
+function clearSession() {
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    for (const key of ['bdu_token', 'bdu_user', 'bdu_token_expires_at']) storage.removeItem(key);
+  }
+}
+
 function session() {
   for (const storage of [window.localStorage, window.sessionStorage]) {
     const token = storage.getItem('bdu_token');
-    if (token) {
-      try { return { token, user: JSON.parse(storage.getItem('bdu_user') || '{}') }; } catch { return { token, user: {} }; }
+    if (!token) continue;
+    // Token hết hạn phải bị coi như chưa đăng nhập; nếu không, người dùng thấy
+    // mình "đã đăng nhập" nhưng mọi thao tác đều 401 và chỉ có toast thoáng qua.
+    const expiresAt = Number(storage.getItem('bdu_token_expires_at'));
+    if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now()) {
+      clearSession();
+      return null;
     }
+    try { return { token, user: JSON.parse(storage.getItem('bdu_user') || '{}') }; } catch { return { token, user: {} }; }
   }
   return null;
 }
@@ -60,6 +72,16 @@ function authOrRedirect() {
   const current = session();
   if (!current) { render(); return null; }
   return current;
+}
+
+// Phiên BDU không hợp lệ (401/AUTH_INVALID): xoá token rồi quay về trang đăng
+// nhập kèm returnTo để người dùng vào lại đúng phòng, tránh kẹt ở màn hình
+// "đã đăng nhập" nhưng không thao tác được.
+function recoverInvalidSession() {
+  clearSession();
+  if (window.location.pathname.startsWith('/login')) return;
+  const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+  window.location.assign(`/login?returnTo=${returnTo}`);
 }
 
 function dataValue(payload) {
@@ -82,6 +104,11 @@ async function api(path, options = {}) {
     const error = new Error(payload?.message || 'Thao tác không thành công.');
     error.code = payload?.code || '';
     error.status = response.status;
+    // Chỉ tự phục hồi khi request thật sự mang token của mình, tránh vòng lặp
+    // đăng nhập cho các request công khai (ví dụ danh sách phòng).
+    if ((response.status === 401 || error.code === 'AUTH_REQUIRED' || error.code === 'AUTH_INVALID') && current?.token) {
+      recoverInvalidSession();
+    }
     throw error;
   }
   return dataValue(payload);
@@ -167,6 +194,17 @@ function seatPieceTag(gameId, seat) {
   if (gameId === 'go') return first ? 'Quân đen' : 'Quân trắng';
   if (gameId === 'caro') return first ? 'Quân X' : 'Quân O';
   if (gameId === 'connect4') return first ? 'Quân xanh' : 'Quân đỏ';
+  return '';
+}
+
+// Màu quân của từng ghế để CSS vẽ swatch nhỏ trong `.seat-piece::before`.
+function seatPieceClass(gameId, seat) {
+  const first = Number(seat) === 1;
+  if (gameId === 'chess') return first ? 'seat-piece--white' : 'seat-piece--black';
+  if (gameId === 'xiangqi') return first ? 'seat-piece--red' : 'seat-piece--black';
+  if (gameId === 'go') return first ? 'seat-piece--black' : 'seat-piece--white';
+  if (gameId === 'caro') return first ? 'seat-piece--blue' : 'seat-piece--red';
+  if (gameId === 'connect4') return first ? 'seat-piece--blue' : 'seat-piece--red';
   return '';
 }
 
@@ -379,6 +417,11 @@ function renderBoard(room) {
   const currentPlayer = currentSeat ? (room?.players || []).find((p) => Number(p.seat) === currentSeat) : null;
   const currentTurnPlayerName = currentPlayer ? playerName(currentPlayer, `Bàn ${currentSeat}`) : (currentSeat ? `Bàn ${currentSeat}` : '');
 
+  // Băng-rôn thân thiện trong toolbar: người chơi luôn biết đang tới lượt ai.
+  const myTurn = !isSpectator && isPlayable && Boolean(me) && currentSeat === Number(me.seat);
+  const playedMoves = ui.moves.length || Number(state.move_number || 0);
+  const openingTurn = myTurn && playedMoves === 0;
+
   const statusNotice = isFinished
     ? (isSpectator
         ? (winnerSeat ? `🏆 ${escapeHtml(winnerName)} đã chiến thắng!` : 'Ván cờ kết thúc với kết quả Hòa!')
@@ -387,11 +430,11 @@ function renderBoard(room) {
             : (winnerSeat ? `Bạn đã thua trận trước ${escapeHtml(winnerName)}.` : 'Ván cờ kết thúc với kết quả Hòa!')))
     : isSpectator
       ? 'Chế độ khán giả · chỉ xem trực tiếp'
-      : canPlay
-        ? 'Chạm ô để đi quân'
+      : myTurn
+        ? (openingTurn ? 'Bạn đi trước nhé!' : 'Lượt của bạn')
         : roomStatus(room) === 'waiting'
           ? 'Chờ đối thủ vào phòng'
-          : `Đang chờ lượt của ${escapeHtml(currentTurnPlayerName)}`;
+          : `Đang chờ ${escapeHtml(currentTurnPlayerName)}`;
 
   return `
     ${isSpectator ? `
@@ -404,7 +447,7 @@ function renderBoard(room) {
       <span class="turn-dot ${isFinished ? 'finished' : ''}"></span>
       <span class="turn">${isFinished ? (winnerSeat ? `🏆 Thắng cuộc: ${escapeHtml(winnerName)}` : '🏆 Ván cờ hòa') : (currentSeat ? `Lượt đi: ${escapeHtml(currentTurnPlayerName)}` : label)}</span>
       <span class="spacer"></span>
-      <strong class="turn-status-text ${isFinished ? (winnerSeat === Number(me?.seat) ? 'status-won' : 'status-lost') : ''}">${statusNotice}</strong>
+      <strong class="turn-status-text ${isFinished ? (winnerSeat === Number(me?.seat) ? 'status-won' : 'status-lost') : ''}" aria-live="polite">${statusNotice}</strong>
     </div>
     <div class="board-stage-wrapper">
       <div class="board-stage board-stage--${game.id}" style="--columns:${columns};--rows:${rows}">
@@ -500,7 +543,7 @@ function renderBoardFinishOverlay(room, winnerSeat, winnerPlayer, winnerName, me
   }
 
   return `
-    <div class="board-finish-overlay pg-finish-overlay ${isMeWinner ? 'won' : isMeLoser ? 'lost' : 'draw'}">
+    <div class="board-finish-overlay pg-finish-overlay ${isMeWinner ? 'won' : isMeLoser ? 'lost' : 'draw'}" role="dialog" aria-modal="true" aria-label="Kết quả trận đấu">
       <div class="board-finish-card pg-modal">
         <button type="button" class="pg-modal-close" data-action="toggle-finish-overlay" aria-label="Xem lại bàn cờ" title="Xem lại bàn cờ">×</button>
 
@@ -865,11 +908,19 @@ function renderRoom() {
 
   const moves = ui.moves.length ? ui.moves : (Array.isArray(state.moves) ? state.moves : []);
 
+  // Ghế của chính người đang xem luôn nằm dưới cùng để thao tác gần tay hơn;
+  // khán giả giữ nguyên bố cục Bàn 1 trên / Bàn 2 dưới.
+  const mePlayer = currentUserIsPlayer(room);
+  const mySeat = mePlayer ? Number(mePlayer.seat) : 0;
+  const bottomSeat = mySeat === 1 ? 1 : 2;
+  const topSeat = bottomSeat === 1 ? 2 : 1;
+
   const renderSeat = (seat) => {
     const player = (players || []).find((p) => Number(p.seat) === seat);
     const fallbackName = seat === 2 && status === 'waiting' ? 'Đang chờ đối thủ…' : `Bàn ${seat}`;
     const name = playerName(player, fallbackName);
     const sub = player?.mssv && player.mssv !== name ? player.mssv : '';
+    const isMe = mySeat === seat;
     const isTurn = !isFinished && status === 'playing' && Number(state.current_seat || state.turn) === seat;
     const isWinner = winnerSeat === seat;
     const isLoser = isFinished && winnerSeat && winnerSeat !== seat;
@@ -877,21 +928,23 @@ function renderRoom() {
       ? (isWinner ? 'Chiến thắng' : isLoser ? 'Thua cuộc' : 'Hòa ván')
       : (isTurn ? 'Đang đi' : player ? 'Đang chờ' : 'Trống');
     const scoreClass = isWinner ? 'win' : isLoser ? 'loss' : isFinished ? 'draw' : '';
-    const scoreText = isWinner ? 'THẮNG' : isLoser ? 'THUA' : isFinished ? 'HÒA' : '';
+    // Chỉ hiện badge THẮNG/THUA/HÒA khi ván đã kết thúc; lúc đang chơi không
+    // còn dòng "—" gây rối mắt.
+    const scoreText = isFinished ? (isWinner ? 'THẮNG' : isLoser ? 'THUA' : 'HÒA') : '';
     const missing = !player;
     return `
-      <div class="seat ${isTurn ? 'seat-turn' : ''} ${isWinner ? 'seat-winner' : ''} ${isLoser ? 'seat-loser' : ''} ${missing ? 'seat-empty' : ''}">
+      <div class="seat ${isMe ? 'seat-me' : ''} ${isTurn ? 'seat-turn' : ''} ${isWinner ? 'seat-winner' : ''} ${isLoser ? 'seat-loser' : ''} ${missing ? 'seat-empty' : ''}">
         <span class="seat-avatar ${seat === 2 ? 'alt' : ''}">${missing ? '?' : initials(name)}<i class="seat-live" aria-hidden="true"></i></span>
         <div class="seat-info">
-          <strong>${escapeHtml(name)}</strong>
+          <strong><span class="seat-name-text">${escapeHtml(name)}</span>${isMe ? '<span class="seat-you">Bạn</span>' : ''}</strong>
           <small>
             <span class="seat-seat">Bàn ${seat} · ${seat === 1 ? 'Chủ phòng' : 'Đối thủ'}</span>
             ${sub ? `<span class="seat-mssv">${escapeHtml(sub)}</span>` : ''}
-            <span class="seat-piece">${seatPieceTag(game.id, seat)}</span>
+            <span class="seat-piece ${seatPieceClass(game.id, seat)}">${seatPieceTag(game.id, seat)}</span>
           </small>
         </div>
         <span class="seat-state ${isTurn ? 'is-turn' : ''}">${stateText}</span>
-        <span class="seat-score ${scoreClass}">${scoreText || '—'}</span>
+        ${isFinished ? `<span class="seat-score ${scoreClass}">${scoreText}</span>` : ''}
       </div>
     `;
   };
@@ -942,15 +995,17 @@ function renderRoom() {
           <div class="room-top-bar">
             <span class="room-top-game"><i aria-hidden="true">${game.icon}</i> ${escapeHtml(game.label)} · ${ui.role === 'spectator' ? 'Khán giả xem trực tiếp' : 'Ván online'}</span>
             <span class="room-top-stats">
-              ${Number(room.spectator_count || 0) > 0 ? `<span class="top-chip">👁️ ${Number(room.spectator_count || 0)}</span>` : ''}
+              ${Number(room.spectator_count || 0) > 0 ? `<span class="top-chip top-chip--spectators">👁️ ${Number(room.spectator_count || 0)} khán giả</span>` : ''}
+              <button type="button" class="top-chip top-chip--action" data-action="copy-opponent-link" data-url="${escapeHtml(urls.player)}" title="Sao chép link mời đối thủ">⚔️ Link đối thủ</button>
+              ${!isPrivate ? `<button type="button" class="top-chip top-chip--action" data-action="copy-spectator-link" data-url="${escapeHtml(urls.spectator)}" title="Sao chép link khán giả">👁️ Link khán giả</button>` : ''}
               <span class="top-chip top-chip--moves">Nước đi: <strong>${state.move_number || moves.length || 0}</strong></span>
             </span>
           </div>
-          ${renderSeat(1)}
+          ${renderSeat(topSeat)}
 
           ${isWaitingOpponent ? renderWaitingOpponent(room) : renderBoard(room)}
 
-          ${renderSeat(2)}
+          ${renderSeat(bottomSeat)}
 
           ${game.id === 'go' && ui.role === 'player' && status === 'playing' ? '<button class="button button-secondary board-pass" data-action="pass-go">Bỏ lượt (cờ vây)</button>' : ''}
         </main>
@@ -1136,7 +1191,7 @@ function render() {
               <span class="user-avatar">${initials(current.user?.name || current.user?.mssv)}</span>
               ${escapeHtml(current.user?.name || current.user?.mssv || 'Sinh viên')}
             </span>
-          ` : '<a href="/login?returnTo=%2Fgames">Đăng nhập BDU ↗</a>'}
+          ` : `<a href="/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}">Đăng nhập BDU ↗</a>`}
         </div>
       </nav>
       <main class="site-main">
@@ -1428,7 +1483,9 @@ function connectRealtime() {
       // Lỗi realtime trước đây bị bỏ qua hoàn toàn nên người chơi tưởng ván
       // vẫn đang đồng bộ trong khi socket đã mất quyền theo dõi phòng.
       if (message.code === 'AUTH_REQUIRED' || message.code === 'AUTH_INVALID') {
-        showToast('Phiên realtime không hợp lệ. Hãy tải lại trang và đăng nhập lại.');
+        // Token đã hết hiệu lực: đưa thẳng về trang đăng nhập kèm returnTo thay
+        // vì chỉ toast rồi để người dùng kẹt trong phòng không thao tác được.
+        recoverInvalidSession();
       } else if (message.code === 'ROOM_FORBIDDEN' || message.code === 'ROOM_INVALID') {
         // Snapshot sẽ không tới nữa; đồng bộ lại bằng HTTP để phát hiện phòng đã đóng.
         if (ui.room) refreshRoom();
@@ -1706,14 +1763,35 @@ window.addEventListener('popstate', () => {
   else loadRooms();
 });
 
+// Điều hướng bàn cờ bằng bàn phím: mỗi ô là một <button> thật nên chỉ cần dời
+// focus sang ô kế cận; Enter/Space do trình duyệt tự kích hoạt như click chuột.
+const ARROW_STEPS = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+
 window.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
     event.preventDefault();
     $('#join-input')?.focus();
   }
-  if (event.key === 'Escape' && ui.modal) {
-    ui.modal = null;
-    render();
+  const focusedCell = document.activeElement?.closest?.('.cell');
+  const step = ARROW_STEPS[event.key];
+  if (focusedCell && step) {
+    event.preventDefault();
+    const row = Number(focusedCell.dataset.row) + step[0];
+    const column = Number(focusedCell.dataset.column) + step[1];
+    const next = document.querySelector(`.cell[data-row="${row}"][data-column="${column}"]`);
+    if (next && !next.disabled) next.focus();
+    return;
+  }
+  if (event.key === 'Escape') {
+    if (ui.modal) {
+      ui.modal = null;
+      render();
+      return;
+    }
+    if (ui.room && !ui.hideFinishOverlay && document.querySelector('.board-finish-overlay')) {
+      ui.hideFinishOverlay = true;
+      render();
+    }
   }
 });
 
