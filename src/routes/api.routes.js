@@ -186,7 +186,15 @@ router.get('/health', (req, res) => {
 });
 router.get('/queue-status', ApiController.getQueueStatus);
 
-// 8. Giải trí: online game rooms, challenges and move history
+// 8. Luyện từ vựng (clone luyentu, trừ Listening/Đặc biệt)
+router.get('/vocab/themes', ApiController.listVocabThemes);
+router.get('/vocab/themes/:slug', ApiController.getVocabTheme);
+router.get('/vocab/themes/:slug/sets', ApiController.listVocabSets);
+router.get('/vocab/sets/:setId', ApiController.getVocabSet);
+router.get('/vocab/sets/:setId/words', ApiController.listVocabWords);
+router.post('/vocab/progress', ApiController.saveVocabProgress);
+
+// 9. Giải trí: online game rooms, challenges and move history
 router.get('/entertainment/games', ApiController.getEntertainmentGames);
 router.get('/entertainment/rooms', ApiController.listEntertainmentRooms);
 router.post('/entertainment/rooms', ApiController.createEntertainmentRoom);

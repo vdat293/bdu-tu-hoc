@@ -1,0 +1,1 @@
+ALTER TABLE vocab_words ALTER COLUMN pos TYPE VARCHAR(64);

@@ -19,6 +19,9 @@
     "db:dump": "node scripts/db-dump.js",
     "db:restore": "node scripts/db-restore.js",
     "rankings:sync": "node scripts/sync-rankings.js",
+    "vocab:import": "node scripts/import-vocab.js",
+    "vocab:fix-pos": "node scripts/fix-vocab-pos.js",
+    "vocab:fix-pos:apply": "node scripts/fix-vocab-pos.js --apply",
     "bot": "node scripts/discord-bot.js",
     "bot:register": "node scripts/discord-bot.js --register",
     "fb:login": "node scripts/fb-import-login.js",
@@ -36,6 +39,7 @@
     "test:clan-quiz": "node tests/test-clan-quiz.js",
     "test:community": "node tests/test-community.js && node tests/test-community-realtime-upgrade.js && node tests/test-community-post-editing-integration.js && node tests/test-confession-delete-hierarchy.js",
     "test:learning-interactions": "node tests/test-learning-interactions.js",
+    "test:vocab": "node tests/test-vocab.js",
     "test:load": "node tests/test-server-load.js",
     "test:wordfmt-structure": "node tests/test-docx-tabular-paste.js && node tests/test-docx-structure.js",
     "test:wordfmt-graduation": "node tests/test-docx-graduation.js && node tests/test-wordfmt-document-type-ui.js && node tests/test-wordfmt-cover-customizations.js"

@@ -15,6 +15,10 @@ const EnglishPage = lazy(() => import('../features/english/EnglishPage.jsx'));
 const EnrollmentPage = lazy(() => import('../features/enrollment/EnrollmentPage.jsx'));
 const LearningPage = lazy(() => import('../features/learning/LearningPage.jsx'));
 const CourseLearningPage = lazy(() => import('../features/learning/CourseLearningPage.jsx'));
+const VocabThemesPage = lazy(() => import('../features/vocab/VocabThemesPage.jsx'));
+const VocabThemePage = lazy(() => import('../features/vocab/VocabThemePage.jsx'));
+const VocabSetPage = lazy(() => import('../features/vocab/VocabSetPage.jsx'));
+const VocabGamePage = lazy(() => import('../features/vocab/VocabGamePage.jsx'));
 const ClubDirectoryPage = lazy(() => import('../features/clubs/pages/ClubDirectoryPage.jsx'));
 const ClubDetailPage = lazy(() => import('../features/clubs/pages/ClubDetailPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
@@ -38,6 +42,10 @@ export default function AppRoutes() {
       <Route path="enrollment" element={<Lazy><EnrollmentPage /></Lazy>} />
       <Route path="learning" element={<Lazy><LearningPage /></Lazy>} />
       <Route path="learning/:courseCode" element={<Lazy><CourseLearningPage /></Lazy>} />
+      <Route path="vocab" element={<Lazy><VocabThemesPage /></Lazy>} />
+      <Route path="vocab/set/:setId" element={<Lazy><VocabSetPage /></Lazy>} />
+      <Route path="vocab/set/:setId/:mode" element={<Lazy><VocabGamePage /></Lazy>} />
+      <Route path="vocab/:slug" element={<Lazy><VocabThemePage /></Lazy>} />
       <Route path="clans" element={<Lazy><ClubDirectoryPage /></Lazy>} />
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />

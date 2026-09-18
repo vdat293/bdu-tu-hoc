@@ -17,3 +17,5 @@ dist/
 .vite/
 .playwright-mcp/
 scratch/
+
+data/pos-report.json
