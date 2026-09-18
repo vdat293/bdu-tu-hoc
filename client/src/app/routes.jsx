@@ -20,14 +20,12 @@ const ClubDetailPage = lazy(() => import('../features/clubs/pages/ClubDetailPage
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
-const DiscordCallbackPage = lazy(() => import('../features/reminders/DiscordCallbackPage.jsx'));
 
 function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
 
 export default function AppRoutes() {
   return <Routes>
     <Route element={<AuthLayout />}><Route path="/login" element={<Lazy><LoginPage /></Lazy>} /></Route>
-    <Route path="/discord-callback" element={<Lazy><DiscordCallbackPage /></Lazy>} />
     <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
       <Route index element={<Navigate to="/gpa" replace />} />
       <Route path="gpa" element={<Lazy><GpaPage /></Lazy>} />

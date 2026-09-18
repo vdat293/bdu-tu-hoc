@@ -74,12 +74,17 @@ async function main() {
   }
 
   const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent
+    ],
     partials: [Partials.Channel]
   });
 
   client.on('clientReady', () => {
-    console.log(`[discord-bot] Online dưới tên ${client.user?.tag}. DM bot: /link <code> để bắt đầu.`);
+    console.log(`[discord-bot] Online dưới tên ${client.user?.tag}. Vào server là bot tự nhắn hỏi mã liên kết.`);
   });
 
   client.on('interactionCreate', async (interaction) => {
@@ -107,7 +112,7 @@ async function main() {
       const mssv = await DiscordLinkService.findMssvByDiscordId(discordId);
       if (!mssv) {
         await interaction.reply({
-          content: 'Bạn chưa liên kết. Trên web: bấm chuông 🔔 → **Nhận thông báo lịch học** → Bật đồng ý → Tạo mã Discord, rồi DM bot `/link <mã 6 số>`.',
+          content: 'Bạn chưa liên kết. Trên web: bấm chuông 🔔 → **Nhận thông báo lịch học** → xác nhận để lấy mã 6 số, vào server rồi nhắn mã đó cho mình nhé.',
           ephemeral: true
         });
         return;
@@ -134,6 +139,54 @@ async function main() {
       if (!interaction.replied) {
         await interaction.reply({ content: 'Lỗi tạm thời, thử lại sau.', ephemeral: true }).catch(() => {});
       }
+    }
+  });
+
+  // Thành viên mới vào server: chủ động DM hỏi mã để tự gắn link.
+  // (Cần bật Server Members Intent trong portal. Nếu user khóa DM thì
+  // bot không nhắn được — họ vẫn nhắn mã cho bot trước được.)
+  client.on('guildMemberAdd', async (member) => {
+    try {
+      if (member?.user?.bot) return;
+      const linked = await DiscordLinkService.findMssvByDiscordId(member.id);
+      if (linked) return;
+      await member.send(
+        'Chào bạn! Mình là bot nhắc lịch học BDU 🎓\n' +
+        'Bạn nhắn **mã 6 số** hiện trên web (chuông 🔔 → Nhận thông báo lịch học) vào đây, ' +
+        'mình tự gắn link và nhắc lịch cho bạn mỗi ngày nhé.'
+      );
+    } catch (err) {
+      console.warn('[discord-bot] Không DM được thành viên mới:', err.message);
+    }
+  });
+
+  // Nhận mã liên kết qua DM (thay cho OAuth): user nhắn mã 6 số là tự link.
+  // (Cần bật Message Content Intent trong portal.)
+  client.on('messageCreate', async (message) => {
+    try {
+      if (message.author?.bot) return;
+      if (message.guild) return; // chỉ xử lý DM riêng
+      const discordId = message.author.id;
+      const already = await DiscordLinkService.findMssvByDiscordId(discordId);
+      if (already) return; // đã link thì im lặng, digest/tag vẫn tới đều
+      const text = String(message.content || '').trim();
+      const code = text.match(/(\d{6})/)?.[1];
+      if (!code) {
+        await message.reply(
+          'Bạn nhắn **mã 6 số** hiện trên web (chuông 🔔 → Nhận thông báo lịch học) vào đây để mình nhắc lịch nhé.'
+        ).catch(() => {});
+        return;
+      }
+      try {
+        await DiscordLinkService.consumeCode(code, discordId);
+        await message.reply(
+          '✅ Kết nối thành công!\nTừ nay mình sẽ nhắc lịch học cho bạn ở đây nhé: sáng gửi lịch hôm nay, trưa nhắc buổi chiều, tối nhắc ngủ sớm nếu mai có học. 🌙'
+        ).catch(() => {});
+      } catch (err) {
+        await message.reply(`❌ ${err.message}`).catch(() => {});
+      }
+    } catch (err) {
+      console.error('[discord-bot] message error:', err.message);
     }
   });
 

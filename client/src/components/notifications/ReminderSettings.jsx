@@ -5,7 +5,6 @@ import { useConfirm } from '../feedback/ConfirmDialog.jsx';
 import {
   consentReminders,
   createDiscordLinkCode,
-  createDiscordOAuthUrl,
   getReminderPrefs,
   revokeReminders,
   sendDiscordTest,
@@ -19,7 +18,6 @@ export default function ReminderSettings({ onClose }) {
   const client = useQueryClient();
   const [agreed, setAgreed] = useState(false);
   const [linkCode, setLinkCode] = useState(null);
-  const [connecting, setConnecting] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
 
   useEffect(() => {
@@ -66,7 +64,7 @@ export default function ReminderSettings({ onClose }) {
     mutationFn: () => unlinkDiscordLink(token),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-      notify('Đã gỡ liên kết Discord. Bấm Kết nối để link tài khoản khác.', 'success');
+      notify('Đã gỡ liên kết Discord. Vào server + nhắn mã mới để link nick khác.', 'success');
     },
     onError: (error) => notify(error?.message || 'Không thể gỡ liên kết Discord.', 'error')
   });
@@ -82,90 +80,17 @@ export default function ReminderSettings({ onClose }) {
 
   const codeMutation = useMutation({
     mutationFn: () => createDiscordLinkCode(token),
-    onSuccess: (data) => {
-      setLinkCode(data);
-      notify('Đã tạo mã liên kết Discord (hết hạn 10 phút).', 'success');
-    },
+    onSuccess: (data) => setLinkCode(data),
     onError: (error) => notify(error?.message || 'Không thể tạo mã.', 'error')
   });
 
-  // 1 hộp thoại duy nhất: xác nhận là tự mở Discord cho authen luôn.
-  // Mở popup blank đồng bộ trong click để không bị trình duyệt chặn,
-  // rồi mới gọi API consent + lấy URL Authorize.
-  const [confirming, setConfirming] = useState(false);
-  const confirmAndConnect = async () => {
-    const popup = window.open('about:blank', 'bdu-discord-link', 'width=520,height=700');
-    if (!popup) {
-      notify('Trình duyệt chặn popup. Cho phép popup rồi bấm lại.', 'error');
-      return;
-    }
-    setConfirming(true);
-    try {
-      await consentReminders(token, { xac_nhan: true });
-      client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-      const { auth_url } = await createDiscordOAuthUrl(token);
-      popup.location.href = auth_url;
-      // Dự phòng khi postMessage trượt: popup đóng thì refetch.
-      const checker = window.setInterval(() => {
-        if (popup.closed) {
-          window.clearInterval(checker);
-          client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-        }
-      }, 800);
-      window.setTimeout(() => window.clearInterval(checker), 5 * 60 * 1000);
-    } catch (error) {
-      popup.close();
-      notify(error?.message || 'Không thể bật nhắc lịch.', 'error');
-      client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  // Lắng nghe tab callback báo về (popup Authorize xong).
-  // Thành công thì đóng modal luôn, chỉ để toast tự tắt — khỏi bắt user bấm thêm.
+  // Có consent mà chưa link: tự sinh mã để user chỉ việc vào server + nhắn mã.
   useEffect(() => {
-    const onMessage = (event) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type !== 'bdu:discord-linked') return;
-      setConnecting(false);
-      client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-      if (event.data.ok) {
-        notify('Đã kết nối Discord! Kiểm tra DM của bot nhé.', 'success');
-        onClose?.();
-      } else {
-        notify('Kết nối Discord chưa xong. Thử lại giúp mình.', 'error');
-      }
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [client, notify, onClose]);
-
-  // 1 click: mở popup Discord Authorize. Xong là link, không gõ gì hết.
-  const connectDiscord = async () => {
-    setConnecting(true);
-    try {
-      const { auth_url } = await createDiscordOAuthUrl(token);
-      const popup = window.open(auth_url, 'bdu-discord-link', 'width=520,height=700');
-      if (!popup) {
-        setConnecting(false);
-        notify('Trình duyệt chặn popup. Cho phép popup rồi bấm lại.', 'error');
-        return;
-      }
-      // Dự phòng khi postMessage trượt: popup đóng thì refetch.
-      const checker = window.setInterval(() => {
-        if (popup.closed) {
-          window.clearInterval(checker);
-          setConnecting(false);
-          client.invalidateQueries({ queryKey: ['reminders-prefs'] });
-        }
-      }, 800);
-      window.setTimeout(() => window.clearInterval(checker), 5 * 60 * 1000);
-    } catch (error) {
-      setConnecting(false);
-      notify(error?.message || 'Không thể kết nối Discord.', 'error');
+    if (consented && !discordLinked && !linkCode && token && !codeMutation.isPending) {
+      codeMutation.mutate();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consented, discordLinked, token]);
 
   const copyCode = async () => {
     const code = linkCode?.code;
@@ -194,7 +119,7 @@ export default function ReminderSettings({ onClose }) {
                 và <strong>báo ngay khi có người nhắc tới bạn</strong> trong Confession.
               </p>
               <p className="reminder-desc">
-                Bấm xác nhận là Discord tự mở để bạn bấm <strong>Authorize</strong>, xong là nhận tin luôn.
+                Bấm xác nhận rồi làm tiếp 2 bước dưới là nhận tin luôn.
               </p>
               <label className="reminder-agree">
                 <input
@@ -207,48 +132,56 @@ export default function ReminderSettings({ onClose }) {
               <button
                 type="button"
                 className="btn btn-primary btn-block"
-                disabled={!agreed || confirming || consentMutation.isPending}
-                onClick={confirmAndConnect}
+                disabled={!agreed || consentMutation.isPending}
+                onClick={() => consentMutation.mutate()}
               >
-                {confirming ? 'Đang mở Discord...' : 'Xác nhận & Kết nối Discord'}
+                {consentMutation.isPending ? 'Đang bật...' : 'Xác nhận'}
               </button>
             </>
           ) : !discordLinked ? (
             <>
               <p className="reminder-desc">
-                Đang <strong>BẬT</strong>. Còn 1 bước nữa là xong:
+                Đang <strong>BẬT</strong>. Còn 2 bước nữa là xong:
               </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                disabled={connecting}
-                onClick={connectDiscord}
-              >
-                {connecting ? 'Đang chờ bạn Authorize...' : '🔗 Kết nối Discord'}
-              </button>
-              <p className="reminder-desc">
-                Sắp xong rồi! Bấm nút dưới, cửa sổ Discord hiện ra thì bấm <strong>Authorize</strong> là nhận tin luôn.
-                Bot sẽ nhắn chào bạn 1 tin để xác nhận.
-              </p>
-              <details className="reminder-details">
-                <summary>Liên kết thủ công</summary>
+              <div className="reminder-block">
+                <strong className="reminder-block-title">Bước 1 — Vào server Discord</strong>
+                {prefs.discord_invite_url ? (
+                  <a
+                    className="btn btn-primary btn-block"
+                    href={prefs.discord_invite_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Vào server nhận tin
+                  </a>
+                ) : (
+                  <p className="reminder-desc">Server nhận tin chưa sẵn sàng, quay lại sau giúp mình nhé.</p>
+                )}
+              </div>
+              <div className="reminder-block">
+                <strong className="reminder-block-title">Bước 2 — Nhắn mã cho bot</strong>
+                <p className="reminder-desc">
+                  Vào server xong bot sẽ tự nhắn chào bạn. Bạn nhắn lại mã này là link xong:
+                </p>
                 <div className="reminder-code-row">
+                  {linkCode?.code ? (
+                    <button type="button" className="reminder-code" onClick={copyCode} title="Bấm để copy">
+                      {linkCode.code} ⧉
+                    </button>
+                  ) : (
+                    <span className="reminder-desc">Đang lấy mã...</span>
+                  )}
                   <button
                     type="button"
                     className="btn btn-secondary"
                     disabled={codeMutation.isPending}
                     onClick={() => codeMutation.mutate()}
                   >
-                    {codeMutation.isPending ? 'Đang tạo...' : 'Tạo mã 6 số'}
+                    Mã mới
                   </button>
-                  {linkCode?.code && (
-                    <button type="button" className="reminder-code" onClick={copyCode} title="Bấm để copy">
-                      {linkCode.code} ⧉
-                    </button>
-                  )}
                 </div>
-                <p className="reminder-desc">DM cho bot lệnh <code className="reminder-cmd">/link code:{linkCode?.code || 'xxxxxx'}</code></p>
-              </details>
+                <p className="reminder-desc">Không thấy bot nhắn? Vào server, tìm bot rồi nhắn mã cho bot trước cũng được.</p>
+              </div>
             </>
           ) : (
             <>
