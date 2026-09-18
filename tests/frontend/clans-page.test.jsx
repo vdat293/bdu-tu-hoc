@@ -17,12 +17,12 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
   useToasts: () => ({ notify: vi.fn() })
 }));
 
-import ClansPage from '../../client/src/features/clans/ClansPage.jsx';
-import ClanJoinQuizModal from '../../client/src/features/clans/ClanJoinQuizModal.jsx';
+import ClubDirectoryPage from '../../client/src/features/clubs/pages/ClubDirectoryPage.jsx';
+import ClanJoinQuizModal from '../../client/src/features/clubs/components/ClanJoinQuizModal.jsx';
 
 function renderDirectory() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/clans']}><Routes><Route path="/clans" element={<ClansPage />} /><Route path="/clans/:id" element={<p>Clan detail route</p>} /></Routes></MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/clans']}><Routes><Route path="/clans" element={<ClubDirectoryPage />} /><Route path="/clans/:id" element={<p>Club detail route</p>} /></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 afterEach(() => {
@@ -48,8 +48,8 @@ beforeEach(() => {
   mocks.getClanQuiz.mockResolvedValue({ enabled: false, questions: [] });
 });
 
-describe('ClansPage', () => {
-  it('uses truthful clan metadata, prevents a disallowed create action, and keeps discovery navigable', async () => {
+describe('ClubDirectoryPage', () => {
+  it('uses truthful club metadata, prevents a disallowed create action, and keeps discovery navigable', async () => {
     renderDirectory();
 
     await screen.findByText('CLB Trí tuệ nhân tạo');
@@ -60,8 +60,8 @@ describe('ClansPage', () => {
     expect(screen.getByRole('button', { name: /Thành lập CLB/i })).toBeDisabled();
     expect(screen.getByText(/Cần danh hiệu #TTCDS/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('link', { name: /Xem CLB CLB Trí tuệ nhân tạo/i }));
-    expect(await screen.findByText('Clan detail route')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'CLB Trí tuệ nhân tạo' }));
+    expect(await screen.findByText('Club detail route')).toBeInTheDocument();
   });
 
   it('does not allow a join submission before the quiz configuration finishes loading', () => {

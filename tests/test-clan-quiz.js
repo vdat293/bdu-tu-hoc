@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { normalizeQuizQuestions, parseQuizImport, scoreQuizSubmission, validateQuizConfig } from '../src/services/clan-quiz.service.js';
-import { parseQuizText } from '../client/src/features/clans/quiz.js';
+import { parseQuizText } from '../client/src/features/clubs/lib/quiz.js';
 
 const questions = normalizeQuizQuestions([
   { question: '2 + 2 = ?', options: ['3', '4'], correctIndex: 1, explanation: 'Phép cộng cơ bản.' }

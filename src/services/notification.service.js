@@ -29,26 +29,50 @@ export const NotificationService = {
     if (!clean) throw httpError('Thiếu MSSV người nhận.', 401);
     const { safeLimit, safeOffset } = clampPaging(limit, offset);
 
+    // Ẩn danh tính actor khi nội dung actor tạo là ẩn danh: mention trong bài ẩn
+    // danh dùng is_anonymous của bài, mention/reply trong bình luận dùng của bình
+    // luận. Join trực tiếp trạng thái hiện tại nên notification cũ cũng được che
+    // nếu bài/bình luận được bật ẩn danh sau đó.
     const listSql = `
       SELECT
-        n.id,
-        n.recipient_mssv,
-        n.actor_mssv,
-        COALESCE(NULLIF(s.full_name, ''), n.actor_mssv) AS actor_name,
-        n.type,
-        n.post_id,
-        n.comment_id,
-        n.is_read,
-        n.created_at,
-        p.title AS post_title,
-        COALESCE(p.category, 'discussion') AS post_category,
-        SUBSTRING(c.content, 1, 140) AS comment_snippet
-      FROM notifications n
-      LEFT JOIN students s ON s.mssv = n.actor_mssv
-      LEFT JOIN community_posts p ON p.id = n.post_id
-      LEFT JOIN community_post_comments c ON c.id = n.comment_id
-      WHERE n.recipient_mssv = $1
-      ORDER BY n.created_at DESC
+        x.id,
+        x.recipient_mssv,
+        CASE WHEN x.actor_is_anonymous THEN NULL ELSE x.actor_mssv END AS actor_mssv,
+        CASE WHEN x.actor_is_anonymous THEN NULL ELSE x.actor_name END AS actor_name,
+        x.actor_is_anonymous,
+        x.type,
+        x.post_id,
+        x.comment_id,
+        x.is_read,
+        x.created_at,
+        x.post_title,
+        x.post_category,
+        x.comment_snippet
+      FROM (
+        SELECT
+          n.id,
+          n.recipient_mssv,
+          n.actor_mssv,
+          COALESCE(NULLIF(s.full_name, ''), n.actor_mssv) AS actor_name,
+          CASE
+            WHEN n.comment_id IS NOT NULL THEN COALESCE(c.is_anonymous, FALSE)
+            ELSE COALESCE(p.is_anonymous, FALSE)
+          END AS actor_is_anonymous,
+          n.type,
+          n.post_id,
+          n.comment_id,
+          n.is_read,
+          n.created_at,
+          p.title AS post_title,
+          COALESCE(p.category, 'discussion') AS post_category,
+          SUBSTRING(c.content, 1, 140) AS comment_snippet
+        FROM notifications n
+        LEFT JOIN students s ON s.mssv = n.actor_mssv
+        LEFT JOIN community_posts p ON p.id = n.post_id
+        LEFT JOIN community_post_comments c ON c.id = n.comment_id
+        WHERE n.recipient_mssv = $1
+      ) x
+      ORDER BY x.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
     const [listResult, countResult] = await Promise.all([

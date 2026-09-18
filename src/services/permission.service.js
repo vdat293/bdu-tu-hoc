@@ -42,6 +42,7 @@ export const CLAN_ROLE_CAPABILITIES = {
     'clan:disband',
     'clan:review_join',
     'clan:role_assign',
+    'clan:role_label_update',
     'clan:kick',
     'clan:announcement_create',
     'clan:post_create',

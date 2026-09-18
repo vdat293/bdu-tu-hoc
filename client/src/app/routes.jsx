@@ -15,9 +15,10 @@ const EnglishPage = lazy(() => import('../features/english/EnglishPage.jsx'));
 const EnrollmentPage = lazy(() => import('../features/enrollment/EnrollmentPage.jsx'));
 const LearningPage = lazy(() => import('../features/learning/LearningPage.jsx'));
 const CourseLearningPage = lazy(() => import('../features/learning/CourseLearningPage.jsx'));
-const ClansPage = lazy(() => import('../features/clans/ClansPage.jsx'));
-const ClanPage = lazy(() => import('../features/clans/ClanPage.jsx'));
+const ClubDirectoryPage = lazy(() => import('../features/clubs/pages/ClubDirectoryPage.jsx'));
+const ClubDetailPage = lazy(() => import('../features/clubs/pages/ClubDetailPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
+const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
 function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
@@ -37,9 +38,10 @@ export default function AppRoutes() {
       <Route path="enrollment" element={<Lazy><EnrollmentPage /></Lazy>} />
       <Route path="learning" element={<Lazy><LearningPage /></Lazy>} />
       <Route path="learning/:courseCode" element={<Lazy><CourseLearningPage /></Lazy>} />
-      <Route path="clans" element={<Lazy><ClansPage /></Lazy>} />
-      <Route path="clans/:clanId" element={<Lazy><ClanPage /></Lazy>} />
+      <Route path="clans" element={<Lazy><ClubDirectoryPage /></Lazy>} />
+      <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
+      <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
       <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
     </Route>
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />

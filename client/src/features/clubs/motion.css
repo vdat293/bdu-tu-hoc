@@ -1,0 +1,65 @@
+/* Motion riêng cho clubs: KHÔNG sửa style toàn cục khác. */
+
+.club-tab-enter { animation: club-tab-enter 200ms ease-out; }
+
+@keyframes club-tab-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.club-shimmer { position: relative; overflow: hidden; border-radius: 6px; background: var(--bg-card-hover, #f1f5f9); min-height: 14px; }
+.club-shimmer::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  animation: club-shimmer 1.4s ease-out infinite;
+}
+@keyframes club-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.club-shimmer--avatar { width: 38px; height: 38px; border-radius: 8px; }
+.club-shimmer--line { height: 14px; }
+.club-shimmer--heading { width: 55%; height: 18px; }
+.club-shimmer--wide { width: 90%; }
+.club-shimmer--short { width: 40%; }
+.club-skeleton-card { pointer-events: none; }
+
+.club-modal-anim { animation: club-modal-pop 180ms ease-out; transform-origin: center; }
+@keyframes club-modal-pop {
+  from { opacity: 0; transform: scale(.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .club-tab-enter, .club-modal-anim, .club-shimmer::after { animation: none; }
+  .club-experience *, .club-experience *::before, .club-experience *::after { transition: none !important; }
+}
+
+@media (max-width: 900px) {
+  .club-detail-layout { grid-template-columns: 1fr; }
+  .club-detail-sidebar { order: 2; }
+}
+
+@media (max-width: 760px) {
+  .club-directory-hero, .club-detail-hero { align-items: stretch; flex-direction: column; }
+  .club-directory-hero__action, .club-detail-hero__actions { justify-items: stretch; width: 100%; }
+  .club-directory-hero__action .btn, .club-detail-hero__actions .btn { width: 100%; }
+  .club-permission-note { max-width: none; text-align: left; }
+  .club-directory-toolbar, .club-feed-filter, .club-doc-toolbar { align-items: stretch; flex-direction: column; }
+  .club-search-field { width: 100%; }
+  .club-doc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .club-member, .club-request { align-items: stretch; flex-direction: column; }
+  .club-member__actions, .club-request__actions { justify-content: flex-start; }
+  .club-role-row { grid-template-columns: 1fr; }
+  .club-form__two-columns, .club-form-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 500px) {
+  .club-experience { gap: 16px; }
+  .club-card__footer { align-items: flex-start; flex-direction: column; }
+  .club-card__footer .btn { width: 100%; }
+  .club-comment-form { align-items: stretch; flex-direction: column; }
+  .club-comment-form .btn { width: 100%; }
+  .club-modal__footer, .club-confirm__actions { align-items: stretch; flex-direction: column-reverse; }
+  .club-modal__footer .btn, .club-confirm__actions .btn { width: 100%; }
+}

@@ -18,7 +18,9 @@ import { CommunityRealtime } from '../services/community-realtime.service.js';
 import { MentionService } from '../services/mention.service.js';
 import { NotificationService } from '../services/notification.service.js';
 import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
+import { ClanRoleService } from '../services/clan-role.service.js';
 import { AchievementService } from '../services/achievement.service.js';
+import { AcademicSnapshotService } from '../services/academic-snapshot.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
 import { SurveyRunService } from '../services/survey-run.service.js';
 import { PermissionService } from '../services/permission.service.js';
@@ -30,11 +32,13 @@ function publishMentionNotifications(created) {
   if (!Array.isArray(created)) return;
   for (const item of created) {
     try {
+      const isAnonymous = Boolean(item?.actor_is_anonymous);
       CommunityRealtime.publishNotification(item?.recipient_mssv, {
         id: item?.id,
         type: item?.type,
-        actor_mssv: item?.actor_mssv,
-        actor_name: item?.actor_name || item?.actor_mssv,
+        actor_mssv: isAnonymous ? null : item?.actor_mssv,
+        actor_name: isAnonymous ? null : (item?.actor_name || item?.actor_mssv),
+        actor_is_anonymous: isAnonymous,
         post_id: item?.post_id != null ? String(item.post_id) : null,
         comment_id: item?.comment_id != null ? String(item.comment_id) : null,
         created_at: item?.created_at
@@ -55,6 +59,15 @@ export const ApiController = {
       StudentService.recordLogin(data.mssv, data.name).catch((err) => {
         console.error('[StudentService] Lỗi cập nhật trạng thái đăng nhập:', err.message);
       });
+      // Chụp snapshot học lực ngay sau login (fire-and-forget): thẻ GPA/tín chỉ
+      // trên hồ sơ confession cần dữ liệu này mà không phụ thuộc token còn sống.
+      if (AcademicSnapshotService.hasDatabase()) {
+        BduService.getGrades(data.token)
+          .then((grades) => AcademicSnapshotService.saveFromGrades(data.mssv, grades, { source: 'bdu_login' }))
+          .catch((err) => {
+            console.warn('[AcademicSnapshot] Không thể lưu học lực khi đăng nhập:', err.message);
+          });
+      }
       return res.json(data);
     } catch (err) {
       console.error('Login error:', err.message);
@@ -78,6 +91,7 @@ export const ApiController = {
           const mssv = await BduIdentityService.resolveVerifiedMssv(authHeader);
           await LearningService.syncStudentCourses(mssv, data);
           await AchievementService.syncFromGrades(mssv, data);
+          await AcademicSnapshotService.saveFromGrades(mssv, data, { source: 'bdu_grades' });
         } catch (syncError) {
           console.error('[StudentDataSync] Không thể đồng bộ học phần/thành tựu:', syncError.message);
         }
@@ -724,6 +738,59 @@ export const ApiController = {
     }
   },
 
+  /**
+   * Hồ sơ công khai của một sinh viên (mở từ tag @MSSV trong Confession):
+   * presentation (tên, avatar, khung, danh hiệu, clan) + học lực tích lũy
+   * (GPA hệ 10/4, tín chỉ đạt, xếp loại) kèm thứ hạng nổi bật.
+   */
+  async getStudentProfile(req, res) {
+    try {
+      res.setHeader('Cache-Control', 'private, no-store');
+      const requesterMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const mssv = String(req.params.mssv || '').trim().toUpperCase();
+      if (!mssv) {
+        return res.status(400).json({ result: false, message: 'Thiếu MSSV cần xem hồ sơ.' });
+      }
+      const presentation = await IdentityPresentationService.getPresentation(mssv);
+      let snapshot = await AcademicSnapshotService.getSnapshot(mssv).catch(() => null);
+      // Chính chủ mở hồ sơ mà chưa có snapshot (user cũ chưa đăng nhập lại):
+      // chụp ngay từ payload điểm BDU đang có token, để GPA hệ 10 không trống.
+      if (!snapshot && requesterMssv === mssv) {
+        try {
+          const grades = await BduService.getGrades(req.headers.authorization);
+          snapshot = await AcademicSnapshotService.saveFromGrades(mssv, grades, { source: 'profile_view' });
+        } catch (snapshotError) {
+          console.warn('[AcademicSnapshot] Không thể chụp học lực khi mở hồ sơ:', snapshotError.message);
+        }
+      }
+      const ranking = AcademicRankingService.hasDatabase()
+        ? await AcademicRankingService.getLatestByMssv(mssv).catch(() => null)
+        : null;
+      const toNumberOrNull = (value) => {
+        const number = Number(value);
+        return value === null || value === undefined || !Number.isFinite(number) ? null : number;
+      };
+      const academic = {
+        gpa_10: toNumberOrNull(snapshot?.gpa_10),
+        gpa_4: toNumberOrNull(snapshot?.gpa_4) ?? toNumberOrNull(ranking?.gpa_tich_luy_he_4),
+        earned_credits: toNumberOrNull(snapshot?.earned_credits) ?? toNumberOrNull(ranking?.tin_chi_dat_tich_luy),
+        classification: snapshot?.classification || ranking?.xep_loai_tich_luy || null,
+        semester_code: snapshot?.semester_code || ranking?.nkhk || null,
+        updated_at: snapshot?.updated_at || ranking?.dong_bo_luc || null,
+        source: snapshot ? 'snapshot' : (ranking ? 'ranking' : null),
+        rank_gpa: ranking?.xep_hang_noi_bat?.gpa_tich_luy || null,
+        rank_credits: ranking?.xep_hang_noi_bat?.tin_chi_tich_luy || null
+      };
+      return res.json({ result: true, data: { ...presentation, academic } });
+    } catch (err) {
+      console.error('Get student profile error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể tải hồ sơ sinh viên.'
+      });
+    }
+  },
+
   async updateMyIdentityPresentation(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
@@ -1250,7 +1317,8 @@ export const ApiController = {
           const created = await MentionService.syncPostMentions(null, {
             postId: post.id,
             content: `${title || ''}\n${content || ''}`,
-            actorMssv: mssv
+            actorMssv: mssv,
+            isAnonymous: Boolean(post?.is_anonymous)
           });
           publishMentionNotifications(created);
         } catch (mentionError) {
@@ -1301,7 +1369,8 @@ export const ApiController = {
           const created = await MentionService.syncPostMentions(null, {
             postId: data.id,
             content: `${data.title || ''}\n${data.content || ''}`,
-            actorMssv: mssv
+            actorMssv: mssv,
+            isAnonymous: Boolean(data?.is_anonymous)
           });
           publishMentionNotifications(created);
         } catch (mentionError) {
@@ -1442,13 +1511,15 @@ export const ApiController = {
             postId: req.params.id,
             commentId: comment?.id,
             content,
-            actorMssv: mssv
+            actorMssv: mssv,
+            isAnonymous: Boolean(comment?.is_anonymous)
           });
           const reply = await MentionService.createReplyNotification(null, {
             postId: req.params.id,
             commentId: comment?.id,
             parentId: comment?.parent_id,
-            actorMssv: mssv
+            actorMssv: mssv,
+            isAnonymous: Boolean(comment?.is_anonymous)
           });
           publishMentionNotifications([...created, ...(reply ? [reply] : [])]);
         } catch (mentionError) {
@@ -1489,7 +1560,8 @@ export const ApiController = {
             postId: req.params.id,
             commentId: comment?.id,
             content: req.body?.content,
-            actorMssv: mssv
+            actorMssv: mssv,
+            isAnonymous: Boolean(comment?.is_anonymous)
           });
           publishMentionNotifications(created);
         } catch (mentionError) {
@@ -1803,6 +1875,39 @@ export const ApiController = {
     } catch (err) {
       console.error('Get clan quiz error:', err.message);
       return res.status(err.status || 500).json({ result: false, code: err.code, message: err.message || 'Không thể tải quiz CLB.' });
+    }
+  },
+
+  async getClanRoles(req, res) {
+    try {
+      if (req.headers.authorization) {
+        try {
+          await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+        } catch {}
+      }
+      const data = await ClanRoleService.getRoleLabels(req.params.id);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Get clan roles error:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể tải tên chức danh CLB.'
+      });
+    }
+  },
+
+  async updateClanRoles(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const roles = Array.isArray(req.body) ? req.body : (req.body?.roles ?? []);
+      const data = await ClanRoleService.updateRoleLabels(req.params.id, mssv, roles);
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('Update clan roles error:', err.message);
+      return res.status(err.status || 400).json({
+        result: false,
+        message: err.message || 'Không thể cập nhật tên chức danh CLB.'
+      });
     }
   },
 

@@ -584,6 +584,8 @@ export const CommunityService = {
         s.full_name AS raw_author_name,
         p.author_mssv AS raw_author_mssv,
         sc.role AS author_clan_role,
+        crl.display_name AS author_role_label,
+        crl.color AS author_role_color,
         CASE 
           WHEN $${viewerParamIndex}::text IS NOT NULL AND l.post_id IS NOT NULL THEN true 
           ELSE false 
@@ -592,6 +594,7 @@ export const CommunityService = {
       JOIN students s ON p.author_mssv = s.mssv
       LEFT JOIN student_clans sc 
         ON p.scope = 'clan' AND p.scope_id ~ '^[0-9]+$' AND sc.clan_id = p.scope_id::bigint AND sc.mssv = p.author_mssv
+      LEFT JOIN clan_role_labels crl ON sc.clan_id = crl.clan_id AND sc.role = crl.role_key
       LEFT JOIN community_post_likes l 
         ON p.id = l.post_id AND l.mssv = $${viewerParamIndex}::text
       ${whereClause}
@@ -651,6 +654,8 @@ export const CommunityService = {
           mssv: maskIdentity ? null : row.raw_author_mssv,
           name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
           clan_role: maskIdentity ? null : row.author_clan_role,
+          author_role_label: maskIdentity ? null : (row.author_role_label || null),
+          author_role_color: maskIdentity ? null : (row.author_role_color || null),
           is_anonymous: row.is_anonymous
         }
       });
@@ -695,6 +700,8 @@ export const CommunityService = {
         s.full_name AS raw_author_name,
         p.author_mssv AS raw_author_mssv,
         sc.role AS author_clan_role,
+        crl.display_name AS author_role_label,
+        crl.color AS author_role_color,
         CASE 
           WHEN $2::text IS NOT NULL AND l.post_id IS NOT NULL THEN true 
           ELSE false 
@@ -703,6 +710,7 @@ export const CommunityService = {
       JOIN students s ON p.author_mssv = s.mssv
       LEFT JOIN student_clans sc 
         ON p.scope = 'clan' AND p.scope_id ~ '^[0-9]+$' AND sc.clan_id = p.scope_id::bigint AND sc.mssv = p.author_mssv
+      LEFT JOIN clan_role_labels crl ON sc.clan_id = crl.clan_id AND sc.role = crl.role_key
       LEFT JOIN community_post_likes l 
         ON p.id = l.post_id AND l.mssv = $2::text
       WHERE p.id = $1 AND p.deleted_at IS NULL;
@@ -747,6 +755,8 @@ export const CommunityService = {
         mssv: maskIdentity ? null : row.raw_author_mssv,
         name: maskIdentity ? 'Sinh viên giấu tên' : (row.raw_author_name || row.raw_author_mssv),
         clan_role: maskIdentity ? null : row.author_clan_role,
+        author_role_label: maskIdentity ? null : (row.author_role_label || null),
+        author_role_color: maskIdentity ? null : (row.author_role_color || null),
         is_anonymous: row.is_anonymous
       }
     };
@@ -1032,10 +1042,13 @@ export const CommunityService = {
         p.attachments,
         s.full_name AS author_name,
         p.author_mssv,
-        sc.role AS author_clan_role
+        sc.role AS author_clan_role,
+        crl.display_name AS author_role_label,
+        crl.color AS author_role_color
       FROM community_posts p
       JOIN students s ON p.author_mssv = s.mssv
       LEFT JOIN student_clans sc ON sc.clan_id = p.scope_id::bigint AND sc.mssv = p.author_mssv
+      LEFT JOIN clan_role_labels crl ON sc.clan_id = crl.clan_id AND sc.role = crl.role_key
       WHERE p.scope = 'clan' 
         AND p.scope_id = $1 
         AND p.deleted_at IS NULL
@@ -1067,6 +1080,8 @@ export const CommunityService = {
           author_name: authorDisplay,
           author_mssv: isAnon ? null : row.author_mssv,
           author_clan_role: isAnon ? null : row.author_clan_role,
+          author_role_label: isAnon ? null : (row.author_role_label || null),
+          author_role_color: isAnon ? null : (row.author_role_color || null),
           created_at: row.post_created_at
         });
       });

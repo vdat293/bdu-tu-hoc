@@ -33,7 +33,7 @@ function formatRelativeTime(dateStr) {
 }
 
 function notificationText(item) {
-  const actor = item?.actor_name || 'Ai đó';
+  const actor = item?.actor_name || (item?.actor_is_anonymous ? 'Người ẩn danh' : 'Ai đó');
   if (item?.type === 'reply') return { bold: actor, rest: ' đã trả lời bình luận của bạn' };
   return { bold: actor, rest: ' đã nhắc tới bạn trong confession' };
 }
@@ -76,11 +76,13 @@ export default function NotificationBell() {
       client.invalidateQueries({ queryKey: ['notifications'] });
       client.invalidateQueries({ queryKey: ['notifications-unread'] });
       const actor = message?.data?.actor_name;
+      const isAnon = Boolean(message?.data?.actor_is_anonymous);
+      const actorLabel = actor || (isAnon ? 'Người ẩn danh' : '');
       const kind = message?.data?.type;
       if (kind === 'reply') {
-        notify(actor ? `${actor} đã trả lời bình luận của bạn` : 'Bạn có trả lời bình luận mới', 'info');
+        notify(actorLabel ? `${actorLabel} đã trả lời bình luận của bạn` : 'Bạn có trả lời bình luận mới', 'info');
       } else {
-        notify(actor ? `${actor} đã nhắc tới bạn trong confession` : 'Bạn được nhắc tới trong confession', 'info');
+        notify(actorLabel ? `${actorLabel} đã nhắc tới bạn trong confession` : 'Bạn được nhắc tới trong confession', 'info');
       }
     };
     window.addEventListener('bdu:realtime', handle);
@@ -182,7 +184,9 @@ export default function NotificationBell() {
                     className={`notif-item${unreadItem ? ' is-unread' : ''}`}
                     onClick={() => handleItemClick(item)}
                   >
-                    <span className="notif-avatar" aria-hidden="true">{getInitials(item?.actor_name)}</span>
+                    <span className="notif-avatar" aria-hidden="true">
+                      {item?.actor_is_anonymous ? '?' : getInitials(item?.actor_name)}
+                    </span>
                     <span className="notif-copy">
                       <span className="notif-text">
                         <strong>{text.bold}</strong>

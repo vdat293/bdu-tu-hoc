@@ -64,7 +64,7 @@ async function resolveActorName(runner, actorMssv) {
   }
 }
 
-async function syncMentions(db, { postId, commentId = null, content, actorMssv }) {
+async function syncMentions(db, { postId, commentId = null, content, actorMssv, isAnonymous = false }) {
   const runner = runnerOf(db);
   const cleanPostId = String(postId ?? '').trim();
   const actor = normalizeMssv(actorMssv);
@@ -92,7 +92,7 @@ async function syncMentions(db, { postId, commentId = null, content, actorMssv }
     );
   }
 
-  const actorName = await resolveActorName(runner, actor);
+  const actorName = isAnonymous ? null : await resolveActorName(runner, actor);
   const created = [];
   for (const user of targets) {
     const result = await runner.query(
@@ -102,32 +102,42 @@ async function syncMentions(db, { postId, commentId = null, content, actorMssv }
        RETURNING id, recipient_mssv, actor_mssv, type, post_id, comment_id, is_read, created_at`,
       [normalizeMssv(user.mssv), actor, cleanPostId, cleanCommentId]
     );
-    if (result.rowCount) created.push({ ...result.rows[0], actor_name: actorName });
+    if (result.rowCount) {
+      created.push({
+        ...result.rows[0],
+        actor_mssv: isAnonymous ? null : result.rows[0].actor_mssv,
+        actor_name: actorName,
+        actor_is_anonymous: Boolean(isAnonymous)
+      });
+    }
   }
   return created;
 }
 
 /**
  * Đồng bộ mentions của bài viết. Chỉ gọi khi post.category === 'confession'.
+ * `isAnonymous`: bài đang ẩn danh thì notification không lộ danh tính người tag.
  * Trả về danh sách notification mention vừa tạo (để publish WS).
  */
-export async function syncPostMentions(db, { postId, content, actorMssv }) {
-  return syncMentions(db, { postId, commentId: null, content, actorMssv });
+export async function syncPostMentions(db, { postId, content, actorMssv, isAnonymous = false }) {
+  return syncMentions(db, { postId, commentId: null, content, actorMssv, isAnonymous });
 }
 
 /**
  * Đồng bộ mentions của bình luận. Chỉ gọi khi post.category === 'confession'.
+ * `isAnonymous`: bình luận đang ẩn danh thì notification không lộ danh tính người tag.
  */
-export async function syncCommentMentions(db, { postId, commentId, content, actorMssv }) {
+export async function syncCommentMentions(db, { postId, commentId, content, actorMssv, isAnonymous = false }) {
   if (commentId == null) return [];
-  return syncMentions(db, { postId, commentId, content, actorMssv });
+  return syncMentions(db, { postId, commentId, content, actorMssv, isAnonymous });
 }
 
 /**
  * Nếu bình luận là reply (có parentId), notify tác giả bình luận cha.
+ * `isAnonymous`: bình luận trả lời đang ẩn danh thì không lộ danh tính người trả lời.
  * Trả về notification vừa tạo hoặc null (tự reply / đã notify rồi).
  */
-export async function createReplyNotification(db, { postId, commentId, parentId, actorMssv }) {
+export async function createReplyNotification(db, { postId, commentId, parentId, actorMssv, isAnonymous = false }) {
   const runner = runnerOf(db);
   const actor = normalizeMssv(actorMssv);
   const cleanPostId = String(postId ?? '').trim();
@@ -144,7 +154,7 @@ export async function createReplyNotification(db, { postId, commentId, parentId,
   const recipient = normalizeMssv(parent.rows[0]?.author_mssv);
   if (!recipient || recipient === actor) return null;
 
-  const actorName = await resolveActorName(runner, actor);
+  const actorName = isAnonymous ? null : await resolveActorName(runner, actor);
   const result = await runner.query(
     `INSERT INTO notifications (recipient_mssv, actor_mssv, type, post_id, comment_id)
      VALUES ($1, $2, 'reply', $3, $4)
@@ -153,7 +163,12 @@ export async function createReplyNotification(db, { postId, commentId, parentId,
     [recipient, actor, cleanPostId, cleanCommentId]
   );
   if (!result.rowCount) return null;
-  return { ...result.rows[0], actor_name: actorName };
+  return {
+    ...result.rows[0],
+    actor_mssv: isAnonymous ? null : result.rows[0].actor_mssv,
+    actor_name: actorName,
+    actor_is_anonymous: Boolean(isAnonymous)
+  };
 }
 
 export const MentionService = {

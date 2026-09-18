@@ -51,9 +51,8 @@ export function lookupMentionName(mssv) {
 }
 
 /**
- * Chip @mention: đã đăng nhập click để mở hồ sơ sinh viên được tag.
- * InfoPage hiện chỉ hiển thị hồ sơ của chính mình — khi InfoPage hỗ trợ
- * `?mssv=` thì nút này hoạt động ngay không cần sửa Confession.
+ * Chip @mention: đã đăng nhập click để mở trang hồ sơ sinh viên được tag
+ * ngay trong khu vực Confession (/confession/profile/:mssv).
  */
 function MentionChip({ mssv, label }) {
   const navigate = useNavigate();
@@ -63,7 +62,7 @@ function MentionChip({ mssv, label }) {
       className="cfs-mention"
       data-mssv={mssv}
       title={`${label} (${mssv}) — xem hồ sơ`}
-      onClick={() => navigate(`/info?mssv=${encodeURIComponent(mssv)}`)}
+      onClick={() => navigate(`/confession/profile/${encodeURIComponent(mssv)}`)}
     >
       @{label}
     </button>

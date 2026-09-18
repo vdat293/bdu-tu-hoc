@@ -524,6 +524,7 @@ function mapPresentationRow(row) {
     student_cohort: row.student_cohort || row.ranking_cohort || null,
     max_titles: MAX_DISPLAYED_TITLES,
     can_create_clan: Boolean(hasTtcds),
+    clans: Array.isArray(row.clans) ? row.clans : [],
     available_titles: availableTitles.map(({ priority, ...title }) => title),
     achievement_catalog: achievementCatalog,
     frame_access: frameAccess,

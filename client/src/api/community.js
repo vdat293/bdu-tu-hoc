@@ -84,6 +84,8 @@ export async function updateClanMemberRole(token, clanId, mssv, role) { const da
 export async function kickClanMember(token, clanId, mssv) { return request(`/api/community/clans/${encodeURIComponent(clanId)}/members/${encodeURIComponent(mssv)}`, { method: 'DELETE', token, defaultMessage: 'Không thể xóa thành viên.' }); }
 export async function updateClan(token, clanId, changes) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}`, { method: 'PATCH', token, body: changes, defaultMessage: 'Không thể cập nhật CLB.' }); return unwrap(data, data); }
 export async function disbandClan(token, clanId) { return request(`/api/community/clans/${encodeURIComponent(clanId)}`, { method: 'DELETE', token, defaultMessage: 'Không thể giải tán CLB.' }); }
+export async function getClanRoles(token, clanId, { signal } = {}) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/roles`, { token, signal, defaultMessage: 'Không thể tải tên chức danh CLB.' }); return unwrap(data, []); }
+export async function updateClanRoles(token, clanId, roles) { const data = await request(`/api/community/clans/${encodeURIComponent(clanId)}/roles`, { method: 'PUT', token, body: { roles }, defaultMessage: 'Không thể cập nhật tên chức danh CLB.' }); return unwrap(data, []); }
 
 export async function getCommunityPosts(token, { scope = 'school', scopeId = null, filter = 'all', limit = 20, offset = 0, signal } = {}) {
   const params = new URLSearchParams({ scope, filter, limit: String(limit), offset: String(offset) });

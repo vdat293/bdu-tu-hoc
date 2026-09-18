@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ViewportModal, useViewportDialog } from '../../components/ViewportModal.jsx';
+import { ViewportModal, useViewportDialog } from '../../../components/ViewportModal.jsx';
 
 export default function ClanJoinQuizModal({ open, clanName, quiz, isLoading, isPending, result, onClose, onSubmit, onViewClan }) {
   const [answers, setAnswers] = useState({});

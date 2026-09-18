@@ -1,5 +1,6 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { PermissionService } from './permission.service.js';
+import { CLAN_ROLE_KEYS, DEFAULT_ROLE_LABELS } from './clan-role.service.js';
 import { getQuizForSubmission, scoreQuizSubmission } from './clan-quiz.service.js';
 
 function normalizeMssv(mssv) {
@@ -163,6 +164,20 @@ export const StudentService = {
         `, [cleanLeaderMssv, clan.id]);
       }
 
+      // Seed 5 role labels mặc định per-CLB (tách role_key khỏi display_name custom).
+      const labelValues = [];
+      const labelPlaceholders = CLAN_ROLE_KEYS.map((roleKey, idx) => {
+        const base = idx * 4;
+        labelValues.push(clan.id, roleKey, DEFAULT_ROLE_LABELS[roleKey].display_name, DEFAULT_ROLE_LABELS[roleKey].color);
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
+      });
+      await client.query(
+        `INSERT INTO clan_role_labels (clan_id, role_key, display_name, color)
+         VALUES ${labelPlaceholders.join(', ')}
+         ON CONFLICT DO NOTHING;`,
+        labelValues
+      );
+
       return clan;
     });
   },
@@ -297,7 +312,7 @@ export const StudentService = {
       cleanRequester,
       clanId,
       'clan:review_join',
-      'Chỉ Trưởng CLB (Bang Chủ) mới có quyền xem danh sách yêu cầu gia nhập.'
+      'Bạn không có quyền xem danh sách yêu cầu gia nhập.'
     );
 
     const sql = `
@@ -346,7 +361,7 @@ export const StudentService = {
       cleanReviewer,
       clanId,
       'clan:review_join',
-      'Chỉ Trưởng CLB mới có quyền phê duyệt hoặc từ chối yêu cầu gia nhập.'
+      'Bạn không có quyền phê duyệt hoặc từ chối yêu cầu gia nhập.'
     );
 
     const reqRes = await query(
@@ -417,10 +432,13 @@ export const StudentService = {
         s.is_active,
         s.last_login_at,
         sc.role,
+        crl.display_name AS role_label,
+        crl.color AS role_color,
         sc.contribution_points,
         sc.joined_at
       FROM student_clans sc
       JOIN students s ON sc.mssv = s.mssv
+      LEFT JOIN clan_role_labels crl ON crl.clan_id = sc.clan_id AND crl.role_key = sc.role
       WHERE sc.clan_id = $1
       ORDER BY 
         CASE sc.role
@@ -485,7 +503,50 @@ export const StudentService = {
       ORDER BY member_count DESC, c.level DESC, c.name ASC;
     `;
     const result = await query(sql, [cleanViewerMssv]);
-    return result.rows;
+    const clans = result.rows;
+    // Nạp role_labels 1 lần cho tất cả CLB, attach dạng { role_key: { display_name, color } }.
+    try {
+      const clanIds = clans.map((c) => c.id).filter((v) => v !== null && v !== undefined);
+      const labelsByClan = new Map();
+      if (clanIds.length > 0) {
+        const labelRes = await query(
+          'SELECT clan_id, role_key, display_name, color FROM clan_role_labels WHERE clan_id = ANY($1)',
+          [clanIds]
+        );
+        for (const row of labelRes.rows || []) {
+          const key = String(row.clan_id);
+          if (!labelsByClan.has(key)) labelsByClan.set(key, {});
+          labelsByClan.get(key)[row.role_key] = {
+            display_name: row.display_name,
+            color: row.color
+          };
+        }
+      }
+      for (const clan of clans) {
+        const existing = labelsByClan.get(String(clan.id)) || {};
+        const roleLabels = {};
+        for (const roleKey of CLAN_ROLE_KEYS) {
+          roleLabels[roleKey] = existing[roleKey] || {
+            display_name: DEFAULT_ROLE_LABELS[roleKey].display_name,
+            color: DEFAULT_ROLE_LABELS[roleKey].color
+          };
+        }
+        clan.role_labels = roleLabels;
+      }
+    } catch {
+      // Bảng clan_role_labels chưa migrate: fallback defaults để feed cũ vẫn chạy.
+      for (const clan of clans) {
+        const roleLabels = {};
+        for (const roleKey of CLAN_ROLE_KEYS) {
+          roleLabels[roleKey] = {
+            display_name: DEFAULT_ROLE_LABELS[roleKey].display_name,
+            color: DEFAULT_ROLE_LABELS[roleKey].color
+          };
+        }
+        clan.role_labels = roleLabels;
+      }
+    }
+    return clans;
   },
 
   /**
@@ -504,7 +565,7 @@ export const StudentService = {
       cleanRequester,
       clanId,
       'clan:role_assign',
-      'Chỉ Bang Chủ mới có quyền phân quyền thành viên.'
+      'Bạn không có quyền phân quyền thành viên.'
     );
 
     const validRoles = ['leader', 'vice_leader', 'elder', 'member'];
@@ -514,7 +575,7 @@ export const StudentService = {
       await query('UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3', ['member', clanId, cleanRequester]);
       await query('UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3', ['leader', clanId, cleanTarget]);
       await query('UPDATE clans SET leader_mssv = $1, updated_at = NOW() WHERE id = $2', [cleanTarget, clanId]);
-      return { success: true, message: 'Đã chuyển giao quyền Bang Chủ thành công.' };
+      return { success: true, message: 'Đã chuyển giao quyền quản trị CLB thành công.' };
     }
 
     const res = await query(
@@ -546,7 +607,7 @@ export const StudentService = {
     );
 
     if (cleanTarget === clanRes.rows[0].leader_mssv) {
-      throw new Error('Không thể khai trừ Bang Chủ.');
+      throw new Error('Không thể khai trừ quản trị CLB.');
     }
 
     const delRes = await query('DELETE FROM student_clans WHERE clan_id = $1 AND mssv = $2', [clanId, cleanTarget]);
@@ -569,7 +630,7 @@ export const StudentService = {
       cleanRequester,
       clanId,
       'clan:edit',
-      'Chỉ Bang Chủ mới có quyền thay đổi thông tin CLB.'
+      'Bạn không có quyền thay đổi thông tin CLB.'
     );
 
     const updates = [];
@@ -614,7 +675,7 @@ export const StudentService = {
       cleanRequester,
       clanId,
       'clan:disband',
-      'Chỉ Bang Chủ mới có quyền giải tán CLB.'
+      'Bạn không có quyền giải tán CLB.'
     );
 
     await query('DELETE FROM clans WHERE id = $1', [clanId]);

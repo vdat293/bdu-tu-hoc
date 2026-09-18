@@ -92,6 +92,7 @@ router.get('/students/me/presentation', ApiController.getMyIdentityPresentation)
 router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
 router.put('/students/me/cosmetics/frame', ApiController.updateMyEquippedFrame);
 router.get('/students/search', ApiController.searchActiveStudents);
+router.get('/students/:mssv/profile', ApiController.getStudentProfile);
 
 // Thông báo tag/reply confession
 router.get('/notifications', ApiController.getNotifications);
@@ -159,6 +160,8 @@ router.get('/community/clans/:id/members', ApiController.getClanMembers);
 router.patch('/community/clans/:id/members/:mssv/role', ApiController.updateClanMemberRole);
 router.delete('/community/clans/:id/members/:mssv', ApiController.kickClanMember);
 router.get('/community/clans/:id/documents', ApiController.getClanDocuments);
+router.get('/community/clans/:id/roles', ApiController.getClanRoles);
+router.put('/community/clans/:id/roles', ApiController.updateClanRoles);
 router.get('/community/clans/:id/quiz', ApiController.getClanQuiz);
 router.put('/community/clans/:id/quiz', ApiController.updateClanQuiz);
 router.post('/community/polls/:pollId/vote', ApiController.voteClanPoll);

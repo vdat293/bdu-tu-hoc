@@ -47,3 +47,20 @@ export async function searchActiveStudents(token, q, { limit = 8, signal } = {})
     return [];
   }
 }
+
+/**
+ * Hồ sơ công khai của một sinh viên: presentation (avatar/khung/danh hiệu/clan)
+ * + học lực tích lũy (GPA hệ 10/4, tín chỉ, xếp loại, thứ hạng nổi bật).
+ *
+ * GET /api/students/:mssv/profile → { result: true, data: {...} }
+ */
+export async function getStudentProfile(token, mssv, { signal } = {}) {
+  const cleanMssv = String(mssv || '').trim();
+  if (!cleanMssv) throw new Error('Thiếu MSSV cần xem hồ sơ.');
+  const data = await request(`/api/students/${encodeURIComponent(cleanMssv)}/profile`, {
+    token,
+    signal,
+    defaultMessage: 'Không thể tải hồ sơ sinh viên.'
+  });
+  return unwrap(data, null);
+}
