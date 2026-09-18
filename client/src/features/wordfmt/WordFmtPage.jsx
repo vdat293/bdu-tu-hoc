@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatDocx } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
 import '../../styles/wordfmt-status.css';
 
@@ -200,6 +201,7 @@ export default function WordFmtPage() {
   const [skipProposal, setSkipProposal] = useState(false);
 
   const [run, setRun] = useState(() => getToolRun('wordfmt') || { status: 'idle', result: null });
+  const [confirmUI, askConfirm] = useConfirm();
 
   useEffect(() => {
     return subscribeToolRun('wordfmt', (next) => {
@@ -238,7 +240,7 @@ export default function WordFmtPage() {
     setIncludeComments(previous?.includeComments ?? true);
   };
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (!file) {
       notify('Vui lòng chọn file .docx trước khi bắt đầu.', 'error');
@@ -258,15 +260,19 @@ export default function WordFmtPage() {
 
     let warningMsg = '';
     if (studentWords > 6 && topicWords > 40) {
-      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ) và tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ) và tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng.`;
     } else if (studentWords > 6) {
-      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      warningMsg = `Tên sinh viên vượt quá 6 từ (${studentWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng.`;
     } else if (topicWords > 40) {
-      warningMsg = `Tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng. Bạn vẫn muốn tiếp tục chứ?`;
+      warningMsg = `Tên tiểu luận/đề tài vượt quá 40 từ (${topicWords} từ), khi xuất ra bìa có khả năng sẽ bị lỗi định dạng.`;
     }
 
     if (warningMsg) {
-      const proceed = window.confirm(warningMsg);
+      const proceed = await askConfirm({
+        title: 'Vẫn tiếp tục chuẩn hóa?',
+        message: warningMsg,
+        confirmText: 'Vẫn tiếp tục'
+      });
       if (!proceed) return;
     }
 
@@ -807,6 +813,7 @@ export default function WordFmtPage() {
           </div>
         </div>
       </div>
+      {confirmUI}
     </section>
   );
 }

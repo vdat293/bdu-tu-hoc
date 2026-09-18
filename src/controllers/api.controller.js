@@ -17,9 +17,11 @@ import { AvatarOverrideService } from '../services/avatar-override.service.js';
 import { CommunityRealtime } from '../services/community-realtime.service.js';
 import { MentionService } from '../services/mention.service.js';
 import { NotificationService } from '../services/notification.service.js';
+import { ReminderDigestService } from '../services/reminder-digest.service.js';
 import { NotificationPrefsService, TokenVaultService } from '../services/notification-prefs.service.js';
 import { ScheduleSnapshotService } from '../services/schedule-snapshot.service.js';
 import { DiscordLinkService } from '../services/discord-link.service.js';
+import { DiscordOAuthService } from '../services/discord-oauth.service.js';
 import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { ClanRoleService } from '../services/clan-role.service.js';
 import { AchievementService } from '../services/achievement.service.js';
@@ -49,6 +51,16 @@ function publishMentionNotifications(created) {
     } catch (error) {
       console.warn('[notifications] Không thể publish realtime:', error.message);
     }
+    // Push tag/reply qua Discord DM ngay (fire-and-forget, chỉ khi user đã link).
+    try {
+      ReminderDigestService.pushMention({
+        recipient_mssv: item?.recipient_mssv,
+        actor_name: item?.actor_is_anonymous ? null : (item?.actor_name || item?.actor_mssv),
+        type: item?.type === 'reply' ? 'reply' : 'mention',
+        post_id: item?.post_id != null ? String(item.post_id) : null,
+        comment_id: item?.comment_id != null ? String(item.comment_id) : null
+      }).catch(() => {});
+    } catch {}
   }
 }
 
@@ -1704,6 +1716,8 @@ export const ApiController = {
           notify_discord: prefs.notify_discord,
           email: prefs.email,
           email_verified_at: prefs.email_verified_at,
+          discord_linked: Boolean(prefs.discord_user_id && prefs.discord_verified_at),
+          discord_username: prefs.discord_username || null,
           discord_verified_at: prefs.discord_verified_at,
           remind_offsets: prefs.remind_offsets
         } : { consented: false }
@@ -1750,6 +1764,44 @@ export const ApiController = {
       }
       const data = await DiscordLinkService.createCode(mssv);
       return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  // Discord OAuth 1-click: frontend lấy URL rồi mở popup Authorize.
+  async createDiscordOAuthUrl(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const prefs = await NotificationPrefsService.get(mssv);
+      if (!NotificationPrefsService.isConsented(prefs)) {
+        return res.status(400).json({ result: false, message: 'Bạn cần bật đồng ý nhận nhắc lịch trước.' });
+      }
+      const data = await DiscordOAuthService.createAuthUrl(mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  // Trang /discord-callback gọi sau khi Discord redirect về kèm ?code&state.
+  async completeDiscordOAuth(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { state, code } = req.body || {};
+      const data = await DiscordOAuthService.complete({ mssv, state, code });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  // Gỡ liên kết Discord để đổi tài khoản. Giữ consent + snapshot lịch.
+  async unlinkDiscordLink(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await NotificationPrefsService.unlinkDiscord(mssv);
+      return res.json({ result: true, data: { linked: false } });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, message: err.message });
     }

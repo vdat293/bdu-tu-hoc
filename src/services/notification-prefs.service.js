@@ -141,18 +141,48 @@ export const NotificationPrefsService = {
     return res.rows[0];
   },
 
-  // Tắt: xóa vault + outbox pending, giữ prefs để biết đã từng tắt.
+  // Tắt hẳn: xóa vault + snapshot + outbox pending + ĐỊNH DANH Discord cũ.
+  // Phải xóa link Discord ở đây, nếu không bật lại sẽ tưởng vẫn còn link
+  // và bỏ qua bước kết nối (bug đã gặp). Muốn giữ link thì dùng unlinkDiscord.
   async revoke(mssv) {
     const clean = normalizeMssv(mssv);
     if (!clean || !isDatabaseConfigured()) return false;
     await TokenVaultService.destroy(clean);
     await query(`DELETE FROM schedule_snapshots WHERE mssv = $1`, [clean]);
     await query(`DELETE FROM notification_outbox WHERE mssv = $1 AND status = 'pending'`, [clean]);
+    await query(`DELETE FROM discord_link_codes WHERE mssv = $1`, [clean]);
+    await query(`DELETE FROM discord_oauth_states WHERE mssv = $1`, [clean]);
     await query(`
       UPDATE student_notification_prefs
-      SET unsubscribed_at = NOW(), notify_email = FALSE, notify_discord = FALSE, updated_at = NOW()
+      SET unsubscribed_at = NOW(),
+        notify_email = FALSE,
+        notify_discord = FALSE,
+        discord_user_id = NULL,
+        discord_username = NULL,
+        discord_verified_at = NULL,
+        updated_at = NOW()
       WHERE mssv = $1;
     `, [clean]);
+    return true;
+  },
+
+  // Gỡ liên kết Discord để đổi tài khoản. Giữ consent + snapshot,
+  // chỉ xóa định danh Discord và hàng đợi discord chưa gửi.
+  async unlinkDiscord(mssv) {
+    const clean = normalizeMssv(mssv);
+    if (!clean || !isDatabaseConfigured()) return false;
+    await query(`
+      UPDATE student_notification_prefs SET
+        discord_user_id = NULL,
+        discord_username = NULL,
+        discord_verified_at = NULL,
+        notify_discord = FALSE,
+        updated_at = NOW()
+      WHERE mssv = $1;
+    `, [clean]);
+    await query(`DELETE FROM discord_link_codes WHERE mssv = $1`, [clean]);
+    await query(`DELETE FROM discord_oauth_states WHERE mssv = $1`, [clean]);
+    await query(`DELETE FROM notification_outbox WHERE mssv = $1 AND channel = 'discord' AND status = 'pending'`, [clean]);
     return true;
   },
 

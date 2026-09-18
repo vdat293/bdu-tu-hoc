@@ -165,6 +165,211 @@
   background: #1877f2;
 }
 
+.notif-panel-footer {
+  padding: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.notif-reminder-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed var(--bdu-light, #2563eb);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--bdu-light, #2563eb);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notif-reminder-btn:hover {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+/* Modal nhận thông báo lịch học — render qua portal ra body nên luôn full viewport */
+.reminder-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.reminder-modal {
+  width: min(440px, 100%);
+  max-height: min(640px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--bg-main, #fff);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.reminder-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reminder-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reminder-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim, inherit);
+}
+
+.reminder-agree {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.reminder-cta {
+  width: 100%;
+  text-align: center;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.reminder-block {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reminder-block-title {
+  font-size: 13px;
+}
+
+.reminder-code-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reminder-code {
+  padding: 8px 14px;
+  border: 1px solid var(--bdu-light, #2563eb);
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+.reminder-cmd {
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 13px;
+}
+
+.reminder-ok {
+  margin: 0;
+  font-size: 13px;
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.reminder-danger {
+  color: #e11d48;
+}
+
+.reminder-status-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.35);
+}
+
+.reminder-status-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #16a34a, #059669);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.reminder-status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reminder-status-copy strong {
+  font-size: 14px;
+}
+
+.reminder-status-copy span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.reminder-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.reminder-actions .btn {
+  flex: 1 1 0;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+@media (max-width: 400px) {
+  .reminder-actions {
+    flex-direction: column;
+  }
+}
+
+.reminder-details {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.reminder-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.reminder-details .reminder-code-row {
+  margin-top: 8px;
+}
+
 /* Điểm nhảy từ chuông: viền xanh tạm thời quanh bài viết được dẫn tới. */
 .fbc-post.is-highlighted {
   outline: 2px solid #1877f2;

@@ -11,6 +11,7 @@ import {
   getLearningResources
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
+import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import {
   AvatarContent,
   TitleBadges,
@@ -308,6 +309,7 @@ export default function CourseLearningPage() {
   const client = useQueryClient();
 
   const [showComposer, setShowComposer] = useState(false);
+  const [confirmUI, askConfirm] = useConfirm();
   const [filterKind, setFilterKind] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedComments, setExpandedComments] = useState({});
@@ -673,10 +675,14 @@ export default function CourseLearningPage() {
                         <button
                           type="button"
                           className="learning-post-delete-btn"
-                          onClick={() => {
-                            if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) {
-                              remove.mutate(post.id);
-                            }
+                          onClick={async () => {
+                            const ok = await askConfirm({
+                              title: 'Xóa bài viết?',
+                              message: 'Bài viết sẽ bị xóa khỏi nhóm môn và không thể khôi phục.',
+                              confirmText: 'Xóa bài viết',
+                              danger: true
+                            });
+                            if (ok) remove.mutate(post.id);
                           }}
                           disabled={remove.isPending}
                           title="Xóa bài viết của bạn"
@@ -976,6 +982,7 @@ export default function CourseLearningPage() {
           </div>
         </div>
       )}
+      {confirmUI}
     </section>
   );
 }

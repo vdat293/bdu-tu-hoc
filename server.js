@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
 import apiRoutes from './src/routes/api.routes.js';
 import { WordFmtService } from './src/services/wordfmt.service.js';
 import { RankingSchedulerService } from './src/services/ranking-scheduler.service.js';
+import { ReminderSchedulerService } from './src/services/reminder-scheduler.service.js';
+import { OutboxMailerService } from './src/services/outbox-mailer.service.js';
 import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
 import { AvatarOverrideService } from './src/services/avatar-override.service.js';
@@ -181,6 +183,8 @@ server.listen(PORT, () => {
   console.log(`⚙️  Môi trường: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
   RankingSchedulerService.start();
+  ReminderSchedulerService.start();
+  OutboxMailerService.start();
   TrafficService.start();
   FacebookImportService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {
@@ -195,6 +199,8 @@ server.listen(PORT, () => {
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   RankingSchedulerService.stop();
+  ReminderSchedulerService.stop();
+  OutboxMailerService.stop();
   TrafficService.stop();
   EntertainmentGameService.stop();
   await FacebookImportService.stop().catch(() => {});

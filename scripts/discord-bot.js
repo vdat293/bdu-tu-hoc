@@ -6,11 +6,11 @@
  * Env cần: DISCORD_BOT_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID (dev, optional)
  */
 import '../src/config/load-env.js';
-import { Client, GatewayIntentBits, Partials, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { ApplicationIntegrationType, Client, GatewayIntentBits, InteractionContextType, Partials, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import { DiscordLinkService } from '../src/services/discord-link.service.js';
 import { NotificationPrefsService } from '../src/services/notification-prefs.service.js';
 import { ScheduleSnapshotService } from '../src/services/schedule-snapshot.service.js';
-import { closeDatabase } from '../src/db/database.js';
+import { closeDatabase, query } from '../src/db/database.js';
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN || '';
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
@@ -20,7 +20,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('link')
     .setDescription('Liên kết tài khoản BDU với Discord')
-    .addStringOption((o) => o.setName('code').setDescription('Mã 6 số lấy trên web /settings/notifications').setRequired(true)),
+    .addStringOption((o) => o.setName('code').setDescription('Mã 6 số lấy trên web (chuông → Nhận thông báo)').setRequired(true)),
   new SlashCommandBuilder()
     .setName('lich')
     .setDescription('Xem 5 buổi học sắp tới (từ snapshot lúc bạn online)'),
@@ -30,23 +30,28 @@ const commands = [
   new SlashCommandBuilder()
     .setName('huy')
     .setDescription('Hủy liên kết Discord + tắt nhắc qua Discord')
-].map((c) => c.toJSON());
+]
+  // Lệnh dùng được trong DM riêng với bot.
+  .map((c) => c
+    .setIntegrationTypes([ApplicationIntegrationType.UserInstall, ApplicationIntegrationType.GuildInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
+    .toJSON());
 
 async function registerCommands() {
   if (!TOKEN || !CLIENT_ID) return;
   const rest = new REST({ version: '10' }).setToken(TOKEN);
+  // Luôn đăng global để lệnh hiện trong DM. Guild chỉ để test nhanh (hiện sau vài giây).
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+  console.log(`[discord-bot] Đã đăng ${commands.length} lệnh global (DM dùng được, lan tỏa ~1h lần đầu).`);
   if (GUILD_ID) {
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-    console.log(`[discord-bot] Đã đăng ${commands.length} lệnh guild ${GUILD_ID}.`);
-  } else {
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-    console.log(`[discord-bot] Đã đăng ${commands.length} lệnh global (lan tỏa ~1h).`);
+    console.log(`[discord-bot] Đã đăng ${commands.length} lệnh guild ${GUILD_ID} (hiện ngay).`);
   }
 }
 
 function formatUpcoming(rows) {
   if (!rows.length) {
-    return 'Chưa có snapshot lịch học. Bạn đăng nhập web 1 lần (đã bật nhắc lịch) rồi thử lại:\n`/trang-thai` để kiểm tra.';
+    return 'Mình chưa thấy lịch học của bạn. Bạn đăng nhập web một lần rồi quay lại gõ `/lich` nhé.';
   }
   return rows
     .map((r, i) => {
@@ -86,7 +91,7 @@ async function main() {
         const code = interaction.options.getString('code', true);
         try {
           const { mssv } = await DiscordLinkService.consumeCode(code, discordId);
-          await interaction.reply({ content: `✅ Đã liên kết MSSV **${mssv}**.\nTừ nay mỗi lần bạn đăng nhập web, lịch sẽ tự snapshot để bot nhắc đúng giờ.\nThử \` /lich \` ngay.`, ephemeral: true });
+          await interaction.reply({ content: `✅ Kết nối thành công!\nTừ nay mình sẽ nhắc lịch học cho bạn ở đây. Gõ \`/lich\` để xem lịch ngay nhé.`, ephemeral: true });
         } catch (err) {
           await interaction.reply({ content: `❌ ${err.message}`, ephemeral: true });
         }
@@ -95,14 +100,14 @@ async function main() {
 
       if (interaction.commandName === 'huy') {
         await DiscordLinkService.unlink(discordId);
-        await interaction.reply({ content: 'Đã hủy liên kết Discord. Web sẽ không nhắc qua Discord nữa cho tới khi bạn /link lại.', ephemeral: true });
+        await interaction.reply({ content: 'Đã hủy nhận thông báo qua Discord. Muốn nhận lại thì vào web bật lại nhé.', ephemeral: true });
         return;
       }
 
       const mssv = await DiscordLinkService.findMssvByDiscordId(discordId);
       if (!mssv) {
         await interaction.reply({
-          content: 'Bạn chưa liên kết. Trên web: **Cài đặt → Thông báo → Bật đồng ý → Tạo mã Discord** rồi DM bot `/link <mã 6 số>`.',
+          content: 'Bạn chưa liên kết. Trên web: bấm chuông 🔔 → **Nhận thông báo lịch học** → Bật đồng ý → Tạo mã Discord, rồi DM bot `/link <mã 6 số>`.',
           ephemeral: true
         });
         return;
@@ -119,8 +124,8 @@ async function main() {
         const on = prefs && !prefs.unsubscribed_at;
         await interaction.reply({
           content: on
-            ? `MSSV **${mssv}** đang BẬT nhắc lịch.\n• Discord: ${prefs.notify_discord ? 'ON' : 'OFF'}\n• Email: ${prefs.notify_email ? `ON (${prefs.email || ''})` : 'OFF'}\n• Nhắc trước: ${(prefs.remind_offsets || []).join(', ')} phút`
-            : `MSSV **${mssv}** đang TẮT. Bật lại trên web mới nhắc tiếp.`,
+            ? '✅ Nhận thông báo đang bật. Sáng mình gửi lịch hôm nay, trưa nhắc buổi chiều, tối nhắc ngủ sớm nếu mai có học nhé.'
+            : '⏸️ Nhận thông báo đang tắt. Vào web bật lại khi cần nhé.',
           ephemeral: true
         });
       }
@@ -134,6 +139,47 @@ async function main() {
 
   client.on('error', (err) => console.error('[discord-bot] client error:', err.message));
   await client.login(TOKEN);
+
+  // Poll outbox discord (tag + digest 6h/12h/21h) để DM user đã link.
+  const poll = async () => {
+    try {
+      // Tự hồi phục nếu token nội bộ bị mất (reconnect race): login lại rồi bỏ qua lượt này.
+      if (!client.isReady() || !client.token) {
+        try {
+          await client.login(TOKEN);
+          console.log('[discord-bot] Re-login OK, token đã khôi phục.');
+        } catch (err) {
+          console.error('[discord-bot] Re-login fail:', err.message);
+        }
+        return;
+      }
+      const res = await query(`
+        SELECT o.*, p.discord_user_id
+        FROM notification_outbox o
+        JOIN student_notification_prefs p ON p.mssv = o.mssv
+        WHERE o.channel = 'discord' AND o.status = 'pending'
+          AND o.scheduled_for <= NOW() AND o.attempts < 5
+          AND p.discord_user_id IS NOT NULL AND p.notify_discord = TRUE
+          AND p.unsubscribed_at IS NULL
+        ORDER BY o.scheduled_for ASC LIMIT 10;
+      `);
+      for (const row of res.rows) {
+        try {
+          const payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : (row.payload || {});
+          const user = await client.users.fetch(row.discord_user_id);
+          await user.send(payload.text || '(BDU) Bạn có thông báo mới.');
+          await query(`UPDATE notification_outbox SET status='sent', sent_at=NOW(), attempts=attempts+1, error=NULL WHERE id=$1`, [row.id]);
+        } catch (err) {
+          await query(`UPDATE notification_outbox SET attempts=attempts+1, error=$2, status=CASE WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END WHERE id=$1`, [row.id, String(err.message).slice(0, 500)]);
+        }
+      }
+    } catch (err) {
+      console.error('[discord-bot] poll outbox:', err.message);
+    }
+  };
+  const pollTimer = setInterval(poll, 20_000);
+  pollTimer.unref?.();
+  console.log('[discord-bot] outbox poller ON (20s): tag + digest 6h/12h/21h.');
 }
 
 function shutdown(signal) {

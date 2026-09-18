@@ -28,6 +28,7 @@ import {
   TitleBadges
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
+import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import MentionAutocomplete from './MentionAutocomplete.jsx';
 import { renderContentWithMentions } from './renderMentions.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
@@ -814,10 +815,21 @@ export default function ConfessionPage() {
   const [params, setParams] = useSearchParams();
 
   // Modals state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showFrameModal, setShowFrameModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);  const [showFrameModal, setShowFrameModal] = useState(false);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [postMenuId, setPostMenuId] = useState(null);
+  const [confirmUI, askConfirm] = useConfirm();
+
+  const confirmDeletePost = async (postId) => {
+    setPostMenuId(null);
+    const ok = await askConfirm({
+      title: 'Xóa bài viết?',
+      message: 'Bài viết sẽ bị xóa khỏi bảng tin và không thể khôi phục.',
+      confirmText: 'Xóa bài viết',
+      danger: true
+    });
+    if (ok) remove.mutate(postId);
+  };
   const [openPostId, setOpenPostId] = useState(null);
   const [editPostId, setEditPostId] = useState(null);
   const [editDraft, setEditDraft] = useState({ title: '', content: '', isAnonymous: true });
@@ -1360,10 +1372,7 @@ export default function ConfessionPage() {
                         open={postMenuId === post.id}
                         onToggle={() => setPostMenuId((current) => (current === post.id ? null : post.id))}
                         onEdit={(event) => openEditPost(post, event)}
-                        onDelete={() => {
-                          setPostMenuId(null);
-                          if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(post.id);
-                        }}
+                        onDelete={() => confirmDeletePost(post.id)}
                         pending={remove.isPending}
                       />
                     </PostHeaderBlock>
@@ -1405,10 +1414,7 @@ export default function ConfessionPage() {
                 open={postMenuId === openPost.id}
                 onToggle={() => setPostMenuId((current) => (current === openPost.id ? null : openPost.id))}
                 onEdit={(event) => openEditPost(openPost, event)}
-                onDelete={() => {
-                  setPostMenuId(null);
-                  if (window.confirm('Bạn chắc chắn muốn xóa bài viết này?')) remove.mutate(openPost.id);
-                }}
+                onDelete={() => confirmDeletePost(openPost.id)}
                 pending={remove.isPending}
               />
             )}
@@ -1944,6 +1950,7 @@ export default function ConfessionPage() {
         </div>,
         document.body
       )}
+      {confirmUI}
     </section>
   );
 }

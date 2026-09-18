@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useRealtimeStatus, useToasts } from '../../app/providers.jsx';
@@ -8,6 +9,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead
 } from '../../api/notifications.js';
+import ReminderSettings from './ReminderSettings.jsx';
 import './NotificationBell.css';
 
 function getInitials(name) {
@@ -46,6 +48,7 @@ export default function NotificationBell() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
   const wrapRef = useRef(null);
 
   const wsFallbackInterval = realtimeStatus === 'ready' ? false : 60_000;
@@ -201,7 +204,23 @@ export default function NotificationBell() {
               })
             )}
           </div>
+          <footer className="notif-panel-footer">
+            <button
+              type="button"
+              className="notif-reminder-btn"
+              onClick={() => {
+                setOpen(false);
+                setShowReminders(true);
+              }}
+            >
+              🔔 Nhận thông báo lịch học
+            </button>
+          </footer>
         </section>
+      )}
+      {showReminders && createPortal(
+        <ReminderSettings onClose={() => setShowReminders(false)} />,
+        document.body
       )}
     </div>
   );
