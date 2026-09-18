@@ -169,8 +169,17 @@ async function main() {
           const user = await client.users.fetch(row.discord_user_id);
           await user.send(payload.text || '(BDU) Bạn có thông báo mới.');
           await query(`UPDATE notification_outbox SET status='sent', sent_at=NOW(), attempts=attempts+1, error=NULL WHERE id=$1`, [row.id]);
+          // Gửi được = kênh DM sống: xóa cờ bị chặn (nếu từng bị đánh dấu).
+          await query(`UPDATE student_notification_prefs SET discord_dm_blocked_at = NULL, discord_dm_error = NULL WHERE mssv = $1`, [row.mssv]).catch(() => {});
         } catch (err) {
-          await query(`UPDATE notification_outbox SET attempts=attempts+1, error=$2, status=CASE WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END WHERE id=$1`, [row.id, String(err.message).slice(0, 500)]);
+          const msg = String(err?.message || '');
+          // 50007 / no-mutual-guilds: Discord chặn DM (không chung server,
+          // user chưa nhắn bot bao giờ). Đánh dấu để web hướng dẫn mở kênh.
+          const blocked = err?.code === 50007 || /no mutual guilds|cannot send messages to this user/i.test(msg);
+          if (blocked) {
+            await query(`UPDATE student_notification_prefs SET discord_dm_blocked_at = NOW(), discord_dm_error = $2 WHERE mssv = $1`, [row.mssv, msg.slice(0, 300)]).catch(() => {});
+          }
+          await query(`UPDATE notification_outbox SET attempts=attempts+1, error=$2, status=CASE WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END WHERE id=$1`, [row.id, msg.slice(0, 500)]);
         }
       }
     } catch (err) {

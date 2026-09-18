@@ -8,6 +8,7 @@ import {
   createDiscordOAuthUrl,
   getReminderPrefs,
   revokeReminders,
+  sendDiscordTest,
   unlinkDiscordLink
 } from '../../api/reminders.js';
 
@@ -68,6 +69,15 @@ export default function ReminderSettings({ onClose }) {
       notify('Đã gỡ liên kết Discord. Bấm Kết nối để link tài khoản khác.', 'success');
     },
     onError: (error) => notify(error?.message || 'Không thể gỡ liên kết Discord.', 'error')
+  });
+
+  const testMutation = useMutation({
+    mutationFn: () => sendDiscordTest(token),
+    onSuccess: () => {
+      notify('Đã gửi tin thử! Mở DM của bot kiểm tra trong 30 giây nhé.', 'success');
+      window.setTimeout(() => client.invalidateQueries({ queryKey: ['reminders-prefs'] }), 30000);
+    },
+    onError: (error) => notify(error?.message || 'Không thể gửi tin thử.', 'error')
   });
 
   const codeMutation = useMutation({
@@ -242,6 +252,37 @@ export default function ReminderSettings({ onClose }) {
             </>
           ) : (
             <>
+              {prefs.discord_dm_blocked && (
+                <div className="reminder-block reminder-block-warn">
+                  <strong className="reminder-block-title">⚠️ Bot chưa nhắn được cho bạn</strong>
+                  <p className="reminder-desc">
+                    Discord đang chặn tin từ bot (2 bên chưa mở kênh với nhau).
+                    {prefs.discord_invite_url
+                      ? ' Bấm nút dưới để vào server nhận tin (1 click), rồi bấm Thử lại:'
+                      : ' Mở Discord, tìm bot rồi nhắn `/trang-thai` 1 lần để mở kênh, rồi bấm Thử lại:'}
+                  </p>
+                  <div className="reminder-code-row">
+                    {prefs.discord_invite_url && (
+                      <a
+                        className="btn btn-primary"
+                        href={prefs.discord_invite_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Vào server nhận tin
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={testMutation.isPending}
+                      onClick={() => testMutation.mutate()}
+                    >
+                      {testMutation.isPending ? 'Đang gửi...' : 'Thử lại'}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="reminder-status-card">
                 <span className="reminder-status-avatar" aria-hidden="true">✓</span>
                 <div className="reminder-status-copy">

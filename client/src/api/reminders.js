@@ -72,3 +72,12 @@ export async function unlinkDiscordLink(token) {
   });
   return unwrap(data, data);
 }
+
+export async function sendDiscordTest(token) {
+  const data = await request('/api/reminders/discord/test', {
+    method: 'POST',
+    token,
+    defaultMessage: 'Không thể gửi tin thử.'
+  });
+  return unwrap(data, data);
+}

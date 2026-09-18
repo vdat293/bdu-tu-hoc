@@ -30,6 +30,7 @@ import { EntertainmentGameService } from '../services/entertainment-game.service
 import { SurveyRunService } from '../services/survey-run.service.js';
 import { PermissionService } from '../services/permission.service.js';
 import { FacebookImportService } from '../services/facebook-import.service.js';
+import { query } from '../db/database.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -1719,6 +1720,8 @@ export const ApiController = {
           discord_linked: Boolean(prefs.discord_user_id && prefs.discord_verified_at),
           discord_username: prefs.discord_username || null,
           discord_verified_at: prefs.discord_verified_at,
+          discord_dm_blocked: Boolean(prefs.discord_dm_blocked_at),
+          discord_invite_url: process.env.DISCORD_INVITE_URL || null,
           remind_offsets: prefs.remind_offsets
         } : { consented: false }
       });
@@ -1802,6 +1805,32 @@ export const ApiController = {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       await NotificationPrefsService.unlinkDiscord(mssv);
       return res.json({ result: true, data: { linked: false } });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  // Bắn 1 tin DM thử để kiểm tra kênh (dùng sau khi user mở kênh DM/server).
+  async sendDiscordTest(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const prefs = await NotificationPrefsService.get(mssv);
+      if (!NotificationPrefsService.isConsented(prefs)) {
+        return res.status(400).json({ result: false, message: 'Bạn cần bật đồng ý nhận nhắc lịch trước.' });
+      }
+      if (!prefs?.discord_user_id) {
+        return res.status(400).json({ result: false, message: 'Bạn chưa liên kết Discord.' });
+      }
+      await query(`
+        INSERT INTO notification_outbox (mssv, channel, type, occurrence_key, remind_offset, scheduled_for, payload, status)
+        VALUES ($1, 'discord', 'welcome', $2, 0, NOW(), $3, 'pending')
+        ON CONFLICT (mssv, channel, occurrence_key, remind_offset) DO NOTHING;
+      `, [
+        mssv,
+        `test:${Date.now()}`,
+        JSON.stringify({ text: '🔔 Tin thử nè! Thấy tin này là kênh nhận tin của bạn đã mở, từ giờ bot sẽ nhắc ở đây nhé.' }).slice(0, 1000)
+      ]);
+      return res.json({ result: true, data: { queued: true } });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, message: err.message });
     }

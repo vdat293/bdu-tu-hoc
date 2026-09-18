@@ -107,6 +107,7 @@ router.delete('/reminders/revoke', ApiController.revokeReminders);
 router.post('/reminders/discord/code', ApiController.createDiscordLinkCode);
 router.post('/reminders/discord/oauth-url', ApiController.createDiscordOAuthUrl);
 router.post('/reminders/discord/oauth-complete', ApiController.completeDiscordOAuth);
+router.post('/reminders/discord/test', ApiController.sendDiscordTest);
 router.delete('/reminders/discord/link', ApiController.unlinkDiscordLink);
 
 // Identity entitlement administration (server-side role checked)
