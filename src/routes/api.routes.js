@@ -100,6 +100,12 @@ router.get('/notifications/unread-count', ApiController.getUnreadNotificationCou
 router.post('/notifications/read-all', ApiController.markAllNotificationsRead);
 router.post('/notifications/:id/read', ApiController.markNotificationRead);
 
+// Nhắc lịch học opt-in (Email/Discord)
+router.get('/reminders/prefs', ApiController.getReminderPrefs);
+router.post('/reminders/consent', ApiController.consentReminders);
+router.delete('/reminders/revoke', ApiController.revokeReminders);
+router.post('/reminders/discord/code', ApiController.createDiscordLinkCode);
+
 // Identity entitlement administration (server-side role checked)
 router.get('/admin/identity/items', ApiController.getAdminIdentityItems);
 router.post('/admin/identity/items', ApiController.createAdminIdentityItem);

@@ -17,6 +17,9 @@ import { AvatarOverrideService } from '../services/avatar-override.service.js';
 import { CommunityRealtime } from '../services/community-realtime.service.js';
 import { MentionService } from '../services/mention.service.js';
 import { NotificationService } from '../services/notification.service.js';
+import { NotificationPrefsService, TokenVaultService } from '../services/notification-prefs.service.js';
+import { ScheduleSnapshotService } from '../services/schedule-snapshot.service.js';
+import { DiscordLinkService } from '../services/discord-link.service.js';
 import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { ClanRoleService } from '../services/clan-role.service.js';
 import { AchievementService } from '../services/achievement.service.js';
@@ -68,6 +71,16 @@ export const ApiController = {
             console.warn('[AcademicSnapshot] Không thể lưu học lực khi đăng nhập:', err.message);
           });
       }
+      // Opt-in nhắc lịch: chỉ khi user đã bật + xác nhận trước đó mới
+      // rotate vault token + snapshot lịch. Mặc định TẮT nên skip hoàn toàn.
+      NotificationPrefsService.get(data.mssv)
+        .then((prefs) => {
+          if (!NotificationPrefsService.isConsented(prefs)) return;
+          return TokenVaultService.save(data.mssv, data.token, data.expires_in)
+            .then(() => ScheduleSnapshotService.syncFromToken(data.mssv, data.token))
+            .catch((err) => console.warn('[ScheduleSnapshot] Không thể snapshot khi đăng nhập:', err.message));
+        })
+        .catch(() => {});
       return res.json(data);
     } catch (err) {
       console.error('Login error:', err.message);
@@ -256,6 +269,13 @@ export const ApiController = {
       const hocKy = req.query?.hoc_ky || req.query?.hocKy || req.body?.hoc_ky || req.body?.hocKy || null;
 
       const scheduleData = await BduService.getSchedule(token, hocKy);
+      // Opportunistic snapshot: user đang online xem lịch + đã consent
+      // thì lưu luôn để bot /lich đọc được mà không cần gọi BDU lại.
+      if (token && scheduleData?.isRealData) {
+        BduIdentityService.resolveVerifiedMssv(token)
+          .then((mssv) => ScheduleSnapshotService.syncFromToken(mssv, token, hocKy))
+          .catch(() => {});
+      }
       return res.json({ result: true, data: scheduleData });
     } catch (err) {
       console.error('Schedule error:', err.message);
@@ -1668,6 +1688,70 @@ export const ApiController = {
         result: false,
         message: err.message || 'Không thể đánh dấu đã đọc tất cả.'
       });
+    }
+  },
+
+  // 11b. Nhắc lịch học opt-in (Email/Discord). Mặc định TẮT.
+  async getReminderPrefs(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const prefs = await NotificationPrefsService.get(mssv);
+      return res.json({
+        result: true,
+        data: prefs ? {
+          consented: NotificationPrefsService.isConsented(prefs),
+          notify_email: prefs.notify_email,
+          notify_discord: prefs.notify_discord,
+          email: prefs.email,
+          email_verified_at: prefs.email_verified_at,
+          discord_verified_at: prefs.discord_verified_at,
+          remind_offsets: prefs.remind_offsets
+        } : { consented: false }
+      });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  async consentReminders(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { xac_nhan } = req.body || {};
+      const prefs = await NotificationPrefsService.consent(mssv, { xac_nhan });
+      // Snapshot ngay bằng token hiện tại để bot có dữ liệu tức thì.
+      const token = req.headers.authorization || req.body?.token || '';
+      if (token) {
+        ScheduleSnapshotService.syncFromToken(mssv, token).catch((err) =>
+          console.warn('[ScheduleSnapshot] consent sync fail:', err.message));
+        TokenVaultService.save(mssv, String(token).replace(/^Bearer\s+/i, ''), null).catch(() => {});
+      }
+      return res.json({ result: true, data: { consented: true, consent_at: prefs.consent_at } });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  async revokeReminders(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      await NotificationPrefsService.revoke(mssv);
+      return res.json({ result: true, data: { consented: false } });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
+    }
+  },
+
+  async createDiscordLinkCode(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const prefs = await NotificationPrefsService.get(mssv);
+      if (!NotificationPrefsService.isConsented(prefs)) {
+        return res.status(400).json({ result: false, message: 'Bạn cần bật đồng ý nhận nhắc lịch trước.' });
+      }
+      const data = await DiscordLinkService.createCode(mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: err.message });
     }
   },
 
