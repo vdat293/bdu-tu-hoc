@@ -77,5 +77,26 @@ services:
       - ./data/fb-profile:/app/data/fb-profile
       - ./data/fb-import:/app/data/fb-import
 
+  # Bot Discord nhắc lịch/tag (chạy riêng process để crash không kéo sập web).
+  # Cần DISCORD_BOT_TOKEN trong .env; để trống thì đừng start service này
+  # (bot thoát ngay và restart-loop). Chỉ chạy bot ở MỘT nơi duy nhất
+  # (prod HOẶC local) vì 1 token không online 2 chỗ cùng lúc được.
+  bdu-notifier-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bdu-tu-hoc-bot
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      - DATABASE_SSL=false
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "scripts/discord-bot.js"]
+
 volumes:
   bdu-postgres-data:
