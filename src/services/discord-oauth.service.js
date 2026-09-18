@@ -6,11 +6,13 @@ function normalizeMssv(value) {
 }
 
 function redirectUri() {
-  const base = (process.env.DISCORD_REDIRECT_URI
+  const raw = (process.env.DISCORD_REDIRECT_URI
     || process.env.APP_URL
     || process.env.PUBLIC_APP_URL
     || 'http://localhost:3000').replace(/\/$/, '');
-  return `${base}/discord-callback`;
+  // Chấp nhận cả 2 dạng: origin (https://sv.bdu.io.vn) hoặc URL đầy đủ
+  // (https://sv.bdu.io.vn/discord-callback).
+  return raw.endsWith('/discord-callback') ? raw : `${raw}/discord-callback`;
 }
 
 export const DiscordOAuthService = {
