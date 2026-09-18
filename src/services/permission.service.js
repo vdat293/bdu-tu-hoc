@@ -22,7 +22,8 @@ export const SYSTEM_ROLE_CAPABILITIES = {
     'identity:catalog_sync',
     'identity:item_create',
     'identity:item_update',
-    'identity:item_delete'
+    'identity:item_delete',
+    'community:post_delete_any'
   ],
   moderator: [
     'community:mod_access',
@@ -35,6 +36,12 @@ export const SYSTEM_ROLE_CAPABILITIES = {
 /**
  * Phân quyền cấp CLB / Nhóm (Clan-level Capabilities)
  */
+export const SYSTEM_ROLE_LEVELS = {
+  owner: 3,
+  identity_admin: 2,
+  moderator: 1
+};
+
 export const CLAN_ROLE_CAPABILITIES = {
   leader: [
     'clan:*',
@@ -126,6 +133,37 @@ export const PermissionService = {
       [cleanMssv]
     );
     return (res.rowCount ?? 0) > 0;
+  },
+
+  async getSystemRoleLevels(mssvs = []) {
+    const cleanList = Array.from(new Set(
+      (Array.isArray(mssvs) ? mssvs : [mssvs]).map(normalizeMssv).filter(Boolean)
+    ));
+    const levels = new Map(cleanList.map((mssv) => [mssv, 0]));
+    if (cleanList.length === 0) return levels;
+
+    const envOwner = normalizeMssv(process.env.SYSTEM_OWNER_MSSV);
+    if (envOwner && levels.has(envOwner)) levels.set(envOwner, SYSTEM_ROLE_LEVELS.owner);
+
+    if (!isDatabaseConfigured()) return levels;
+
+    const res = await query(
+      'SELECT mssv, role FROM system_roles WHERE mssv = ANY($1::text[]) AND is_active = TRUE',
+      [cleanList]
+    );
+    for (const row of res.rows) {
+      const mssv = normalizeMssv(row.mssv);
+      const level = SYSTEM_ROLE_LEVELS[row.role] || 0;
+      if (level > (levels.get(mssv) || 0)) levels.set(mssv, level);
+    }
+    return levels;
+  },
+
+  async getSystemRoleLevel(mssv) {
+    const cleanMssv = normalizeMssv(mssv);
+    if (!cleanMssv) return 0;
+    const levels = await this.getSystemRoleLevels([cleanMssv]);
+    return levels.get(cleanMssv) || 0;
   },
 
   /**

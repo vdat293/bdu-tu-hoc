@@ -1,6 +1,6 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
-import { PermissionService } from './permission.service.js';
+import { PermissionService, SYSTEM_ROLE_LEVELS } from './permission.service.js';
 
 function normalizeMssv(mssv) {
   return String(mssv || '').trim().toUpperCase();
@@ -51,6 +51,27 @@ function normalizePostId(postId) {
 
 function normalizeBoolean(value) {
   return value === true || value === 1 || value === 'true' || value === '1';
+}
+
+function isConfessionCategory(category) {
+  return String(category || '').trim().toLowerCase() === 'confession';
+}
+
+/**
+ * Kiểm duyệt toàn hệ thống: ngoài confession giữ nguyên quyền cũ; với confession
+ * yêu cầu cấp bậc role cao hơn tác giả (owner được xoá tất cả).
+ */
+async function canDeleteByModeration({ requesterMssv, canDeleteAny, authorMssv, category, roleLevels = null }) {
+  if (!canDeleteAny) return false;
+  if (!isConfessionCategory(category)) return true;
+
+  const cleanRequester = normalizeMssv(requesterMssv);
+  const levels = roleLevels || await PermissionService.getSystemRoleLevels([cleanRequester, authorMssv]);
+  const requesterLevel = levels.get(cleanRequester) || 0;
+  if (requesterLevel >= SYSTEM_ROLE_LEVELS.owner) return true;
+
+  const authorLevel = levels.get(normalizeMssv(authorMssv)) || 0;
+  return requesterLevel > authorLevel;
 }
 
 async function canAccessPost(post, viewerMssv, client = null) {
@@ -613,6 +634,12 @@ export const CommunityService = {
       : {};
     const canEditAny = Boolean(moderation['community:post_update_any']);
     const canDeleteAny = Boolean(moderation['community:post_delete_any']);
+    const roleLevels = canDeleteAny && cleanViewerMssv
+      ? await PermissionService.getSystemRoleLevels([
+          cleanViewerMssv,
+          ...listResult.rows.map((row) => row.raw_author_mssv)
+        ])
+      : null;
     const clanCapabilityCache = new Map();
     const canDeleteInClan = (clanId) => {
       const key = String(clanId);
@@ -626,7 +653,14 @@ export const CommunityService = {
     for (const row of listResult.rows) {
       const isAuthor = Boolean(cleanViewerMssv && cleanViewerMssv === row.raw_author_mssv);
       const maskIdentity = row.is_anonymous && !isAuthor;
-      let canDelete = Boolean(isAuthor || canDeleteAny);
+      const canDeleteByMod = await canDeleteByModeration({
+        requesterMssv: cleanViewerMssv,
+        canDeleteAny,
+        authorMssv: row.raw_author_mssv,
+        category: row.category,
+        roleLevels
+      });
+      let canDelete = Boolean(isAuthor || canDeleteByMod);
       if (!canDelete && cleanViewerMssv && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
         canDelete = await canDeleteInClan(row.scope_id);
       }
@@ -727,7 +761,13 @@ export const CommunityService = {
       : {};
     const canEditAny = Boolean(moderation['community:post_update_any']);
     const canDeleteAny = Boolean(moderation['community:post_delete_any']);
-    let canDelete = Boolean(isAuthor || canDeleteAny);
+    const canDeleteByMod = await canDeleteByModeration({
+      requesterMssv: cleanViewerMssv,
+      canDeleteAny,
+      authorMssv: row.raw_author_mssv,
+      category: row.category
+    });
+    let canDelete = Boolean(isAuthor || canDeleteByMod);
     if (!canDelete && cleanViewerMssv && row.scope === 'clan' && /^\d+$/.test(String(row.scope_id || ''))) {
       canDelete = await PermissionService.canInClan(cleanViewerMssv, row.scope_id, 'clan:post_delete_any');
     }
@@ -779,7 +819,7 @@ export const CommunityService = {
 
     return transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id, author_mssv, scope, scope_id, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, author_mssv, scope, scope_id, category, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
@@ -792,7 +832,13 @@ export const CommunityService = {
       // Kiểm duyệt toàn hệ thống (vai trò moderator): cần thiết cho bài nhập tự
       // động từ Facebook vì tác giả là bút danh giả lập, không thể tự đăng nhập.
       if (!canDelete) {
-        canDelete = await PermissionService.can(cleanRequester, 'community:post_delete_any');
+        const canDeleteAny = await PermissionService.can(cleanRequester, 'community:post_delete_any');
+        canDelete = await canDeleteByModeration({
+          requesterMssv: cleanRequester,
+          canDeleteAny,
+          authorMssv: postRow.author_mssv,
+          category: postRow.category
+        });
       }
 
       if (!canDelete) {
@@ -907,7 +953,7 @@ export const CommunityService = {
 
     return transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id, scope, scope_id, is_pinned FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+        'SELECT id, author_mssv, scope, scope_id, is_pinned FROM community_posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
