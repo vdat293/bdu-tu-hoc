@@ -400,6 +400,56 @@
     }
   };
 
+  // Thông báo cập nhật website qua Discord DM
+  const BROADCAST_TEMPLATE = [
+    '🎉 Website BDU Tự Học vừa có bản cập nhật mới!',
+    '',
+    '📘 Luyện ngữ pháp: 8 lộ trình (Ngữ pháp cơ bản, Grammar In Use, TOEIC cơ bản/500–700/700+, Destination B1/B2/C1&C2) — 246 bài học, hơn 10.400 câu hỏi kèm lý thuyết, đáp án và giải thích; có cả bài đọc hiểu TOEIC.',
+    '🔁 Ôn tập từ vựng theo lịch: đánh dấu đã thuộc rồi ôn lại sau 1 ngày → 7 ngày → 30 ngày, kèm độ chính xác từng bộ từ.',
+    '🎨 Giao diện mục Luyện từ vựng & Luyện ngữ pháp gọn gàng, dễ nhìn hơn.',
+    '',
+    'Mở mục "Luyện ngữ pháp" và "Luyện từ vựng" trên website nhé. Chúc bạn học tốt! 📚'
+  ].join('\n');
+
+  const updateBroadcastCharCount = () => {
+    const area = $('#broadcast-text');
+    if (area) $('#broadcast-char-count').textContent = String(area.value.length);
+  };
+
+  const renderBroadcastHistory = (recent) => {
+    const box = $('#broadcast-history');
+    if (!box) return;
+    if (!recent.length) {
+      box.innerHTML = '<p class="admin-empty">Chưa có đợt thông báo nào.</p>';
+      return;
+    }
+    box.innerHTML = recent.map((row) => `
+      <article class="broadcast-item">
+        <div class="broadcast-item-head">
+          <strong>${escapeHtml(new Date(row.created_at).toLocaleString('vi-VN'))}</strong>
+          <span class="broadcast-item-stats">
+            ${Number(row.recipients) || 0} người nhận · ${Number(row.sent) || 0} đã gửi${row.pending ? ` · ${Number(row.pending)} đang chờ` : ''}${row.failed ? ` · ${Number(row.failed)} lỗi` : ''}${row.actor ? ` · bởi ${escapeHtml(row.actor)}` : ''}
+          </span>
+        </div>
+        <p class="broadcast-item-text">${escapeHtml(row.text)}</p>
+        <small class="broadcast-item-key">${escapeHtml(row.occurrence_key)}</small>
+      </article>
+    `).join('');
+  };
+
+  const loadBroadcast = async () => {
+    try {
+      const data = await BduApi.getAdminBroadcast(sessionToken);
+      $('#broadcast-recipients').textContent = `${Number(data?.recipients?.discord) || 0} sinh viên`;
+      renderBroadcastHistory(Array.isArray(data?.recent) ? data.recent : []);
+    } catch (error) {
+      const box = $('#broadcast-history');
+      if (box) {
+        box.innerHTML = `<p class="admin-empty">${escapeHtml(error.message || 'Không thể tải thông tin thông báo.')}</p>`;
+      }
+    }
+  };
+
   // Xác thực quyền quản trị của session hiện tại
   const verifyAndLoad = async () => {
     if (!sessionToken) {
@@ -413,7 +463,7 @@
       items = await BduApi.getAdminIdentityItems(sessionToken, { includeInactive: true });
       setAuthenticatedUi(true);
       renderCatalog();
-      await Promise.all([loadAudit(), loadAvatarList()]);
+      await Promise.all([loadAudit(), loadAvatarList(), loadBroadcast()]);
       showAlert('Kết nối thành công với quyền quản trị viên.');
     } catch (error) {
       console.warn('Xác thực quyền quản trị thất bại:', error.message);
@@ -605,7 +655,7 @@
       $('#admin-identity').textContent = `${result.name || 'Quản trị viên'} · ${result.mssv || ''}`;
       setAuthenticatedUi(true);
       renderCatalog();
-      await Promise.all([loadAudit(), loadAvatarList()]);
+      await Promise.all([loadAudit(), loadAvatarList(), loadBroadcast()]);
       showAlert('Đăng nhập thành công với quyền quản trị viên.');
     } catch (error) {
       showAlert(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản và mật khẩu.', true);
@@ -631,6 +681,49 @@
 
   $('#avatar-refresh')?.addEventListener('click', loadAvatarList);
   $('#toggle-ranking-frames')?.addEventListener('change', renderCatalog);
+
+  // Gửi thông báo cập nhật qua Discord DM
+  $('#broadcast-text')?.addEventListener('input', updateBroadcastCharCount);
+  $('#broadcast-refresh')?.addEventListener('click', loadBroadcast);
+
+  $('#btn-broadcast-template')?.addEventListener('click', () => {
+    const area = $('#broadcast-text');
+    if (!area) return;
+    area.value = BROADCAST_TEMPLATE;
+    updateBroadcastCharCount();
+    showAlert('Đã điền mẫu thông báo cập nhật. Kiểm tra nội dung rồi bấm "Gửi thông báo".');
+  });
+
+  $('#broadcast-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = $('#broadcast-text')?.value.trim() || '';
+    if (!text) {
+      showAlert('Nội dung thông báo không được để trống.', true);
+      return;
+    }
+    const recipientsLabel = $('#broadcast-recipients')?.textContent || 'danh sách đã liên kết Discord';
+    const preview = `${text.slice(0, 400)}${text.length > 400 ? '…' : ''}`;
+    if (!window.confirm(`Gửi thông báo qua Discord DM cho ${recipientsLabel}?\n\n${preview}`)) return;
+
+    const button = $('#btn-broadcast-submit');
+    button.disabled = true;
+    showAlert('Đang xếp hàng gửi thông báo…');
+    try {
+      const result = await BduApi.sendAdminBroadcast(sessionToken, text);
+      showAlert(`Đã xếp hàng ${result.enqueued} tin nhắn (mã đợt: ${result.occurrence_key}). Bot sẽ gửi trong ~20 giây.`);
+      await loadBroadcast();
+    } catch (error) {
+      showAlert(error.message || 'Không thể gửi thông báo.', true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  const broadcastArea = $('#broadcast-text');
+  if (broadcastArea && !broadcastArea.value) {
+    broadcastArea.value = BROADCAST_TEMPLATE;
+    updateBroadcastCharCount();
+  }
 
   // 8. Quản lý Item Editor (Thêm mới, Chỉnh sửa, Đóng form)
   $('#btn-open-create-item')?.addEventListener('click', () => openItemEditor('create'));

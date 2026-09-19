@@ -4,45 +4,43 @@
  * đang bật nhận thông báo và chưa huỷ đăng ký.
  *
  * Chạy: node scripts/discord-broadcast.js "<nội dung>" [occurrence-key]
- *  - occurrence-key mặc định: broadcast-<YYYY-MM-DD> (chống gửi trùng trong ngày)
+ *  - Bỏ trống nội dung để dùng mẫu cập nhật mặc định bên dưới.
+ *  - occurrence-key mặc định: broadcast-<ISO timestamp> (mỗi lần chạy là một đợt).
+ *
+ * Trên VPS: docker compose exec -T bdu-hub node scripts/discord-broadcast.js
  */
-import { closeDatabase, isDatabaseConfigured, query } from '../src/db/database.js';
+import { closeDatabase, isDatabaseConfigured } from '../src/db/database.js';
+import { BroadcastService, BROADCAST_MAX_TEXT } from '../src/services/broadcast.service.js';
 
 const DEFAULT_TEXT = [
-  '🎉 Website BDU Tự Học vừa có bản cập nhật mới: Luyện từ vựng!',
+  '🎉 Website BDU Tự Học vừa có bản cập nhật mới!',
   '',
-  '• 15 bộ đề lớn (TOEIC, IELTS, Destination, 2800-3000 từ thông dụng...) — hơn 25.900 từ vựng',
-  '• 4 chế độ học: Flashcard, Quiz (Từ→Nghĩa / Ngữ cảnh / Nghĩa→Từ), Typing, Ghép cặp',
-  '• Theo dõi tiến độ theo từng bộ từ và từng theme',
-  '• Mở tại mục "Luyện từ vựng" trên website',
+  '📘 Luyện ngữ pháp: 8 lộ trình (Ngữ pháp cơ bản, Grammar In Use, TOEIC cơ bản/500–700/700+, Destination B1/B2/C1&C2) — 246 bài học, hơn 10.400 câu hỏi kèm lý thuyết, đáp án và giải thích; có cả bài đọc hiểu TOEIC.',
+  '🔁 Ôn tập từ vựng theo lịch: đánh dấu đã thuộc rồi ôn lại sau 1 ngày → 7 ngày → 30 ngày, kèm độ chính xác từng bộ từ.',
+  '🎨 Giao diện mục Luyện từ vựng & Luyện ngữ pháp gọn gàng, dễ nhìn hơn.',
   '',
-  'Chúc bạn học tốt! 📚'
+  'Mở mục "Luyện ngữ pháp" và "Luyện từ vựng" trên website nhé. Chúc bạn học tốt! 📚'
 ].join('\n');
 
-const text = (process.argv[2] || DEFAULT_TEXT).slice(0, 3500);
-const occurrenceKey = process.argv[3] || `broadcast-${new Date().toISOString().slice(0, 10)}`;
+const text = (process.argv[2] || DEFAULT_TEXT).slice(0, BROADCAST_MAX_TEXT);
+const key = process.argv[3] || null;
 
 if (!isDatabaseConfigured()) {
   console.error('Thiếu DATABASE_URL.');
   process.exit(1);
 }
 
-const preview = await query(`
-  SELECT COUNT(*)::int AS total
-  FROM student_notification_prefs p
-  WHERE p.discord_user_id IS NOT NULL AND p.notify_discord = TRUE AND p.unsubscribed_at IS NULL
-`);
-console.log(`Người nhận hợp lệ: ${preview.rows[0].total}`);
+try {
+  const recipients = await BroadcastService.getRecipients();
+  console.log(`Người nhận hợp lệ: ${recipients.discord}`);
 
-const result = await query(`
-  INSERT INTO notification_outbox (mssv, channel, type, occurrence_key, remind_offset, scheduled_for, payload, status)
-  SELECT p.mssv, 'discord', 'broadcast', $1, 0, NOW(), jsonb_build_object('text', $2::text), 'pending'
-  FROM student_notification_prefs p
-  WHERE p.discord_user_id IS NOT NULL AND p.notify_discord = TRUE AND p.unsubscribed_at IS NULL
-  ON CONFLICT (mssv, channel, occurrence_key, remind_offset) DO NOTHING
-`, [occurrenceKey, text]);
-
-console.log(`✓ Đã xếp hàng ${result.rowCount} tin nhắn (key: ${occurrenceKey}). Bot sẽ gửi trong ~20 giây.`);
-console.log('--- Nội dung ---');
-console.log(text);
-await closeDatabase();
+  const result = await BroadcastService.enqueue({ text, key, actor: 'cli' });
+  console.log(`✓ Đã xếp hàng ${result.enqueued} tin nhắn (key: ${result.occurrence_key}). Bot sẽ gửi trong ~20 giây.`);
+  console.log('--- Nội dung ---');
+  console.log(text);
+} catch (error) {
+  console.error('Broadcast thất bại:', error.message);
+  process.exitCode = 1;
+} finally {
+  await closeDatabase();
+}

@@ -311,6 +311,37 @@
         <div id="catalog-list" class="catalog-list"></div>
       </section>
 
+      <!-- GỬI THÔNG BÁO CẬP NHẬT QUA DISCORD DM -->
+      <section class="admin-card admin-broadcast-card">
+        <div class="admin-card-heading">
+          <div>
+            <p class="admin-eyebrow">UPDATE BROADCAST</p>
+            <h2>Gửi thông báo cập nhật cho sinh viên</h2>
+          </div>
+          <span class="admin-hint">DM tới sinh viên đã liên kết Discord và đang bật nhận thông báo</span>
+        </div>
+        <form id="broadcast-form">
+          <textarea id="broadcast-text" class="admin-input broadcast-textarea" rows="10" maxlength="3500" required placeholder="Nội dung thông báo gửi qua Discord DM…"></textarea>
+          <div class="broadcast-toolbar">
+            <span class="broadcast-meta">
+              Người nhận dự kiến: <strong id="broadcast-recipients">…</strong>
+              · <span id="broadcast-char-count">0</span>/3500 ký tự
+            </span>
+            <div class="broadcast-actions">
+              <button id="btn-broadcast-template" class="admin-button admin-button-secondary" type="button">Dùng mẫu cập nhật</button>
+              <button id="btn-broadcast-submit" class="admin-button admin-button-primary" type="submit">📣 Gửi thông báo</button>
+            </div>
+          </div>
+        </form>
+        <div class="broadcast-history-head">
+          <h3>Đã gửi gần đây</h3>
+          <button id="broadcast-refresh" class="admin-button admin-button-secondary" type="button">Làm mới</button>
+        </div>
+        <div id="broadcast-history" class="broadcast-history">
+          <p class="admin-empty">Đang tải lịch sử thông báo…</p>
+        </div>
+      </section>
+
       <section class="admin-card admin-card-audit">
         <div class="admin-card-heading">
           <div>

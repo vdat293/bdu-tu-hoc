@@ -335,6 +335,27 @@ const BduApi = {
     return data.data || [];
   },
 
+  async getAdminBroadcast(token) {
+    const response = await fetch('/api/admin/broadcast', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải thông tin thông báo cập nhật.');
+    return data.data || { recipients: { discord: 0 }, recent: [] };
+  },
+
+  async sendAdminBroadcast(token, text) {
+    const response = await fetch('/api/admin/broadcast', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ text })
+    });
+    const data = await this.handleResponse(response, 'Không thể gửi thông báo cập nhật.');
+    return data.data;
+  },
+
   async createAdminIdentityItem(token, itemData) {
     const response = await fetch('/api/admin/identity/items', {
       method: 'POST',

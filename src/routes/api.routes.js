@@ -125,6 +125,10 @@ router.delete('/admin/system-roles/:mssv/:role', ApiController.revokeAdminSystem
 // Kéo bài viết từ nhóm Facebook về Confession (kiểm duyệt viên)
 router.get('/admin/facebook-import/status', ApiController.requireCommunityModerator, ApiController.getFacebookImportStatus);
 router.post('/admin/facebook-import/run', ApiController.requireCommunityModerator, ApiController.runFacebookImport);
+
+// 6b. Thông báo cập nhật website qua Discord DM (Admin Tool)
+router.get('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController.getAdminBroadcast);
+router.post('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController.sendAdminBroadcast);
 router.get('/admin/avatars', ApiController.getAdminAvatars);
 router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
 router.post('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, avatarUpload.single('avatar'), ApiController.uploadAdminAvatar);
