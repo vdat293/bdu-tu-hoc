@@ -5,6 +5,10 @@ const SUBMIT_ENDPOINT = `${BDU_BASE_URL}/zms/w-luutraloidanhgia`;
 
 const DEFAULT_TEXT_RESPONSE = 'Không';
 
+// kieu_tra_loi theo KieuTraLoi của cổng BDU: 6 chuỗi, 7 chuỗi đơn, 10 địa chỉ.
+// Đây là các câu trả lời tự luận; form BDU bind ô nhập vào `tra_loi_danh_gia`.
+const TEXT_ANSWER_TYPES = new Set([6, 7, 10]);
+
 function bearer(token) {
   const value = String(token || '').trim();
   return value.startsWith('Bearer ') ? value : `Bearer ${value}`;
@@ -168,18 +172,25 @@ function buildAnswers(groups, { ratingLevel = '5', genderLevel = '0', attendance
     const scale = group?.thang_do?.ds_thang_diem || [];
     for (const question of group?.ds_cau_hoi || []) {
       const order = Number(question?.thu_tu_cau_hoi);
-      const isText = booleanValue(question?.is_y_kien_khac) || booleanValue(group?.thang_do?.is_y_kien_khac);
+      const isPlainText = TEXT_ANSWER_TYPES.has(Number(question?.kieu_tra_loi));
+      const hasOtherComment = booleanValue(question?.is_y_kien_khac)
+        || booleanValue(group?.is_y_kien_khac)
+        || booleanValue(group?.thang_do?.is_y_kien_khac);
       let value = '';
       let other = '';
 
-      if (isText) {
+      if (isPlainText) {
+        value = DEFAULT_TEXT_RESPONSE;
         other = DEFAULT_TEXT_RESPONSE;
-      } else if (order === 1) {
-        value = chooseScaleValue(scale, gender, 0);
-      } else if (order === 2) {
-        value = chooseScaleValue(scale, attendance, 1);
       } else {
-        value = chooseScaleValue(scale, rating, rating);
+        if (order === 1) {
+          value = chooseScaleValue(scale, gender, 0);
+        } else if (order === 2) {
+          value = chooseScaleValue(scale, attendance, 1);
+        } else {
+          value = chooseScaleValue(scale, rating, rating);
+        }
+        if (hasOtherComment) other = DEFAULT_TEXT_RESPONSE;
       }
 
       answers.push({
