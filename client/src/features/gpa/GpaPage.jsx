@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { getGrades, getMyAcademicRanking } from '../../api/academics.js';
@@ -57,6 +57,7 @@ function formatRankTitle(rank) {
 }
 
 function GpaPageSkeleton() {
+  const isPhoneViewport = usePhoneViewport();
   return (
     <section id="tab-grades" className="tab-pane active" role="status" aria-label="Đang tải bảng điểm">
       <div className="hero-section glass-panel">
@@ -81,17 +82,19 @@ function GpaPageSkeleton() {
           ))}
         </div>
       </div>
-      <div className="analytics-grid">
-        {[1, 2].map((chart) => (
-          <div className="chart-card glass-panel" key={chart}>
-            <div className="skeleton-copy">
-              <SkeletonBlock className="skeleton-line heading" />
-              <SkeletonBlock className="skeleton-line wide" />
-              <SkeletonBlock className="skeleton-chart" />
+      {!isPhoneViewport && (
+        <div className="analytics-grid">
+          {[1, 2].map((chart) => (
+            <div className="chart-card glass-panel" key={chart}>
+              <div className="skeleton-copy">
+                <SkeletonBlock className="skeleton-line heading" />
+                <SkeletonBlock className="skeleton-line wide" />
+                <SkeletonBlock className="skeleton-chart" />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       <div className="gradebook-section glass-panel">
         <div className="skeleton-toolbar">
           <SkeletonBlock className="skeleton-control" />
@@ -104,6 +107,29 @@ function GpaPageSkeleton() {
       </div>
     </section>
   );
+}
+
+// Điện thoại không mount chart: khỏi tải Chart.js (~200KB) và tránh canvas 0x0
+// khi chart nằm trong khối bị CSS `display: none` (không hồi phục khi xoay ngang).
+function usePhoneViewport() {
+  const query = '(max-width: 680px)';
+  const readMatch = () => typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia(query).matches;
+  const [matches, setMatches] = useState(readMatch);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mql = window.matchMedia(query);
+    const onChange = (event) => setMatches(event.matches);
+    setMatches(mql.matches);
+    if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
+    else mql.addListener(onChange);
+    return () => {
+      if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
+      else mql.removeListener(onChange);
+    };
+  }, []);
+  return matches;
 }
 
 function extractComponentDetailList(course) {
@@ -138,6 +164,7 @@ export default function GpaPage() {
   const status = params.get('status') || 'ALL';
   const queryText = params.get('q') || '';
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const isPhoneViewport = usePhoneViewport();
   const detailDialogRef = useRef(null);
   const detailCloseRef = useRef(null);
   const detailOpenerRef = useRef(null);
@@ -335,44 +362,46 @@ export default function GpaPage() {
         </div>
       </div>
 
-      {/* Analytics Charts Grid */}
-      <div className="analytics-grid">
-        <div className="chart-card glass-panel">
-          <div className="card-header">
-            <div className="card-title-group">
-              <h3 className="card-title">Tiến Trình Học Tập (GPA)</h3>
-              <p className="card-desc">Biến động điểm trung bình qua từng học kỳ</p>
+      {/* Analytics Charts Grid — điện thoại bỏ hẳn, khỏi tải Chart.js */}
+      {!isPhoneViewport && (
+        <div className="analytics-grid">
+          <div className="chart-card glass-panel">
+            <div className="card-header">
+              <div className="card-title-group">
+                <h3 className="card-title">Tiến Trình Học Tập (GPA)</h3>
+                <p className="card-desc">Biến động điểm trung bình qua từng học kỳ</p>
+              </div>
+            </div>
+            <div className="chart-container">
+              {semesters.length > 0 ? (
+                <GpaTrendChart semesters={semesters} />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  Đang tải dữ liệu học kỳ…
+                </div>
+              )}
             </div>
           </div>
-          <div className="chart-container">
-            {semesters.length > 0 ? (
-              <GpaTrendChart semesters={semesters} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                Đang tải dữ liệu học kỳ…
-              </div>
-            )}
-          </div>
-        </div>
 
-        <div className="chart-card glass-panel">
-          <div className="card-header">
-            <div className="card-title-group">
-              <h3 className="card-title">Phân Bố Điểm Chữ</h3>
-              <p className="card-desc">Tỷ lệ các thang điểm chữ (A, B, C, D, F)</p>
+          <div className="chart-card glass-panel">
+            <div className="card-header">
+              <div className="card-title-group">
+                <h3 className="card-title">Phân Bố Điểm Chữ</h3>
+                <p className="card-desc">Tỷ lệ các thang điểm chữ (A, B, C, D, F)</p>
+              </div>
+            </div>
+            <div className="chart-container">
+              {semesters.length > 0 ? (
+                <GradeDistChart semesters={semesters} />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  Đang tải phân bố điểm…
+                </div>
+              )}
             </div>
           </div>
-          <div className="chart-container">
-            {semesters.length > 0 ? (
-              <GradeDistChart semesters={semesters} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                Đang tải phân bố điểm…
-              </div>
-            )}
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Gradebook Section */}
       <div className="gradebook-section glass-panel">
@@ -475,15 +504,15 @@ export default function GpaPage() {
                   <table className="grade-table">
                     <thead>
                       <tr>
-                        <th>Mã Môn</th>
-                        <th>Tên Môn Học</th>
-                        <th>Số TC</th>
-                        <th>Điểm GK</th>
-                        <th>Điểm Thi</th>
-                        <th>Điểm TK (10)</th>
-                        <th>Điểm Hệ 4</th>
-                        <th>Điểm Chữ</th>
-                        <th>Kết Quả</th>
+                        <th className="col-code">Mã Môn</th>
+                        <th className="col-name">Tên Môn Học</th>
+                        <th className="col-tc">Số TC</th>
+                        <th className="col-gk">Điểm GK</th>
+                        <th className="col-thi">Điểm Thi</th>
+                        <th className="col-tk10">Điểm TK (10)</th>
+                        <th className="col-h4">Điểm Hệ 4</th>
+                        <th className="col-chu">Điểm Chữ</th>
+                        <th className="col-kq">Kết Quả</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -512,17 +541,17 @@ export default function GpaPage() {
                               }}
                               style={{ cursor: 'pointer' }}
                             >
-                              <td><code>{c.ma_mon || '--'}</code></td>
-                              <td className="course-name-cell" title="Bấm để xem chi tiết điểm thành phần">
+                              <td className="col-code"><code>{c.ma_mon || '--'}</code></td>
+                              <td className="course-name-cell col-name" title="Bấm để xem chi tiết điểm thành phần">
                                 {c.ten_mon || '--'}
                               </td>
-                              <td><strong>{c.so_tin_chi || 0}</strong></td>
-                              <td>{c.diem_giua_ky !== undefined && c.diem_giua_ky !== null && c.diem_giua_ky !== '' ? c.diem_giua_ky : '--'}</td>
-                              <td>{c.diem_thi !== undefined && c.diem_thi !== null && c.diem_thi !== '' ? c.diem_thi : '--'}</td>
-                              <td><strong>{formatScore(c.diem_tk)}</strong></td>
-                              <td><strong>{formatScore(c.diem_tk_so)}</strong></td>
-                              <td><span className={`grade-pill ${getGradeLetterClass(c.diem_tk_chu)}`}>{c.diem_tk_chu || '--'}</span></td>
-                              <td>
+                              <td className="col-tc"><strong>{c.so_tin_chi || 0}</strong></td>
+                              <td className="col-gk">{c.diem_giua_ky !== undefined && c.diem_giua_ky !== null && c.diem_giua_ky !== '' ? c.diem_giua_ky : '--'}</td>
+                              <td className="col-thi">{c.diem_thi !== undefined && c.diem_thi !== null && c.diem_thi !== '' ? c.diem_thi : '--'}</td>
+                              <td className="col-tk10"><strong>{formatScore(c.diem_tk)}</strong></td>
+                              <td className="col-h4"><strong>{formatScore(c.diem_tk_so)}</strong></td>
+                              <td className="col-chu"><span className={`grade-pill ${getGradeLetterClass(c.diem_tk_chu)}`}>{c.diem_tk_chu || '--'}</span></td>
+                              <td className="col-kq">
                                 {result.status === 'passed' ? (
                                   <span className="tag tag-active">Đạt</span>
                                 ) : result.status === 'failed' ? (

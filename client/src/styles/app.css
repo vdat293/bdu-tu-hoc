@@ -3507,3 +3507,113 @@ body.theme-dark .survey-settings-note {
   font-size: 13px;
   color: #65676b;
 }
+
+/* ==========================================================================
+   GPA + LOGIN — GỌN CHO ĐIỆN THOẠI (≤680px)
+   - Stats GPA 4 hàng -> lưới 2x2; ẩn chart; bảng còn 5 cột; ẩn nút CSV/In.
+   - Login ẩn khối minh họa mascot, chỉ giữ 1 form gọn trong 1 màn hình.
+   Dùng `@media screen` để khi in từ điện thoại, bảng in vẫn đủ cột.
+   Đặt cuối file vì app.css load sau cùng nên thắng khi đồng specificity.
+   ========================================================================== */
+@media screen and (max-width: 680px) {
+  /* Stats 2x2: đè style.css (1 cột ở ≤620px); dựng lại viền chia ô cho lưới 2 cột. */
+  #tab-grades .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #tab-grades .stat-card,
+  #tab-grades .stat-card:nth-child(2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+  #tab-grades .stat-card:nth-child(odd) {
+    border-right: 1px solid var(--border-color);
+  }
+  #tab-grades .stat-card:nth-child(n+3) {
+    border-bottom: 0;
+  }
+  /* Ô stat trên cột hẹp ~160px: thu padding/icon/chữ để không tràn chữ. */
+  #tab-grades .stat-card {
+    min-height: 0;
+    padding: 16px 14px;
+    gap: 10px;
+  }
+  #tab-grades .stat-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    font-size: .62rem;
+  }
+  #tab-grades .stat-info {
+    min-width: 0;
+  }
+  #tab-grades .stat-value {
+    font-size: 1.3rem;
+  }
+  #tab-grades .stat-title {
+    font-size: .6rem;
+  }
+  #tab-grades .stat-rank-caption {
+    white-space: normal;
+  }
+
+  /* Ẩn chart (lớp dự phòng khi matchMedia không hỗ trợ; JSX cũng không mount). */
+  #tab-grades .analytics-grid {
+    display: none;
+  }
+
+  /* Bảng 5 cột: Mã môn, GK, Thi, Kết quả ẩn; chi tiết xem bằng tap mở modal. */
+  #tab-grades .grade-table .col-code,
+  #tab-grades .grade-table .col-gk,
+  #tab-grades .grade-table .col-thi,
+  #tab-grades .grade-table .col-kq {
+    display: none;
+  }
+  /* Tên môn dài tự xuống dòng, không đẩy bảng tràn ngang. */
+  #tab-grades .grade-table .course-name-cell {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  #tab-grades .grade-table th,
+  #tab-grades .grade-table td {
+    padding: 10px 8px;
+  }
+
+  /* Header khối học kỳ: tiêu đề 1 hàng riêng, meta (môn/TC/GPA) xuống hàng dưới. */
+  #tab-grades .semester-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  /* Toolbar còn mỗi ô tìm kiếm: ẩn CSV/In, search full width. */
+  #btn-export-csv,
+  #btn-print {
+    display: none;
+  }
+  #tab-grades .toolbar-right .search-box {
+    width: 100%;
+  }
+
+  /* Login: ẩn khối minh họa mascot, chỉ giữ 1 form gọn trong 1 màn hình. */
+  .auth-shell .login-context {
+    display: none;
+  }
+  .login-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 14px;
+  }
+  .auth-shell {
+    grid-template-columns: 1fr;
+    width: min(480px, 100%);
+    min-height: 0;
+  }
+  .login-card {
+    padding: 28px 22px;
+  }
+  /* Wordmark đã có tên trường nên tag chữ bên dưới và mác trang trí là thừa. */
+  .login-card .university-badge .badge-tag,
+  .login-card::before {
+    display: none;
+  }
+}
