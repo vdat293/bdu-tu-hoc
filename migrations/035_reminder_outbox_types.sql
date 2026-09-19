@@ -6,5 +6,5 @@ ALTER TABLE notification_outbox
   ADD CONSTRAINT notification_outbox_type_check CHECK (type IN (
     'schedule_reminder', 'exam_reminder',
     'daily_morning', 'daily_noon', 'sleep_reminder',
-    'mention', 'reply', 'welcome'
+    'mention', 'reply', 'welcome', 'broadcast'
   ));
