@@ -117,11 +117,13 @@ export const VocabService = {
       whereExtra += ` AND p.status = 'known'`;
     } else if (safeMssv && status === 'unlearned') {
       whereExtra += ` AND (p.status IS NULL OR p.status <> 'known')`;
+    } else if (safeMssv && status === 'due') {
+      whereExtra += ` AND p.status = 'known' AND p.next_review_at <= NOW()`;
     }
 
     const { rows } = await query(
       `SELECT w.id, w.set_id, w.term, w.pronunciation, w.pos, w.meaning_vi, w.example, w.audio_url, w.sort_order,
-              p.status AS progress
+              p.status AS progress, p.known_at, p.next_review_at, p.review_stage
        FROM vocab_words w
        LEFT JOIN vocab_progress p ON p.word_id = w.id AND p.mssv = NULLIF($2, '')
        WHERE w.set_id = $1 ${whereExtra} ${orderSql} LIMIT ${lim}`,
@@ -136,7 +138,10 @@ export const VocabService = {
       meaning: r.meaning_vi,
       example: r.example,
       audio: r.audio_url,
-      progress: r.progress || 'learning'
+      progress: r.progress || 'learning',
+      known_at: r.known_at || null,
+      next_review_at: r.next_review_at || null,
+      review_stage: Number(r.review_stage || 0)
     }));
   },
 
@@ -147,13 +152,136 @@ export const VocabService = {
     if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
     const exists = await query('SELECT 1 FROM vocab_words WHERE id = $1', [cleanWord]);
     if (exists.rowCount === 0) throw httpError('Từ vựng không tồn tại.', 404);
-    await query(
-      `INSERT INTO vocab_progress (mssv, word_id, status, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (mssv, word_id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()`,
-      [cleanMssv, cleanWord, st]
-    );
+    if (st === 'known') {
+      // Lần đầu thuộc -> đặt mốc ôn 1 ngày. Đã thuộc sẵn thì giữ nguyên lịch ôn.
+      await query(
+        `INSERT INTO vocab_progress (mssv, word_id, status, known_at, review_stage, next_review_at, updated_at)
+         VALUES ($1, $2, 'known', NOW(), 0, NOW() + INTERVAL '1 day', NOW())
+         ON CONFLICT (mssv, word_id) DO UPDATE SET
+           status = 'known',
+           known_at = COALESCE(vocab_progress.known_at, NOW()),
+           review_stage = CASE WHEN vocab_progress.status = 'known' THEN vocab_progress.review_stage ELSE 0 END,
+           next_review_at = CASE WHEN vocab_progress.status = 'known' THEN vocab_progress.next_review_at ELSE NOW() + INTERVAL '1 day' END,
+           updated_at = NOW()`,
+        [cleanMssv, cleanWord]
+      );
+    } else {
+      await query(
+        `INSERT INTO vocab_progress (mssv, word_id, status, review_stage, updated_at)
+         VALUES ($1, $2, 'learning', 0, NOW())
+         ON CONFLICT (mssv, word_id) DO UPDATE SET
+           status = 'learning', known_at = NULL, next_review_at = NULL, review_stage = 0, updated_at = NOW()`,
+        [cleanMssv, cleanWord]
+      );
+    }
     return { ok: true };
+  },
+
+  /**
+   * Ghi nhận kết quả một từ trong lượt ôn tập.
+   * pass: stage 0 -> +7 ngày, stage 1 -> +30 ngày, stage 2 -> thành thạo (ngừng nhắc).
+   * fail: quay về mốc 1 ngày.
+   */
+  async reviewWord(mssv, wordId, result) {
+    const cleanMssv = cleanStr(mssv, 32);
+    const cleanWord = assertUuid(wordId, 'word id');
+    if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
+    if (result !== 'pass' && result !== 'fail') throw httpError('Kết quả ôn không hợp lệ.', 400);
+
+    const passSql = `UPDATE vocab_progress
+       SET review_stage = LEAST(review_stage + 1, 3),
+           next_review_at = CASE LEAST(review_stage + 1, 3)
+             WHEN 1 THEN NOW() + INTERVAL '7 days'
+             WHEN 2 THEN NOW() + INTERVAL '30 days'
+             ELSE NULL
+           END,
+           last_reviewed_at = NOW(), updated_at = NOW()
+       WHERE mssv = $1 AND word_id = $2 AND status = 'known'
+       RETURNING review_stage, next_review_at`;
+    const failSql = `UPDATE vocab_progress
+       SET review_stage = 0, next_review_at = NOW() + INTERVAL '1 day',
+           last_reviewed_at = NOW(), updated_at = NOW()
+       WHERE mssv = $1 AND word_id = $2 AND status = 'known'
+       RETURNING review_stage, next_review_at`;
+
+    const { rows } = await query(result === 'pass' ? passSql : failSql, [cleanMssv, cleanWord]);
+    if (rows.length === 0) throw httpError('Từ chưa được đánh dấu thuộc.', 404);
+    const row = rows[0];
+    return {
+      ok: true,
+      stage: Number(row.review_stage),
+      next_review_at: row.next_review_at || null,
+      mastered: Number(row.review_stage) >= 3
+    };
+  },
+
+  async getReviewSummary(mssv) {
+    const cleanMssv = cleanStr(mssv, 32);
+    if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
+    const { rows } = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE next_review_at <= NOW()) AS due_day,
+         COUNT(*) FILTER (WHERE next_review_at <= NOW() + INTERVAL '7 days') AS due_week,
+         COUNT(*) FILTER (WHERE next_review_at <= NOW() + INTERVAL '30 days') AS due_month,
+         COUNT(*) FILTER (WHERE next_review_at IS NULL) AS mastered,
+         COUNT(*) AS known_total
+       FROM vocab_progress
+       WHERE mssv = $1 AND status = 'known'`,
+      [cleanMssv]
+    );
+    const row = rows[0] || {};
+    return {
+      due_day: Number(row.due_day || 0),
+      due_week: Number(row.due_week || 0),
+      due_month: Number(row.due_month || 0),
+      mastered: Number(row.mastered || 0),
+      known_total: Number(row.known_total || 0)
+    };
+  },
+
+  async listReviewWords(mssv, { bucket = 'day', limit = 50 } = {}) {
+    const cleanMssv = cleanStr(mssv, 32);
+    if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
+    const buckets = {
+      day: `p.next_review_at <= NOW()`,
+      week: `p.next_review_at <= NOW() + INTERVAL '7 days'`,
+      month: `p.next_review_at <= NOW() + INTERVAL '30 days'`,
+      all: `p.next_review_at IS NOT NULL`
+    };
+    const bucketKey = String(bucket || 'day');
+    if (!buckets[bucketKey]) throw httpError('Khung ôn tập không hợp lệ.', 400);
+    const lim = Math.max(1, Math.min(200, Number(limit) || 50));
+
+    const { rows } = await query(
+      `SELECT w.id, w.set_id, w.term, w.pronunciation, w.pos, w.meaning_vi, w.example, w.audio_url, w.sort_order,
+              p.status AS progress, p.known_at, p.next_review_at, p.review_stage,
+              s.name AS set_name, s.theme_slug, t.title AS theme_title
+       FROM vocab_progress p
+       JOIN vocab_words w ON w.id = p.word_id
+       JOIN vocab_sets s ON s.id = w.set_id
+       JOIN vocab_themes t ON t.slug = s.theme_slug
+       WHERE p.mssv = $1 AND p.status = 'known' AND ${buckets[bucketKey]}
+       ORDER BY p.next_review_at ASC NULLS LAST, w.term ASC
+       LIMIT ${lim}`,
+      [cleanMssv]
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      set_id: r.set_id,
+      term: r.term,
+      pronunciation: r.pronunciation,
+      pos: r.pos,
+      meaning: r.meaning_vi,
+      example: r.example,
+      audio: r.audio_url,
+      progress: r.progress || 'known',
+      known_at: r.known_at || null,
+      next_review_at: r.next_review_at || null,
+      review_stage: Number(r.review_stage || 0),
+      set_name: r.set_name,
+      theme_slug: r.theme_slug,
+      theme_title: r.theme_title
+    }));
   },
 
   async getSetInfo(setId, { mssv = null } = {}) {

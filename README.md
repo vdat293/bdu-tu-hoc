@@ -259,6 +259,19 @@ docker compose exec bdu-hub npm run rankings:sync
 Các lần sau scheduler tự chạy theo `RANKING_SYNC_HOUR` (mặc định 03:00,
 Asia/Ho_Chi_Minh).
 
+Import dữ liệu ngữ pháp lên VPS (giống luyện từ vựng: local export SQL upsert
+rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên VPS):
+
+```bash
+# Trên máy local, sau khi đã crawl + npm run grammar:import vào DB local
+npm run grammar:export
+scp data/grammar-export.sql ubuntu@<vps>:~/bdu-tu-hoc/data/
+
+# Trên VPS
+cd ~/bdu-tu-hoc
+cat data/grammar-export.sql | docker compose exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
 ### Cách 2: Sử dụng Docker CLI thuần
 ```bash
 docker build -t bdu-tu-hoc:latest .

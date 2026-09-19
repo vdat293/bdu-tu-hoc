@@ -307,7 +307,7 @@ export const QUIZ_MODE_META = {
   context: { label: 'NGỮ CẢNH — chọn từ phù hợp với câu', toggle: null }
 };
 
-export function QuizGame({ words, quizMode = 'word-meaning', onReplay, onExit }) {
+export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onReplay, onExit }) {
   const later = useTimeouts();
   const [localMode, setLocalMode] = useState(quizMode);
   const [index, setIndex] = useState(0);
@@ -374,6 +374,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onReplay, onExit })
     if (opt.correct) {
       setScore((s) => s + 10);
       setCorrectCount((c) => c + 1);
+      onProgress?.(word.id, 'known')?.catch?.(() => {});
     }
     later(advance, 850);
   };
@@ -581,7 +582,7 @@ export function TypingGame({ words, onProgress, onReplay, onExit }) {
 const ROUND_SIZE = 8;
 const MATCH_HEARTS = 5;
 
-export function MatchGame({ words, onReplay, onExit }) {
+export function MatchGame({ words, onProgress, onReplay, onExit }) {
   const later = useTimeouts();
   const rounds = useMemo(() => {
     const pool = shuffle(words);
@@ -648,6 +649,7 @@ export function MatchGame({ words, onReplay, onExit }) {
       setScore((s) => s + 10);
       setMatchedTotal((m) => m + 1);
       setFirst(null);
+      onProgress?.(w.id, 'known')?.catch?.(() => {});
       if (nextDone.length >= roundWords.length) later(() => goNextRef.current(), 700);
     } else {
       setWrong(w.id);

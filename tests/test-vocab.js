@@ -31,4 +31,20 @@ for (const s of ['b1-4-0-5-0', 'c1', 'b2-5-5-6-5', 'a1-0-3-0', 'sach-destination
   assert.ok(slugs.includes(s), `Thiếu theme ${s}`);
 }
 
-console.log('✅ Vocab service + themes OK (11 themes, 361 sets)');
+// 5. Migration 042: cột ngày thuộc + lịch ôn tập Leitner + index
+const reviewMigration = fs.readFileSync('migrations/042_vocab_review.sql', 'utf8');
+for (const col of ['known_at', 'last_reviewed_at', 'review_stage', 'next_review_at']) {
+  assert.match(reviewMigration, new RegExp(col), `Thiếu cột ${col}`);
+}
+assert.match(reviewMigration, /vocab_progress_due_idx/, 'Thiếu index đến hạn ôn');
+assert.match(reviewMigration, /vocab_progress_known_at_idx/, 'Thiếu index ngày thuộc');
+
+// 6. Validation API ôn tập: lỗi đầu vào phải chặn trước khi chạm DB
+const WORD_UUID = '11111111-1111-4111-8111-111111111111';
+await assert.rejects(() => VocabService.getReviewSummary(''), /Thiếu mssv/);
+await assert.rejects(() => VocabService.listReviewWords(''), /Thiếu mssv/);
+await assert.rejects(() => VocabService.listReviewWords('24050001', { bucket: 'year' }), /Khung ôn tập không hợp lệ/);
+await assert.rejects(() => VocabService.reviewWord('24050001', 'not-a-uuid', 'pass'), /đúng định dạng/);
+await assert.rejects(() => VocabService.reviewWord('24050001', WORD_UUID, 'skip'), /Kết quả ôn không hợp lệ/);
+
+console.log('✅ Vocab service + themes OK (11 themes, 361 sets, ôn tập Leitner)');

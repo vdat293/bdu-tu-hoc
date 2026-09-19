@@ -24,7 +24,7 @@ function get(path, headers = { Accept: 'text/html' }) {
 }
 
 await new Promise((resolve) => setTimeout(resolve, 250));
-const routes = ['/gpa', '/info', '/schedule', '/leaderboard', '/learning/CSC101', '/vocab', '/vocab/a1-0-3-0', '/vocab/set/11111111-1111-4111-8111-111111111111', '/vocab/set/11111111-1111-4111-8111-111111111111/quiz', '/clans/42', '/route-does-not-exist'];
+const routes = ['/gpa', '/info', '/schedule', '/leaderboard', '/learning/CSC101', '/vocab', '/vocab/a1-0-3-0', '/vocab/set/11111111-1111-4111-8111-111111111111', '/vocab/set/11111111-1111-4111-8111-111111111111/quiz', '/grammar', '/grammar/path/11111111-1111-4111-8111-111111111111', '/grammar/lesson/11111111-1111-4111-8111-111111111111', '/clans/42', '/route-does-not-exist'];
 for (const route of routes) {
   const response = await get(route);
   assert.equal(response.status, 200, `${route} must serve the SPA document`);

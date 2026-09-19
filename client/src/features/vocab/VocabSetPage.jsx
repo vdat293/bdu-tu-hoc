@@ -5,26 +5,23 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getVocabSet, getVocabSets, getVocabWords, saveVocabProgress } from '../../api/vocab.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { PosBadge } from './games.jsx';
+import { VOCAB_MODES, QUIZ_CHOICES } from './modes.js';
 import { patchWordsCache, patchProgressInCache } from './vocab-cache.js';
 import './vocab.css';
 
-export const VOCAB_MODES = [
-  { id: 'flashcard', title: 'Flashcard', desc: 'Lật thẻ để học từ vựng', points: '+5', color: '#6366f1', icon: '☰' },
-  { id: 'quiz', title: 'Quiz', desc: 'Trắc nghiệm chọn đáp án', points: '+10', color: '#f97316', icon: '☑' },
-  { id: 'typing', title: 'Typing', desc: 'Xem nghĩa, gõ từ tiếng Anh', points: '+10', color: '#16a34a', icon: 'T' },
-  { id: 'match', title: 'Ghép cặp', desc: 'Nối từ với nghĩa', points: '+10', color: '#0ea5e9', icon: '▦' }
-];
-
-export const QUIZ_CHOICES = [
-  { id: 'word-meaning', title: 'Từ -> Nghĩa', desc: 'Nhìn từ tiếng Anh, chọn nghĩa đúng', tone: 'is-blue' },
-  { id: 'context', title: 'Ngữ cảnh', desc: 'Che từ trong ví dụ, chọn đáp án phù hợp với câu', tone: 'is-violet' },
-  { id: 'meaning-word', title: 'Nghĩa -> Từ', desc: 'Nhìn nghĩa tiếng Việt, chọn từ đúng', tone: 'is-green' }
-];
+export { VOCAB_MODES, QUIZ_CHOICES };
 
 function wordsFrom(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.words)) return payload.words;
   return [];
+}
+
+function formatKnownAt(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function useDialogKeys(onClose) {
@@ -211,10 +208,13 @@ export default function VocabSetPage() {
         ← {setInfo?.theme_title || 'Tất cả theme'}
       </button>
       <div className="section-header-box glass-panel">
-        <h2 className="section-title">{setInfo?.name || 'Bộ từ'}</h2>
-        <p className="section-desc">
-          {setInfo?.theme_title ? `${setInfo.theme_title} · ` : ''}{words.length}/{setTotal} từ
-        </p>
+        <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
+        <div>
+          <h2 className="section-title">{setInfo?.name || 'Bộ từ'}</h2>
+          <p className="section-desc">
+            {setInfo?.theme_title ? `${setInfo.theme_title} · ` : ''}{words.length}/{setTotal} từ
+          </p>
+        </div>
       </div>
 
       {/* Tùy chỉnh */}
@@ -236,6 +236,7 @@ export default function VocabSetPage() {
               <option value="all">Tất cả</option>
               <option value="unlearned">Chưa thuộc</option>
               <option value="known">Đã thuộc</option>
+              <option value="due">Đến hạn ôn</option>
             </select>
           </label>
           <label className="vocab-tune">
@@ -294,6 +295,7 @@ export default function VocabSetPage() {
             <option value="all">Tất cả</option>
             <option value="unlearned">Chưa thuộc</option>
             <option value="known">Đã thuộc</option>
+            <option value="due">Đến hạn ôn</option>
           </select>
         </div>
         {wordsQuery.isLoading ? (
@@ -303,7 +305,7 @@ export default function VocabSetPage() {
         ) : (
           <div className="vocab-table-wrap">
             <table className="vocab-table">
-              <thead><tr><th>TỪ VỰNG</th><th>NGHĨA</th><th>LOẠI TỪ</th><th>VÍ DỤ</th><th>THUỘC</th></tr></thead>
+              <thead><tr><th>TỪ VỰNG</th><th>NGHĨA</th><th>LOẠI TỪ</th><th>VÍ DỤ</th><th>NGÀY THUỘC</th><th>THUỘC</th></tr></thead>
               <tbody>
                 {words.map((w) => {
                   const known = w.progress === 'known';
@@ -323,6 +325,7 @@ export default function VocabSetPage() {
                       <td>{w.meaning}</td>
                       <td>{w.pos || '—'}</td>
                       <td className="vocab-example">{w.example}</td>
+                      <td className="vocab-known-date">{formatKnownAt(w.known_at)}</td>
                       <td className="vocab-progress-cell">
                         <button
                           type="button"

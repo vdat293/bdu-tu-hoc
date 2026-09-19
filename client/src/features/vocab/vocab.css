@@ -55,6 +55,9 @@
 .vocab-known-toggle:disabled { opacity: .6; cursor: wait; }
 .vocab-row.is-known .vocab-term { color: #16a34a; }
 .vocab-progress-cell { white-space: nowrap; }
+.vocab-known-date { color: #64748b; font-size: 13px; white-space: nowrap; }
+
+
 
 /* ==================== Trang theme (roadmap) ==================== */
 .vocab-theme-hero { display: grid; gap: 16px; }

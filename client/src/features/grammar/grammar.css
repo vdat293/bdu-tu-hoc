@@ -1,0 +1,193 @@
+/* ==================== Danh sách lộ trình ngữ pháp ==================== */
+.gr-section { margin-top: 26px; }
+.gr-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.gr-section-head h3 { margin: 0; font-size: 18px; color: #0f172a; }
+.gr-section-count { background: #eef2f7; color: #64748b; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+
+.gr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 17px; align-items: stretch; }
+.gr-path-card { border-radius: 16px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; padding: 0; transition: transform .15s ease, box-shadow .15s ease; }
+.gr-path-card:hover { transform: translateY(-2px); }
+.gr-path-card:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+.gr-path-banner { position: relative; overflow: hidden; color: #fff; padding: 22px 18px 18px; display: grid; justify-items: center; gap: 6px; text-align: center; }
+.gr-path-banner::before { content: ''; position: absolute; top: -46px; right: -46px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255, 255, 255, .14); }
+.gr-path-banner::after { content: ''; position: absolute; bottom: -60px; left: -40px; width: 120px; height: 120px; border-radius: 50%; background: rgba(255, 255, 255, .1); }
+.gr-path-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .18em; opacity: .82; }
+.gr-path-banner-label { font-size: 30px; font-weight: 900; line-height: 1.05; letter-spacing: .01em; }
+.gr-path-badge { position: relative; z-index: 1; background: rgba(255, 255, 255, .95); color: #0f172a; border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 900; letter-spacing: .06em; }
+.gr-path-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.gr-path-name { margin: 0; font-size: 16px; line-height: 1.35; min-height: 44px; }
+.gr-path-meta { color: #64748b; font-size: 13px; }
+.gr-path-done { align-self: flex-start; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 800; }
+.gr-difficulty { margin-top: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; background: #f8fafc; }
+.gr-difficulty-row { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .06em; color: #64748b; margin-bottom: 8px; }
+.gr-difficulty-bar { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.gr-difficulty-fill { height: 100%; border-radius: 999px; }
+
+/* ==================== Trang lộ trình ==================== */
+.gr-panel { border-radius: 18px; padding: 20px; margin-top: 16px; }
+.gr-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gr-panel-head h3 { margin: 0; font-size: 16px; }
+.gr-list-count { font-size: 13px; color: #64748b; }
+
+.gr-hero { display: grid; gap: 16px; }
+.gr-hero-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.gr-hero-icon { font-size: 34px; line-height: 1; }
+.gr-hero-title { margin: 0; font-size: 22px; }
+.gr-hero-group { margin: 4px 0 0; font-size: 13px; color: #64748b; }
+.gr-hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.gr-theme-badge { border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700; background: #f1f5f9; color: #475569; }
+.gr-theme-badge.is-sky { background: #e0f2fe; color: #0369a1; }
+.gr-theme-badge.is-mint { background: #dcfce7; color: #15803d; }
+.gr-theme-badge.is-violet { background: #ede9fe; color: #6d28d9; }
+.gr-theme-badge.is-amber { background: #fef3c7; color: #b45309; }
+.gr-hero-progress { display: grid; gap: 8px; }
+.gr-hero-progress-label { display: flex; justify-content: space-between; align-items: center; color: #475569; font-size: 14px; }
+.gr-hero-difficulty { font-size: 13px; font-weight: 700; }
+.gr-hero-progress-bar { height: 12px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.gr-hero-progress-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #22c55e, #84cc16); transition: width .3s ease; }
+
+.gr-lessons { list-style: none; display: grid; gap: 12px; margin: 14px 0 0; padding: 0; }
+.gr-lesson { border-radius: 16px; padding: 0; overflow: hidden; border: 1.5px solid #e9eef5; transition: border-color .12s ease, box-shadow .12s ease; }
+.gr-lesson.is-active { border-color: #fcd34d; background: #fffbeb; }
+.gr-lesson.is-completed { border-color: #bbf7d0; }
+.gr-lesson-btn { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: transparent; border: none; cursor: pointer; text-align: left; }
+.gr-lesson-btn:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+.gr-lesson-index { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 15px; background: #eef2ff; color: #4f46e5; }
+.gr-lesson-index.is-active { background: #fbbf24; color: #fff; }
+.gr-lesson-index.is-done { background: #16a34a; color: #fff; }
+.gr-lesson-main { flex: 1; display: grid; gap: 6px; min-width: 0; }
+.gr-lesson-name { font-size: 15px; line-height: 1.4; color: #0f172a; }
+.gr-lesson-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-badge { background: #f1f5f9; color: #475569; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+.gr-badge.is-mint { background: #dcfce7; color: #15803d; }
+.gr-badge.is-amber { background: #fef3c7; color: #b45309; }
+.gr-badge.is-sky { background: #e0f2fe; color: #0369a1; }
+.gr-lesson-arrow { color: #94a3b8; font-size: 18px; }
+.gr-lessons .gr-lesson:hover { border-color: #cbd5e1; box-shadow: 0 14px 28px -24px rgba(15, 23, 42, .5); }
+
+/* ==================== Trang bài học: lý thuyết ==================== */
+.gr-crumb { margin: 0 0 10px; font-size: 13px; color: #64748b; }
+.gr-crumb-link { border: none; background: none; padding: 0; color: #4f46e5; font-weight: 700; cursor: pointer; font-size: 13px; }
+.gr-crumb-link:hover { text-decoration: underline; }
+.gr-theory { border-radius: 20px; padding: 22px; }
+.gr-theory-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gr-theory-title { margin: 0; font-size: 22px; line-height: 1.35; }
+.gr-theory-sub { margin: 6px 0 0; color: #64748b; font-size: 14px; }
+.gr-theory-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.gr-theory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.gr-start-btn { flex: 1; min-width: 220px; border: none; border-radius: 14px; background: #22c55e; color: #fff; font-size: 16px; font-weight: 800; padding: 14px 22px; cursor: pointer; transition: background .15s ease, transform .12s ease; }
+.gr-start-btn:hover { background: #16a34a; transform: translateY(-1px); }
+.gr-theory-empty { color: #64748b; }
+.gr-rules { display: grid; gap: 16px; margin-top: 18px; }
+.gr-rule { border: 1.5px solid #e9eef5; border-radius: 18px; padding: 18px 20px; background: #fff; }
+.gr-rule-title { margin: 0 0 10px; font-size: 17px; color: #0f172a; }
+.gr-rule-content { color: #334155; font-size: 15px; line-height: 1.65; }
+.gr-rule-content p { margin: 8px 0; }
+.gr-rule-content ul, .gr-rule-content ol { margin: 8px 0; padding-left: 22px; }
+.gr-rule-content table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+.gr-rule-content th, .gr-rule-content td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; vertical-align: top; }
+.gr-rule-content th { background: #f8fafc; font-weight: 800; }
+.gr-rule-content code { background: #f1f5f9; border-radius: 6px; padding: 2px 6px; font-size: 13px; }
+.gr-rule-content blockquote { margin: 10px 0; padding: 8px 14px; border-left: 4px solid #c7d2fe; background: #f8faff; color: #475569; }
+.gr-rule-content strong { color: #0f172a; }
+
+/* ==================== Làm bài tập ==================== */
+.gr-wrap { max-width: 920px; margin: 0 auto; }
+.gr-topbar { border-radius: 22px; padding: 16px 20px 14px; border: 1.5px solid #e2e8f0; }
+.gr-topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gr-counter { font-weight: 800; font-size: 16px; color: #0f172a; }
+.gr-topbar-actions { display: flex; align-items: center; gap: 8px; }
+.gr-action { border: 1.5px solid #cbd5e1; background: #fff; color: #334155; font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 10px; cursor: pointer; }
+.gr-action:hover { border-color: #94a3b8; }
+.gr-action.is-exit { color: #ef4444; border-color: #fecaca; }
+.gr-action.is-exit:hover { background: #fef2f2; border-color: #fca5a5; }
+.gr-progress { height: 6px; border-radius: 999px; background: #eef2f7; overflow: hidden; margin-top: 12px; }
+.gr-progress i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width .3s ease; }
+.gr-status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.gr-timer { display: flex; align-items: center; gap: 8px; flex: 1; }
+.gr-timer-num { color: #16a34a; font-weight: 800; font-size: 14px; min-width: 38px; }
+.gr-timer.is-danger .gr-timer-num { color: #dc2626; }
+.gr-timer-bar { flex: 1; max-width: 320px; height: 8px; border-radius: 999px; background: #e8edf5; overflow: hidden; }
+.gr-timer-bar i { display: block; height: 100%; border-radius: 999px; background: #22c55e; transition: width 1s linear; }
+.gr-timer.is-danger .gr-timer-bar i { background: #ef4444; }
+.gr-accuracy { font-size: 13px; font-weight: 700; color: #64748b; white-space: nowrap; }
+
+.gr-card { border-radius: 26px; padding: 26px 24px; margin-top: 18px; border: 1.5px solid #e9eef5; }
+.gr-passage { border: 1.5px solid #dbeafe; background: #f8fbff; border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
+.gr-passage-title { margin: 0 0 8px; font-size: 15px; color: #1d4ed8; }
+.gr-passage-body { margin: 0; white-space: pre-wrap; color: #334155; font-size: 14px; line-height: 1.7; }
+.gr-question { margin: 0 0 16px; font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.5; text-align: center; }
+
+.gr-options { display: grid; gap: 12px; }
+.gr-option { display: flex; align-items: center; gap: 14px; text-align: left; border: 2px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 15px 18px; font-size: 16px; cursor: pointer; transition: border-color .12s ease, background .12s ease, transform .12s ease; }
+.gr-option:hover:not(:disabled) { border-color: #93c5fd; background: #f0f7ff; transform: translateY(-1px); }
+.gr-option:disabled { cursor: default; }
+.gr-option-letter { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #eef2ff; color: #4f46e5; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.gr-option.is-correct { border-color: #22c55e; background: #f0fdf4; }
+.gr-option.is-correct .gr-option-letter { background: #dcfce7; color: #15803d; }
+.gr-option.is-wrong { border-color: #ef4444; background: #fef2f2; }
+.gr-option.is-wrong .gr-option-letter { background: #fee2e2; color: #b91c1c; }
+.gr-option.is-dim { opacity: .55; }
+
+.gr-fill { display: flex; gap: 10px; flex-wrap: wrap; }
+.gr-fill input { flex: 1; min-width: 220px; border: 2px solid #93c5fd; border-radius: 14px; padding: 13px 18px; font-size: 16px; outline: none; background: #fff; }
+.gr-fill input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, .15); }
+.gr-fill input:disabled { background: #f8fafc; color: #64748b; }
+
+.gr-arrange { display: grid; gap: 14px; }
+.gr-arrange-answer { min-height: 62px; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; background: #fff; }
+.gr-arrange-answer.is-correct { border-style: solid; border-color: #22c55e; background: #f0fdf4; }
+.gr-arrange-answer.is-wrong { border-style: solid; border-color: #ef4444; background: #fef2f2; }
+.gr-arrange-empty { color: #94a3b8; font-size: 14px; align-self: center; }
+.gr-words { display: flex; flex-wrap: wrap; gap: 8px; }
+.gr-chip { border: 1.5px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 600; color: #0f172a; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
+.gr-chip:hover:not(:disabled) { border-color: #60a5fa; background: #f0f7ff; }
+.gr-chip.is-picked { background: #eef2ff; border-color: #818cf8; color: #4338ca; }
+.gr-chip.is-used { opacity: .35; cursor: default; }
+.gr-arrange-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.gr-hint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.gr-hint-btn { border: 1.5px solid #fcd34d; background: #fffbeb; color: #b45309; border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.gr-hint-btn:hover { background: #fef3c7; }
+.gr-hint-text { margin: 0; color: #92400e; font-size: 14px; }
+
+.gr-feedback { margin-top: 18px; border-radius: 16px; padding: 14px 16px; font-size: 15px; display: grid; gap: 6px; }
+.gr-feedback.is-ok { background: #f0fdf4; border: 1.5px solid #bbf7d0; color: #15803d; }
+.gr-feedback.is-bad { background: #fef2f2; border: 1.5px solid #fecaca; color: #b91c1c; }
+.gr-feedback-explain { margin: 4px 0 0; color: #475569; font-size: 14px; }
+.gr-feedback-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.gr-kbd-hint { font-size: 12px; color: #94a3b8; }
+.gr-kbd-foot { margin: 14px 0 0; text-align: right; }
+
+.gr-result { text-align: center; display: grid; justify-items: center; gap: 8px; padding: 34px 24px; }
+.gr-result-emoji { font-size: 46px; }
+.gr-result h3 { margin: 0; font-size: 22px; }
+.gr-result-score { margin: 0; font-size: 20px; font-weight: 800; color: #16a34a; }
+.gr-result-bar { width: min(420px, 100%); height: 10px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.gr-result-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #22c55e, #84cc16); }
+.gr-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
+.gr-review-title { margin: 0 0 12px; font-size: 17px; }
+.gr-review-list { margin: 0; padding-left: 20px; display: grid; gap: 14px; }
+.gr-review-q { margin: 0; font-weight: 700; color: #0f172a; }
+.gr-review-a { margin: 4px 0 0; color: #475569; font-size: 14px; }
+.gr-review-explain { margin: 4px 0 0; color: #64748b; font-size: 14px; font-style: italic; }
+
+/* ==================== Responsive & in ấn ==================== */
+@media (max-width: 640px) {
+  .gr-card { padding: 20px 16px; }
+  .gr-question { font-size: 17px; }
+  .gr-hero-badges { margin-left: 0; }
+  .gr-lesson-btn { align-items: flex-start; }
+  .gr-fill { flex-direction: column; }
+}
+
+@media print {
+  .sidebar, .topbar, .gr-crumb, .gr-theory-actions, .gr-theory-head button, .sidebar-scrim, .bg-glow { display: none !important; }
+  .main-content-wrapper { margin: 0 !important; }
+  .gr-theory, .gr-rule { border: none; box-shadow: none; padding: 0 0 12px; }
+  .gr-rule { break-inside: avoid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-path-card, .gr-option, .gr-start-btn, .gr-progress i, .gr-timer-bar i { transition: none; }
+}

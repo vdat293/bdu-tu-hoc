@@ -9,6 +9,7 @@ export const navigation = [
   { path: '/enrollment', label: 'Đăng ký môn học', icon: '+', keywords: 'đăng ký tín chỉ học phần' },
   { path: '/learning', label: 'Kho Tài Liệu', icon: '09', keywords: 'kho tài liệu video học liệu môn học' },
   { path: '/vocab', label: 'Luyện từ vựng', icon: 'Aa', keywords: 'luyện từ vựng flashcard quiz typing ghép cặp english' },
+  { path: '/grammar', label: 'Luyện ngữ pháp', icon: 'Ab', keywords: 'luyện ngữ pháp grammar toeic destination trắc nghiệm điền từ sắp xếp đọc hiểu' },
   { path: '/clans', label: 'CLB / Nhóm Học Tập', icon: '10', keywords: 'clan nhóm câu lạc bộ guild' },
   { path: '/confession', label: 'BDU Confession', icon: '11', keywords: 'bài viết diễn đàn confession cfs' }
 ];
@@ -20,6 +21,7 @@ export function findRouteMeta(pathname) {
   if (canonical.startsWith('/learning/')) return { title: 'Không gian môn học' };
   if (canonical === '/vocab') return { title: 'Luyện từ vựng' };
   if (canonical.startsWith('/vocab/')) return { title: 'Luyện từ vựng' };
+  if (canonical.startsWith('/grammar')) return { title: 'Luyện ngữ pháp' };
   if (canonical.startsWith('/clans/')) return { title: 'Kênh CLB' };
   if (canonical.startsWith('/confession/profile/')) return { title: 'Hồ sơ sinh viên' };
   return routeMeta[canonical] || { title: 'BDU Tự Học' };

@@ -31,6 +31,7 @@ import { SurveyRunService } from '../services/survey-run.service.js';
 import { PermissionService } from '../services/permission.service.js';
 import { FacebookImportService } from '../services/facebook-import.service.js';
 import { VocabService } from '../services/vocab.service.js';
+import { GrammarService } from '../services/grammar.service.js';
 import { query } from '../db/database.js';
 import path from 'path';
 import fs from 'fs';
@@ -2192,6 +2193,118 @@ export const ApiController = {
       if (status >= 500) {
         console.error('saveVocabProgress error:', err.message);
         return res.status(400).json({ result: false, message: 'Không thể lưu tiến độ.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  // 10b. Ôn tập từ vựng theo lịch (Leitner ngày/tuần/tháng)
+  async getVocabReviewSummary(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await VocabService.getReviewSummary(mssv);
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('getVocabReviewSummary error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể tải lịch ôn tập.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  async listVocabReviewWords(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { bucket, limit } = req.query || {};
+      const data = await VocabService.listReviewWords(mssv, { bucket, limit });
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('listVocabReviewWords error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể tải từ cần ôn.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  async reviewVocabWord(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { word_id, result } = req.body || {};
+      const data = await VocabService.reviewWord(mssv, word_id, result);
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('reviewVocabWord error:', err.message);
+        return res.status(400).json({ result: false, message: 'Không thể lưu kết quả ôn tập.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  // 10c. Luyện ngữ pháp (clone luyennguphap: lý thuyết + trắc nghiệm/điền từ/sắp xếp + đọc hiểu)
+  async listGrammarGroups(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await GrammarService.listGroups({ mssv });
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('listGrammarGroups error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể tải danh sách ngữ pháp.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  async getGrammarPath(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await GrammarService.getPath(req.params.pathId, { mssv });
+      if (!data) return res.status(404).json({ result: false, message: 'Không tìm thấy lộ trình.' });
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('getGrammarPath error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể tải lộ trình.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  async getGrammarLesson(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await GrammarService.getLesson(req.params.lessonId, { mssv });
+      if (!data) return res.status(404).json({ result: false, message: 'Không tìm thấy bài học.' });
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('getGrammarLesson error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể tải bài học.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
+  async saveGrammarProgress(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { lesson_id, answered, correct, total, completed } = req.body || {};
+      const data = await GrammarService.saveProgress(mssv, lesson_id, { answered, correct, total, completed });
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('saveGrammarProgress error:', err.message);
+        return res.status(400).json({ result: false, message: 'Không thể lưu tiến độ ngữ pháp.' });
       }
       return res.status(status).json({ result: false, message: err.message });
     }

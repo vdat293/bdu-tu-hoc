@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   getVocabSets: vi.fn(),
   getVocabSet: vi.fn(),
   getVocabWords: vi.fn(),
-  saveVocabProgress: vi.fn()
+  saveVocabProgress: vi.fn(),
+  getVocabReviewSummary: vi.fn(),
+  getVocabReviewWords: vi.fn(),
+  reviewVocabWord: vi.fn()
 }));
 
 vi.mock('../../client/src/api/vocab.js', () => mocks);
@@ -22,6 +25,7 @@ import VocabThemesPage from '../../client/src/features/vocab/VocabThemesPage.jsx
 import VocabThemePage from '../../client/src/features/vocab/VocabThemePage.jsx';
 import VocabSetPage from '../../client/src/features/vocab/VocabSetPage.jsx';
 import VocabGamePage from '../../client/src/features/vocab/VocabGamePage.jsx';
+import VocabReviewPage from '../../client/src/features/vocab/VocabReviewPage.jsx';
 
 const SET_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
 
@@ -47,10 +51,17 @@ function allRoutes() {
       <Route path="/vocab" element={<VocabThemesPage />} />
       <Route path="/vocab/set/:setId" element={<VocabSetPage />} />
       <Route path="/vocab/set/:setId/:mode" element={<VocabGamePage />} />
+      <Route path="/vocab/review/:mode" element={<VocabReviewPage />} />
       <Route path="/vocab/:slug" element={<VocabThemePage />} />
     </>
   );
 }
+
+beforeEach(() => {
+  mocks.getVocabReviewSummary.mockResolvedValue({ due_day: 0, due_week: 0, due_month: 0, mastered: 0, known_total: 0 });
+  mocks.getVocabReviewWords.mockResolvedValue([]);
+  mocks.reviewVocabWord.mockResolvedValue({ ok: true });
+});
 
 afterEach(() => {
   cleanup();
@@ -65,6 +76,8 @@ describe('vocab themes page', () => {
     ]);
     renderWith(allRoutes(), '/vocab');
     expect(await screen.findByText('A1 (0-3.0)')).toBeTruthy();
+    expect(screen.getByText('Mỗi ngày một ít, tích luỹ cho tương lai')).toBeTruthy();
+    expect(document.querySelector('.section-header-box > div > .section-title')).toBeTruthy();
     expect(screen.getByText('📚 31 bộ từ')).toBeTruthy();
     expect(screen.getByText('1/5')).toBeTruthy();
     expect(screen.getByText('4/5')).toBeTruthy();
@@ -240,5 +253,72 @@ describe('vocab game page', () => {
     renderWith(allRoutes(), `/vocab/set/${SET_ID}/match`);
     expect(await screen.findByText(/VÒNG 1\//)).toBeTruthy();
     expect(screen.getByText('Đã ghép:')).toBeTruthy();
+  });
+});
+
+describe('vocab review', () => {
+  beforeEach(() => {
+    mocks.getVocabThemes.mockResolvedValue([
+      { slug: 'a1-0-3-0', title: 'A1 (0-3.0)', difficulty: 1, total_sets: 31 }
+    ]);
+  });
+
+  it('giu du 4 card game va them card on tap', async () => {
+    mocks.getVocabReviewSummary.mockResolvedValue({ due_day: 2, due_week: 5, due_month: 9, mastered: 1, known_total: 12 });
+    renderWith(allRoutes(), '/vocab');
+    expect(await screen.findByLabelText('Ôn tập bằng Flashcard')).toBeTruthy();
+    expect(screen.getByLabelText('Ôn tập bằng Quiz')).toBeTruthy();
+    expect(screen.getByLabelText('Ôn tập bằng Typing')).toBeTruthy();
+    expect(screen.getByLabelText('Ôn tập bằng Ghép cặp')).toBeTruthy();
+    const reviewCard = await screen.findByLabelText('Ôn tập từ vựng');
+    fireEvent.click(reviewCard);
+    expect(await screen.findByText('Chọn phạm vi ôn tập')).toBeTruthy();
+    expect(screen.getByText('Ôn từ hôm qua')).toBeTruthy();
+    expect(screen.getByText('Ôn từ tuần qua')).toBeTruthy();
+    expect(screen.getByText('Ôn tập toàn bộ')).toBeTruthy();
+    expect(screen.getByText('2 từ · từ đến hạn ôn hôm nay')).toBeTruthy();
+    expect(screen.getByText('11 từ · theo tháng hoặc tất cả từ chưa thành thạo')).toBeTruthy();
+  });
+
+  it('card game tren /vocab hoi pham vi roi vao thang game', async () => {
+    mocks.getVocabReviewSummary.mockResolvedValue({ due_day: 2, due_week: 5, due_month: 9, mastered: 1, known_total: 12 });
+    mocks.getVocabReviewWords.mockResolvedValue(WORDS);
+    renderWith(allRoutes(), '/vocab');
+    fireEvent.click(await screen.findByLabelText('Ôn tập bằng Quiz'));
+    expect(await screen.findByText('Chọn phạm vi ôn tập')).toBeTruthy();
+    fireEvent.click(screen.getByText('Ôn từ tuần qua'));
+    expect(await screen.findByText('Câu 1 / 4')).toBeTruthy();
+  });
+
+  it('card on tap tu dong vao che do typing', async () => {
+    mocks.getVocabReviewSummary.mockResolvedValue({ due_day: 2, due_week: 5, due_month: 9, mastered: 1, known_total: 12 });
+    mocks.getVocabReviewWords.mockResolvedValue(WORDS);
+    renderWith(allRoutes(), '/vocab');
+    fireEvent.click(await screen.findByLabelText('Ôn tập từ vựng'));
+    fireEvent.click(await screen.findByText('Ôn từ hôm qua'));
+    expect(await screen.findByText('Chưa có gợi ý')).toBeTruthy();
+    expect(screen.getByText(/Ôn tập · Từ hôm qua/)).toBeTruthy();
+    expect(mocks.getVocabReviewWords).toHaveBeenCalledWith('test-token', expect.objectContaining({ bucket: 'day' }));
+  });
+
+  it('an card on tap khi chua co tu thuoc', async () => {
+    renderWith(allRoutes(), '/vocab');
+    await screen.findByText('A1 (0-3.0)');
+    expect(screen.queryByLabelText('Ôn tập từ vựng')).toBeNull();
+  });
+
+  it('flashcard on tap ghi ket qua pass/fail qua API review', async () => {
+    mocks.getVocabReviewWords.mockResolvedValue(WORDS);
+    renderWith(allRoutes(), '/vocab/review/flashcard?bucket=day');
+    expect(await screen.findByText('Chơi lại')).toBeTruthy();
+    fireEvent.click(screen.getByText('✕ Quên'));
+    await waitFor(() => expect(mocks.reviewVocabWord).toHaveBeenCalledWith('test-token', expect.any(String), 'fail'));
+    fireEvent.click(await screen.findByText('✓ Thuộc'));
+    await waitFor(() => expect(mocks.reviewVocabWord).toHaveBeenCalledWith('test-token', expect.any(String), 'pass'));
+  });
+
+  it('bao trong khi khung on tap khong co tu', async () => {
+    renderWith(allRoutes(), '/vocab/review/quiz?bucket=week');
+    expect(await screen.findByText('Không có từ nào đến hạn')).toBeTruthy();
   });
 });

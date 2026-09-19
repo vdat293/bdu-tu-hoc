@@ -3,9 +3,9 @@ import { navigation, findRouteMeta } from '../../client/src/app/navigation.js';
 
 describe('student route contract', () => {
   it('has one canonical route for every student navigation item', () => {
-    expect(navigation).toHaveLength(12);
-    expect(new Set(navigation.map((item) => item.path)).size).toBe(12);
-    expect(navigation.map((item) => item.path)).toEqual(expect.arrayContaining(['/gpa', '/info', '/schedule', '/leaderboard', '/learning', '/vocab', '/clans', '/confession']));
+    expect(navigation).toHaveLength(13);
+    expect(new Set(navigation.map((item) => item.path)).size).toBe(13);
+    expect(navigation.map((item) => item.path)).toEqual(expect.arrayContaining(['/gpa', '/info', '/schedule', '/leaderboard', '/learning', '/vocab', '/grammar', '/clans', '/confession']));
     expect(navigation.map((item) => item.path)).not.toContain('/entertainment');
   });
 
@@ -14,6 +14,9 @@ describe('student route contract', () => {
     expect(findRouteMeta('/vocab/a1-0-3-0').title).toBe('Luyện từ vựng');
     expect(findRouteMeta('/vocab/set/abc').title).toBe('Luyện từ vựng');
     expect(findRouteMeta('/vocab/set/abc/quiz').title).toBe('Luyện từ vựng');
+    expect(findRouteMeta('/grammar').title).toBe('Luyện ngữ pháp');
+    expect(findRouteMeta('/grammar/path/abc').title).toBe('Luyện ngữ pháp');
+    expect(findRouteMeta('/grammar/lesson/abc').title).toBe('Luyện ngữ pháp');
     expect(findRouteMeta('/clans/42').title).toBe('Kênh CLB');
     expect(findRouteMeta('/gpa/').title).toBe('Bảng điểm & GPA');
   });

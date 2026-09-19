@@ -39,3 +39,26 @@ export async function saveVocabProgress(token, wordId, status) {
   });
   return unwrap(data, data);
 }
+
+export async function getVocabReviewSummary(token, { signal } = {}) {
+  const data = await request('/api/vocab/review/summary', { token, signal, defaultMessage: 'Không thể tải lịch ôn tập.' });
+  return unwrap(data, { due_day: 0, due_week: 0, due_month: 0, mastered: 0, known_total: 0 });
+}
+
+export async function getVocabReviewWords(token, { bucket, limit, signal } = {}) {
+  const params = new URLSearchParams();
+  if (bucket) params.set('bucket', bucket);
+  if (limit) params.set('limit', String(limit));
+  const suffix = params.size ? `?${params}` : '';
+  const data = await request(`/api/vocab/review/words${suffix}`, { token, signal, defaultMessage: 'Không thể tải từ cần ôn.' });
+  return unwrap(data, []);
+}
+
+export async function reviewVocabWord(token, wordId, result) {
+  const data = await request('/api/vocab/review', {
+    method: 'POST', token,
+    body: { word_id: wordId, result },
+    defaultMessage: 'Không thể lưu kết quả ôn tập.'
+  });
+  return unwrap(data, data);
+}

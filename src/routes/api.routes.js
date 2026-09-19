@@ -193,6 +193,15 @@ router.get('/vocab/themes/:slug/sets', ApiController.listVocabSets);
 router.get('/vocab/sets/:setId', ApiController.getVocabSet);
 router.get('/vocab/sets/:setId/words', ApiController.listVocabWords);
 router.post('/vocab/progress', ApiController.saveVocabProgress);
+router.get('/vocab/review/summary', ApiController.getVocabReviewSummary);
+router.get('/vocab/review/words', ApiController.listVocabReviewWords);
+router.post('/vocab/review', ApiController.reviewVocabWord);
+
+// 8b. Luyện ngữ pháp (clone luyennguphap: lý thuyết + bài tập + đọc hiểu)
+router.get('/grammar/groups', ApiController.listGrammarGroups);
+router.get('/grammar/paths/:pathId', ApiController.getGrammarPath);
+router.get('/grammar/lessons/:lessonId', ApiController.getGrammarLesson);
+router.post('/grammar/progress', ApiController.saveGrammarProgress);
 
 // 9. Giải trí: online game rooms, challenges and move history
 router.get('/entertainment/games', ApiController.getEntertainmentGames);
