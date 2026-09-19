@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { loginStudent } from '../api/academics.js';
 import { clearStoredSession, persistSession, readStoredSession } from '../features/auth/session.js';
 import { CommunityRealtime } from '../services/community-realtime.js';
+import UpdateBanner from './UpdateBanner.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -233,5 +234,5 @@ function AuthProvider({ children }) {
 function storageForSession(remember) { return remember ? window.localStorage : window.sessionStorage; }
 
 export function AppProviders({ children }) {
-  return <QueryClientProvider client={queryClient}><ToastProvider><AuthProvider>{children}</AuthProvider></ToastProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><ToastProvider><AuthProvider>{children}</AuthProvider><UpdateBanner /></ToastProvider></QueryClientProvider>;
 }

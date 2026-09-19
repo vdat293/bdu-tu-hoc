@@ -13,6 +13,7 @@ data/*.dump
 data/avatars/
 data/fb-profile/
 data/fb-import/
+data/client-assets/
 dist/
 .vite/
 .playwright-mcp/

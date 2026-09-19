@@ -21,6 +21,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_ID: ${BUILD_ID:-}
     container_name: bdu-tu-hoc-app
     restart: unless-stopped
     deploy:
@@ -79,6 +81,9 @@ services:
       - FB_IMPORT_AUTO_RELOGIN=${FB_IMPORT_AUTO_RELOGIN:-true}
       - FB_IMPORT_RELOGIN_MAX_ATTEMPTS=${FB_IMPORT_RELOGIN_MAX_ATTEMPTS:-2}
       - FB_IMPORT_RELOGIN_COOLDOWN_MINUTES=${FB_IMPORT_RELOGIN_COOLDOWN_MINUTES:-360}
+      # Giữ chunk cũ của các bản build trước để HTML còn cache không 404.
+      - CLIENT_ASSET_HISTORY_DIR=/app/data/client-assets
+      - CLIENT_ASSET_HISTORY_DAYS=${CLIENT_ASSET_HISTORY_DAYS:-30}
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +93,7 @@ services:
       - ./data/avatars:/app/data/avatars
       - ./data/fb-profile:/app/data/fb-profile
       - ./data/fb-import:/app/data/fb-import
+      - ./data/client-assets:/app/data/client-assets
 
   # Bot Discord nhắc lịch/tag (chạy riêng process để crash không kéo sập web).
   # Cần DISCORD_BOT_TOKEN trong .env; để trống thì đừng start service này

@@ -37,6 +37,22 @@ import { query } from '../db/database.js';
 import path from 'path';
 import fs from 'fs';
 
+// Vite emits dist/client/build.json on every production build. Reading it here
+// lets an open tab compare its embedded __BUILD_ID__ with the deployed one.
+let cachedBuildId = null;
+function resolveBuildId() {
+  const envBuildId = String(process.env.BUILD_ID || '').trim();
+  if (envBuildId) return envBuildId;
+  if (cachedBuildId) return cachedBuildId;
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), 'dist', 'client', 'build.json'), 'utf8');
+    cachedBuildId = String(JSON.parse(raw)?.build_id || '').trim() || null;
+  } catch {
+    cachedBuildId = null;
+  }
+  return cachedBuildId;
+}
+
 function publishMentionNotifications(created) {
   if (!Array.isArray(created)) return;
   for (const item of created) {
@@ -1088,6 +1104,12 @@ export const ApiController = {
       wordFmtQueue: WordFmtService.getQueueStats(),
       communityRealtime: CommunityRealtime.getStatus()
     });
+  },
+
+  // 10a. System: deployed build id for the "có bản mới" client banner
+  getVersion(req, res) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ result: true, build_id: resolveBuildId() });
   },
 
   // 10b. Entertainment games: database-backed rooms + server-authoritative moves

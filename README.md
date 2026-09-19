@@ -203,6 +203,43 @@ Kết quả xác minh của một token opaque khôi phục sau restart chỉ đ
 `BDU_RESTORED_TOKEN_TTL_MS` (mặc định 5 phút); đăng nhập mới luôn giữ hạn
 `expires_in` do BDU cấp.
 
+### Cache trình duyệt/CDN và phát hiện bản mới
+
+Portal React được phục vụ với chiến lược cache phân tầng, không cần người dùng
+tự xóa cache sau deploy:
+
+* Document SPA (`/` và deep link) trả `Cache-Control: no-store`.
+* `/app-assets/*` có hash trong tên nên `immutable, max-age=1y` an toàn.
+* JS/CSS/HTML legacy trong `public/` không có hash nên trả `no-cache,
+  must-revalidate` (browser/CDN nhận 304 qua ETag, file đổi được phục vụ ngay).
+* `/media/avatars` có tên timestamp + hash; `/media/fb-import` revalidate mỗi
+  ngày vì tên file có thể bị ghi đè khi bài viết được import lại.
+
+`npm run build:client` sinh `dist/client/build.json` và tự stamp `?v=<BUILD_ID>`
+cho CSS legacy cùng `<meta name="bdu-build">`; runtime trả `GET /api/version`
+cùng id đó. Tab đang mở phát hiện id khác khi quay lại tab sẽ hiện banner "có
+bản cập nhật mới" (không tự reload để không mất nội dung đang gõ). Nếu tab còn
+giữ chunk cũ đã bị xóa, client tự reload một lần có guard 30 giây; trường hợp
+tầng cache vẫn trả HTML cũ thì ErrorBoundary hiện nút "Tải lại trang".
+
+Chunk cũ của các bản build trước được giữ trong `data/client-assets` (volume
+Docker) nên HTML còn cache tải được chunk cũ thay vì 404. Mặc định giữ 30 ngày,
+chỉnh bằng `CLIENT_ASSET_HISTORY_DAYS`, đặt `CLIENT_ASSET_HISTORY_ENABLED=false`
+để tắt. Vì vậy **không cần purge CDN thủ công**: nếu bạn có panel CDN thì nên
+cấu hình HTML/`/api/version` không cache, còn nếu site nằm sau WAF của nhà cung
+cấp hosting (không có panel) thì cơ chế trên vẫn hoạt động. Xác nhận sau deploy:
+
+```bash
+curl -fsSI https://hub.example.edu.vn/ | grep -i cache-control   # no-store
+curl -fsS  https://hub.example.edu.vn/api/version                # {"result":true,"build_id":"..."}
+```
+
+Nếu WAF phía trước vẫn cache HTML bất chấp `no-store`, hãy gửi yêu cầu nhà cung
+cấp loại trừ HTML và `/api/version` khỏi cache — đó là thứ duy nhất cần họ hỗ trợ.
+
+Muốn build id cố định/đọc được thay vì timestamp, truyền lúc build:
+`BUILD_ID=$(date +%Y%m%d%H%M%S) docker compose up -d --build`.
+
 ### Site Giải trí độc lập
 
 `/games` là một site static độc lập với portal React: portal chỉ có shortcut

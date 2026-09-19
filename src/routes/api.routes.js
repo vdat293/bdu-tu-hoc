@@ -189,6 +189,7 @@ router.get('/health', (req, res) => {
   });
 });
 router.get('/queue-status', ApiController.getQueueStatus);
+router.get('/version', ApiController.getVersion);
 
 // 8. Luyện từ vựng (clone luyentu, trừ Listening/Đặc biệt)
 router.get('/vocab/themes', ApiController.listVocabThemes);

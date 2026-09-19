@@ -20,6 +20,7 @@ import { IdentityAdminService } from './src/services/identity-admin.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
 import { FacebookImportService } from './src/services/facebook-import.service.js';
+import { AssetHistoryService } from './src/services/asset-history.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,12 @@ if (!fs.existsSync(avatarStorageDir)) {
 if (!fs.existsSync(fbImportMediaDir)) {
   fs.mkdirSync(fbImportMediaDir, { recursive: true, mode: 0o750 });
 }
+// Chunk cũ của các bản build trước được giữ trong volume để HTML còn cache
+// không bị 404; serve-static cần thư mục tồn tại ngay từ request đầu tiên.
+const assetHistoryDir = AssetHistoryService.getDir();
+if (AssetHistoryService.isEnabled() && !fs.existsSync(assetHistoryDir)) {
+  fs.mkdirSync(assetHistoryDir, { recursive: true, mode: 0o750 });
+}
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -63,8 +70,9 @@ app.use('/media/avatars', express.static(avatarStorageDir, {
 app.use('/media/avatars', (req, res) => res.status(404).json({ result: false, message: 'Không tìm thấy ảnh đại diện.' }));
 app.use('/media/fb-import', express.static(fbImportMediaDir, {
   dotfiles: 'deny',
-  immutable: true,
-  maxAge: '30d',
+  // Tên file dạng `<index>.<ext>` có thể bị ghi đè khi bài viết được import lại
+  // nên không được immutable; browser/CDN revalidate sau một ngày.
+  maxAge: '1d',
   redirect: false,
   setHeaders(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -72,7 +80,19 @@ app.use('/media/fb-import', express.static(fbImportMediaDir, {
 }));
 // The React build has its own immutable namespace. Legacy public assets and
 // the standalone admin surface remain available during the migration.
+// Dist được ưu tiên; nếu tầng cache phía trước còn giữ HTML cũ, request chunk
+// cũ rơi xuống bản lưu trong volume (AssetHistoryService) thay vì 404.
 app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
+  immutable: true,
+  maxAge: '1y',
+  fallthrough: true,
+  redirect: false,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
+app.use('/app-assets', express.static(AssetHistoryService.getDir(), {
   immutable: true,
   maxAge: '1y',
   fallthrough: false,
@@ -131,7 +151,21 @@ app.get(['/admin', '/admin/', '/admin/*'], (req, res) => {
 // /admin-tool, media). Nếu đứng trước, serve-static sẽ tự 301 `/games` →
 // `/games/` trước khi handler riêng kịp chạy; 301 là redirect cacheable nên
 // proxy/CDN phía trước có thể nhân bản và lặp vô hạn với người dùng thật.
-app.use(express.static(path.join(__dirname, 'public'), { index: false, redirect: false }));
+// Asset legacy không có hash trong tên nên phải revalidate: browser/CDN nhận
+// 304 qua ETag, còn file đổi nội dung sẽ được phục vụ ngay sau deploy.
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  redirect: false,
+  setHeaders(res, filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.html' || ext === '.js' || ext === '.css') {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
 
 // Mount API routes
 app.use('/api', apiRoutes);
@@ -187,6 +221,7 @@ server.listen(PORT, () => {
   OutboxMailerService.start();
   TrafficService.start();
   FacebookImportService.start();
+  AssetHistoryService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {
     if (res?.synced) {
       console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);
@@ -203,6 +238,7 @@ async function shutdown(signal) {
   OutboxMailerService.stop();
   TrafficService.stop();
   EntertainmentGameService.stop();
+  AssetHistoryService.stop();
   await FacebookImportService.stop().catch(() => {});
   CommunityRealtime.close();
   await TrafficService.flush().catch(() => {});

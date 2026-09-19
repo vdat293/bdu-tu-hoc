@@ -15,6 +15,10 @@ COPY package*.json ./
 RUN npm ci
 COPY client ./client
 COPY vite.config.js ./
+# BUILD_ID (tuỳ chọn) ghi vào dist/client/build.json + meta `bdu-build` và
+# được /api/version trả về để tab đang mở biết có bản mới. Để trống dùng timestamp.
+ARG BUILD_ID=""
+ENV BUILD_ID=$BUILD_ID
 RUN npm run build:client
 
 # .NET runtime base provides all native libraries required by WordFmt.
