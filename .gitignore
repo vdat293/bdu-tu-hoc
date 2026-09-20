@@ -20,3 +20,5 @@ dist/
 scratch/
 
 data/pos-report.json
+.agents/
+skills-lock.json
