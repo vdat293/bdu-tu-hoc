@@ -1,0 +1,393 @@
+/* Phòng chơi: màn chia sẻ link, bàn đấu, sidebar lịch sử/chat, overlay kết thúc. */
+
+/* ---------- Màn chia sẻ link (chờ đối thủ) ---------- */
+.share-screen {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px 0 60px;
+}
+.share-card {
+  width: min(680px, 100%);
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  text-align: center;
+  padding: 34px 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+.share-card h1 { font-size: clamp(24px, 4vw, 34px); }
+.share-card > p { color: var(--text-muted); max-width: 480px; }
+.share-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.share-link input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.share-link .btn { flex: none; }
+.share-players { display: flex; align-items: center; gap: 18px; justify-content: center; flex-wrap: wrap; }
+.share-vs { color: var(--text-faint); font-weight: 900; font-size: 12px; letter-spacing: .12em; }
+.share-hint { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; }
+.waiting-dots { display: inline-flex; gap: 5px; }
+.waiting-dots i {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: waiting-bounce 1.2s ease-in-out infinite;
+}
+.waiting-dots i:nth-child(2) { animation-delay: .16s; }
+.waiting-dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes waiting-bounce { 0%, 70%, 100% { transform: translateY(0); opacity: .45; } 35% { transform: translateY(-5px); opacity: 1; } }
+.share-foot { display: flex; align-items: center; gap: 10px; justify-content: space-between; width: 100%; padding-top: 6px; border-top: 1px solid var(--border); }
+
+/* ---------- Khung phòng chơi ---------- */
+.room-screen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.room-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 10px;
+}
+.room-title { display: grid; }
+.room-title strong { font-size: 16px; }
+.room-title span { color: var(--text-faint); font-size: 11px; }
+.room-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.room-status-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.room-status-pill.is-live { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.room-status-pill.is-live i { animation: pulse-dot 1.6s ease infinite; }
+.room-status-pill.is-offline { color: var(--danger); }
+.room-status-pill.is-offline i { background: var(--danger); }
+@keyframes pulse-dot { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+.spectator-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--info) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+  color: var(--info);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.room-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+  padding-bottom: 24px;
+}
+.room-main { display: grid; gap: 12px; min-width: 0; }
+
+/* ---------- Thẻ người chơi ---------- */
+.player-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.player-card--active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
+.player-card--empty { border-style: dashed; color: var(--text-faint); }
+.player-card--winner { border-color: var(--warning); }
+.player-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.player-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; min-width: 0; }
+.player-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-name .player-you { color: var(--text-faint); font-size: 11px; font-weight: 700; }
+.player-meta { display: flex; align-items: center; gap: 8px; color: var(--text-faint); font-size: 11px; }
+.seat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--player-1); flex: none; }
+.player-card--seat-2 .seat-dot { background: var(--player-2); }
+.player-card--winner .seat-dot { background: var(--warning); }
+
+/* Bảng tỉ số phía trên bàn: đối thủ · tỉ số · mình (theo ảnh papergames). */
+.match-scoreboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.match-score {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  min-width: 84px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.match-score-num { font-size: 26px; font-weight: 900; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.match-score-num i { margin: 0 5px; color: var(--text-faint); font-style: normal; font-weight: 700; }
+.match-score-label { color: var(--text-faint); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.player-meta { flex-wrap: wrap; }
+.player-wins {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.clock-ring {
+  position: relative;
+  width: 46px; height: 46px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--clock-progress, 1) * 360deg), var(--panel-strong) 0);
+}
+.clock-ring::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+.clock-ring b { position: relative; z-index: 1; font-size: 12px; font-variant-numeric: tabular-nums; }
+.clock-ring.is-low { background: conic-gradient(var(--danger) calc(var(--clock-progress, 1) * 360deg), var(--panel-strong) 0); }
+.clock-ring.is-idle { visibility: hidden; }
+
+.turn-hint { text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 700; }
+.turn-hint strong { color: var(--accent); }
+
+/* ---------- Bàn đấu ---------- */
+.board-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: clamp(10px, 2vw, 22px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  min-height: 300px;
+}
+.board-stage.is-opponent-turn { border-color: color-mix(in srgb, var(--player-2) 40%, transparent); }
+.board-stage[data-game] { --board-size: min(100%, 620px); }
+.game-board-slot { width: 100%; display: grid; place-items: center; }
+.board-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 12px; }
+.board-toolbar .grow { flex: 1; }
+
+/* ---------- Sidebar ---------- */
+.sidebar { display: grid; gap: 12px; position: sticky; top: 78px; }
+.side-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+.side-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+.side-tabs button {
+  padding: 11px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.side-tabs button[aria-selected="true"] { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.side-tabs button .tab-badge {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+}
+.side-panel-body { display: grid; gap: 10px; padding: 12px; max-height: 430px; overflow: auto; }
+
+.move-list { display: grid; gap: 6px; }
+.move-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--panel-strong);
+  font-size: 12px;
+}
+.move-list li.is-latest { outline: 1px solid var(--accent-soft); color: var(--accent); }
+.move-list .move-index { color: var(--text-faint); font-variant-numeric: tabular-nums; min-width: 22px; }
+.move-list .move-actor { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.chat-list { display: grid; gap: 8px; align-content: start; min-height: 120px; }
+.chat-item { display: flex; gap: 8px; align-items: flex-start; }
+.chat-item.is-me { flex-direction: row-reverse; text-align: right; }
+.chat-bubble {
+  max-width: 78%;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: var(--panel-strong);
+  font-size: 12.5px;
+  word-break: break-word;
+}
+.chat-item.is-me .chat-bubble { background: var(--accent-soft); }
+.chat-item.is-emoji .chat-bubble { font-size: 24px; padding: 4px 10px; background: transparent; }
+.chat-meta { color: var(--text-faint); font-size: 10px; margin-bottom: 2px; }
+.chat-system { text-align: center; color: var(--text-faint); font-size: 11px; }
+.chat-form { display: flex; gap: 6px; border-top: 1px solid var(--border); padding: 10px; }
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  outline: none;
+}
+.chat-form input:focus { border-color: var(--accent); }
+.emoji-row { display: flex; gap: 4px; padding: 8px 10px 0; flex-wrap: wrap; }
+.emoji-row button {
+  width: 34px; height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 18px;
+  line-height: 1;
+}
+.emoji-row button:hover { background: var(--bg-hover); }
+
+/* ---------- Thông báo góc: khán giả vào xem ---------- */
+.corner-feed {
+  position: fixed;
+  top: 74px;
+  right: 16px;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: min(300px, calc(100vw - 24px));
+}
+.corner-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  animation: corner-in .25s ease;
+}
+.corner-item .corner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.corner-item .corner-text b { color: var(--text); }
+.corner-item .corner-text i { color: var(--text-faint); font-style: normal; }
+@keyframes corner-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ---------- Overlay kết thúc ---------- */
+.finish-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(4px);
+  animation: fade-in .22s ease;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.finish-card {
+  width: min(430px, 100%);
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+  padding: 30px 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+.finish-card h2 { font-size: 26px; }
+.finish-badge {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.finish-badge.is-loss { background: var(--danger-soft); color: var(--danger); }
+.finish-badge.is-draw { background: var(--panel-strong); color: var(--text-muted); }
+.finish-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.finish-timer { color: var(--text-faint); font-size: 12px; }
+.finish-note { color: var(--warning); font-size: 12px; font-weight: 700; }
+
+/* ---------- Mobile ---------- */
+@media screen and (max-width: 980px) {
+  .room-layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; }
+  .side-panel-body { max-height: 300px; }
+}
+@media screen and (max-width: 680px) {
+  .share-card { padding: 22px 16px; gap: 16px; }
+  .share-link { flex-direction: column; align-items: stretch; border-radius: var(--radius); padding: 10px; gap: 8px; }
+  .share-link input { text-align: center; padding: 6px 0; font-size: 12px; }
+  .share-players { gap: 10px; }
+  .room-topbar { flex-wrap: wrap; padding: 8px 0; gap: 8px; }
+  .room-title strong { font-size: 14px; }
+  .match-scoreboard { gap: 6px; }
+  .match-score { min-width: 64px; padding: 4px 8px; }
+  .match-score-num { font-size: 20px; }
+  .player-card { padding: 8px 10px; gap: 9px; }
+  .player-card .player-you { display: none; }
+  .player-wins { padding: 1px 6px; }
+  .clock-ring { width: 38px; height: 38px; }
+  .clock-ring b { font-size: 11px; }
+  .board-stage { padding: 8px; min-height: 240px; }
+  .corner-feed { top: 62px; right: 8px; left: 8px; width: auto; }
+  .finish-card { padding: 22px 16px; }
+  .finish-actions { width: 100%; flex-direction: column-reverse; }
+  .finish-actions .btn { width: 100%; }
+}

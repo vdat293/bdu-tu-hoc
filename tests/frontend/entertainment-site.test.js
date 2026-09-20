@@ -5,147 +5,152 @@ import { describe, expect, it } from 'vitest';
 import { navigation } from '../../client/src/app/navigation.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const games = (relative) => fs.readFileSync(path.join(root, 'public/games', relative), 'utf8');
 
 describe('standalone entertainment site contract', () => {
   it('keeps the portal entry point separate from sidebar navigation', () => {
-    const html = fs.readFileSync(path.join(root, 'public/games/index.html'), 'utf8');
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
-    expect(html).toContain('/games/games.css');
-    expect(html).toContain('/games/games.js');
-    expect(script).toContain('/api/entertainment/rooms');
-    expect(script).toContain('/ws/community');
-    expect(css).toContain('grid-template-rows: repeat(var(--rows), minmax(0, 1fr));');
-    expect(css).toContain('width: min(81%, 760px);');
+    const html = games('index.html');
+    expect(html).toContain('/games/styles/tokens.css');
+    expect(html).toContain('/games/js/main.js');
+    expect(html).not.toContain('/games/games.js');
     expect(navigation.some((item) => item.path === '/entertainment' || item.path === '/games')).toBe(false);
   });
 
-  it('exposes every requested game in the standalone UI', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    for (const label of ['Cờ caro', 'Cờ vua', 'Cờ tướng', 'Cờ vây', 'Connect 4']) expect(script).toContain(label);
-    expect(script).toContain('challenges');
-    expect(script).toContain('accept-challenge');
+  it('ships a module per requested game through the client registry', () => {
+    const registry = games('js/games/index.js');
+    const pairs = [
+      ['tic_tac_toe', 'tic-tac-toe'], ['connect4', 'connect4'], ['caro', 'caro'], ['chess', 'chess'],
+      ['checkers', 'checkers'], ['battleship', 'battleship'], ['backgammon', 'backgammon']
+    ];
+    for (const [id, file] of pairs) {
+      expect(registry).toContain(`id: '${id}'`);
+      expect(registry).toContain(`import('./${file}.js')`);
+    }
+    // Mỗi game có CSS riêng (placeholder cũng hợp lệ trước khi team hoàn thiện).
+    for (const id of ['tic-tac-toe', 'connect4', 'caro', 'chess', 'checkers', 'battleship', 'backgammon']) {
+      expect(fs.existsSync(path.join(root, 'public/games/styles/games', `${id}.css`))).toBe(true);
+    }
+    // Game mẫu đã sẵn sàng để các team copy convention.
+    const sample = games('js/games/tic-tac-toe.js');
+    expect(sample).toContain('export default');
+    expect(sample).toContain('function mount(root, api)');
+    expect(sample).toContain('function preview()');
+    expect(sample).toContain('update(');
   });
 
-  it('separates opponent and spectator mechanisms and handles waiting state with spinner', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
-
-    // Dual links & separate roles
-    expect(script).toContain('copy-opponent-link');
-    expect(script).toContain('copy-spectator-link');
-    expect(script).toContain('role=player');
-    expect(script).toContain('role=spectator');
-    expect(script).toContain('renderWaitingOpponent');
-
-    // Waiting spinner & radar styling
-    expect(css).toContain('.waiting-stage');
-    expect(css).toContain('.waiting-spinner');
-    expect(css).toContain('.waiting-radar');
-    expect(css).toContain('@keyframes waitingSpin');
-    expect(css).toContain('.spectator-banner');
-
-    // Private vs Public support
-    expect(script).toContain('private');
-    expect(script).toContain('public');
-    expect(css).toContain('.meta-tag-private');
-    expect(css).toContain('.meta-tag-public');
+  it('only exposes the friend-link flow with a copyable invite link and no QR code', () => {
+    const gamePage = games('js/views/game-page.js');
+    const room = games('js/views/room.js');
+    const home = games('js/views/home.js');
+    expect(gamePage).toContain('Chơi với một người bạn');
+    expect(gamePage).toContain('visibility: \'private\'');
+    expect(room).toContain('Chia sẻ liên kết này với một người bạn');
+    expect(room).toContain('copyText');
+    expect(room).toContain('data-action="copy-link"');
+    // Không còn QR/lobby/challenge như bản cũ.
+    const allSources = [home, gamePage, room, games('js/main.js'), games('js/api.js')].join('\n');
+    expect(allSources.toLowerCase()).not.toContain('qrcode');
+    expect(allSources).not.toContain('data-filter');
+    expect(allSources).not.toContain('accept-challenge');
+    expect(room).not.toContain('challenges');
   });
 
-  it('supports rematch countdown and player leave auto-exit logic', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
-
-    // Rematch timer & UI
-    expect(script).toContain('startRematchCountdown');
-    expect(script).toContain('clearRematchCountdown');
-    expect(script).toContain('request-rematch');
-    expect(script).toContain('/rematch');
-    expect(script).toContain('game.rematch.requested');
-    expect(script).toContain('game.rematch.started');
-
-    // Auto-exit & room deletion
-    expect(script).toContain('/leave');
-    expect(script).toContain('game.room.closed');
-
-    // Rematch styling
-    expect(css).toContain('.rematch-card');
-    expect(css).toContain('.rematch-timer-circle');
-    expect(css).toContain('.rematch-timer-num');
-    expect(css).toContain('.rematch-info');
-    expect(css).toContain('.rematch-actions');
+  it('auto-assigns roles: first joiner plays, later joiners spectate', () => {
+    const room = games('js/views/room.js');
+    const api = games('js/api.js');
+    expect(api).toContain('/join');
+    expect(room).toContain("role === 'spectator'");
+    expect(room).toContain('viewer_seat');
+    expect(room).toContain('Bạn đang xem trực tiếp');
+    expect(room).toContain('spectator_count');
   });
 
-  it('provides rich win/loss feedback, resign button, and winning cell highlight', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
-
-    // Resign action
-    expect(script).toContain('data-action="resign"');
-    expect(script).toContain('submitMove({ resign: true })');
-
-    // Winning cells highlight
-    expect(script).toContain('winning-cell');
-    expect(css).toContain('.cell.winning-cell');
-    expect(css).toContain('@keyframes winningCellGlow');
-
-    // Win/Loss seat badges and toolbar
-    expect(script).toContain('seat-score');
-    expect(script).toContain('THẮNG');
-    expect(script).toContain('THUA');
-    expect(css).toContain('.seat-score.win');
-    expect(css).toContain('.seat-score.loss');
-    expect(css).toContain('.board-toolbar--finished');
+  it('supports light and dark themes toggled from the header', () => {
+    const tokens = games('styles/tokens.css');
+    const session = games('js/session.js');
+    const header = games('js/components/header.js');
+    expect(tokens).toContain(':root[data-theme="light"]');
+    expect(tokens).toContain('prefers-color-scheme');
+    expect(session).toContain('bdu_theme');
+    expect(session).toContain('applyTheme');
+    expect(header).toContain('data-action="toggle-theme"');
   });
 
-  it('renders authentic Xiangqi board with river, palace diagonals, and red/black piece discs', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
-
-    // Traditional pieces
-    expect(script).toContain("rr: '俥'");
-    expect(script).toContain("rn: '傌'");
-    expect(script).toContain("rk: '帥'");
-    expect(script).toContain("bk: '將'");
-
-    // River and palace classes
-    expect(script).toContain('xq-river-top');
-    expect(script).toContain('xq-river-bottom');
-    expect(script).toContain('xq-palace');
-    expect(script).toContain('xq-diag-cross');
-    expect(script).toContain('楚河');
-    expect(script).toContain('漢界');
-
-    // CSS styling
-    expect(css).toContain('.board.xiangqi');
-    expect(css).toContain('.xq-river-text');
-    expect(css).toContain('.xq-diag-cross');
-    expect(css).toContain('.piece-red');
-    expect(css).toContain('.piece-black');
-    // Ensure broken odd/even coloring is gone
-    expect(css).not.toContain('.board-stage .board.xiangqi .cell:nth-child(odd)');
+  it('renders frames and titles from the identity catalog with cinematic effects', () => {
+    const identity = games('js/identity.js');
+    const api = games('js/api.js');
+    const css = games('styles/identity.css');
+    const room = games('js/views/room.js');
+    expect(api).toContain('/api/identity/frames');
+    expect(identity).toContain('GamesApi.frames');
+    expect(identity).toContain('titleBadgesHtml');
+    expect(identity).toContain('playCinematic');
+    expect(css).toContain('.id-avatar-frame');
+    expect(css).toContain('.fx-cinematic');
+    // Cinematic chạy khi đối thủ vào phòng và khi thắng ván.
+    expect(room).toContain('playCinematic');
+    expect(room).toContain('playConfetti');
+    expect(room).toContain('game.spectator.joined');
+    expect(room).toContain('vào xem');
   });
 
-  it('renders prominent victory finish overlay directly on board with real player name', () => {
-    const script = fs.readFileSync(path.join(root, 'public/games/games.js'), 'utf8');
-    const css = fs.readFileSync(path.join(root, 'public/games/games.css'), 'utf8');
+  it('keeps chat, move history and rematch inside the room without persistence', () => {
+    const room = games('js/views/room.js');
+    const realtime = games('js/realtime.js');
+    expect(realtime).toContain("type: 'game.chat'");
+    expect(room).toContain('data-emoji');
+    expect(room).toContain('Chat');
+    expect(room).toContain('Nước đi');
+    expect(realtime).toContain("type: 'game.rematch'");
+    expect(room).toContain('Chơi lại');
+  });
 
-    // Finish overlay on the board
-    expect(script).toContain('renderBoardFinishOverlay');
-    expect(script).toContain('board-finish-overlay');
-    expect(script).toContain('board-finish-card');
-    expect(script).toContain('board-finish-winner-pill');
-    expect(script).toContain('toggle-finish-overlay');
+  it('uses the BDU logo as the header brand instead of custom text', () => {
+    const header = games('js/components/header.js');
+    const main = games('js/main.js');
+    expect(header).toContain('/assets/images/logo-bdu-2024.png');
+    expect(header).toContain('Trường Đại học Bình Dương');
+    expect(main).toContain('/assets/images/logo-bdu-2024.png');
+    expect(header).not.toContain('brand-mark');
+  });
 
-    // CSS finish overlay
-    expect(css).toContain('.board-finish-overlay');
-    expect(css).toContain('.board-finish-card');
-    expect(css).toContain('.board-finish-winner-pill');
-    expect(css).toContain('.board-finish-minimized');
+  it('shows the match score above the board and career wins per player', () => {
+    const room = games('js/views/room.js');
+    const css = games('styles/room.css');
+    expect(room).toContain('data-scoreboard');
+    expect(room).toContain('match-score-num');
+    expect(room).toContain('sessionScore');
+    expect(room).toContain('player-wins');
+    expect(css).toContain('.match-scoreboard');
+    expect(css).toContain('.match-score-num');
+  });
 
-    // Dynamic winner name resolution (no hardcoded 'Người chơi 1' for winners)
-    expect(script).not.toContain('Thắng cuộc: Người chơi ${winnerSeat}');
-    expect(script).toContain('Thắng cuộc: ${escapeHtml(winnerName)}');
+  it('declares Game Hub titles with entry effects ready for future titles', () => {
+    const identity = games('js/identity.js');
+    const css = games('styles/identity.css');
+    const room = games('js/views/room.js');
+    expect(identity).toContain('GAME_TITLE_EFFECTS');
+    expect(identity).toContain("'vua-tro-choi'");
+    expect(identity).toContain("'doi-mem'");
+    expect(identity).toContain('gameTitleEffectFor');
+    expect(identity).toContain('gameTitleBadgesHtml');
+    expect(css).toContain('.id-game-title--game-king');
+    expect(css).toContain('.fx-title-game-king');
+    expect(css).toContain('.fx-title-soft-opponent');
+    expect(room).toContain('playEntryEffect');
+    expect(room).toContain('gameTitleEffectFor');
+  });
+
+  it('renders the caro board on intersections with color stones, no X/O glyphs', () => {
+    const caro = games('js/games/caro.js');
+    const css = games('styles/games/caro.css');
+    expect(css).toContain('repeating-linear-gradient');
+    expect(caro).not.toContain('✕');
+    expect(caro).not.toContain('○');
+    expect(css).toContain('--caro-board-surface');
+    expect(css).toContain('--caro-stone-p1');
+    expect(css).not.toContain('radial-gradient');
+    expect(css).toContain('caro-lines');
+    expect(css).toContain('caro-stars');
   });
 });
-

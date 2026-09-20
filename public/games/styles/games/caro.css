@@ -1,0 +1,203 @@
+/* Bàn Cờ caro 15×15 kiểu gomoku — scope .caro- (team Caro sở hữu).
+   Quân đặt tại giao điểm; lưới vẽ bằng repeating-linear-gradient; ô 32–40px
+   trong khung cuộn hai chiều nên không tràn viewport 360px. */
+
+.caro-wrap {
+  --caro-cell: clamp(32px, calc((100vw - 140px) / 15), 40px);
+  max-width: 100%;
+  max-height: min(74vh, 660px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--caro-board-frame);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
+.caro-board {
+  position: relative;
+  width: calc(var(--caro-cell) * 15);
+  height: calc(var(--caro-cell) * 15);
+  margin: 0 auto;
+  border: 1px solid var(--caro-board-grid);
+  border-radius: var(--radius-sm);
+  background: var(--caro-board-surface);
+  box-shadow: none;
+}
+/* Khóa thao tác chỉ thay đổi khả năng bấm, không làm mờ bàn/quân. Người chơi
+   vẫn cần nhìn rõ thế cờ trong lúc chờ đối thủ hoặc khi xem trực tiếp. */
+
+.caro-lines,
+.caro-stars,
+.caro-grid,
+.caro-winline { position: absolute; }
+
+.caro-lines {
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, var(--caro-board-grid) 0, var(--caro-board-grid) 1px, transparent 1px, transparent var(--caro-cell)),
+    repeating-linear-gradient(to bottom, var(--caro-board-grid) 0, var(--caro-board-grid) 1px, transparent 1px, transparent var(--caro-cell));
+  background-position: calc(var(--caro-cell) / 2) calc(var(--caro-cell) / 2);
+}
+
+.caro-stars {
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.caro-star {
+  position: absolute;
+  width: clamp(6px, calc(var(--caro-cell) * .22), 10px);
+  height: clamp(6px, calc(var(--caro-cell) * .22), 10px);
+  border-radius: 50%;
+  background: var(--caro-board-star);
+  transform: translate(-50%, -50%);
+}
+
+.caro-grid {
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  grid-template-rows: repeat(15, 1fr);
+}
+.caro-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font: inherit;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+.caro-cell:disabled { opacity: 1; }
+.caro-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 50%; }
+
+/* Quân tròn phẳng, phân biệt ghế bằng hai màu có tương phản với mặt bàn. */
+.caro-stone {
+  position: relative;
+  width: 76%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: scale(0);
+  transition: transform .14s ease, background .16s ease, border-color .16s ease, filter .16s ease;
+}
+.caro-cell.is-p1 .caro-stone {
+  background: var(--caro-stone-p1);
+  border-color: color-mix(in srgb, var(--caro-stone-p1) 70%, #fff);
+  transform: scale(1);
+}
+.caro-cell.is-p2 .caro-stone {
+  background: var(--caro-stone-p2);
+  border-color: color-mix(in srgb, var(--caro-stone-p2) 70%, #fff);
+  transform: scale(1);
+}
+
+/* Nước vừa đi và hàng thắng dùng viền phẳng, không dùng highlight hoặc glow. */
+.caro-cell.is-last .caro-stone { outline: 2px solid var(--text); outline-offset: 2px; }
+
+/* Quân thuộc đường thắng giữ đường viền rõ nhưng vẫn phẳng. */
+.caro-cell.is-winning .caro-stone {
+  outline: 2px solid var(--warning);
+  outline-offset: 2px;
+}
+
+/* Đoạn line mờ nối các giao điểm thắng (style do update() đặt). */
+.caro-winline {
+  z-index: 3;
+  height: clamp(4px, calc(var(--caro-cell) * .16), 7px);
+  border-radius: var(--radius-sm);
+  background: var(--warning);
+  box-shadow: none;
+  transform-origin: left center;
+  pointer-events: none;
+  opacity: .85;
+}
+.caro-winline[hidden] { display: none; }
+
+/* Ghost quân theo ghế khi hover giao điểm trống. */
+.caro-cell.is-playable { cursor: pointer; }
+.caro-cell.is-playable:hover .caro-stone,
+.caro-cell.is-playable:focus-visible .caro-stone {
+  transform: scale(.9);
+}
+.caro-cell.is-playable[data-tone="p1"]:hover .caro-stone,
+.caro-cell.is-playable[data-tone="p1"]:focus-visible .caro-stone {
+  background: color-mix(in srgb, var(--caro-stone-p1) 55%, transparent);
+  border-color: var(--caro-stone-p1);
+}
+.caro-cell.is-playable[data-tone="p2"]:hover .caro-stone,
+.caro-cell.is-playable[data-tone="p2"]:focus-visible .caro-stone {
+  background: color-mix(in srgb, var(--caro-stone-p2) 55%, transparent);
+  border-color: var(--caro-stone-p2);
+}
+
+/* ---------- Preview card trang chủ ---------- */
+.caro-preview {
+  position: relative;
+  width: min(100%, 190px);
+  aspect-ratio: 1;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--caro-board-surface);
+  box-shadow: none;
+}
+.caro-preview-lines,
+.caro-preview-stars,
+.caro-preview-grid {
+  position: absolute;
+  inset: 9px;
+}
+.caro-preview-lines { pointer-events: none; }
+.caro-preview-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--caro-board-grid);
+  transform: translateX(-50%);
+}
+.caro-preview-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--caro-board-grid);
+  transform: translateY(-50%);
+}
+.caro-preview-stars { pointer-events: none; }
+.caro-preview-star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--caro-board-star);
+  transform: translate(-50%, -50%);
+}
+.caro-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+}
+.caro-preview-cell { display: grid; place-items: center; }
+.caro-preview-stone {
+  width: 64%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.caro-preview-stone.is-p1 { background: var(--caro-stone-p1); border-color: color-mix(in srgb, var(--caro-stone-p1) 70%, #fff); }
+.caro-preview-stone.is-p2 { background: var(--caro-stone-p2); border-color: color-mix(in srgb, var(--caro-stone-p2) 70%, #fff); }

@@ -76,7 +76,7 @@ for (const route of gamesRoutes) {
   assert.equal(response.status, 200, `${route} must return 200 (got ${response.status})`);
   assert.equal(response.location, undefined, `${route} must not send a Location header`);
   assert.ok(response.status < 300, `${route} must not be a 3xx redirect`);
-  assert.match(response.body, /\/games\/games\.js/, `${route} must serve the static games site, not the portal SPA`);
+  assert.match(response.body, /\/games\/js\/main\.js/, `${route} must serve the static games site, not the portal SPA`);
 }
 for (const route of ['/admin', '/admin/']) {
   const response = await get(route);

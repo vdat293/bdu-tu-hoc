@@ -1,0 +1,175 @@
+/* CSS bàn Cờ vua — scope .chess-, thuộc sở hữu của team Cờ vua.
+   Dùng token trong styles/tokens.css để chạy đúng cả theme sáng/tối. */
+
+.chess-board {
+  --chess-accent: var(--player-1);
+  position: relative;
+  width: min(100%, 520px);
+  margin-inline: auto;
+}
+.chess-board.is-viewer-2 { --chess-accent: var(--player-2); }
+
+.chess-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* Viền vẽ bằng box-shadow để không ăn vào kích thước ô (touch target ≥ 40px). */
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border-strong), var(--shadow);
+  touch-action: manipulation;
+}
+
+.chess-square {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--board-light);
+  color: var(--text);
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.chess-square.is-dark { background: var(--board-dark); }
+.chess-square:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.chess-square.is-playable { cursor: pointer; }
+.chess-square.is-playable:hover { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--chess-accent) 45%, transparent); }
+.chess-square.is-selected { box-shadow: inset 0 0 0 4px var(--chess-accent); }
+
+/* Nước vừa đi: phủ vàng nhạt; ô đến đậm hơn ô đi. */
+.chess-square.is-last-from::before,
+.chess-square.is-last-to::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--warning) 26%, transparent);
+  pointer-events: none;
+}
+.chess-square.is-last-to::before { background: color-mix(in srgb, var(--warning) 40%, transparent); }
+
+/* Ô đến được: chấm tròn; nếu là ô ăn quân thì khoanh tròn. */
+.chess-square.is-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--chess-accent) 80%, transparent);
+  pointer-events: none;
+}
+.chess-square.is-capture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 74%;
+  height: 74%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--chess-accent) 85%, transparent);
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Quân: glyph đặc tô màu bằng CSS, viền bóng để rõ trên cả ô sáng lẫn ô tối. */
+.chess-piece {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(20px, 6.2vw, 40px);
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+.chess-piece.is-white { color: #fbfdff; text-shadow: 0 1px 1px rgba(10, 25, 35, .7), 0 0 3px rgba(10, 25, 35, .45); }
+.chess-piece.is-black { color: #202b36; text-shadow: 0 1px 1px rgba(255, 255, 255, .45), 0 0 3px rgba(255, 255, 255, .3); }
+
+/* Toạ độ a–h / 1–8 gắn vào hàng dưới và cột trái theo hướng nhìn. */
+.chess-coord {
+  position: absolute;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+.chess-coord.is-shown { opacity: .8; }
+.chess-coord--file { right: 3px; bottom: 2px; }
+.chess-coord--rank { left: 3px; top: 2px; }
+.chess-square.is-light .chess-coord { color: var(--board-dark); }
+.chess-square.is-dark .chess-coord { color: var(--board-light); }
+
+/* Bộ chọn phong cấp: 4 nút ≥ 40px, nổi trên bàn. */
+.chess-promotion {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: repeat(4, 44px);
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+.chess-promotion[hidden] { display: none; }
+.chess-promotion-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.chess-promotion-btn:hover { border-color: var(--accent); background: var(--bg-hover); }
+.chess-promotion-btn .chess-piece { font-size: 26px; color: var(--text); text-shadow: none; }
+
+/* Art card trang chủ. */
+.chess-preview {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  width: min(100%, 210px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.chess-preview-square {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: var(--board-light);
+}
+.chess-preview-square.is-dark { background: var(--board-dark); }
+.chess-preview-square .chess-piece {
+  font-size: clamp(9px, 3.4vw, 13px);
+  animation: chess-preview-in .4s ease backwards;
+}
+.chess-preview-square .chess-piece.is-white { color: #fbfdff; text-shadow: 0 1px 1px rgba(10, 25, 35, .6); }
+.chess-preview-square .chess-piece.is-black { color: #202b36; text-shadow: 0 1px 1px rgba(255, 255, 255, .4); }
+@keyframes chess-preview-in { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+
+/* Mobile tới 360px: ô vẫn ≥ 40px, chữ toạ độ nhỏ lại. */
+@media (max-width: 420px) {
+  /* Bù 2px padding/border của board-stage để 8 ô vừa đúng ≥ 40px ở viewport 360px. */
+  .chess-board { width: calc(100% + 2px); }
+  .chess-coord { font-size: 8px; }
+  .chess-piece { font-size: clamp(17px, 6.4vw, 27px); }
+  .chess-promotion { grid-template-columns: repeat(4, 40px); }
+  .chess-promotion-btn { width: 40px; height: 40px; }
+  .chess-promotion-btn .chess-piece { font-size: 22px; }
+}

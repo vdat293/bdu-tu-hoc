@@ -3,16 +3,18 @@ import { WebSocketServer } from 'ws';
 import { query } from '../db/database.js';
 import { BduIdentityService } from './bdu-identity.service.js';
 import { normalizeCourseCode } from './learning.service.js';
-import { EntertainmentGameService } from './entertainment-game.service.js';
+import { EntertainmentGameService, viewerStateFor, viewerLegalMovesFor } from './entertainment-game.service.js';
+import { IdentityPresentationService } from './identity-presentation.service.js';
 
 const WS_PATH = '/ws/community';
 const MAX_PAYLOAD = 16 * 1024;
 const WS_OPEN = 1;
 const DEFAULT_AUTH_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_BUFFERED_BYTES = 512 * 1024;
-// Khoảng ân hạn trước khi một phòng bị đóng vì người chơi mất kết nối.
+// Khoảng ân hạn trước khi một phòng bị xử thua vì người chơi mất kết nối.
 // Phải đủ dài để một lần F5 / rớt mạng chớp nhoáng không phá ván đấu.
-const DEFAULT_GAME_DISCONNECT_GRACE_MS = 30_000;
+const DEFAULT_GAME_DISCONNECT_GRACE_MS = 60_000;
+const CHAT_RATE_LIMIT_MS = 700;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -317,13 +319,20 @@ class CommunityRealtimeGateway {
       const result = await EntertainmentGameService.makeMove(roomRef, client.mssv, message.move || message.payload, {
         clientMoveId: message.clientMoveId || message.client_move_id
       });
-      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.move.accepted', data: result });
-      this.publishGameMove(result);
+      // Ack cho chính người đi cũng phải che state theo ghế (battleship) vì raw
+      // state chứa hạm đội đối thủ.
+      if (this.isClientAttached(client)) {
+        jsonSend(client.ws, {
+          type: 'game.move.accepted',
+          data: { ...result, state: viewerStateFor(result.game_type, result.state, result.seat) }
+        });
+      }
+      await this.publishGameMove(result);
       return;
     }
     if (message.type === 'game.join' || message.type === 'game_join') {
       const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
-      const result = await EntertainmentGameService.joinRoom(roomRef, client.mssv, { inviteCode: message.inviteCode || message.invite_code || message.code });
+      const result = await EntertainmentGameService.joinRoom(roomRef, client.mssv);
       // Người vào phòng qua socket phải được subscribe ngay, nếu không họ sẽ
       // không nhận được bất kỳ nước đi / sự kiện nào của phòng.
       if (result?.room_code) {
@@ -339,14 +348,56 @@ class CommunityRealtimeGateway {
       const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
       const result = await EntertainmentGameService.leaveRoom(roomRef, client.mssv);
       this.detachFromGameRoom(client, result.room_code);
-      if (this.isClientAttached(client)) jsonSend(client.ws, { type: 'game.leave.accepted', data: result });
+      if (this.isClientAttached(client)) {
+        jsonSend(client.ws, {
+          type: 'game.leave.accepted',
+          data: result.state ? { ...result, state: viewerStateFor(result.game_type, result.state, result.seat) } : result
+        });
+      }
       if (result.deleted) {
         this.publishGameRoomClosed(result.room_code, {
           reason: 'player_left',
           actor: client.mssv,
-          message: 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.'
+          message: 'Người tạo phòng đã rời đi. Phòng đã tự động đóng.'
         });
+      } else if (result.forfeited) {
+        this.publishGameForfeited(result);
+        this.publishGameRoomUpdated({ room_code: result.room_code, status: 'finished', state_version: result.state_version, players: null });
       }
+      return;
+    }
+    if (message.type === 'game.chat' || message.type === 'game_chat') {
+      const roomRef = String(message.roomCode || message.room_code || message.room || '').replace(/^game(?::|-room:)/i, '').trim();
+      const key = gameRoom(roomRef);
+      if (!roomRef || !client.rooms.has(key)) {
+        jsonSend(client.ws, { type: 'error', code: 'ROOM_FORBIDDEN', message: 'Bạn chưa tham gia phòng này.' });
+        return;
+      }
+      const now = Date.now();
+      if (client.lastChatAt && now - client.lastChatAt < CHAT_RATE_LIMIT_MS) {
+        const limitError = new Error('Bạn gửi tin nhắn quá nhanh, thử lại sau một chút.');
+        limitError.status = 429;
+        limitError.code = 'CHAT_RATE_LIMITED';
+        throw limitError;
+      }
+      const { kind, text } = EntertainmentGameService.sanitizeChat(message.payload || message);
+      const roomRow = await query('SELECT room_code, allow_chat FROM game_rooms WHERE room_code = $1 OR id::text = $1 LIMIT 1', [roomRef]);
+      if (!roomRow.rowCount) throw Object.assign(new Error('Không tìm thấy phòng.'), { status: 404, code: 'ROOM_NOT_FOUND' });
+      if (roomRow.rows[0].allow_chat === false) throw Object.assign(new Error('Phòng này đã tắt chat.'), { status: 403, code: 'CHAT_DISABLED' });
+      client.lastChatAt = now;
+      const identity = await this.publicIdentity(client.mssv);
+      this.emitToRooms([key], 'game.chat.message', {
+        room_code: roomRow.rows[0].room_code,
+        mssv: client.mssv,
+        name: identity?.name || client.mssv,
+        avatar_url: identity?.avatar_url || null,
+        avatar_source: identity?.avatar_source || 'initials',
+        equipped_frame_id: identity?.equipped_frame_id || null,
+        titles: identity?.titles || [],
+        kind,
+        text,
+        at: new Date().toISOString()
+      });
       return;
     }
     if (message.type === 'game.rematch' || message.type === 'game_rematch') {
@@ -370,11 +421,24 @@ class CommunityRealtimeGateway {
       // client sẽ subscribe nhầm phòng và bỏ lỡ mọi broadcast nước đi.
       const room = this.canonicalRoom(requested);
       client.requestedRooms.add(room);
-      if (await this.canJoin(client, room)) {
+      const access = await this.canJoin(client, room);
+      // canJoin cũ trả boolean; bản mới trả { allowed, isPlayer } để phục vụ
+      // thông báo khán giả vào xem. Chấp nhận cả hai kiểu cho tương thích.
+      const allowed = access === true || access?.allowed === true;
+      const isPlayer = access !== null && typeof access === 'object' && access.isPlayer === true;
+      if (allowed) {
         // `unsubscribe` may arrive while canJoin is waiting on PostgreSQL.
         // Honor the newest client intent rather than adding a ghost room.
         if (!this.isClientAttached(client) || !client.requestedRooms.has(room)) return;
+        const alreadySubscribed = client.rooms.has(room);
         this.join(client, room);
+        // Khán giả vào xem lần đầu được thông báo cho cả phòng (kèm khung/danh hiệu).
+        if (!alreadySubscribed && !isPlayer && this.isGameRoom(room)) {
+          const identity = await this.publicIdentity(client.mssv);
+          if (this.isClientAttached(client) && client.requestedRooms.has(room)) {
+            this.publishGameSpectatorJoined(this.gameRoomRef(room), identity);
+          }
+        }
         if (this.isClientAttached(client)) {
           jsonSend(client.ws, { type: 'subscribed', room: requested });
           if (this.isGameRoom(room)) {
@@ -401,7 +465,8 @@ class CommunityRealtimeGateway {
   }
 
   async canJoin(client, room) {
-    if (room === 'forum') return true;
+    const denied = { allowed: false, isPlayer: false };
+    if (room === 'forum') return { allowed: true, isPlayer: false };
     // `this.query` cho phép test bơm truy vấn giả; production luôn dùng pool thật.
     const runQuery = typeof this.query === 'function' ? this.query : query;
     if (this.isGameRoom(room)) {
@@ -416,8 +481,12 @@ class CommunityRealtimeGateway {
         WHERE (r.room_code = $1 OR r.id::text = $1) AND r.status IN ('waiting', 'active', 'finished')
         LIMIT 1
       `, [roomRef, client.mssv]);
-      if (!result.rowCount) return false;
-      return Boolean(result.rows[0].mssv) || (result.rows[0].visibility === 'public' && result.rows[0].allow_spectators !== false);
+      if (!result.rowCount) return denied;
+      const isPlayer = Boolean(result.rows[0].mssv);
+      return {
+        allowed: isPlayer || result.rows[0].allow_spectators !== false,
+        isPlayer
+      };
     }
     const communityPostMatch = room.match(/^community-post:(\d+)$/);
     if (communityPostMatch) {
@@ -428,10 +497,10 @@ class CommunityRealtimeGateway {
       `,
         [communityPostMatch[1]]
       );
-      if (!result.rowCount) return false;
+      if (!result.rowCount) return denied;
       const post = result.rows[0];
-      if (post.scope !== 'clan') return true;
-      return this.isClanMember(client.mssv, post.scope_id);
+      if (post.scope !== 'clan') return { allowed: true, isPlayer: false };
+      return { allowed: await this.isClanMember(client.mssv, post.scope_id), isPlayer: false };
     }
     const coursePostMatch = room.match(/^course-post:(\d+)$/);
     if (coursePostMatch) {
@@ -442,13 +511,13 @@ class CommunityRealtimeGateway {
         WHERE course_posts.id = $1
         LIMIT 1
       `, [coursePostMatch[1]]);
-      return result.rowCount > 0 && this.isCourseMember(client.mssv, result.rows[0].course_code);
+      return { allowed: result.rowCount > 0 && await this.isCourseMember(client.mssv, result.rows[0].course_code), isPlayer: false };
     }
     const clanMatch = room.match(/^clan:(\d+)$/);
-    if (clanMatch) return this.isClanMember(client.mssv, clanMatch[1]);
+    if (clanMatch) return { allowed: await this.isClanMember(client.mssv, clanMatch[1]), isPlayer: false };
     const courseMatch = room.match(/^course:(.+)$/);
-    if (courseMatch) return this.isCourseMember(client.mssv, courseMatch[1]);
-    return false;
+    if (courseMatch) return { allowed: await this.isCourseMember(client.mssv, courseMatch[1]), isPlayer: false };
+    return denied;
   }
 
   async isClanMember(mssv, clanId) {
@@ -519,20 +588,24 @@ class CommunityRealtimeGateway {
         try {
           const currentRoomClients = this.rooms.get(room);
           const stillConnected = currentRoomClients && [...currentRoomClients].some((c) => c.mssv === mssv);
-          if (!stillConnected) {
-            const res = await query(
-              `SELECT r.id, r.room_code FROM game_rooms r JOIN game_room_players p ON p.room_id = r.id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.mssv = $2 AND p.left_at IS NULL`,
-              [roomRef, mssv]
-            );
-            if (res.rowCount > 0) {
-              await query(`DELETE FROM game_rooms WHERE id = $1`, [res.rows[0].id]);
-              EntertainmentGameService.clearRematchTimer?.(res.rows[0].room_code);
-              this.publishGameRoomClosed(res.rows[0].room_code, {
-                reason: 'player_left',
-                actor: mssv,
-                message: 'Một trong hai đối thủ đã mất kết nối quá lâu. Phòng đã tự động đóng.'
-              });
-            }
+          if (stillConnected) return;
+          const res = await query(
+            `SELECT r.id, r.room_code FROM game_rooms r JOIN game_room_players p ON p.room_id = r.id WHERE (r.room_code = $1 OR r.id::text = $1) AND p.mssv = $2 AND p.left_at IS NULL`,
+            [roomRef, mssv]
+          );
+          if (!res.rowCount) return;
+          // Mất kết nối quá lâu được xử như rời phòng: ván đang chơi bị xử thua để
+          // đối thủ không phải chờ vô hạn, phòng đang chờ thì được dọn hẳn.
+          const result = await EntertainmentGameService.leaveRoom(res.rows[0].room_code, mssv);
+          if (result.deleted) {
+            this.publishGameRoomClosed(result.room_code, {
+              reason: 'player_left',
+              actor: mssv,
+              message: 'Người tạo phòng đã mất kết nối quá lâu. Phòng đã tự động đóng.'
+            });
+          } else if (result.forfeited) {
+            this.publishGameForfeited({ ...result, actor: mssv });
+            this.publishGameRoomUpdated({ room_code: result.room_code, status: 'finished', state_version: result.state_version, players: null });
           }
         } catch {}
       }, disconnectGraceMs());
@@ -549,7 +622,7 @@ class CommunityRealtimeGateway {
     this.clients.delete(client);
   }
 
-  emitToRooms(rooms, type, data) {
+  emitToRooms(rooms, type, data, { perClient = null } = {}) {
     const envelope = {
       type,
       eventId: crypto.randomUUID(),
@@ -560,7 +633,70 @@ class CommunityRealtimeGateway {
     rooms.filter(Boolean).forEach((room) => {
       for (const client of this.rooms.get(room) || []) recipients.add(client);
     });
-    recipients.forEach((client) => jsonSend(client.ws, envelope));
+    recipients.forEach((client) => {
+      let payload = envelope;
+      if (perClient) {
+        const tailored = perClient(client);
+        if (tailored === null || tailored === undefined) return;
+        payload = { ...envelope, data: tailored };
+      }
+      jsonSend(client.ws, payload);
+    });
+  }
+
+  // Ghế của từng người chơi trong phòng, dùng để che state khi broadcast.
+  async gameSeats(roomRef) {
+    const seats = new Map();
+    if (!roomRef) return seats;
+    try {
+      const result = await query(`
+        SELECT p.mssv, p.seat
+        FROM game_room_players p
+        JOIN game_rooms r ON r.id = p.room_id
+        WHERE (r.room_code = $1 OR r.id::text = $1) AND p.left_at IS NULL
+      `, [String(roomRef)]);
+      for (const row of result.rows) seats.set(String(row.mssv).toUpperCase(), Number(row.seat));
+    } catch {}
+    return seats;
+  }
+
+  // Danh tính rút gọn (khung + danh hiệu) để hiện thông báo vào xem / chat.
+  async publicIdentity(mssv) {
+    const clean = normalizeMssv(mssv);
+    if (!clean) return null;
+    try {
+      const presentation = await IdentityPresentationService.getPresentation(clean);
+      return {
+        mssv: clean,
+        name: presentation.name || clean,
+        avatar_url: presentation.avatar_url || null,
+        avatar_source: presentation.avatar_source || 'initials',
+        equipped_frame_id: presentation.equipped_frame_id || null,
+        titles: (presentation.selected_titles || []).slice(0, 4).map((title) => ({
+          id: title.id,
+          label: title.label,
+          tone: title.tone || null,
+          rarity: title.rarity || null,
+          asset_key: title.asset_key || null
+        }))
+      };
+    } catch {
+      return { mssv: clean, name: clean, avatar_url: null, avatar_source: 'initials', equipped_frame_id: null, titles: [] };
+    }
+  }
+
+  publishGameSpectatorJoined(roomCode, identity) {
+    if (!roomCode || !identity) return;
+    this.emitToRooms([gameRoom(roomCode)], 'game.spectator.joined', {
+      room_code: roomCode,
+      mssv: identity.mssv,
+      name: identity.name,
+      avatar_url: identity.avatar_url,
+      avatar_source: identity.avatar_source,
+      equipped_frame_id: identity.equipped_frame_id,
+      titles: identity.titles,
+      at: new Date().toISOString()
+    });
   }
 
   publishPostCreated(post) {
@@ -665,21 +801,89 @@ class CommunityRealtimeGateway {
     });
   }
 
-  publishGameMove(move) {
+  async publishGameMove(move) {
     if (!move?.room_code) return;
-    this.emitToRooms([gameRoom(move.room_code)], 'game.move.applied', {
+    const base = {
       room_code: move.room_code,
+      game_type: move.game_type || null,
       move_number: Number(move.move_number),
       actor_mssv: move.actor_mssv || null,
       seat: move.seat === undefined ? null : Number(move.seat),
       move: move.move,
-      state: move.state,
       state_version: Number(move.state_version || move.move_number),
       status: move.status,
       winner_seat: move.winner_seat === undefined ? null : move.winner_seat,
       result: move.result || null,
+      turn_deadline: move.turn_deadline || null,
       idempotent: Boolean(move.idempotent)
-    });
+    };
+    const seats = await this.gameSeats(move.room_code);
+    // Mỗi client nhận state đã che theo ghế của mình (battleship) và gợi ý nước
+    // đi riêng khi tới lượt; khán giả chỉ thấy thông tin công khai.
+    try {
+      this.emitToRooms([gameRoom(move.room_code)], 'game.move.applied', { ...base, state: move.state, legal_moves: null }, {
+        perClient: (client) => {
+          const seat = seats.get(normalizeMssv(client.mssv)) || null;
+          return {
+            ...base,
+            state: viewerStateFor(move.game_type, move.state, seat),
+            legal_moves: viewerLegalMovesFor(move.game_type, move.state, seat)
+          };
+        }
+      });
+    } catch (err) {
+      console.error('[realtime] game.move.applied broadcast failed:', err?.message);
+    }
+  }
+
+  async publishGameTimeout(data) {
+    if (!data?.room_code) return;
+    const base = {
+      room_code: data.room_code,
+      game_type: data.game_type || null,
+      winner_seat: data.winner_seat === undefined ? null : data.winner_seat,
+      result: data.result || 'timeout',
+      state_version: data.state_version === undefined ? null : Number(data.state_version),
+      status: data.status || 'finished',
+      reason: data.reason || 'turn_timeout',
+      turn_deadline: null
+    };
+    const seats = await this.gameSeats(data.room_code);
+    try {
+      this.emitToRooms([gameRoom(data.room_code)], 'game.turn.timeout', { ...base, state: data.state, legal_moves: null }, {
+        perClient: (client) => {
+          const seat = seats.get(normalizeMssv(client.mssv)) || null;
+          return { ...base, state: viewerStateFor(data.game_type, data.state, seat), legal_moves: null };
+        }
+      });
+    } catch (err) {
+      console.error('[realtime] game.turn.timeout broadcast failed:', err?.message);
+    }
+  }
+
+  async publishGameForfeited(data) {
+    if (!data?.room_code) return;
+    const base = {
+      room_code: data.room_code,
+      game_type: data.game_type || null,
+      actor: data.actor || null,
+      winner_seat: data.winner_seat === undefined ? null : data.winner_seat,
+      result: 'forfeit',
+      state_version: data.state_version === undefined ? null : Number(data.state_version),
+      status: 'finished',
+      message: 'Đối thủ đã rời phòng. Bạn thắng ván này.'
+    };
+    const seats = await this.gameSeats(data.room_code);
+    try {
+      this.emitToRooms([gameRoom(data.room_code)], 'game.room.forfeited', { ...base, state: data.state }, {
+        perClient: (client) => {
+          const seat = seats.get(normalizeMssv(client.mssv)) || null;
+          return { ...base, state: viewerStateFor(data.game_type, data.state, seat) };
+        }
+      });
+    } catch (err) {
+      console.error('[realtime] game.room.forfeited broadcast failed:', err?.message);
+    }
   }
 
   publishGameChallengeCreated(challenge) {
@@ -699,6 +903,9 @@ class CommunityRealtimeGateway {
     }
     if (type === 'challenge.expired' && data?.room_code) {
       this.emitToRooms([gameRoom(data.room_code)], 'game.challenge.expired', data);
+    }
+    if (type === 'turn.timeout' && data?.room_code) {
+      this.publishGameTimeout(data);
     }
   }
 

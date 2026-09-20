@@ -1,0 +1,84 @@
+/* Token màu cho 2 theme sáng/tối. Theme đồng bộ với portal qua key localStorage
+   `bdu_theme`; mặc định theo prefers-color-scheme khi chưa từng chọn. */
+:root {
+  --bg: #090d16;
+  --bg-soft: #0d1322;
+  --bg-elevated: #121a2c;
+  --bg-hover: #1a2640;
+  --panel: rgba(255, 255, 255, .035);
+  --panel-strong: rgba(255, 255, 255, .07);
+  --border: rgba(255, 255, 255, .09);
+  --border-strong: rgba(255, 255, 255, .16);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-faint: #94a3b8;
+  --accent: #3b82f6;
+  --accent-strong: #1d4ed8;
+  --accent-fill: #1d4ed8;
+  --accent-fill-hover: #1e40af;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(59, 130, 246, .14);
+  --danger: #ef6262;
+  --danger-soft: rgba(239, 98, 98, .14);
+  --warning: #d9a441;
+  --info: #60a5fa;
+  --board-light: #e8edf3;
+  --board-dark: #426484;
+  --board-line: rgba(15, 42, 68, .4);
+  --caro-board-surface: #13263a;
+  --caro-board-frame: #0d1624;
+  --caro-board-grid: #7695b0;
+  --caro-board-star: #b7cce0;
+  --caro-stone-p1: #5c9ee5;
+  --caro-stone-p2: #d98a5c;
+  --shadow: 0 8px 20px rgba(0, 0, 0, .2);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --player-1: #4d93e8;
+  --player-2: #ca7247;
+}
+
+:root[data-theme="light"] {
+  --bg: #f1f5f9;
+  --bg-soft: #e9eef5;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f8fafc;
+  --panel: rgba(15, 23, 42, .025);
+  --panel-strong: rgba(15, 23, 42, .055);
+  --border: rgba(15, 23, 42, .11);
+  --border-strong: rgba(15, 23, 42, .2);
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+  --accent: #1d4ed8;
+  --accent-strong: #0b3c68;
+  --accent-fill: #1d4ed8;
+  --accent-fill-hover: #0b3c68;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(29, 78, 216, .1);
+  --danger: #d94b4b;
+  --danger-soft: rgba(217, 75, 75, .11);
+  --warning: #9a6a15;
+  --info: #2563eb;
+  --board-light: #f7fafc;
+  --board-dark: #5c7894;
+  --board-line: rgba(15, 42, 68, .3);
+  --caro-board-surface: #edf3f8;
+  --caro-board-frame: #dce6ef;
+  --caro-board-grid: #6a8297;
+  --caro-board-star: #35546f;
+  --caro-stone-p1: #2f74c0;
+  --caro-stone-p2: #b85d38;
+  --shadow: 0 6px 16px rgba(15, 23, 42, .1);
+  --player-1: #2f74c0;
+  --player-2: #b85d38;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

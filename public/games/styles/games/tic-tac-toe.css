@@ -1,0 +1,79 @@
+/* Bàn Tic Tac Toe — mọi selector đều scope bằng tiền tố .ttt- */
+
+.ttt-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 360px);
+  margin: 0 auto;
+}
+
+.ttt-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: inherit;
+  font-size: clamp(34px, 9vw, 54px);
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, transform .12s ease, border-color .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.ttt-cell:disabled { cursor: default; }
+.ttt-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ttt-cell.is-p1 { color: var(--player-1); }
+.ttt-cell.is-p2 { color: var(--player-2); }
+.ttt-cell.is-playable:hover { border-color: var(--accent); background: var(--bg-hover); transform: translateY(-2px); }
+.ttt-cell.is-playable:active { transform: translateY(0) scale(.97); }
+.ttt-cell.is-last { animation: ttt-pop .28s cubic-bezier(.34, 1.56, .64, 1); }
+.ttt-cell.is-winning {
+  --ttt-win: var(--warning);
+  border-color: var(--ttt-win);
+  background: color-mix(in srgb, var(--ttt-win) 12%, var(--bg-elevated));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ttt-win) 45%, transparent), 0 0 24px color-mix(in srgb, var(--ttt-win) 35%, transparent);
+}
+.ttt-cell.is-winning.is-p1 { --ttt-win: var(--player-1); }
+.ttt-cell.is-winning.is-p2 { --ttt-win: var(--player-2); }
+
+/* Khóa bàn khi là khán giả hoặc chưa tới lượt: mờ ô trống, giữ quân rõ. */
+.ttt-board.is-locked .ttt-cell.is-empty { opacity: .55; }
+.ttt-board.is-finished .ttt-cell { cursor: default; }
+
+@keyframes ttt-pop {
+  from { transform: scale(.72); opacity: .3; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.ttt-preview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: min(100%, 180px); }
+.ttt-preview span {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  font-size: 22px;
+  font-weight: 900;
+  animation: ttt-preview-in .5s ease backwards;
+}
+.ttt-preview span.is-x { color: var(--player-1); }
+.ttt-preview span.is-o { color: var(--player-2); }
+@keyframes ttt-preview-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 380px) {
+  .ttt-board { gap: 8px; }
+  .ttt-cell { border-radius: var(--radius-sm); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttt-cell { transition: none; }
+  .ttt-cell.is-last, .ttt-preview span { animation: none; }
+}

@@ -91,6 +91,7 @@ router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiControlle
 router.get('/students/me/presentation', ApiController.getMyIdentityPresentation);
 router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
 router.put('/students/me/cosmetics/frame', ApiController.updateMyEquippedFrame);
+router.get('/identity/frames', ApiController.getIdentityFrames);
 router.get('/students/search', ApiController.searchActiveStudents);
 router.get('/students/:mssv/profile', ApiController.getStudentProfile);
 

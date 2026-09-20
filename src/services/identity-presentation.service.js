@@ -754,6 +754,29 @@ export const IdentityPresentationService = {
       VALUES ($1, $2, 'equip', $1, $3::jsonb);
     `, [cleanMssv, requested === 'real' ? 'frame:auto' : `frame:${requested}`, JSON.stringify({ frame_id: requested })]);
     return this.getPresentation(cleanMssv);
+  },
+
+  // Catalog khung đang bật, dùng cho các site độc lập (ví dụ /games) để vẽ khung
+  // và chọn hiệu ứng cinematic mà không phải nhúng CSS của portal.
+  async listFrameCatalog() {
+    if (!isDatabaseConfigured()) return [];
+    const result = await query(`
+      SELECT id, label, description, rarity, asset_key, metadata, sort_order
+      FROM identity_items
+      WHERE item_type = 'frame' AND is_active = TRUE
+      ORDER BY sort_order ASC, id ASC
+    `);
+    return result.rows.map((row) => ({
+      id: String(row.id),
+      key: String(row.id).replace(/^frame:/, ''),
+      label: row.label || String(row.id).replace(/^frame:/, ''),
+      description: row.description || null,
+      rarity: row.rarity || 'common',
+      asset_key: row.asset_key || null,
+      motion: row.metadata?.motion || null,
+      metadata: row.metadata || {},
+      sort_order: Number(row.sort_order || 0)
+    }));
   }
 };
 

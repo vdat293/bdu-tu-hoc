@@ -1,0 +1,168 @@
+/* Bàn Cờ đam — mọi selector đều scope bằng tiền tố .chk-, dùng token trong
+   styles/tokens.css để chạy đúng cả theme sáng/tối. */
+
+.chk-board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  width: min(100%, 520px);
+  margin-inline: auto;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border-strong), var(--shadow);
+  touch-action: manipulation;
+}
+
+.chk-cell {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 40px; /* touch target tối thiểu 40px, kể cả ở màn 360px */
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--board-light);
+  color: var(--text);
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+.chk-cell.is-light { background: var(--board-light); }
+.chk-cell.is-dark { background: var(--board-dark); }
+.chk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chk-cell:not(:disabled) { cursor: pointer; }
+
+/* Quân tròn: seat 1 dùng --player-1 (đỏ), seat 2 dùng --player-2 (tối hơn). */
+.chk-piece {
+  width: 74%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.chk-piece.is-empty { opacity: 0; }
+.chk-piece.is-p1 {
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--player-1) 70%, #fff), var(--player-1) 62%);
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, .28), 0 2px 5px rgba(0, 0, 0, .35);
+}
+.chk-piece.is-p2 {
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--player-2) 45%, #000), color-mix(in srgb, var(--player-2) 25%, #10151b) 62%);
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, .42), 0 2px 5px rgba(0, 0, 0, .4);
+}
+/* Vua: vòng accent + chấm trắng giữa quân để phân biệt ở cả 2 theme. */
+.chk-piece.is-king {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 80%, #fff), 0 2px 5px rgba(0, 0, 0, .35);
+}
+.chk-piece.is-king::after {
+  content: '';
+  width: 30%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
+
+/* Ô được chọn / quân bị buộc đi tiếp trong chuỗi ăn. */
+.chk-cell.is-selected { box-shadow: inset 0 0 0 4px var(--accent); }
+.chk-cell.is-selected .chk-piece { transform: scale(1.06); }
+.chk-cell.is-chain { box-shadow: inset 0 0 0 4px var(--warning); }
+.chk-cell.is-chain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  pointer-events: none;
+  animation: chk-chain-pulse 1.1s ease-in-out infinite;
+}
+
+/* Nước vừa đi: ô xuất phát mờ hơn ô đến. */
+.chk-cell.is-last-from::before,
+.chk-cell.is-last-to::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+  pointer-events: none;
+}
+.chk-cell.is-last-to::before { background: color-mix(in srgb, var(--warning) 42%, transparent); }
+
+/* Ô đích hợp lệ: chấm tròn; nếu là nước ăn thì khoanh vòng quanh quân. */
+.chk-cell.is-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 85%, transparent);
+  pointer-events: none;
+  animation: chk-target-in .16s ease;
+}
+.chk-cell.is-capture::after {
+  width: 78%;
+  height: 78%;
+  box-sizing: border-box;
+  background: transparent;
+  border: 3px solid color-mix(in srgb, var(--danger) 85%, transparent);
+}
+
+.chk-board.is-locked .chk-piece.is-empty { opacity: .3; }
+.chk-board.is-finished .chk-cell:not(:disabled) { cursor: default; }
+
+@keyframes chk-target-in {
+  from { transform: scale(.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes chk-chain-pulse {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
+
+/* Art cho card trang chủ. */
+.chk-preview {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  width: min(100%, 200px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chk-preview-cell {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--board-light);
+  animation: chk-preview-in .5s ease backwards;
+}
+.chk-preview-cell.is-dark { background: var(--board-dark); }
+.chk-preview-cell.has-piece::after {
+  content: '';
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+}
+.chk-preview-cell.is-p1::after { background: var(--player-1); }
+.chk-preview-cell.is-p2::after { background: color-mix(in srgb, var(--player-2) 35%, #10151b); }
+.chk-preview-cell.is-king::after { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 85%, #fff); }
+@keyframes chk-preview-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 380px) {
+  .chk-board { border-radius: var(--radius-sm); }
+  .chk-piece { width: 82%; }
+  .chk-preview { width: min(100%, 160px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chk-piece { transition: none; }
+  .chk-cell.is-target::after,
+  .chk-cell.is-chain::before,
+  .chk-preview-cell { animation: none; }
+}

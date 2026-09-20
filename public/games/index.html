@@ -1,15 +1,29 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#eaf4fb" />
-    <meta name="description" content="BDU Game Lounge — phòng chơi board game online realtime dành cho sinh viên BDU." />
-    <title>BDU Game Lounge · Giải trí online</title>
-    <link rel="stylesheet" href="/games/games.css?v=20260917-games-refresh" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1b26" />
+    <meta name="description" content="BDU Game Hub — chơi board game online với bạn bè qua link mời, có khung và danh hiệu." />
+    <title>BDU Game Hub · Chơi với bạn</title>
+    <link rel="stylesheet" href="/games/styles/tokens.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/base.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/home.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/game-page.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/room.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/identity.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/tic-tac-toe.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/connect4.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/caro.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/chess.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/checkers.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/battleship.css?v=20260920-games-v2" />
+    <link rel="stylesheet" href="/games/styles/games/backgammon.css?v=20260920-games-v2" />
   </head>
   <body>
-    <div id="games-app"></div>
-    <script type="module" src="/games/games.js?v=20260917-games-refresh"></script>
+    <div id="games-app" class="app-root"></div>
+    <div id="games-portal" class="fx-layer" aria-hidden="true"></div>
+    <div id="games-toasts" class="toast-stack" role="status" aria-live="polite"></div>
+    <script type="module" src="/games/js/main.js?v=20260920-games-v2"></script>
   </body>
 </html>

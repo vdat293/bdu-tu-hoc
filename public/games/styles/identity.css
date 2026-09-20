@@ -1,0 +1,197 @@
+/* Khung avatar + badge danh hiệu + hiệu ứng cinematic theo khung.
+   Asset khung dùng lại /assets/frames, /assets/images của portal nên không cần copy. */
+
+.id-avatar {
+  position: relative;
+  width: var(--avatar-size, 44px);
+  height: var(--avatar-size, 44px);
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.id-avatar-photo,
+.id-avatar-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--bg-hover);
+  overflow: hidden;
+  object-fit: cover;
+}
+.id-avatar-initials {
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  font-size: calc(var(--avatar-size, 44px) * .36);
+  font-weight: 900;
+}
+.id-avatar-frame {
+  position: absolute;
+  inset: -16%;
+  width: 132%;
+  height: 132%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--frame-color, var(--accent)) 55%, transparent));
+}
+.id-avatar--tier-top-1 .id-avatar-photo,
+.id-avatar--tier-top-1 .id-avatar-initials { border-color: #ffd76a; }
+.id-avatar--tier-top-2 .id-avatar-photo,
+.id-avatar--tier-top-2 .id-avatar-initials { border-color: #c9d6ff; }
+.id-avatar--tier-top-3 .id-avatar-photo,
+.id-avatar--tier-top-3 .id-avatar-initials { border-color: #ffb27a; }
+.id-avatar--tier-legendary .id-avatar-photo,
+.id-avatar--tier-legendary .id-avatar-initials { border-color: #ff9de2; }
+.id-avatar--plain .id-avatar-photo,
+.id-avatar--plain .id-avatar-initials { border-color: var(--border-strong); }
+
+/* ---------- Badge danh hiệu ---------- */
+.id-title-badges { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.id-title-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.id-title-badge--more { color: var(--text-faint); }
+.id-title-badge.tone-gold { color: #ffd76a; border-color: rgba(255, 215, 106, .45); background: rgba(255, 215, 106, .10); }
+.id-title-badge.tone-charm { color: #ff9ec4; border-color: rgba(255, 158, 196, .45); background: rgba(255, 158, 196, .10); }
+.id-title-badge.tone-chatgpt { color: #74e0c2; border-color: rgba(116, 224, 194, .45); background: rgba(116, 224, 194, .10); }
+.id-title-badge.tone-youth { color: #8fd3ff; border-color: rgba(143, 211, 255, .45); background: rgba(143, 211, 255, .10); }
+.id-title-badge.tone-blue { color: #7fb4ff; border-color: rgba(127, 180, 255, .45); background: rgba(127, 180, 255, .10); }
+.id-title-badge.tone-emerald { color: #6fe0a8; border-color: rgba(111, 224, 168, .45); background: rgba(111, 224, 168, .10); }
+.id-title-badge.tone-bronze { color: #e0a878; border-color: rgba(224, 168, 120, .45); background: rgba(224, 168, 120, .10); }
+.id-title-badge.tone-violet { color: #c1a8ff; border-color: rgba(193, 168, 255, .45); background: rgba(193, 168, 255, .10); }
+.id-title-badge.rarity-vip { box-shadow: 0 0 0 1px rgba(255, 215, 106, .35) inset; }
+.id-title-badge.rarity-legendary { text-shadow: 0 0 8px currentColor; }
+
+/* ---------- Danh hiệu riêng của Game Hub ---------- */
+.id-game-title-badges { display: inline-flex; align-items: center; gap: 4px; }
+.id-game-title {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.id-game-title--game-king {
+  color: #ffd76a;
+  border-color: rgba(255, 215, 106, .5);
+  background: rgba(255, 215, 106, .12);
+  box-shadow: 0 0 10px rgba(255, 215, 106, .22);
+}
+.id-game-title--soft-opponent {
+  color: #8fd3ff;
+  border-color: rgba(143, 211, 255, .5);
+  background: rgba(143, 211, 255, .12);
+}
+.fx-title-chip {
+  padding: 5px 16px;
+  border: 1px solid var(--frame-primary);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--frame-primary) 14%, transparent);
+  color: var(--frame-highlight);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+/* Hiệu ứng riêng theo effect của danh hiệu: thêm class .fx-title-<effect> mới
+   là đủ để có animation riêng, không phải sửa playCinematic. */
+.fx-title-game-king .fx-rays { opacity: .48; animation-duration: 5s; }
+.fx-title-game-king .fx-ring { border-width: 3px; }
+.fx-title-game-king .fx-kicker { color: #ffd76a; letter-spacing: .3em; }
+.fx-title-soft-opponent .fx-rays { opacity: .2; animation-duration: 15s; }
+.fx-title-soft-opponent .fx-kicker { color: #8fd3ff; }
+
+/* ---------- Cinematic ---------- */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
+.fx-cinematic {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 46%, rgba(6, 14, 22, .55), rgba(6, 14, 22, .88));
+  animation: fx-fade .3s ease;
+}
+.fx-cinematic-inner { position: relative; display: grid; justify-items: center; gap: 10px; text-align: center; }
+.fx-rays {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 520px; height: 520px;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(from 0deg,
+    transparent 0 12deg, var(--frame-primary) 12deg 17deg, transparent 17deg 34deg,
+    var(--frame-secondary) 34deg 39deg, transparent 39deg 60deg,
+    var(--frame-highlight) 60deg 65deg, transparent 65deg 92deg,
+    var(--frame-primary) 92deg 97deg, transparent 97deg 130deg);
+  opacity: .28;
+  border-radius: 50%;
+  animation: fx-spin 9s linear infinite;
+  filter: blur(1px);
+}
+.fx-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 120px; height: 120px;
+  border: 2px solid var(--frame-primary);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: fx-ring 1.9s ease-out infinite;
+}
+.fx-ring:nth-child(2) { animation-delay: .45s; border-color: var(--frame-secondary); }
+.fx-ring:nth-child(3) { animation-delay: .9s; border-color: var(--frame-highlight); }
+.fx-avatar { position: relative; z-index: 1; }
+.fx-name { position: relative; z-index: 1; font-size: 22px; font-weight: 900; color: var(--text); text-shadow: 0 2px 18px rgba(0,0,0,.6); }
+.fx-kicker { position: relative; z-index: 1; color: var(--frame-highlight); font-size: 11px; font-weight: 900; letter-spacing: .22em; text-transform: uppercase; }
+.fx-titles { position: relative; z-index: 1; }
+.fx-hint { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.5); font-size: 11px; }
+@keyframes fx-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fx-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes fx-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.6); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3.4); } }
+
+.fx-particle {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--frame-highlight);
+  animation: fx-particle 1.6s ease-out forwards;
+}
+@keyframes fx-particle {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d)) scale(.2); }
+}
+
+/* Hiệu ứng nhẹ khi thắng: confetti màu khung */
+.fx-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.fx-confetti i {
+  position: absolute;
+  top: -14px;
+  width: 9px; height: 14px;
+  background: var(--frame-primary);
+  animation: fx-confetti 2.6s linear forwards;
+}
+@keyframes fx-confetti { to { transform: translateY(105vh) rotate(540deg); opacity: .1; } }
+
+@media screen and (max-width: 680px) {
+  .fx-rays { width: 360px; height: 360px; }
+  .fx-name { font-size: 18px; }
+}

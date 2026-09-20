@@ -26,7 +26,7 @@ import { getClanQuiz, saveClanQuiz } from '../services/clan-quiz.service.js';
 import { ClanRoleService } from '../services/clan-role.service.js';
 import { AchievementService } from '../services/achievement.service.js';
 import { AcademicSnapshotService } from '../services/academic-snapshot.service.js';
-import { EntertainmentGameService } from '../services/entertainment-game.service.js';
+import { EntertainmentGameService, EntertainmentGameInternals, viewerStateFor } from '../services/entertainment-game.service.js';
 import { SurveyRunService } from '../services/survey-run.service.js';
 import { PermissionService } from '../services/permission.service.js';
 import { FacebookImportService } from '../services/facebook-import.service.js';
@@ -790,6 +790,22 @@ export const ApiController = {
     }
   },
 
+  // Catalog khung cho site độc lập /games: cần đăng nhập nhưng không cần quyền admin.
+  async getIdentityFrames(req, res) {
+    try {
+      await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const frames = await IdentityPresentationService.listFrameCatalog();
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      return res.json({ result: true, data: { frames } });
+    } catch (err) {
+      return res.status(err.status || 500).json({
+        result: false,
+        code: err.code || 'IDENTITY_FRAMES_FAILED',
+        message: err.message || 'Không thể tải danh sách khung.'
+      });
+    }
+  },
+
   /**
    * Hồ sơ công khai của một sinh viên (mở từ tag @MSSV trong Confession):
    * presentation (tên, avatar, khung, danh hiệu, clan) + học lực tích lũy
@@ -1117,13 +1133,14 @@ export const ApiController = {
     return res.json({
       result: true,
       data: {
-        games: [
-          { id: 'caro', label: 'Cờ caro', players: 2 },
-          { id: 'chess', label: 'Cờ vua', players: 2 },
-          { id: 'xiangqi', label: 'Cờ tướng', players: 2 },
-          { id: 'go', label: 'Cờ vây', players: 2 },
-          { id: 'connect4', label: 'Connect 4', players: 2 }
-        ],
+        games: EntertainmentGameInternals.PUBLIC_GAME_METAS.map((game) => ({
+          id: game.id,
+          label: game.label,
+          tagline: game.tagline || '',
+          players: game.players || 2,
+          clock: game.clock !== false,
+          order: game.order || 0
+        })),
         realtime: { websocket_path: '/ws/community', room_prefix: 'game:' }
       }
     });
@@ -1157,6 +1174,8 @@ export const ApiController = {
         visibility: req.body?.visibility,
         name: req.body?.name,
         allowSpectators: req.body?.allowSpectators ?? req.body?.allow_spectators,
+        allowChat: req.body?.allowChat ?? req.body?.allow_chat,
+        turnSeconds: req.body?.turnSeconds ?? req.body?.turn_seconds,
         ttlSeconds: req.body?.ttlSeconds || req.body?.ttl_seconds
       });
       CommunityRealtime.publishGameRoomUpdated(data);
@@ -1172,8 +1191,9 @@ export const ApiController = {
       if (req.headers.authorization) {
         try { mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization); } catch {}
       }
-      const role = req.query.role ? String(req.query.role).toLowerCase() : null;
-      const data = await EntertainmentGameService.getRoom(req.params.roomRef, { mssv, role });
+      // Không cần tham số role: service tự xác định người chơi hay khán giả theo mssv.
+      const data = await EntertainmentGameService.getRoom(req.params.roomRef, { mssv });
+      res.setHeader('Cache-Control', 'private, no-store');
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, code: err.code || 'ROOM_LOAD_FAILED', message: err.message || 'Không thể tải phòng.' });
@@ -1183,7 +1203,7 @@ export const ApiController = {
   async joinEntertainmentRoom(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-      const data = await EntertainmentGameService.joinRoom(req.params.roomRef, mssv, { inviteCode: req.body?.inviteCode || req.body?.code });
+      const data = await EntertainmentGameService.joinRoom(req.params.roomRef, mssv);
       CommunityRealtime.publishGameRoomUpdated(data);
       return res.json({ result: true, data });
     } catch (err) {
@@ -1195,14 +1215,19 @@ export const ApiController = {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const data = await EntertainmentGameService.leaveRoom(req.params.roomRef, mssv);
+      // State trả cho người vừa rời cũng phải che theo ghế (battleship).
+      const safeData = data.state ? { ...data, state: viewerStateFor(data.game_type, data.state, data.seat) } : data;
       if (data.deleted) {
         CommunityRealtime.publishGameRoomClosed(data.room_code, {
           reason: 'player_left',
           actor: mssv,
-          message: 'Một trong hai đối thủ đã rời phòng. Phòng đã tự động đóng.'
+          message: 'Người tạo phòng đã rời đi. Phòng đã tự động đóng.'
         });
+      } else if (data.forfeited) {
+        CommunityRealtime.publishGameForfeited(data);
+        CommunityRealtime.publishGameRoomUpdated({ room_code: data.room_code, status: 'finished', state_version: data.state_version, players: null });
       }
-      return res.json({ result: true, data });
+      return res.json({ result: true, data: safeData });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, code: err.code || 'ROOM_LEAVE_FAILED', message: err.message || 'Không thể rời phòng.' });
     }
@@ -1229,8 +1254,16 @@ export const ApiController = {
       const data = await EntertainmentGameService.makeMove(req.params.roomRef, mssv, req.body?.move || req.body, {
         clientMoveId: req.body?.clientMoveId || req.body?.client_move_id
       });
+      // Broadcast state đầy đủ (đã che theo từng client trong gateway), còn phản hồi
+      // HTTP cho người đi chỉ chứa state theo góc nhìn của chính họ.
       CommunityRealtime.publishGameMove(data);
-      return res.json({ result: true, data });
+      return res.json({
+        result: true,
+        data: {
+          ...data,
+          state: viewerStateFor(data.game_type, data.state, data.seat)
+        }
+      });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, code: err.code || 'MOVE_REJECTED', message: err.message || 'Nước đi không được chấp nhận.' });
     }
@@ -1238,7 +1271,11 @@ export const ApiController = {
 
   async listEntertainmentMoves(req, res) {
     try {
-      const data = await EntertainmentGameService.listMoves(req.params.roomRef, { after: req.query.after, limit: req.query.limit });
+      let mssv = null;
+      if (req.headers.authorization) {
+        try { mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization); } catch {}
+      }
+      const data = await EntertainmentGameService.listMoves(req.params.roomRef, { after: req.query.after, limit: req.query.limit, mssv });
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, code: err.code || 'MOVE_HISTORY_FAILED', message: err.message || 'Không thể tải lịch sử nước đi.' });

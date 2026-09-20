@@ -242,18 +242,36 @@ Muốn build id cố định/đọc được thay vì timestamp, truyền lúc b
 
 ### Site Giải trí độc lập
 
-`/games` là một site static độc lập với portal React: portal chỉ có shortcut
-trong khối `TIỆN ÍCH`, không đưa Game Lounge vào sidebar hay layout học tập.
-Các URL `/games/room/<mã-phòng>` và `/games/challenges/<id>` đều được server
-fallback về `public/games/index.html` để refresh/deep-link không bị 404.
+`/games` (BDU Game Hub) là một site static độc lập với portal React: portal chỉ có
+shortcut trong khối `TIỆN ÍCH`, không đưa Game Hub vào sidebar hay layout học tập.
+Site có hai theme sáng/tối (dùng chung key `bdu_theme` với portal) và các URL
+`/games/<game>`, `/games/room/<mã-phòng>` đều được server fallback về
+`public/games/index.html` để refresh/deep-link không bị 404.
 
-Phòng, lịch sử nước đi và challenge được lưu trong PostgreSQL ở migration 026;
-WebSocket dùng `/ws/community` với room `game:<room_code>`. State được máy chủ
-kiểm tra bằng transaction + row lock + `clientMoveId` idempotency, nên client
-không được tự quyết định nước đi. Challenge có invite code băm, thời hạn tối đa
-7 ngày và bài Confession được ẩn khi challenge hết hạn.
-Cờ vua dùng `chess.js` để kiểm tra FEN, nước đi hợp lệ, phong cấp và trạng thái
-chiếu hết/hòa; caro dùng bàn 15×15 với điều kiện nối 5 quân.
+**Cách chơi duy nhất — chơi với bạn qua link:** chọn game → "Chơi với một người
+bạn" → copy link gửi bạn. Người mở link đầu tiên chiếm ghế trống và thành đối thủ;
+người vào sau tự động ở chế độ khán giả (không cần `?role=`). 7 game hiển thị:
+Battleship, Tic Tac Toe, Connect 4, Cờ caro (đánh trên giao điểm), Cờ vua, Cờ đam
+(English draughts 8×8) và Backgammon.
+
+Phòng, nước đi và thống kê thắng/thua nằm trong PostgreSQL (migration 026, 044,
+045); WebSocket dùng `/ws/community` với room `game:<room_code>`. State được máy
+chủ kiểm tra bằng transaction + row lock + `clientMoveId` idempotency; mỗi người
+chỉ nhận state đã che theo ghế (Battleship giấu toạ độ tàu chưa chìm với cả người
+chơi lẫn khán giả). Cài đặt phòng: thời gian mỗi nước (mặc định 1 phút, có thể
+"Không giới hạn"), cho phép khán giả, bật/tắt chat — chat và emoji chỉ chạy qua
+WebSocket (rate-limit 700ms, không lưu DB). Hết giờ bị xử thua, rời phòng giữa ván
+bị xử thua (forfeit), phòng đã kết thúc giữ 3 phút cho "Chơi lại" rồi tự đóng.
+Cờ vua dùng `chess.js` (phong cấp, chiếu hết, hòa lặp thế 3 lần, luật 50 nước);
+Backgammon có luật dùng tối đa xúc xắc; Cờ đam có luật hòa 40 nước không tiến triển
+và lặp thế.
+
+Khung avatar + danh hiệu của từng người chơi được đồng bộ từ Góc Tự Học Số
+(`GET /api/identity/frames` + presentation khi lấy phòng). Khi đối thủ vào phòng
+hoặc khi thắng ván, site phát hiệu ứng cinematic theo khung; danh hiệu Game Hub
+(Vua trò chơi khi thắng trên 100 trận, Đối mềm khi đấu từ 100 trận và thắng dưới
+50) có hiệu ứng riêng — thêm danh hiệu mới chỉ cần khai báo ở
+`src/config/game-titles.js` và `public/games/js/identity.js`.
 
 Khi chạy production trên VPS:
 
@@ -261,8 +279,9 @@ Khi chạy production trên VPS:
    `https://hub.example.edu.vn` khi dùng `/games`, hoặc
    `https://games.example.edu.vn` nếu reverse proxy map `/games` vào root của
    hostname đó; để trống sẽ tạo link tương đối).
-2. Proxy `/games`, `/api/entertainment/*` và `/ws/community` về cùng app Node;
-   dùng cấu hình Upgrade HTTP/1.1 trong file Nginx mẫu.
+2. Proxy `/games`, `/api/entertainment/*`, `/api/identity/frames` và
+   `/ws/community` về cùng app Node; dùng cấu hình Upgrade HTTP/1.1 trong file
+   Nginx mẫu.
 3. Giữ đúng một replica Node cho đến khi bổ sung pub/sub dùng chung; PostgreSQL
    là nguồn dữ liệu bền vững, còn membership/broadcast WebSocket hiện nằm trong
    process đang chạy.

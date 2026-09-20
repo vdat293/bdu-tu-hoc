@@ -1,0 +1,249 @@
+/* Bàn Battleship — mọi selector đều scope bằng tiền tố .bs-, dùng token theme
+   trong styles/tokens.css để chạy đúng cả theme sáng/tối. */
+
+.bs-game {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---------- Thanh công cụ đặt tàu ---------- */
+.bs-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.bs-tools[hidden] { display: none; }
+
+.bs-fleet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bs-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.bs-chip.is-current {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+.bs-chip.is-done {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  opacity: .75;
+}
+
+.bs-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bs-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, border-color .12s ease, transform .12s ease, opacity .12s ease;
+}
+.bs-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
+.bs-btn:active:not(:disabled) { transform: scale(.97); }
+.bs-btn:disabled { opacity: .5; cursor: default; }
+.bs-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bs-btn--go {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--accent-ink);
+}
+.bs-btn--go:hover:not(:disabled) { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
+
+.bs-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------- Hai lưới ---------- */
+.bs-boards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  justify-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.bs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 440px;
+  min-width: 0;
+}
+.bs-panel[hidden] { display: none; }
+
+.bs-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.bs-title-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bs-board {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--info) 8%, var(--bg-elevated)), var(--bg-elevated));
+  box-shadow: var(--shadow);
+}
+
+.bs-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--board-dark) 14%, var(--bg-elevated));
+  color: var(--text);
+  font-family: inherit;
+  font-size: clamp(10px, 2.4vw, 16px);
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, border-color .12s ease, transform .12s ease;
+}
+.bs-cell:disabled { cursor: default; }
+.bs-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 1; }
+.bs-board[data-board="attack"] .bs-cell:not(:disabled):hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+.bs-board[data-board="placing"] .bs-cell:not(:disabled):hover { border-color: var(--accent); }
+
+.bs-cell.is-ship {
+  background: var(--board-dark);
+  border-color: var(--board-line);
+}
+.bs-cell.is-miss::after {
+  content: '';
+  width: 24%;
+  height: 24%;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.bs-cell.is-hit {
+  background: color-mix(in srgb, var(--danger) 24%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+.bs-cell.is-hit::after { content: '✕'; color: var(--danger); }
+.bs-cell.is-ship.is-hit { background: color-mix(in srgb, var(--danger) 48%, var(--board-dark)); }
+.bs-cell.is-sunk { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--danger) 70%, transparent); }
+.bs-cell.is-last { animation: bs-pop .3s cubic-bezier(.34, 1.56, .64, 1); }
+
+@keyframes bs-pop {
+  from { transform: scale(.72); opacity: .5; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.bs-wait {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+.bs-wait[hidden] { display: none; }
+
+/* ---------- Art cho card trang chủ ---------- */
+.bs-preview {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 3px;
+  width: min(100%, 200px);
+}
+.bs-preview-cell {
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--board-dark) 14%, var(--bg-elevated));
+}
+.bs-preview-cell.is-ship {
+  border-color: var(--board-line);
+  background: var(--board-dark);
+}
+.bs-preview-cell.is-hit {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+.bs-preview-cell.is-miss { position: relative; }
+.bs-preview-cell.is-miss::after {
+  content: '';
+  position: absolute;
+  inset: 32%;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+/* ---------- Mobile 360px: một lưới một hàng, không tràn ngang ---------- */
+@media (max-width: 420px) {
+  .bs-board {
+    gap: 1px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+  }
+  .bs-cell { border-radius: 3px; }
+  .bs-tools { padding: 10px; }
+}
+
+@media (max-width: 380px) {
+  .bs-buttons { gap: 6px; }
+  .bs-btn { padding: 0 10px; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-cell { transition: none; }
+  .bs-cell.is-last { animation: none; }
+}

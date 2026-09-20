@@ -37,9 +37,9 @@ state = applyMove('go', state, { pass: true }, 1);
 assert.equal(state.result, 'win');
 assert.equal(state.winner_seat, 1);
 
-// Test Vietnamese Caro 2-end block rule (Chặn 2 đầu không thắng)
+// Luật BDU: 5 quân liên tiếp là auto win, kể cả khi bị chặn hai đầu.
 let caroBlocked = initialState('caro');
-// O X X X X X O (seat 1 has 5 in a row, but both ends blocked by seat 2)
+// O X X X X X O (seat 1 has 5 in a row, both ends blocked by seat 2)
 caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 2 }, 1); // X
 caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 1 }, 2); // O (blocks left)
 caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 3 }, 1); // X
@@ -48,9 +48,10 @@ caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 4 }, 1); // X
 caroBlocked = applyMove('caro', caroBlocked, { row: 0, column: 0 }, 2);
 caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 5 }, 1); // X
 caroBlocked = applyMove('caro', caroBlocked, { row: 0, column: 1 }, 2);
-caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 6 }, 1); // X (completes 5, but blocked both ends by O at (7,1) and (7,7)!)
-assert.equal(caroBlocked.result, null); // NOT a win because blocked at both ends!
-assert.equal(caroBlocked.winner_seat, null);
+caroBlocked = applyMove('caro', caroBlocked, { row: 7, column: 6 }, 1); // X (completes 5)
+assert.equal(caroBlocked.result, 'win'); // 5 quân là thắng dù bị chặn hai đầu
+assert.equal(caroBlocked.winner_seat, 1);
+assert.equal(caroBlocked.winning_cells.length, 5);
 
 // Caro: 5 quân chỉ bị chặn MỘT đầu vẫn thắng.
 let caroOneEnd = initialState('caro');
@@ -149,3 +150,48 @@ assert.throws(
 );
 
 console.log('✓ Entertainment game state machines are server-authoritative, enforce accurate win conditions, and reject invalid turns/moves.');
+
+// ---- Room flow helpers: redaction, legal moves, chat, clock ----
+const {
+  viewerStateFor,
+  viewerLegalMovesFor,
+  EntertainmentGameService
+} = await import('../src/services/entertainment-game.service.js');
+
+// Game công khai (caro/chess/...) không che state với bất kỳ ghế nào.
+const publicState = initialState('caro');
+assert.deepEqual(viewerStateFor('caro', publicState, 1), publicState);
+assert.equal(viewerLegalMovesFor('tic_tac_toe', initialState('tic_tac_toe'), 1).length, 9);
+assert.equal(viewerLegalMovesFor('tic_tac_toe', initialState('tic_tac_toe'), 2), null, 'không phải lượt thì không gợi ý nước đi');
+
+// Chat trong phòng: chuẩn hoá khoảng trắng, chặn rỗng, giới hạn độ dài.
+assert.deepEqual(EntertainmentGameService.sanitizeChat({ kind: 'emoji', text: '  hi   bạn  ' }), { kind: 'emoji', text: 'hi bạn' });
+assert.throws(() => EntertainmentGameService.sanitizeChat({ text: '   ' }), /tr/);
+assert.equal(EntertainmentGameService.sanitizeChat({ text: 'x'.repeat(500) }).text.length, EntertainmentGameInternals.MAX_CHAT_LENGTH);
+
+// Đồng hồ mỗi nước: 0 = không giới hạn, ngoài khoảng phải bị từ chối.
+assert.equal(EntertainmentGameInternals.turnSeconds(0), 0);
+assert.equal(EntertainmentGameInternals.turnSeconds(60), 60);
+assert.throws(() => EntertainmentGameInternals.turnSeconds(5));
+assert.throws(() => EntertainmentGameInternals.turnSeconds(999));
+assert.equal(EntertainmentGameInternals.turnSeconds(undefined, 60), 60);
+
+// Danh sách game công khai: đủ 7 game UI, game ẩn không lên card.
+const publicIds = EntertainmentGameInternals.PUBLIC_GAME_METAS.map((meta) => meta.id);
+for (const id of ['battleship', 'tic_tac_toe', 'connect4', 'caro', 'chess', 'checkers', 'backgammon']) {
+  assert.ok(publicIds.includes(id), `${id} phải có trên UI`);
+}
+assert.ok(!publicIds.includes('xiangqi') && !publicIds.includes('go'), 'game ẩn không xuất hiện trên UI');
+
+// Battleship: lịch sử/broadcast không bao giờ mang toạ độ đội tàu (audit CRITICAL).
+const battleship = await import('../src/services/games/battleship.js');
+assert.deepEqual(battleship.redactMove({ place: true, ships: [{ row: 1, column: 2, horizontal: true }] }), { place: true });
+assert.deepEqual(battleship.redactMove({ auto: true }), { place: true });
+assert.deepEqual(battleship.redactMove({ row: 4, column: 5 }), { row: 4, column: 5 });
+
+// Đồng hồ: pha đặt tàu của battleship được miễn deadline; game clock=false không có deadline.
+assert.equal(EntertainmentGameInternals.nextDeadline({ game_type: 'battleship', turn_seconds: 60 }, { phase: 'placing', current_seat: 1 }), null);
+assert.ok(EntertainmentGameInternals.nextDeadline({ game_type: 'battleship', turn_seconds: 60 }, { phase: 'playing', current_seat: 1 }), 'pha bắn phải có deadline');
+assert.equal(EntertainmentGameInternals.nextDeadline({ game_type: 'backgammon', turn_seconds: 60 }, { current_seat: 1 }), null);
+
+console.log('OK Entertainment room helpers redact state per seat, expose legal moves, sanitize chat and validate clocks.');
