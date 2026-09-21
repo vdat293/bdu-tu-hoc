@@ -47,6 +47,151 @@ assert.equal(
 );
 assert.equal(matchEnglishOption(parsed.questions[0].options, 'unknown'), undefined);
 
+// Manual completion controls without an activity link must be queued too.
+const courseHtml = `
+  <li id="module-25461" class="activity modtype_label">
+    <div class="activity-content"><h4>iContent</h4></div>
+    <button data-action="toggle-manual-completion" data-toggletype="manual:mark-done"
+      data-cmid="25461" data-activityname="iContent" data-withavailability="0">Mark as done</button>
+  </li>
+  <li id="module-25462" class="activity modtype_icontent">
+    <a href="/mod/icontent/view.php?id=25462"><span class="instancename">9A iContent</span></a>
+    <button data-action="toggle-manual-completion" data-toggletype="manual:mark-done"
+      data-cmid="25462" data-activityname="9A iContent">Mark as done</button>
+  </li>`;
+const courseClient = new MoodleClient();
+courseClient.request = async () => ({ data: courseHtml });
+const activities = await courseClient.getCourseActivities('289');
+assert.equal(activities.some(item => item.cmid === '25461' && item.type === 'manual'), true);
+assert.equal(activities.filter(item => item.cmid === '25462').length, 1);
+
+// JS-rendered manual controls must also be recovered from the AJAX course state.
+const contentsCalls = [];
+const contentsClient = new MoodleClient();
+contentsClient.getSesskey = async () => 'contents-key';
+contentsClient.request = async (url, options) => {
+  contentsCalls.push({ url, options });
+  if (url.startsWith('/course/view.php')) {
+    return { data: '<a href="/mod/icontent/view.php?id=25462">9A iContent</a>' };
+  }
+  if (url.includes('info=core_course_get_module')) {
+    const cmid = JSON.parse(options.data)[0].args.id;
+    return {
+      data: [{ data: cmid === 25461
+        ? '<button data-action="toggle-manual-completion" data-toggletype="manual:mark-done" data-cmid="25461" data-activityname="iContent">Mark as done</button>'
+        : '<li class="activity"></li>' }]
+    };
+  }
+  return {
+    data: [{ data: {
+      cm: [
+        {
+          id: 25461,
+          name: 'iContent',
+          module: 'label',
+          url: '',
+          completion: 1,
+          completiondata: { state: 0, hascompletion: true, isautomatic: false }
+        },
+        {
+          id: 25462,
+          name: '9A iContent',
+          module: 'icontent',
+          url: '/mod/icontent/view.php?id=25462',
+          completion: 1,
+          completiondata: { state: 0, hascompletion: true, isautomatic: false }
+        },
+        {
+          id: 25463,
+          name: 'Already done',
+          module: 'label',
+          url: '',
+          completion: 1,
+          completiondata: { state: 1, hascompletion: true, isautomatic: false }
+        },
+        {
+          id: 25464,
+          name: 'Automatic without URL',
+          module: 'label',
+          url: '',
+          completion: 2,
+          completiondata: { state: 0, hascompletion: true, isautomatic: true }
+        }
+      ]
+    } }]
+  };
+};
+const contentsActivities = await contentsClient.getCourseActivities('289');
+assert.equal(contentsActivities.some(item => item.cmid === '25461' && item.type === 'manual'), true);
+assert.equal(contentsActivities.filter(item => item.cmid === '25462').length, 1);
+assert.equal(contentsActivities.some(item => item.cmid === '25463'), false);
+assert.equal(contentsActivities.some(item => item.cmid === '25464'), false);
+assert.equal(contentsCalls[1].url.includes('info=core_courseformat_get_state'), true);
+assert.deepEqual(JSON.parse(contentsCalls[1].options.data)[0].args, { courseid: 289 });
+assert.equal(contentsCalls.some(call => call.url.includes('info=core_course_get_module')), true);
+
+const completionPayloads = [];
+const completionClient = new MoodleClient();
+completionClient.request = async (url, options) => {
+  completionPayloads.push({ url, options });
+  return { data: [{ data: { status: true, warnings: [] } }] };
+};
+assert.equal(await completionClient.markActivityCompletedManually('25461', undefined, 'page-key'), true);
+assert.match(completionPayloads[0].url, /sesskey=page-key/);
+assert.deepEqual(JSON.parse(completionPayloads[0].options.data)[0].args, { cmid: 25461, completed: true });
+
+const completionErrorClient = new MoodleClient();
+completionErrorClient.request = async () => ({
+  data: [{ exception: 'moodle_exception', errorcode: 'invalidparameter', message: 'Invalid cmid' }]
+});
+assert.equal(await completionErrorClient.markActivityCompletedManually('25461', undefined, 'page-key'), false);
+assert.equal(completionErrorClient.lastManualCompletionFailure, 'invalidparameter');
+
+const sesskeyFallbackClient = new MoodleClient();
+let fallbackApiUrl = '';
+sesskeyFallbackClient.request = async (url) => {
+  if (url === '/my/') return { data: '<script>M.cfg = {"sesskey":"dashboard-key"};</script>' };
+  fallbackApiUrl = url;
+  return { data: [{ data: { status: true, warnings: [] } }] };
+};
+assert.equal(await sesskeyFallbackClient.markActivityCompletedManually('25461'), true);
+assert.match(fallbackApiUrl, /sesskey=dashboard-key/);
+
+const manualClient = new MoodleClient();
+let markedCmid = null;
+manualClient.request = async () => ({ data: '<html></html>' });
+manualClient.markActivityCompletedManually = async (cmid, _signal, sesskey) => {
+  markedCmid = String(cmid);
+  return true;
+};
+const manualResult = await manualClient.visitActivity('manual', '25461');
+assert.equal(markedCmid, '25461');
+assert.equal(manualResult.manualCompleted, true);
+
+const icontentClient = new MoodleClient();
+icontentClient.request = async () => ({
+  data: `<input type="hidden" name="sesskey" value="page-key">
+    <button data-action="toggle-manual-completion" data-toggletype="manual:mark-done" data-cmid="25461">Mark as done</button>`
+});
+let icontentCall = null;
+icontentClient.markActivityCompletedManually = async (cmid, _signal, sesskey) => {
+  icontentCall = { cmid: String(cmid), sesskey };
+  return true;
+};
+const icontentResult = await icontentClient.visitActivity('icontent', '25461');
+assert.deepEqual(icontentCall, { cmid: '25461', sesskey: 'page-key' });
+assert.equal(icontentResult.manualCompleted, true);
+
+const failedIcontentClient = new MoodleClient();
+failedIcontentClient.request = async () => ({
+  data: `<button data-action="toggle-manual-completion" data-toggletype="manual:mark-done" data-cmid="25461">Mark as done</button>`
+});
+failedIcontentClient.markActivityCompletedManually = async () => false;
+await assert.rejects(
+  () => failedIcontentClient.visitActivity('icontent', '25461'),
+  /không ghi nhận Mark as done.*status=true/
+);
+
 const manual = EnglishExerciseService.addAnswer('__codex_test_question__', '__codex_test_answer__');
 assert.equal(EnglishExerciseService.listAnswers().some(item => item.id === manual.id), true);
 assert.equal(EnglishExerciseService.deleteAnswer(manual.id), true);

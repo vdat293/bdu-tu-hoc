@@ -4,11 +4,32 @@ import { CookieJar } from 'tough-cookie';
 
 const MOODLE_URL = 'https://bdu.vn247.org';
 
+function extractSesskey($) {
+  const inputSesskey = $('input[name="sesskey"]').first().val();
+  if (inputSesskey) return String(inputSesskey);
+
+  const metaSesskey = $('meta[name="sesskey"]').attr('content');
+  if (metaSesskey) return String(metaSesskey);
+
+  const scripts = $('script').map((_, el) => $(el).html()).get();
+  for (const script of scripts) {
+    if (!script) continue;
+    const match = script.match(/["']sesskey["']\s*:\s*["']([^"']+)["']/)
+      || script.match(/\bsesskey\s*=\s*["']([^"']+)["']/);
+    if (match) return match[1];
+  }
+
+  return '';
+}
+
 /** Cookie-isolated Moodle client adapted from tool-do-eng-web/lib/moodle.js. */
 export class MoodleClient {
   constructor() {
     this.baseUrl = MOODLE_URL;
     this.jar = new CookieJar();
+    this.lastManualCompletionFailure = '';
+    this.lastCourseContentsFailure = '';
+    this.lastCourseContentsSesskey = '';
   }
 
   async request(url, options = {}, redirects = 0) {
@@ -85,13 +106,7 @@ export class MoodleClient {
   async getSesskey(signal) {
     const dashboard = await this.request('/my/', { signal });
     const $ = cheerio.load(dashboard.data);
-    let sesskey = '';
-    const scripts = $('script').map((_, el) => $(el).html()).get();
-    for (const script of scripts) {
-      if (!script) continue;
-      const sk = script.match(/"sesskey":"([^"]+)"/);
-      if (sk) { sesskey = sk[1]; break; }
-    }
+    let sesskey = extractSesskey($);
     if (!sesskey) {
       const logoutHref = $('a[href*="logout.php"]').attr('href');
       if (logoutHref) {
@@ -145,6 +160,134 @@ export class MoodleClient {
     return allCourses;
   }
 
+  async getCourseContents(courseId, signal) {
+    this.lastCourseContentsFailure = '';
+    this.lastCourseContentsSesskey = '';
+    try {
+      const numericCourseId = Number(courseId);
+      if (!Number.isInteger(numericCourseId) || numericCourseId <= 0) {
+        this.lastCourseContentsFailure = `courseid không hợp lệ: ${courseId}`;
+        return [];
+      }
+      const sesskey = await this.getSesskey(signal);
+      if (!sesskey) {
+        this.lastCourseContentsFailure = 'không lấy được sesskey cho core_courseformat_get_state';
+        return [];
+      }
+      this.lastCourseContentsSesskey = sesskey;
+      const response = await this.request(
+        `/lib/ajax/service.php?sesskey=${encodeURIComponent(sesskey)}&info=core_courseformat_get_state`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          data: JSON.stringify([{
+            index: 0,
+            methodname: 'core_courseformat_get_state',
+            args: { courseid: numericCourseId }
+          }]),
+          signal
+        }
+      );
+      const result = response.data?.[0];
+      if (result?.error || result?.exception || !result?.data) {
+        const failure = result?.exception || result?.error || result?.data || 'Moodle không trả course state';
+        this.lastCourseContentsFailure = typeof failure === 'string' ? failure : JSON.stringify(failure);
+        return [];
+      }
+      if (typeof result.data === 'string') {
+        try {
+          return JSON.parse(result.data);
+        } catch (error) {
+          this.lastCourseContentsFailure = `course state không phải JSON: ${error.message}`;
+          return [];
+        }
+      }
+      return result.data;
+    } catch (error) {
+      this.lastCourseContentsFailure = error?.message || 'lỗi không xác định khi lấy course contents';
+      return [];
+    }
+  }
+
+  collectManualOnlyContents(sections) {
+    const manualOnly = [];
+    const visit = entries => {
+      for (const entry of entries || []) {
+        const modules = Array.isArray(entry.modules) ? entry.modules : [];
+        for (const module of modules) {
+          const completion = module.completiondata || {};
+          const hasManualCompletion = Number(module.completion) === 1
+            || (completion.hascompletion === true && completion.isautomatic === false);
+          const isIncomplete = Number(completion.state) === 0;
+          const hasNoActivityUrl = !String(module.url || '').trim();
+          if (hasManualCompletion && isIncomplete && hasNoActivityUrl && module.id) {
+            manualOnly.push({
+              cmid: String(module.id),
+              type: 'manual',
+              title: String(module.name || `Hoạt động #${module.id}`).trim(),
+              url: null
+            });
+          }
+        }
+        visit(entry.contents);
+      }
+    };
+    if (Array.isArray(sections)) {
+      visit(sections);
+    }
+    return manualOnly;
+  }
+
+  async findManualOnlyContents(state, signal) {
+    const modules = Array.isArray(state?.cm)
+      ? state.cm
+      : (Array.isArray(state?.cms) ? state.cms : []);
+    const candidates = modules.filter(module => module?.id && !String(module.url || '').trim());
+    if (!candidates.length) return [];
+
+    const sesskey = this.lastCourseContentsSesskey || await this.getSesskey(signal);
+    if (!sesskey) return [];
+    const manualOnly = [];
+
+    for (const module of candidates) {
+      try {
+        const response = await this.request(
+          `/lib/ajax/service.php?sesskey=${encodeURIComponent(sesskey)}&info=core_course_get_module`,
+          {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            data: JSON.stringify([{
+              index: 0,
+              methodname: 'core_course_get_module',
+              args: { id: Number(module.id), sectionreturn: 0 }
+            }]),
+            signal
+          }
+        );
+        const result = response.data?.[0];
+        if (result?.error || result?.exception || typeof result?.data !== 'string') continue;
+        const $module = cheerio.load(result.data);
+        const button = $module('[data-action="toggle-manual-completion"][data-toggletype="manual:mark-done"][data-cmid]').first();
+        if (!button.length || String(button.attr('data-cmid')) !== String(module.id)) continue;
+        manualOnly.push({
+          cmid: String(module.id),
+          type: 'manual',
+          title: String(button.attr('data-activityname') || module.name || `Hoạt động #${module.id}`).trim(),
+          url: null
+        });
+      } catch {}
+    }
+    return manualOnly;
+  }
+
   async getCourseActivities(courseId, signal) {
     const response = await this.request(`/course/view.php?id=${encodeURIComponent(courseId)}`, { signal });
     const $ = cheerio.load(response.data);
@@ -162,29 +305,75 @@ export class MoodleClient {
         activities.push({ cmid, type, title: title || `Hoạt động #${cmid}`, url: href });
       }
     });
+
+    // Moodle can render a manual-completion activity (notably iContent's
+    // parent label) as a button without an /mod/.../view.php link. Keep these
+    // controls in the automation queue so the runner performs the same
+    // completion action as the browser's "Mark as done" button.
+    $('[data-action="toggle-manual-completion"][data-toggletype="manual:mark-done"][data-cmid]').each((_, element) => {
+      const button = $(element);
+      const cmid = button.attr('data-cmid') || '';
+      if (!cmid || activities.some(item => item.cmid === cmid)) return;
+      const module = button.closest('[id^="module-"]');
+      const title = button.attr('data-activityname')
+        || module.find('.activity-content, [id$="-title"]').first().text().trim()
+        || `Hoạt động #${cmid}`;
+      activities.push({ cmid, type: 'manual', title, url: null });
+    });
+
+    // Moodle's course page can add completion buttons after the initial HTML
+    // through JS. The AJAX contents response is the authoritative fallback
+    // for manual-only modules that have no activity URL (notably label).
+    const contents = await this.getCourseContents(courseId, signal);
+    const manualOnly = Array.isArray(contents)
+      ? this.collectManualOnlyContents(contents)
+      : await this.findManualOnlyContents(contents, signal);
+    for (const activity of manualOnly) {
+      if (!activities.some(item => item.cmid === activity.cmid)) activities.push(activity);
+    }
+
     return activities;
   }
 
-  async markActivityCompletedManually(cmid, signal) {
+  async markActivityCompletedManually(cmid, signal, sesskey = '') {
+    this.lastManualCompletionFailure = '';
     try {
-      const sesskey = await this.getSesskey(signal);
-      if (!sesskey) return false;
+      const numericCmid = Number(cmid);
+      if (!Number.isInteger(numericCmid) || numericCmid <= 0) {
+        this.lastManualCompletionFailure = `cmid không hợp lệ: ${cmid}`;
+        return false;
+      }
+      const resolvedSesskey = sesskey || await this.getSesskey(signal);
+      if (!resolvedSesskey) {
+        this.lastManualCompletionFailure = 'không lấy được sesskey';
+        return false;
+      }
       const response = await this.request(
-        `/lib/ajax/service.php?sesskey=${encodeURIComponent(sesskey)}&info=core_completion_update_activity_completion_status_manually`,
+        `/lib/ajax/service.php?sesskey=${encodeURIComponent(resolvedSesskey)}&info=core_completion_update_activity_completion_status_manually`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           data: JSON.stringify([{
             index: 0,
             methodname: 'core_completion_update_activity_completion_status_manually',
-            args: { cmid: Number(cmid), completed: true }
+            args: { cmid: numericCmid, completed: true }
           }]),
           signal
         }
       );
-      const data = response.data?.[0]?.data;
-      return Boolean(data?.status);
-    } catch {
+      const result = response.data?.[0];
+      if (result?.error || result?.exception || result?.data?.error) {
+        const failure = result.errorcode || result.exception || result.data.error || 'Moodle trả lỗi API';
+        this.lastManualCompletionFailure = typeof failure === 'string' ? failure : JSON.stringify(failure);
+        return false;
+      }
+      if (result?.data?.status !== true) {
+        this.lastManualCompletionFailure = `Moodle trả status=${String(result?.data?.status)}`;
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.lastManualCompletionFailure = error?.message || 'lỗi không xác định khi gọi API completion';
       return false;
     }
   }
@@ -320,6 +509,20 @@ export class MoodleClient {
   }
 
   async visitActivity(type, cmid, signal) {
+    if (type === 'manual') {
+      const manualCompleted = await this.markActivityCompletedManually(cmid, signal);
+      if (!manualCompleted) {
+        throw new Error(`Moodle không ghi nhận Mark as done cho hoạt động #${cmid}: ${this.lastManualCompletionFailure || 'API không trả status=true'}.`);
+      }
+      return {
+        scormCompleted: false,
+        hvpScoreSent: false,
+        manualCompleted,
+        title: `Hoạt động #${cmid}`,
+        html: ''
+      };
+    }
+
     const url = `/mod/${encodeURIComponent(type)}/view.php?id=${encodeURIComponent(cmid)}`;
     const response = await this.request(url, { signal });
     const $ = cheerio.load(response.data);
@@ -372,8 +575,15 @@ export class MoodleClient {
       }
     }
 
-    // Trigger Moodle manual completion toggle ("Mark as done")
-    const manualRes = await this.markActivityCompletedManually(cmid, signal);
+    // Trigger Moodle manual completion toggle ("Mark as done"). Modern
+    // Moodle/iContent renders this as a data-action button, not a form.
+    const manualButton = $('[data-action="toggle-manual-completion"][data-toggletype="manual:mark-done"][data-cmid]').first();
+    const buttonCmid = manualButton.attr('data-cmid') || '';
+    if (buttonCmid && String(buttonCmid) !== String(cmid)) {
+      throw new Error(`Moodle trả về cmid không khớp cho hoạt động #${cmid}.`);
+    }
+    const pageSesskey = extractSesskey($);
+    const manualRes = await this.markActivityCompletedManually(buttonCmid || cmid, signal, pageSesskey);
     if (manualRes) manualCompleted = true;
 
     // Fallback: If there is a manual completion toggle form on the page, also post to it
@@ -393,6 +603,10 @@ export class MoodleClient {
         });
         manualCompleted = true;
       } catch {}
+    }
+
+    if ((manualButton.length > 0 || toggleAction) && !manualCompleted) {
+      throw new Error(`Moodle không ghi nhận Mark as done cho hoạt động #${cmid}: ${this.lastManualCompletionFailure || 'API không trả status=true'}.`);
     }
 
     return {

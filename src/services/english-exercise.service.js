@@ -272,6 +272,15 @@ async function runAutoFinishCourse(session, job, config) {
   }
   const activities = await session.client.getCourseActivities(courseId, job.controller.signal);
   log(session, `📋 Danh sách: Tìm thấy ${activities.length} hoạt động trong khóa.`, activities.length ? 'info' : 'warning');
+  const manualOnly = activities.filter(activity => activity.type === 'manual');
+  log(
+    session,
+    `🔎 Completion manual-only phát hiện: ${manualOnly.length ? manualOnly.map(activity => `#${activity.cmid}`).join(', ') : 'không có'}${manualOnly.length ? ' (sẽ gọi core_completion_update_activity_completion_status_manually)' : ''}.`,
+    manualOnly.length ? 'info' : 'warning'
+  );
+  if (session.client.lastCourseContentsFailure) {
+    log(session, `⚠️ Không đọc được fallback course state: ${session.client.lastCourseContentsFailure}`, 'warning');
+  }
   log(session, `======================================================`, 'info');
 
   let quizzesDone = 0;
