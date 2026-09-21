@@ -1,5 +1,6 @@
 import { isDatabaseConfigured, query } from '../db/database.js';
 import { CommunityRealtime } from './community-realtime.service.js';
+import { BduIdentityService } from './bdu-identity.service.js';
 
 // Configuration
 const BATCH_SIZE = 50;
@@ -41,6 +42,77 @@ function parseUserAgent(uaString = '') {
   return { deviceType, os, browser };
 }
 
+// Query strings are persisted for the admin audit trail, so credentials or
+// one-time codes sent as params must never reach the database.
+const SENSITIVE_QUERY_KEYS = new Set([
+  'password', 'pass', 'matkhau', 'mat_khau', 'token', 'access_token',
+  'refresh_token', 'id_token', 'authorization', 'otp', 'admin_key',
+  'api_key', 'secret', 'client_secret', 'code_verifier'
+]);
+const MAX_QUERY_JSON_LENGTH = 2000;
+const MAX_QUERY_VALUE_LENGTH = 200;
+
+function sanitizeQueryValue(key, value, depth = 0) {
+  if (SENSITIVE_QUERY_KEYS.has(String(key).toLowerCase())) return '[REDACTED]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    return value.length > MAX_QUERY_VALUE_LENGTH ? value.slice(0, MAX_QUERY_VALUE_LENGTH) : value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (depth >= 2) return '[…]';
+  if (Array.isArray(value)) return value.slice(0, 10).map((item) => sanitizeQueryValue('', item, depth + 1));
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      out[childKey] = sanitizeQueryValue(childKey, childValue, depth + 1);
+    }
+    return out;
+  }
+  return String(value).slice(0, MAX_QUERY_VALUE_LENGTH);
+}
+
+function sanitizeQueryForLog(queryParams) {
+  if (!queryParams || typeof queryParams !== 'object') return null;
+  const sanitized = {};
+  for (const [key, value] of Object.entries(queryParams)) {
+    sanitized[key] = sanitizeQueryValue(key, value);
+  }
+  let json;
+  try {
+    json = JSON.stringify(sanitized);
+  } catch {
+    return null;
+  }
+  if (!json || json === '{}') return null;
+  return json.length > MAX_QUERY_JSON_LENGTH ? json.slice(0, MAX_QUERY_JSON_LENGTH) : json;
+}
+
+// Express exposes the matched pattern only after routing, which is exactly when
+// this runs (response finish). Unmatched routes (404) fall back to the raw path
+// without the query string so the admin can still group by endpoint.
+function resolveRoutePattern(req) {
+  const base = req?.baseUrl || '';
+  const routePath = req?.route?.path;
+  let full = '';
+  if (typeof routePath === 'string' && routePath) {
+    full = `${base}${routePath}`;
+  } else if (Array.isArray(routePath) && routePath.length > 0) {
+    full = `${base}${routePath[0]}`;
+  } else {
+    full = String(req?.path || req?.originalUrl || req?.url || '').split('?')[0];
+  }
+  return full.length > 255 ? full.slice(0, 255) : full;
+}
+
+function parseQueryJson(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 // In-memory batch queue
 let queue = [];
 let flushTimer = null;
@@ -54,6 +126,7 @@ function getTimeRangeInterval(timeRange) {
     case '24h': return "INTERVAL '24 hours'";
     case '7d': return "INTERVAL '7 days'";
     case '30d': return "INTERVAL '30 days'";
+    case 'all': return null;
     default: return "INTERVAL '24 hours'";
   }
 }
@@ -118,7 +191,7 @@ export const TrafficService = {
       let paramIndex = 1;
 
       for (const item of batch) {
-        placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10}, $${paramIndex + 11}, $${paramIndex + 12}, $${paramIndex + 13})`);
+        placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10}, $${paramIndex + 11}, $${paramIndex + 12}, $${paramIndex + 13}, $${paramIndex + 14}, $${paramIndex + 15})`);
         values.push(
           item.method,
           item.path,
@@ -133,16 +206,18 @@ export const TrafficService = {
           item.browser || 'Unknown',
           item.referrer || null,
           item.errorMessage || null,
-          item.createdAt || new Date()
+          item.createdAt || new Date(),
+          item.route || null,
+          item.queryJson || null
         );
-        paramIndex += 14;
+        paramIndex += 16;
       }
 
       const sql = `
         INSERT INTO traffic_logs (
           method, path, status_code, response_time_ms, mssv, full_name,
           ip_address, user_agent, device_type, os, browser, referrer,
-          error_message, created_at
+          error_message, created_at, route, query_json
         ) VALUES ${placeholders.join(', ')};
       `;
 
@@ -191,9 +266,20 @@ export const TrafficService = {
             ''
           );
 
-          // Extract MSSV from request state or auth header if present
+          // Extract MSSV from request state or auth header if present. The
+          // identity cache is populated by whichever controller verified the
+          // token during this same request, so peeking never calls BDU here.
           let mssv = req.verifiedMssv || req.identityAdminMssv || null;
-          let fullName = req.studentName || null;
+          const fullName = req.studentName || null;
+          if (!mssv && req.headers.authorization) {
+            mssv = BduIdentityService.peek(req.headers.authorization);
+          }
+          if (!mssv && req.body && typeof req.body.token === 'string') {
+            mssv = BduIdentityService.peek(req.body.token);
+          }
+          if (!mssv && req.query && typeof req.query.token === 'string') {
+            mssv = BduIdentityService.peek(req.query.token);
+          }
           if (!mssv && req.body && typeof req.body.username === 'string' && /^[0-9]{7,15}$/.test(req.body.username.trim())) {
             mssv = req.body.username.trim();
           }
@@ -203,6 +289,8 @@ export const TrafficService = {
             path: reqPath.length > 500 ? reqPath.slice(0, 500) : reqPath,
             statusCode: res.statusCode,
             responseTimeMs,
+            route: resolveRoutePattern(req),
+            queryJson: sanitizeQueryForLog(req.query),
             mssv: mssv ? String(mssv).toUpperCase() : null,
             fullName: fullName ? String(fullName).slice(0, 255) : null,
             ip: ip ? String(ip).slice(0, 64) : null,
@@ -235,6 +323,7 @@ export const TrafficService = {
     }
 
     const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `WHERE created_at >= NOW() - ${intervalSql}` : '';
 
     const statsSql = `
       SELECT
@@ -247,20 +336,20 @@ export const TrafficService = {
         COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500)::int AS count_4xx,
         COUNT(*) FILTER (WHERE status_code >= 500)::int AS count_5xx
       FROM traffic_logs
-      WHERE created_at >= NOW() - ${intervalSql};
+      ${timeFilter};
     `;
 
-    // Compare with previous period for trends
-    const prevStatsSql = `
+    // Compare with previous period for trends (not meaningful for "all time")
+    const prevStatsSql = intervalSql ? `
       SELECT COUNT(*)::int AS prev_total_requests
       FROM traffic_logs
       WHERE created_at >= NOW() - (${intervalSql} * 2)
         AND created_at < NOW() - ${intervalSql};
-    `;
+    ` : null;
 
     const [currentRes, prevRes] = await Promise.all([
       query(statsSql),
-      query(prevStatsSql)
+      prevStatsSql ? query(prevStatsSql) : Promise.resolve({ rows: [] })
     ]);
 
     const row = currentRes.rows[0] || {};
@@ -294,6 +383,7 @@ export const TrafficService = {
   async getTimeline({ timeRange = '24h' } = {}) {
     if (!isDatabaseConfigured()) return [];
     const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `WHERE created_at >= NOW() - ${intervalSql}` : '';
 
     const isHourly = ['1h', '6h', '24h'].includes(timeRange);
     const truncUnit = isHourly ? 'hour' : 'day';
@@ -306,7 +396,7 @@ export const TrafficService = {
         COUNT(*) FILTER (WHERE status_code >= 400)::int AS error,
         COALESCE(ROUND(AVG(response_time_ms)::numeric, 1), 0)::float AS avg_latency
       FROM traffic_logs
-      WHERE created_at >= NOW() - ${intervalSql}
+      ${timeFilter}
       GROUP BY time_bucket
       ORDER BY time_bucket ASC;
     `;
@@ -324,24 +414,26 @@ export const TrafficService = {
   async getTopEndpoints({ timeRange = '24h', limit = 10 } = {}) {
     if (!isDatabaseConfigured()) return [];
     const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `WHERE created_at >= NOW() - ${intervalSql}` : '';
 
     const sql = `
       SELECT
-        path,
+        COALESCE(route, split_part(path, '?', 1)) AS endpoint,
         method,
         COUNT(*)::int AS count,
         COALESCE(ROUND(AVG(response_time_ms)::numeric, 1), 0)::float AS avg_latency,
         COUNT(*) FILTER (WHERE status_code >= 400)::int AS error_count
       FROM traffic_logs
-      WHERE created_at >= NOW() - ${intervalSql}
-      GROUP BY path, method
+      ${timeFilter}
+      GROUP BY endpoint, method
       ORDER BY count DESC
       LIMIT $1;
     `;
 
     const result = await query(sql, [Math.max(1, Math.min(50, Number(limit) || 10))]);
     return result.rows.map((r) => ({
-      path: r.path,
+      path: r.endpoint,
+      route: r.endpoint,
       method: r.method,
       count: r.count,
       avgLatency: r.avg_latency,
@@ -352,25 +444,28 @@ export const TrafficService = {
   async getTopUsers({ timeRange = '24h', limit = 15 } = {}) {
     if (!isDatabaseConfigured()) return [];
     const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `AND t.created_at >= NOW() - ${intervalSql}` : '';
+    const subTimeFilter = intervalSql ? `AND t2.created_at >= NOW() - ${intervalSql}` : '';
 
     const sql = `
       SELECT
-        mssv,
-        MAX(full_name) AS full_name,
+        t.mssv,
+        COALESCE(MAX(t.full_name), MAX(st.full_name)) AS full_name,
         COUNT(*)::int AS request_count,
-        COUNT(*) FILTER (WHERE status_code >= 400)::int AS error_count,
-        MAX(created_at) AS last_active,
+        COUNT(*) FILTER (WHERE t.status_code >= 400)::int AS error_count,
+        MAX(t.created_at) AS last_active,
         (
-          SELECT t2.path
+          SELECT COALESCE(t2.route, split_part(t2.path, '?', 1))
           FROM traffic_logs t2
-          WHERE t2.mssv = t.mssv AND t2.created_at >= NOW() - ${intervalSql}
-          GROUP BY t2.path
+          WHERE t2.mssv = t.mssv ${subTimeFilter}
+          GROUP BY COALESCE(t2.route, split_part(t2.path, '?', 1))
           ORDER BY COUNT(*) DESC
           LIMIT 1
         ) AS top_path
       FROM traffic_logs t
-      WHERE mssv IS NOT NULL AND created_at >= NOW() - ${intervalSql}
-      GROUP BY mssv
+      LEFT JOIN students st ON st.mssv = t.mssv
+      WHERE t.mssv IS NOT NULL ${timeFilter}
+      GROUP BY t.mssv
       ORDER BY request_count DESC
       LIMIT $1;
     `;
@@ -391,19 +486,20 @@ export const TrafficService = {
       return { devices: [], os: [], browsers: [] };
     }
     const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `WHERE created_at >= NOW() - ${intervalSql}` : '';
 
     const [devicesRes, osRes, browsersRes] = await Promise.all([
       query(`
         SELECT device_type AS name, COUNT(*)::int AS count
         FROM traffic_logs
-        WHERE created_at >= NOW() - ${intervalSql}
+        ${timeFilter}
         GROUP BY device_type
         ORDER BY count DESC;
       `),
       query(`
         SELECT os AS name, COUNT(*)::int AS count
         FROM traffic_logs
-        WHERE created_at >= NOW() - ${intervalSql}
+        ${timeFilter}
         GROUP BY os
         ORDER BY count DESC
         LIMIT 6;
@@ -411,7 +507,7 @@ export const TrafficService = {
       query(`
         SELECT browser AS name, COUNT(*)::int AS count
         FROM traffic_logs
-        WHERE created_at >= NOW() - ${intervalSql}
+        ${timeFilter}
         GROUP BY browser
         ORDER BY count DESC
         LIMIT 6;
@@ -432,6 +528,7 @@ export const TrafficService = {
     ip = null,
     status = 'all',
     path = null,
+    route = null,
     method = null,
     search = null,
     timeRange = '24h'
@@ -449,66 +546,79 @@ export const TrafficService = {
 
     if (timeRange && timeRange !== 'all') {
       const intervalSql = getTimeRangeInterval(timeRange);
-      conditions.push(`created_at >= NOW() - ${intervalSql}`);
+      if (intervalSql) conditions.push(`tl.created_at >= NOW() - ${intervalSql}`);
     }
 
     if (mssv) {
       params.push(String(mssv).trim().toUpperCase());
-      conditions.push(`mssv = $${params.length}`);
+      conditions.push(`tl.mssv = $${params.length}`);
     }
 
     if (ip) {
       params.push(`%${String(ip).trim()}%`);
-      conditions.push(`ip_address ILIKE $${params.length}`);
+      conditions.push(`tl.ip_address ILIKE $${params.length}`);
     }
 
     if (status && status !== 'all') {
-      if (status === '2xx') conditions.push(`status_code >= 200 AND status_code < 300`);
-      else if (status === '3xx') conditions.push(`status_code >= 300 AND status_code < 400`);
-      else if (status === '4xx') conditions.push(`status_code >= 400 AND status_code < 500`);
-      else if (status === '5xx') conditions.push(`status_code >= 500`);
+      if (status === '2xx') conditions.push(`tl.status_code >= 200 AND tl.status_code < 300`);
+      else if (status === '3xx') conditions.push(`tl.status_code >= 300 AND tl.status_code < 400`);
+      else if (status === '4xx') conditions.push(`tl.status_code >= 400 AND tl.status_code < 500`);
+      else if (status === '5xx') conditions.push(`tl.status_code >= 500`);
       else if (/^\d{3}$/.test(status)) {
         params.push(Number(status));
-        conditions.push(`status_code = $${params.length}`);
+        conditions.push(`tl.status_code = $${params.length}`);
       }
     }
 
     if (method && method !== 'all') {
       params.push(String(method).trim().toUpperCase());
-      conditions.push(`method = $${params.length}`);
+      conditions.push(`tl.method = $${params.length}`);
     }
 
     if (path) {
       params.push(`%${String(path).trim()}%`);
-      conditions.push(`path ILIKE $${params.length}`);
+      conditions.push(`tl.path ILIKE $${params.length}`);
+    }
+
+    if (route) {
+      params.push(String(route).trim());
+      conditions.push(`COALESCE(tl.route, split_part(tl.path, '?', 1)) = $${params.length}`);
     }
 
     if (search) {
       params.push(`%${String(search).trim()}%`);
       const pIdx = params.length;
       conditions.push(`(
-        path ILIKE $${pIdx} OR
-        mssv ILIKE $${pIdx} OR
-        full_name ILIKE $${pIdx} OR
-        ip_address ILIKE $${pIdx} OR
-        error_message ILIKE $${pIdx}
+        tl.path ILIKE $${pIdx} OR
+        tl.route ILIKE $${pIdx} OR
+        tl.mssv ILIKE $${pIdx} OR
+        COALESCE(tl.full_name, s.full_name) ILIKE $${pIdx} OR
+        tl.ip_address ILIKE $${pIdx} OR
+        tl.error_message ILIKE $${pIdx}
       )`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const countSql = `SELECT COUNT(*)::int AS total FROM traffic_logs ${whereClause};`;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      FROM traffic_logs tl
+      LEFT JOIN students s ON s.mssv = tl.mssv
+      ${whereClause};
+    `;
     const countRes = await query(countSql, params);
     const total = countRes.rows[0]?.total || 0;
 
     const dataSql = `
       SELECT
-        id, method, path, status_code, response_time_ms,
-        mssv, full_name, ip_address, user_agent,
-        device_type, os, browser, referrer, error_message, created_at
-      FROM traffic_logs
+        tl.id, tl.method, tl.path, tl.status_code, tl.response_time_ms,
+        tl.mssv, COALESCE(tl.full_name, s.full_name) AS full_name,
+        tl.ip_address, tl.user_agent, tl.device_type, tl.os, tl.browser,
+        tl.referrer, tl.error_message, tl.created_at, tl.route, tl.query_json
+      FROM traffic_logs tl
+      LEFT JOIN students s ON s.mssv = tl.mssv
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY tl.created_at DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2};
     `;
 
@@ -519,6 +629,8 @@ export const TrafficService = {
         id: r.id,
         method: r.method,
         path: r.path,
+        route: r.route || null,
+        query: parseQueryJson(r.query_json),
         statusCode: r.status_code,
         responseTimeMs: Number(r.response_time_ms),
         mssv: r.mssv,
@@ -538,6 +650,125 @@ export const TrafficService = {
         limit: safeLimit,
         totalPages: Math.ceil(total / safeLimit) || 1
       }
+    };
+  },
+
+  async getDistinctRoutes({ timeRange = '7d' } = {}) {
+    if (!isDatabaseConfigured()) return [];
+    const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `AND created_at >= NOW() - ${intervalSql}` : '';
+
+    const sql = `
+      SELECT
+        COALESCE(route, split_part(path, '?', 1)) AS route,
+        method,
+        COUNT(*)::int AS count
+      FROM traffic_logs
+      WHERE route IS NOT NULL ${timeFilter}
+      GROUP BY COALESCE(route, split_part(path, '?', 1)), method
+      ORDER BY count DESC
+      LIMIT 300;
+    `;
+
+    const result = await query(sql);
+    return result.rows.map((r) => ({
+      route: r.route,
+      method: r.method,
+      count: r.count
+    }));
+  },
+
+  async getUserActivity({ mssv = null, timeRange = '24h' } = {}) {
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    if (!isDatabaseConfigured() || !cleanMssv) return null;
+
+    const intervalSql = getTimeRangeInterval(timeRange);
+    const timeFilter = intervalSql ? `AND created_at >= NOW() - ${intervalSql}` : '';
+
+    const [studentRes, summaryRes, routesRes, devicesRes, ipsRes] = await Promise.all([
+      query(`
+        SELECT mssv, full_name, class_code, faculty_code, cohort, avatar_url,
+               first_login_at, last_login_at, is_active
+        FROM students
+        WHERE mssv = $1;
+      `, [cleanMssv]),
+      query(`
+        SELECT
+          COUNT(*)::int AS total_requests,
+          COUNT(*) FILTER (WHERE status_code >= 400)::int AS error_count,
+          MIN(created_at) AS first_seen,
+          MAX(created_at) AS last_seen,
+          COALESCE(ROUND(AVG(response_time_ms)::numeric, 1), 0)::float AS avg_latency
+        FROM traffic_logs
+        WHERE mssv = $1 ${timeFilter};
+      `, [cleanMssv]),
+      query(`
+        SELECT
+          COALESCE(route, split_part(path, '?', 1)) AS route,
+          method,
+          COUNT(*)::int AS count,
+          COUNT(*) FILTER (WHERE status_code >= 400)::int AS error_count,
+          MAX(created_at) AS last_called,
+          COALESCE(ROUND(AVG(response_time_ms)::numeric, 1), 0)::float AS avg_latency
+        FROM traffic_logs
+        WHERE mssv = $1 ${timeFilter}
+        GROUP BY COALESCE(route, split_part(path, '?', 1)), method
+        ORDER BY count DESC
+        LIMIT 100;
+      `, [cleanMssv]),
+      query(`
+        SELECT device_type AS name, COUNT(*)::int AS count
+        FROM traffic_logs
+        WHERE mssv = $1 ${timeFilter}
+        GROUP BY device_type
+        ORDER BY count DESC;
+      `, [cleanMssv]),
+      query(`
+        SELECT ip_address, COUNT(*)::int AS count, MAX(created_at) AS last_seen
+        FROM traffic_logs
+        WHERE mssv = $1 AND ip_address IS NOT NULL ${timeFilter}
+        GROUP BY ip_address
+        ORDER BY count DESC
+        LIMIT 5;
+      `, [cleanMssv])
+    ]);
+
+    const studentRow = studentRes.rows[0] || null;
+    const summaryRow = summaryRes.rows[0] || {};
+
+    return {
+      student: studentRow ? {
+        mssv: studentRow.mssv,
+        fullName: studentRow.full_name || 'Sinh viên BDU',
+        classCode: studentRow.class_code,
+        facultyCode: studentRow.faculty_code,
+        cohort: studentRow.cohort,
+        avatarUrl: studentRow.avatar_url,
+        isActive: studentRow.is_active,
+        firstLoginAt: studentRow.first_login_at,
+        lastLoginAt: studentRow.last_login_at
+      } : null,
+      summary: {
+        totalRequests: summaryRow.total_requests || 0,
+        errorCount: summaryRow.error_count || 0,
+        firstSeen: summaryRow.first_seen,
+        lastSeen: summaryRow.last_seen,
+        avgLatency: summaryRow.avg_latency || 0
+      },
+      routes: routesRes.rows.map((r) => ({
+        route: r.route,
+        method: r.method,
+        count: r.count,
+        errorCount: r.error_count,
+        lastCalled: r.last_called,
+        avgLatency: r.avg_latency
+      })),
+      devices: devicesRes.rows,
+      ips: ipsRes.rows.map((r) => ({
+        ip: r.ip_address,
+        count: r.count,
+        lastSeen: r.last_seen
+      }))
     };
   },
 
@@ -706,4 +937,11 @@ export const TrafficService = {
       }
     };
   }
+};
+
+export const TrafficServiceInternals = {
+  sanitizeQueryForLog,
+  resolveRoutePattern,
+  getTimeRangeInterval,
+  parseQueryJson
 };

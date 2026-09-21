@@ -145,6 +145,8 @@ router.get('/admin/dashboard/users', AdminDashboardController.getUsers);
 router.get('/admin/dashboard/visited-students', AdminDashboardController.getVisitedStudents);
 router.get('/admin/dashboard/devices', AdminDashboardController.getDevices);
 router.get('/admin/dashboard/logs', AdminDashboardController.getLogs);
+router.get('/admin/dashboard/routes', AdminDashboardController.getRoutes);
+router.get('/admin/dashboard/users/:mssv/activity', AdminDashboardController.getUserActivity);
 router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
 router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 

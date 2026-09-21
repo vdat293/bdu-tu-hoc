@@ -21,6 +21,7 @@ import { EntertainmentGameService } from './src/services/entertainment-game.serv
 import { TrafficService } from './src/services/traffic.service.js';
 import { FacebookImportService } from './src/services/facebook-import.service.js';
 import { AssetHistoryService } from './src/services/asset-history.service.js';
+import { attachRequestContext } from './src/utils/request-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +56,7 @@ if (AssetHistoryService.isEnabled() && !fs.existsSync(assetHistoryDir)) {
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(attachRequestContext);
 app.use(TrafficService.middleware());
 app.use('/media/avatars', express.static(avatarStorageDir, {
   dotfiles: 'deny',

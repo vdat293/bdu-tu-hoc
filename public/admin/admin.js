@@ -4,8 +4,9 @@
 
 // Application State
 const state = {
-  adminKey: sessionStorage.getItem('bdu_admin_key') || localStorage.getItem('bdu_admin_key') || '',
+  adminKey: sessionStorage.getItem('bdu_admin_key') || '',
   studentToken: sessionStorage.getItem('bdu_token') || localStorage.getItem('bdu_token') || '',
+  adminLabel: sessionStorage.getItem('bdu_admin_label') || '',
   timeRange: '24h',
   autoRefreshMs: 15000,
   activeTab: 'overview',
@@ -15,6 +16,7 @@ const state = {
     search: '',
     status: 'all',
     method: 'all',
+    route: '',
     mssv: ''
   },
   visitedFilters: {
@@ -50,6 +52,8 @@ const dom = {
   // Modals
   modalAuthGate: document.getElementById('modal-auth-gate'),
   formAdminAuth: document.getElementById('form-admin-auth'),
+  inputAdminUser: document.getElementById('input-admin-user'),
+  inputAdminPass: document.getElementById('input-admin-pass'),
   inputAdminKey: document.getElementById('input-admin-key'),
   authErrorMsg: document.getElementById('auth-error-msg'),
   btnCloseAuthModal: document.getElementById('btn-close-auth-modal'),
@@ -70,6 +74,17 @@ const dom = {
   btnCancelPurge: document.getElementById('btn-cancel-purge'),
   btnConfirmPurge: document.getElementById('btn-confirm-purge'),
   purgeAlertMsg: document.getElementById('purge-alert-msg'),
+
+  // Student API activity modal
+  modalStudentActivity: document.getElementById('modal-student-activity'),
+  studentActivityTitle: document.getElementById('student-activity-title'),
+  studentActivitySub: document.getElementById('student-activity-sub'),
+  studentActivitySummary: document.getElementById('student-activity-summary'),
+  studentActivityRoutes: document.getElementById('student-activity-routes'),
+  studentActivityDevices: document.getElementById('student-activity-devices'),
+  btnCloseStudentActivity: document.getElementById('btn-close-student-activity'),
+  btnActivityDismiss: document.getElementById('btn-activity-dismiss'),
+  btnActivityFilterLogs: document.getElementById('btn-activity-filter-logs'),
 
   // KPIs
   kpiTotalRequests: document.getElementById('kpi-total-requests'),
@@ -96,6 +111,7 @@ const dom = {
   btnClearSearch: document.getElementById('btn-clear-search'),
   statusFilterBtns: document.querySelectorAll('[data-status]'),
   methodFilterBtns: document.querySelectorAll('[data-method]'),
+  selectLogRoute: document.getElementById('select-log-route'),
   activeMssvTagRow: document.getElementById('active-mssv-tag-row'),
   activeFilterMssv: document.getElementById('active-filter-mssv'),
   btnRemoveMssvFilter: document.getElementById('btn-remove-mssv-filter'),
@@ -135,6 +151,26 @@ const dom = {
 };
 
 let currentSelectedLog = null;
+let currentActivityMssv = '';
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDateTime(value) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+}
 
 // Notification Toast
 function showToast(message, type = 'info') {
@@ -182,7 +218,7 @@ async function api(path, options = {}) {
 // Authentication Modal
 function openAuthModal() {
   dom.modalAuthGate.style.display = 'flex';
-  dom.inputAdminKey.focus();
+  if (dom.inputAdminUser) dom.inputAdminUser.focus();
 }
 
 function closeAuthModal() {
@@ -190,51 +226,79 @@ function closeAuthModal() {
   dom.authErrorMsg.style.display = 'none';
 }
 
+function clearAuthForm() {
+  if (dom.inputAdminPass) dom.inputAdminPass.value = '';
+  if (dom.inputAdminKey) dom.inputAdminKey.value = '';
+}
+
 dom.formAdminAuth.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const key = dom.inputAdminKey.value.trim();
-  if (!key) return;
+  const username = dom.inputAdminUser?.value.trim() || '';
+  const password = dom.inputAdminPass?.value || '';
+  const key = dom.inputAdminKey?.value.trim() || '';
+
+  if (!key && (!username || !password)) {
+    dom.authErrorMsg.textContent = 'Nhập MSSV + mật khẩu BDU, hoặc mã khóa kỹ thuật.';
+    dom.authErrorMsg.style.display = 'block';
+    return;
+  }
 
   try {
     dom.authErrorMsg.style.display = 'none';
+    const payload = key ? { key } : { username, password };
     const loginRes = await fetch('/api/admin/dashboard/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key })
+      body: JSON.stringify(payload)
     });
 
     const resJson = await loginRes.json();
     if (!resJson.result) {
-      throw new Error(resJson.message || 'Mã khóa không đúng với cấu hình SYSTEM_OWNER_MSSV.');
+      throw new Error(resJson.message || 'Đăng nhập quản trị thất bại.');
     }
 
-    state.adminKey = key;
-    state.adminMssv = resJson.mssv || key;
-    sessionStorage.setItem('bdu_admin_key', key);
-    localStorage.setItem('bdu_admin_key', key);
+    if (resJson.token) {
+      state.studentToken = resJson.token;
+      state.adminKey = '';
+      sessionStorage.setItem('bdu_token', resJson.token);
+      sessionStorage.removeItem('bdu_admin_key');
+    } else {
+      state.adminKey = key;
+      state.studentToken = '';
+      sessionStorage.setItem('bdu_admin_key', key);
+      sessionStorage.removeItem('bdu_token');
+    }
+    state.adminLabel = resJson.name || resJson.mssv || 'Quản trị viên';
+    sessionStorage.setItem('bdu_admin_label', state.adminLabel);
+    if (resJson.mssv) sessionStorage.setItem('bdu_admin_mssv', resJson.mssv);
+    else sessionStorage.removeItem('bdu_admin_mssv');
 
     await fetchAllData();
+    fetchRoutes();
     closeAuthModal();
+    clearAuthForm();
     updateAuthDisplay();
-    showToast(`Đã xác thực quản trị viên (${state.adminMssv}) thành công!`, 'success');
+    showToast(`Đã xác thực quản trị viên (${state.adminLabel}) thành công!`, 'success');
   } catch (err) {
-    dom.authErrorMsg.textContent = err.message || 'Mã khóa không đúng.';
+    dom.authErrorMsg.textContent = err.message || 'Đăng nhập quản trị thất bại.';
     dom.authErrorMsg.style.display = 'block';
   }
 });
 
 dom.btnOpenAuthModal.addEventListener('click', () => {
   dom.btnCloseAuthModal.style.display = 'block';
-  dom.inputAdminKey.value = state.adminKey;
+  clearAuthForm();
+  if (dom.inputAdminUser && !dom.inputAdminUser.value) {
+    dom.inputAdminUser.value = sessionStorage.getItem('bdu_admin_mssv') || '';
+  }
   openAuthModal();
 });
 
 dom.btnCloseAuthModal.addEventListener('click', closeAuthModal);
 
 function updateAuthDisplay() {
-  const mssv = state.adminMssv || (state.adminKey === '24050126' ? '24050126' : null) || '24050126';
   if (state.adminKey || state.studentToken) {
-    dom.displayAuthStatus.textContent = `👑 Admin: ${mssv}`;
+    dom.displayAuthStatus.textContent = `👑 ${state.adminLabel || 'Quản trị viên'}`;
   } else {
     dom.displayAuthStatus.textContent = 'Chưa xác thực';
   }
@@ -281,6 +345,7 @@ dom.rangePills.forEach((pill) => {
     state.timeRange = pill.getAttribute('data-range');
     state.logFilters.page = 1;
     fetchAllData();
+    fetchRoutes();
   });
 });
 
@@ -301,6 +366,7 @@ function startAutoRefresh() {
 
 dom.btnManualRefresh.addEventListener('click', () => {
   fetchAllData();
+  fetchRoutes();
   showToast('Đã làm mới dữ liệu!', 'info');
 });
 
@@ -328,7 +394,7 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
       api(`/api/admin/dashboard/devices?timeRange=${state.timeRange}`),
-      api(`/api/admin/dashboard/logs?timeRange=${state.timeRange}&page=${state.logFilters.page}&limit=${state.logFilters.limit}&status=${state.logFilters.status}&method=${state.logFilters.method}&search=${encodeURIComponent(state.logFilters.search)}&mssv=${encodeURIComponent(state.logFilters.mssv)}`),
+      api(`/api/admin/dashboard/logs?timeRange=${state.timeRange}&page=${state.logFilters.page}&limit=${state.logFilters.limit}&status=${state.logFilters.status}&method=${state.logFilters.method}&route=${encodeURIComponent(state.logFilters.route)}&search=${encodeURIComponent(state.logFilters.search)}&mssv=${encodeURIComponent(state.logFilters.mssv)}`),
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`)
     ]);
@@ -622,7 +688,7 @@ function renderLogs(logsData = {}) {
   dom.btnPageNext.disabled = p.page >= p.totalPages;
 
   if (!logs.length) {
-    dom.logsTableBody.innerHTML = '<tr><td colspan="8" class="text-center-muted">Không tìm thấy bản ghi log nào phù hợp.</td></tr>';
+    dom.logsTableBody.innerHTML = '<tr><td colspan="9" class="text-center-muted">Không tìm thấy bản ghi log nào phù hợp.</td></tr>';
     return;
   }
 
@@ -631,6 +697,7 @@ function renderLogs(logsData = {}) {
     const clock = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const dateStr = d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
     const hasError = log.statusCode >= 400;
+    const apiLabel = log.route || log.path.split('?')[0];
 
     let statClass = 'stat-2xx';
     if (log.statusCode >= 300 && log.statusCode < 400) statClass = 'stat-3xx';
@@ -649,21 +716,24 @@ function renderLogs(logsData = {}) {
           <span class="log-clock">${clock}</span>
           <span class="log-date">${dateStr}</span>
         </td>
-        <td><span class="method-tag method-${log.method.toLowerCase()}">${log.method}</span></td>
+        <td><span class="method-tag method-${escapeHtml(log.method.toLowerCase())}">${escapeHtml(log.method)}</span></td>
+        <td>
+          <span class="route-code" title="${escapeHtml(log.route || '')}">${escapeHtml(apiLabel)}</span>
+        </td>
         <td>
           <div class="path-wrap">
-            <span class="path-code" title="${log.path}">${log.path}</span>
-            ${log.errorMessage ? `<span class="path-err" title="${log.errorMessage}">⚠ ${log.errorMessage}</span>` : ''}
+            <span class="path-code" title="${escapeHtml(log.path)}">${escapeHtml(log.path)}</span>
+            ${log.errorMessage ? `<span class="path-err" title="${escapeHtml(log.errorMessage)}">⚠ ${escapeHtml(log.errorMessage)}</span>` : ''}
           </div>
         </td>
         <td><span class="status-badge ${statClass}">${log.statusCode}</span></td>
         <td><span class="latency-badge ${latClass}">${log.responseTimeMs} ms</span></td>
         <td>
-          ${log.mssv ? `<span class="mssv-tag" title="${log.fullName || log.mssv}">${log.mssv}</span>` : '<span style="color: var(--text-muted); font-size: 0.78rem;">Khách</span>'}
+          ${log.mssv ? `<span class="mssv-tag" title="${escapeHtml(log.fullName || log.mssv)}">${escapeHtml(log.mssv)}</span>` : '<span style="color: var(--text-muted); font-size: 0.78rem;">Khách</span>'}
         </td>
         <td>
-          <span class="client-ip-text">${log.ipAddress || '127.0.0.1'}</span>
-          <span class="client-dev-text">${log.os || ''} ${log.browser ? `• ${log.browser}` : ''}</span>
+          <span class="client-ip-text">${escapeHtml(log.ipAddress || '127.0.0.1')}</span>
+          <span class="client-dev-text">${escapeHtml(log.os || '')} ${log.browser ? `• ${escapeHtml(log.browser)}` : ''}</span>
         </td>
         <td style="text-align: center;">
           <button type="button" class="btn-inspect" title="Xem chi tiết">👁</button>
@@ -689,42 +759,60 @@ function openLogDetailModal(log) {
   dom.modalLogTitle.textContent = `Yêu Cầu #${log.id} • ${log.method} ${log.statusCode}`;
   dom.modalLogTime.textContent = new Date(log.createdAt).toLocaleString();
 
+  const hasQuery = log.query && Object.keys(log.query).length > 0;
+  const queryJson = hasQuery ? JSON.stringify(log.query, null, 2) : '';
+
   dom.modalLogBody.innerHTML = `
     <div class="log-detail-grid">
-      <div class="detail-row"><span class="k">Method:</span><span class="method-tag method-${log.method.toLowerCase()}">${log.method}</span></div>
+      <div class="detail-row"><span class="k">Method:</span><span class="method-tag method-${escapeHtml(log.method.toLowerCase())}">${escapeHtml(log.method)}</span></div>
       <div class="detail-row"><span class="k">Status HTTP:</span><span class="status-badge">${log.statusCode}</span></div>
       <div class="detail-row"><span class="k">Độ trễ:</span><span>${log.responseTimeMs} ms</span></div>
-      <div class="detail-row"><span class="k">Sinh viên:</span><span>${log.mssv ? `${log.mssv} (${log.fullName || 'BDU'})` : 'Chưa đăng nhập'}</span></div>
-      <div class="detail-row"><span class="k">IP Client:</span><span>${log.ipAddress || '127.0.0.1'}</span></div>
-      <div class="detail-row"><span class="k">Thiết bị:</span><span>${log.deviceType} • ${log.os} • ${log.browser}</span></div>
+      <div class="detail-row"><span class="k">Sinh viên:</span><span>${log.mssv ? `${escapeHtml(log.mssv)} (${escapeHtml(log.fullName || 'BDU')})` : 'Chưa đăng nhập'}</span></div>
+      <div class="detail-row"><span class="k">IP Client:</span><span>${escapeHtml(log.ipAddress || '127.0.0.1')}</span></div>
+      <div class="detail-row"><span class="k">Thiết bị:</span><span>${escapeHtml(log.deviceType)} • ${escapeHtml(log.os)} • ${escapeHtml(log.browser)}</span></div>
+    </div>
+
+    <div style="margin-top: 10px;">
+      <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">API đã gọi (Route pattern):</span>
+      <div class="detail-code-box">
+        <span>${escapeHtml(log.route || '(không khớp route — có thể 404)')}</span>
+        ${log.route ? `<button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.route)}">📋 Chép</button>` : ''}
+      </div>
     </div>
 
     <div style="margin-top: 10px;">
       <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Đường dẫn đầy đủ (Path):</span>
       <div class="detail-code-box">
-        <span>${log.path}</span>
-        <button type="button" class="btn-copy-code" data-copy="${log.path}">📋 Chép</button>
+        <span>${escapeHtml(log.path)}</span>
+        <button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.path)}">📋 Chép</button>
       </div>
     </div>
+
+    ${hasQuery ? `
+      <div style="margin-top: 10px;">
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Tham số truy vấn (đã che token/mật khẩu):</span>
+        <pre class="detail-query-box">${escapeHtml(queryJson)}</pre>
+      </div>
+    ` : ''}
 
     ${log.errorMessage ? `
       <div style="margin-top: 10px;">
         <span style="font-size: 0.75rem; font-weight: 700; color: #ef4444;">Thông báo lỗi:</span>
-        <div class="detail-error-box">${log.errorMessage}</div>
+        <div class="detail-error-box">${escapeHtml(log.errorMessage)}</div>
       </div>
     ` : ''}
 
     ${log.referrer ? `
       <div style="margin-top: 10px;">
         <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Nguồn gọi (Referrer):</span>
-        <div class="detail-code-box" style="font-size: 0.75rem;">${log.referrer}</div>
+        <div class="detail-code-box" style="font-size: 0.75rem;">${escapeHtml(log.referrer)}</div>
       </div>
     ` : ''}
 
     ${log.userAgent ? `
       <div style="margin-top: 10px;">
         <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">User-Agent:</span>
-        <div class="detail-code-box" style="font-size: 0.72rem; line-height: 1.4;">${log.userAgent}</div>
+        <div class="detail-code-box" style="font-size: 0.72rem; line-height: 1.4; display: block;">${escapeHtml(log.userAgent)}</div>
       </div>
     ` : ''}
   `;
@@ -782,6 +870,90 @@ dom.btnRemoveMssvFilter.addEventListener('click', () => {
   fetchAllData();
 });
 
+// Student API activity trace modal
+function labelForTimeRange(range) {
+  return {
+    '1h': '1 giờ qua',
+    '6h': '6 giờ qua',
+    '24h': '24 giờ qua',
+    '7d': '7 ngày qua',
+    '30d': '30 ngày qua',
+    'all': 'Toàn bộ thời gian'
+  }[range] || range;
+}
+
+async function openStudentActivity(mssv) {
+  currentActivityMssv = mssv;
+  dom.studentActivityTitle.textContent = `Dấu Vết API • ${mssv}`;
+  dom.studentActivitySub.textContent = labelForTimeRange(state.timeRange);
+  dom.studentActivitySummary.innerHTML = '<div class="loading-state">Đang tải dữ liệu...</div>';
+  dom.studentActivityRoutes.innerHTML = '<tr><td colspan="6" class="text-center-muted">Đang tải...</td></tr>';
+  dom.studentActivityDevices.innerHTML = '';
+  dom.modalStudentActivity.style.display = 'flex';
+
+  try {
+    const data = await api(`/api/admin/dashboard/users/${encodeURIComponent(mssv)}/activity?timeRange=${state.timeRange}`);
+    renderStudentActivity(data);
+  } catch (err) {
+    dom.studentActivitySummary.innerHTML = `<div class="text-center-muted">${escapeHtml(err.message || 'Không thể tải dấu vết hoạt động.')}</div>`;
+    dom.studentActivityRoutes.innerHTML = '<tr><td colspan="6" class="text-center-muted">Không có dữ liệu.</td></tr>';
+  }
+}
+
+function renderStudentActivity(data = {}) {
+  const student = data.student || {};
+  const summary = data.summary || {};
+  const routes = data.routes || [];
+  const devices = data.devices || [];
+  const ips = data.ips || [];
+
+  dom.studentActivityTitle.textContent = `Dấu Vết API • ${student.mssv || currentActivityMssv}`;
+  dom.studentActivitySub.textContent = [
+    student.fullName,
+    student.classCode ? `Lớp ${student.classCode}` : null,
+    student.lastLoginAt ? `Đăng nhập cuối: ${formatDateTime(student.lastLoginAt)}` : null,
+    labelForTimeRange(state.timeRange)
+  ].filter(Boolean).join(' • ');
+
+  dom.studentActivitySummary.innerHTML = `
+    <div class="activity-stat"><span class="label">Tổng request</span><span class="value">${(summary.totalRequests || 0).toLocaleString()}</span></div>
+    <div class="activity-stat"><span class="label">Lỗi (4xx/5xx)</span><span class="value ${summary.errorCount ? 'text-error' : ''}">${(summary.errorCount || 0).toLocaleString()}</span></div>
+    <div class="activity-stat"><span class="label">Độ trễ TB</span><span class="value">${summary.avgLatency || 0} ms</span></div>
+    <div class="activity-stat"><span class="label">Request đầu</span><span class="value small">${formatDateTime(summary.firstSeen)}</span></div>
+    <div class="activity-stat"><span class="label">Request cuối</span><span class="value small">${formatDateTime(summary.lastSeen)}</span></div>
+  `;
+
+  dom.studentActivityRoutes.innerHTML = routes.length ? routes.map((row) => `
+    <tr>
+      <td><span class="route-code" title="${escapeHtml(row.route)}">${escapeHtml(row.route)}</span></td>
+      <td><span class="method-tag method-${escapeHtml(String(row.method).toLowerCase())}">${escapeHtml(row.method)}</span></td>
+      <td><strong>${Number(row.count || 0).toLocaleString()}</strong></td>
+      <td>${row.errorCount ? `<span class="status-badge stat-4xx">${row.errorCount}</span>` : '0'}</td>
+      <td>${formatDateTime(row.lastCalled)}</td>
+      <td>${row.avgLatency} ms</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" class="text-center-muted">Chưa có request nào trong khoảng thời gian này.</td></tr>';
+
+  const deviceChips = devices.map((d) => `<span class="activity-chip">${escapeHtml(d.name)}: <strong>${d.count}</strong></span>`);
+  const ipChips = ips.map((ip) => `<span class="activity-chip">${escapeHtml(ip.ip)}: <strong>${ip.count}</strong></span>`);
+  const chips = [...deviceChips, ...ipChips];
+  dom.studentActivityDevices.innerHTML = chips.length
+    ? chips.join('')
+    : '<span class="activity-empty">Không có dữ liệu thiết bị/IP.</span>';
+}
+
+function closeStudentActivityModal() {
+  dom.modalStudentActivity.style.display = 'none';
+}
+
+dom.btnCloseStudentActivity.addEventListener('click', closeStudentActivityModal);
+dom.btnActivityDismiss.addEventListener('click', closeStudentActivityModal);
+dom.btnActivityFilterLogs.addEventListener('click', () => {
+  if (!currentActivityMssv) return;
+  closeStudentActivityModal();
+  filterByMssv(currentActivityMssv);
+});
+
 // Logs Filters Events
 let searchTimeout = null;
 dom.inputLogSearch.addEventListener('input', (e) => {
@@ -822,6 +994,29 @@ dom.methodFilterBtns.forEach((btn) => {
     fetchAllData();
   });
 });
+
+// API route filter (populated from live traffic)
+async function fetchRoutes() {
+  if (!dom.selectLogRoute) return;
+  try {
+    const routes = await api(`/api/admin/dashboard/routes?timeRange=${state.timeRange}`);
+    const current = state.logFilters.route;
+    dom.selectLogRoute.innerHTML = '<option value="">Tất cả API</option>' + routes.map((row) => (
+      `<option value="${escapeHtml(row.route)}">${escapeHtml(`${row.method} ${row.route}`)} (${row.count})</option>`
+    )).join('');
+    if (current) dom.selectLogRoute.value = current;
+  } catch (err) {
+    console.error('[Admin] Lỗi nạp danh sách API:', err.message);
+  }
+}
+
+if (dom.selectLogRoute) {
+  dom.selectLogRoute.addEventListener('change', (e) => {
+    state.logFilters.route = e.target.value;
+    state.logFilters.page = 1;
+    fetchAllData();
+  });
+}
 
 dom.btnPagePrev.addEventListener('click', () => {
   if (state.logFilters.page > 1) {
@@ -907,8 +1102,8 @@ function renderVisitedStudents(res = {}) {
           </td>
           <td style="text-align: center;">${statusBadge}</td>
           <td style="text-align: right;">
-            <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${s.mssv}" title="Xem lịch sử truy cập của sinh viên này">
-              🔍 Xem Log
+            <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${s.mssv}" title="Xem dấu vết API sinh viên này đã gọi">
+              🧭 Dấu vết API
             </button>
           </td>
         </tr>
@@ -918,7 +1113,7 @@ function renderVisitedStudents(res = {}) {
     dom.visitedTableBody.querySelectorAll('.btn-view-student-logs').forEach((btn) => {
       btn.addEventListener('click', () => {
         const mssv = btn.getAttribute('data-mssv');
-        filterByMssv(mssv);
+        openStudentActivity(mssv);
       });
     });
   }
@@ -1078,6 +1273,7 @@ async function init() {
   updateAuthDisplay();
   startAutoRefresh();
   await fetchAllData();
+  fetchRoutes();
 }
 
 init();

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { BduService } from './bdu.service.js';
+import { currentRequest } from '../utils/request-context.js';
 
 const identities = new Map();
 const pendingResolutions = new Map();
@@ -8,6 +9,11 @@ const DEFAULT_RESTORED_TOKEN_TTL_MS = 5 * 60 * 1000;
 
 function normalizeMssv(value) {
   return String(value ?? '').trim().toUpperCase();
+}
+
+function markVerifiedRequest(mssv) {
+  const req = currentRequest();
+  if (req && !req.verifiedMssv) req.verifiedMssv = mssv;
 }
 
 function normalizeToken(value) {
@@ -106,13 +112,20 @@ export const BduIdentityService = {
     cleanup();
     const key = tokenKey(token);
     const cached = identities.get(key);
-    if (cached) return cached.mssv;
+    if (cached) {
+      markVerifiedRequest(cached.mssv);
+      return cached.mssv;
+    }
 
     // A reconnect storm after a deploy must not turn into dozens of identical
     // BDU profile calls. Share one verification per opaque token and let all
     // waiting sockets receive the same authoritative outcome.
     const pending = pendingResolutions.get(key);
-    if (pending) return pending;
+    if (pending) {
+      const mssv = await pending;
+      markVerifiedRequest(mssv);
+      return mssv;
+    }
 
     // A restored browser session may outlive this process. Re-verify it against
     // BDU rather than trusting an MSSV supplied by the browser or JWT claims.
@@ -134,10 +147,19 @@ export const BduIdentityService = {
     })();
     pendingResolutions.set(key, resolution);
     try {
-      return await resolution;
+      const mssv = await resolution;
+      markVerifiedRequest(mssv);
+      return mssv;
     } finally {
       if (pendingResolutions.get(key) === resolution) pendingResolutions.delete(key);
     }
+  },
+
+  peek(tokenValue) {
+    const token = normalizeToken(tokenValue);
+    if (!token) return null;
+    cleanup();
+    return identities.get(tokenKey(token))?.mssv || null;
   },
 
   clear(tokenValue) {

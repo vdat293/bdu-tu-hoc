@@ -97,6 +97,7 @@ export const ApiController = {
       const { username, password } = req.body;
       const data = await BduService.login(username, password);
       BduIdentityService.register(data.token, data.mssv, { expiresIn: data.expires_in });
+      req.verifiedMssv = data.mssv;
       StudentService.recordLogin(data.mssv, data.name).catch((err) => {
         console.error('[StudentService] Lỗi cập nhật trạng thái đăng nhập:', err.message);
       });

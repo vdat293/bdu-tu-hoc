@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/admin/admin.css?v=20260916-v2" />
+  <link rel="stylesheet" href="/admin/admin.css?v=20260921-v3" />
   <script src="/admin/chart.min.js"></script>
 </head>
 <body>
@@ -282,6 +282,13 @@
                 <button type="button" class="filter-btn" data-method="PUT">PUT</button>
                 <button type="button" class="filter-btn" data-method="DELETE">DELETE</button>
               </div>
+
+              <div class="filter-group">
+                <span class="filter-label">API:</span>
+                <select id="select-log-route" class="admin-select" style="max-width: 280px;">
+                  <option value="">Tất cả API</option>
+                </select>
+              </div>
             </div>
 
             <div id="active-mssv-tag-row" class="active-tag-row" style="display: none;">
@@ -298,6 +305,7 @@
                   <tr>
                     <th style="width: 140px;">Thời Gian</th>
                     <th style="width: 80px;">Method</th>
+                    <th style="width: 230px;">API (Route)</th>
                     <th>Đường Dẫn (Path)</th>
                     <th style="width: 90px;">Mã HTTP</th>
                     <th style="width: 90px;">Độ Trễ</th>
@@ -307,7 +315,7 @@
                   </tr>
                 </thead>
                 <tbody id="logs-table-body">
-                  <tr><td colspan="8" class="text-center-muted">Đang tải nhật ký...</td></tr>
+                  <tr><td colspan="9" class="text-center-muted">Đang tải nhật ký...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -519,14 +527,25 @@
         <button type="button" class="btn-close-modal" id="btn-close-auth-modal" style="display: none;">✕</button>
       </div>
       <div class="modal-body">
-        <p class="auth-desc">Hệ thống sử dụng tài khoản theo cấu hình <strong>SYSTEM_OWNER_MSSV=24050126</strong> trong <code>.env</code>. Bạn có thể nhập trực tiếp MSSV này hoặc mã khóa admin để mở khóa Dashboard.</p>
+        <p class="auth-desc">Đăng nhập bằng tài khoản BDU có quyền quản trị, hoặc bằng mã khóa kỹ thuật do quản trị hệ thống cấu hình trên server.</p>
         <form id="form-admin-auth">
           <div class="form-group">
-            <label for="input-admin-key">Mã Khóa / MSSV Quản Trị Viên:</label>
-            <input type="text" id="input-admin-key" placeholder="Nhập 24050126 hoặc mã key..." required autocomplete="username" />
+            <label for="input-admin-user">MSSV quản trị viên:</label>
+            <input type="text" id="input-admin-user" placeholder="MSSV của bạn" autocomplete="username" />
           </div>
+          <div class="form-group">
+            <label for="input-admin-pass">Mật khẩu tài khoản BDU:</label>
+            <input type="password" id="input-admin-pass" placeholder="Mật khẩu BDU" autocomplete="current-password" />
+          </div>
+          <details class="auth-key-details">
+            <summary>Hoặc dùng mã khóa kỹ thuật</summary>
+            <div class="form-group">
+              <label for="input-admin-key">Mã khóa admin (ADMIN_DASHBOARD_KEY):</label>
+              <input type="password" id="input-admin-key" placeholder="Mã khóa kỹ thuật" autocomplete="off" />
+            </div>
+          </details>
           <div id="auth-error-msg" class="auth-error" style="display: none;"></div>
-          <button type="submit" class="btn-auth-submit">Xác Thực & Mở Khóa Dashboard</button>
+          <button type="submit" class="btn-auth-submit">Đăng Nhập Quản Trị</button>
         </form>
       </div>
     </div>
@@ -576,9 +595,57 @@
     </div>
   </div>
 
+  <!-- Modal 4: Student API Activity Trace -->
+  <div class="modal-overlay" id="modal-student-activity" style="display: none;">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="student-activity-title">Dấu Vết API Theo Sinh Viên</h3>
+          <span class="modal-sub" id="student-activity-sub">--</span>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-student-activity">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="activity-summary-grid" id="student-activity-summary">
+          <div class="loading-state">Đang tải dữ liệu...</div>
+        </div>
+
+        <div>
+          <h4 class="activity-section-title">API đã gọi</h4>
+          <div class="table-container activity-table-wrap">
+            <table class="admin-data-table">
+              <thead>
+                <tr>
+                  <th>API (Route)</th>
+                  <th style="width: 90px;">Method</th>
+                  <th style="width: 90px;">Số lần</th>
+                  <th style="width: 80px;">Lỗi</th>
+                  <th style="width: 160px;">Lần cuối</th>
+                  <th style="width: 90px;">TB</th>
+                </tr>
+              </thead>
+              <tbody id="student-activity-routes">
+                <tr><td colspan="6" class="text-center-muted">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="activity-section-title">Thiết Bị & IP</h4>
+          <div id="student-activity-devices" class="activity-chip-row"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-outline" id="btn-activity-filter-logs">🔍 Lọc trong Nhật Ký</button>
+        <button type="button" class="btn-action-primary" id="btn-activity-dismiss">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Region -->
   <div class="admin-toast-container" id="admin-toast-container"></div>
 
-  <script type="module" src="/admin/admin.js?v=20260916-v2"></script>
+  <script type="module" src="/admin/admin.js?v=20260921-v3"></script>
 </body>
 </html>

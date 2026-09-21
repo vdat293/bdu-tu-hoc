@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { TrafficService } from '../services/traffic.service.js';
 import { BduIdentityService } from '../services/bdu-identity.service.js';
 import { IdentityAdminService } from '../services/identity-admin.service.js';
@@ -7,54 +8,125 @@ function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+// The owner MSSV is an identifier, never a credential. Key access must use the
+// dedicated ADMIN_DASHBOARD_KEY secret so leaking an MSSV grants nothing.
+function isSecretMatch(provided, expected) {
+  if (!expected) return false;
+  const providedBuffer = Buffer.from(String(provided));
+  const expectedBuffer = Buffer.from(String(expected));
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 5;
+const loginFailures = new Map();
+
+function clientIp(req) {
+  return String(
+    req?.headers?.['cf-connecting-ip']
+    || req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
+    || req?.socket?.remoteAddress
+    || 'unknown'
+  );
+}
+
+function getLoginThrottle(req) {
+  const key = clientIp(req);
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now - entry.firstAt > LOGIN_WINDOW_MS) {
+    loginFailures.delete(key);
+    return { blocked: false };
+  }
+  if (entry.count >= LOGIN_MAX_FAILURES) {
+    return {
+      blocked: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((entry.firstAt + LOGIN_WINDOW_MS - now) / 1000))
+    };
+  }
+  return { blocked: false };
+}
+
+function recordLoginFailure(req) {
+  const key = clientIp(req);
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now - entry.firstAt > LOGIN_WINDOW_MS) {
+    loginFailures.set(key, { count: 1, firstAt: now });
+  } else {
+    entry.count += 1;
+  }
+  if (loginFailures.size > 1000) {
+    for (const [ip, state] of loginFailures) {
+      if (now - state.firstAt > LOGIN_WINDOW_MS) loginFailures.delete(ip);
+    }
+  }
+}
+
+function clearLoginFailures(req) {
+  loginFailures.delete(clientIp(req));
+}
+
 export const AdminDashboardController = {
   /**
-   * Đăng nhập hoặc mở khóa Admin Dashboard:
-   * Hỗ trợ:
-   * 1. Nhập mã key (khớp với SYSTEM_OWNER_MSSV hoặc ADMIN_DASHBOARD_KEY)
-   * 2. Hoặc đăng nhập bằng MSSV + mật khẩu tài khoản sinh viên quản trị (SYSTEM_OWNER_MSSV)
+   * Đăng nhập Admin Dashboard bằng một trong hai cách:
+   * 1. MSSV + mật khẩu tài khoản BDU của quản trị viên (owner/identity_admin)
+   * 2. Mã khóa kỹ thuật ADMIN_DASHBOARD_KEY (dành cho ops/script)
+   * MSSV owner không bao giờ là mật khẩu.
    */
   async login(req, res) {
     try {
+      const throttle = getLoginThrottle(req);
+      if (throttle.blocked) {
+        res.setHeader('Retry-After', String(throttle.retryAfterSeconds));
+        return res.status(429).json({
+          result: false,
+          message: 'Quá nhiều lần đăng nhập sai. Vui lòng thử lại sau ít phút.'
+        });
+      }
+
       const { username, password, key } = req.body || {};
       const ownerMssv = normalizeMssv(process.env.SYSTEM_OWNER_MSSV);
       const configuredKey = process.env.ADMIN_DASHBOARD_KEY || process.env.SYSTEM_ADMIN_KEY;
 
-      // 1. Kiểm tra mã khóa trực tiếp
+      // 1. Technical key only. Never the owner MSSV.
       if (key) {
-        const cleanKey = String(key).trim().toUpperCase();
-        const matchesOwner = ownerMssv && cleanKey === ownerMssv;
-        const matchesKey = configuredKey && String(key).trim() === configuredKey.trim();
-
-        if (matchesOwner || matchesKey) {
-          return res.json({
-            result: true,
-            mssv: ownerMssv || cleanKey,
-            adminKey: String(key).trim(),
-            message: 'Mở khóa Admin Dashboard thành công!'
+        if (!isSecretMatch(String(key).trim(), configuredKey)) {
+          recordLoginFailure(req);
+          return res.status(401).json({
+            result: false,
+            message: 'Thông tin đăng nhập quản trị không hợp lệ.'
           });
         }
-        return res.status(401).json({
-          result: false,
-          message: `Mã khóa không đúng (khớp với SYSTEM_OWNER_MSSV ${ownerMssv || ''}).`
+        clearLoginFailures(req);
+        return res.json({
+          result: true,
+          adminKey: String(key).trim(),
+          message: 'Mở khóa Admin Dashboard thành công!'
         });
       }
 
-      // 2. Đăng nhập qua tài khoản sinh viên BDU
+      // 2. MSSV + mật khẩu tài khoản BDU (chỉ owner/identity_admin)
       if (username && password) {
         const cleanUser = normalizeMssv(username);
-        const isOwner = ownerMssv && cleanUser === ownerMssv;
-        const isRoleAdmin = isOwner || (await IdentityAdminService.hasRole(cleanUser, 'owner')) || (await IdentityAdminService.hasRole(cleanUser, 'identity_admin'));
+        const isOwner = Boolean(ownerMssv) && cleanUser === ownerMssv;
+        const isRoleAdmin = isOwner
+          || (await IdentityAdminService.hasRole(cleanUser, 'owner'))
+          || (await IdentityAdminService.hasRole(cleanUser, 'identity_admin'));
 
         if (!isRoleAdmin) {
+          recordLoginFailure(req);
           return res.status(403).json({
             result: false,
-            message: `Tài khoản ${cleanUser} không phải là tài khoản quản trị viên (yêu cầu SYSTEM_OWNER_MSSV: ${ownerMssv}).`
+            message: 'Tài khoản không có quyền quản trị.'
           });
         }
 
         const data = await BduService.login(cleanUser, password);
         BduIdentityService.register(data.token, data.mssv, { expiresIn: data.expires_in });
+        req.verifiedMssv = data.mssv;
+        clearLoginFailures(req);
 
         return res.json({
           result: true,
@@ -67,9 +139,10 @@ export const AdminDashboardController = {
 
       return res.status(400).json({
         result: false,
-        message: 'Vui lòng cung cấp mã khóa hoặc tài khoản đăng nhập.'
+        message: 'Vui lòng đăng nhập bằng MSSV + mật khẩu BDU hoặc mã khóa kỹ thuật.'
       });
     } catch (err) {
+      recordLoginFailure(req);
       return res.status(err.status || 500).json({
         result: false,
         message: err.message || 'Lỗi đăng nhập quản trị.'
@@ -79,33 +152,27 @@ export const AdminDashboardController = {
 
   /**
    * Middleware kiểm tra quyền truy cập Admin Dashboard:
-   * Cho phép xác thực bằng một trong các cách:
-   * 1. Header `x-admin-key` hoặc query `admin_key` khớp với SYSTEM_OWNER_MSSV hoặc ADMIN_DASHBOARD_KEY
-   * 2. Hoặc Bearer token BDU của tài khoản có MSSV trùng với SYSTEM_OWNER_MSSV hoặc role owner/identity_admin
+   * 1. Header `x-admin-key` khớp ADMIN_DASHBOARD_KEY/SYSTEM_ADMIN_KEY (ops/script)
+   * 2. Hoặc Bearer token BDU của tài khoản owner/identity_admin
    */
   async requireAdmin(req, res, next) {
     try {
       const ownerMssv = normalizeMssv(process.env.SYSTEM_OWNER_MSSV);
       const configuredKey = process.env.ADMIN_DASHBOARD_KEY || process.env.SYSTEM_ADMIN_KEY;
-      const providedKey = req.headers['x-admin-key'] || req.query.admin_key;
+      const providedKey = req.headers['x-admin-key'];
 
-      if (providedKey) {
-        const cleanKey = String(providedKey).trim().toUpperCase();
-        const matchesOwner = ownerMssv && cleanKey === ownerMssv;
-        const matchesKey = configuredKey && String(providedKey).trim() === configuredKey.trim();
-
-        if (matchesOwner || matchesKey) {
-          req.isAdminKeyAuthorized = true;
-          req.identityAdminMssv = ownerMssv || cleanKey;
-          return next();
-        }
+      if (providedKey && isSecretMatch(String(providedKey).trim(), configuredKey)) {
+        req.isAdminKeyAuthorized = true;
+        // Never persist the configured dashboard key as an identity in logs.
+        req.identityAdminMssv = 'ADMIN_KEY';
+        return next();
       }
 
       const authHeader = req.headers.authorization;
       if (!authHeader) {
         return res.status(401).json({
           result: false,
-          message: 'Yêu cầu quyền quản trị viên (SYSTEM_OWNER_MSSV). Vui lòng đăng nhập hoặc cung cấp key.'
+          message: 'Yêu cầu quyền quản trị viên. Vui lòng đăng nhập.'
         });
       }
 
@@ -116,7 +183,7 @@ export const AdminDashboardController = {
       if (!isOwner && !isAdmin) {
         return res.status(403).json({
           result: false,
-          message: `Tài khoản sinh viên ${actor} không có quyền quản trị (yêu cầu SYSTEM_OWNER_MSSV: ${ownerMssv || 'chưa đặt'}).`
+          message: 'Tài khoản không có quyền quản trị.'
         });
       }
 
@@ -198,7 +265,7 @@ export const AdminDashboardController = {
 
   async getLogs(req, res) {
     try {
-      const { page, limit, mssv, ip, status, path, method, search, timeRange } = req.query;
+      const { page, limit, mssv, ip, status, path, route, method, search, timeRange } = req.query;
       const data = await TrafficService.getDetailedLogs({
         page,
         limit,
@@ -206,6 +273,7 @@ export const AdminDashboardController = {
         ip,
         status,
         path,
+        route,
         method,
         search,
         timeRange
@@ -214,6 +282,34 @@ export const AdminDashboardController = {
     } catch (err) {
       console.error('[AdminDashboard] Lỗi getLogs:', err.message);
       return res.status(500).json({ result: false, message: 'Không thể tải danh sách nhật ký truy cập.' });
+    }
+  },
+
+  async getRoutes(req, res) {
+    try {
+      const { timeRange } = req.query;
+      const data = await TrafficService.getDistinctRoutes({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getRoutes:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể tải danh sách API.' });
+    }
+  },
+
+  async getUserActivity(req, res) {
+    try {
+      const { timeRange } = req.query;
+      const data = await TrafficService.getUserActivity({
+        mssv: req.params.mssv,
+        timeRange
+      });
+      if (!data) {
+        return res.status(404).json({ result: false, message: 'Không tìm thấy dữ liệu hoạt động của sinh viên này.' });
+      }
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getUserActivity:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể tải dấu vết hoạt động của sinh viên.' });
     }
   },
 
