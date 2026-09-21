@@ -40,15 +40,21 @@ import fs from 'fs';
 // Vite emits dist/client/build.json on every production build. Reading it here
 // lets an open tab compare its embedded __BUILD_ID__ with the deployed one.
 let cachedBuildId = null;
+let cachedBuildMtimeMs = 0;
 function resolveBuildId() {
   const envBuildId = String(process.env.BUILD_ID || '').trim();
   if (envBuildId) return envBuildId;
-  if (cachedBuildId) return cachedBuildId;
+  const buildFile = path.join(process.cwd(), 'dist', 'client', 'build.json');
   try {
-    const raw = fs.readFileSync(path.join(process.cwd(), 'dist', 'client', 'build.json'), 'utf8');
-    cachedBuildId = String(JSON.parse(raw)?.build_id || '').trim() || null;
+    // Cache theo mtime: một lần build lại giữa chừng phải đổi build_id ngay,
+    // nếu không mọi tab đang mở sẽ so với bản cũ và kẹt ở banner "cập nhật".
+    const mtimeMs = fs.statSync(buildFile).mtimeMs;
+    if (cachedBuildId && mtimeMs === cachedBuildMtimeMs) return cachedBuildId;
+    cachedBuildId = String(JSON.parse(fs.readFileSync(buildFile, 'utf8'))?.build_id || '').trim() || null;
+    cachedBuildMtimeMs = mtimeMs;
   } catch {
     cachedBuildId = null;
+    cachedBuildMtimeMs = 0;
   }
   return cachedBuildId;
 }

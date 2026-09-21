@@ -59,8 +59,8 @@ export default function AppRoutes() {
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
-      <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
     </Route>
+    {/* 404 đứng riêng một trang, không mượn khung sidebar/topbar của cổng. */}
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
   </Routes>;
 }

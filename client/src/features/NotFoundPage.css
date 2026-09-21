@@ -1,0 +1,337 @@
+/* ==========================================================================
+   404 — Kính lúp soi nền "Solar flare"
+   Nền flow 4 màu (ROSE RICE → SAPPAN ROSE → WILD PLUM → INKED VIOLET) tự
+   trôi; kính lúp bám theo con trỏ và chỉ bên trong tấm kính mặt sàn mới khai
+   ra chữ 404 đậm hơn cùng các manh mối (clip-path + scale quanh con trỏ).
+   ========================================================================== */
+
+.nf-page {
+  /* Palette "Solar flare" — stop: 12.5% / 37.5% / 62.5% / 87.5% */
+  --nf-solar-rice: #fff6de;
+  --nf-solar-rose: #ffc24b;
+  --nf-solar-plum: #f4664d;
+  --nf-solar-violet: #8a2e5e;
+  --nf-noise: 6;
+
+  --nf-lens-r: 72px;
+  --nf-zoom: 1.3;
+  --nf-lx: 50%;
+  --nf-ly: 54%;
+  --nf-clip-r: calc(var(--nf-lens-r) / var(--nf-zoom));
+
+  --nf-ink: #2a2622;
+  --nf-ink-soft: rgba(42, 38, 34, 0.82);
+  --nf-glow: rgba(255, 246, 222, 0.6);
+  --nf-glyph-base: rgba(255, 246, 222, 0.42);
+  --nf-glyph-found: rgba(42, 26, 40, 0.72);
+  --nf-note: rgba(42, 26, 40, 0.8);
+  --nf-note-shadow: rgba(255, 246, 222, 0.7);
+  --nf-floor-veil: rgba(42, 26, 40, 0.18);
+  --nf-floor-line: rgba(255, 246, 222, 0.3);
+  --nf-ring: #2a2622;
+  --nf-ring-inner: rgba(255, 246, 222, 0.42);
+  --nf-handle: #2a2622;
+  --nf-handle-dark: #16130f;
+  --nf-check-a: rgba(42, 38, 34, 0.1);
+  --nf-check-b: rgba(255, 246, 222, 0.32);
+  --nf-glass-veil: linear-gradient(180deg, rgba(255, 246, 222, 0.13), rgba(255, 246, 222, 0.02));
+  --nf-shine: rgba(255, 246, 222, 0.85);
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--nf-solar-plum);
+  overflow: hidden;
+  isolation: isolate;
+  contain: paint;
+  touch-action: pan-y;
+}
+
+/* --- Nền flow ------------------------------------------------------------ */
+
+.nf-flow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(118deg,
+      var(--nf-solar-rice) 12.5%,
+      var(--nf-solar-rose) 37.5%,
+      var(--nf-solar-plum) 62.5%,
+      var(--nf-solar-violet) 87.5%);
+}
+
+.nf-flow-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nf-flow-grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  opacity: calc(var(--nf-noise) * 0.5);
+  mix-blend-mode: overlay;
+}
+
+/* --- Nội dung ------------------------------------------------------------ */
+
+.nf-brand {
+  position: absolute;
+  top: clamp(18px, 3vw, 30px);
+  left: clamp(18px, 3vw, 30px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--nf-ink);
+  text-shadow: 0 1px 18px var(--nf-glow);
+  opacity: 0.86;
+  pointer-events: none;
+}
+
+.nf-brand img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.nf-copy {
+  position: relative;
+  z-index: 4;
+  padding: clamp(64px, 11vh, 116px) 22px 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Màn sương kem giữ phần chữ luôn đọc được khi dải màu trôi qua. */
+.nf-copy::before {
+  content: '';
+  position: absolute;
+  inset: -4% -14% auto -14%;
+  z-index: -1;
+  height: 210%;
+  background: radial-gradient(closest-side at 50% 40%, rgba(255, 246, 222, 0.72), rgba(255, 246, 222, 0.3) 62%, rgba(255, 246, 222, 0) 100%);
+  pointer-events: none;
+}
+
+.nf-title {
+  margin: 0;
+  font-family: var(--font-display, var(--font-main));
+  font-size: clamp(1.6rem, 4.4vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--nf-ink);
+  text-shadow: 0 0 30px var(--nf-glow), 0 2px 60px rgba(255, 246, 222, 0.45);
+}
+
+.nf-desc {
+  max-width: 44ch;
+  margin: 10px auto 0;
+  font-size: clamp(0.9rem, 1.6vw, 1rem);
+  font-weight: 600;
+  color: var(--nf-ink-soft);
+  text-shadow: 0 1px 22px rgba(255, 246, 222, 0.7);
+}
+
+.nf-cta {
+  margin-top: clamp(18px, 3vw, 26px);
+  min-width: 168px;
+  pointer-events: auto;
+}
+
+/* Nút theo đúng mực của palette Solar flare thay vì xanh BDU. */
+.nf-page .nf-cta {
+  background: var(--nf-ink);
+  color: var(--nf-solar-rice);
+  box-shadow: 0 12px 30px -14px rgba(42, 26, 40, 0.8);
+}
+
+.nf-page .nf-cta:hover {
+  background: #17140f;
+  box-shadow: 0 16px 34px -14px rgba(42, 26, 40, 0.85);
+}
+
+/* Trỏ chuột được "cầm" bởi kính lúp, chỉ ẩn khi vòng lặp đã chạy thật. */
+.nf-page.is-live {
+  cursor: none;
+}
+
+.nf-page.is-live .nf-cta {
+  cursor: pointer;
+}
+
+/* --- Mặt sàn & chữ 404 --------------------------------------------------- */
+
+.nf-page::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 36%;
+  background: linear-gradient(180deg, transparent, var(--nf-floor-veil));
+  border-top: 1px solid var(--nf-floor-line);
+  pointer-events: none;
+}
+
+.nf-floor,
+.nf-found {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.nf-floor {
+  z-index: 1;
+}
+
+
+.nf-glyph {
+  position: absolute;
+  bottom: 7%;
+  left: 50%;
+  margin: 0;
+  font-family: var(--font-display, var(--font-main));
+  font-size: clamp(7.5rem, 30vw, 26rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.78;
+  white-space: nowrap;
+  user-select: none;
+  transform: translateX(-50%);
+}
+
+.nf-glyph-base {
+  color: var(--nf-glyph-base);
+  text-shadow: 0 0 70px rgba(255, 246, 222, 0.35);
+}
+
+/* Dưới kính chữ hiện rõ thành mực đậm, kèm quầng kem để không chìm vào dải màu. */
+.nf-glyph-found {
+  color: var(--nf-glyph-found);
+  text-shadow: 0 0 30px rgba(255, 246, 222, 0.5);
+}
+
+/* Tấm kính: cắt đúng vòng tròn quanh con trỏ rồi phóng 1.3 lần quanh chính
+   điểm đó — vòng tròn là điểm bất động nên kính không bao giờ lệch vành. */
+.nf-found {
+  z-index: 2;
+  clip-path: circle(var(--nf-clip-r) at var(--nf-lx) var(--nf-ly));
+  transform: scale(var(--nf-zoom));
+  transform-origin: var(--nf-lx) var(--nf-ly);
+  will-change: clip-path, transform;
+}
+
+.nf-note {
+  position: absolute;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: clamp(0.6rem, 1.15vw, 0.8rem);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--nf-note);
+  text-shadow: 0 1px 12px var(--nf-note-shadow), 0 0 3px var(--nf-note-shadow);
+  white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(var(--nf-note-rotate, -3deg));
+}
+
+/* --- Kính lúp ------------------------------------------------------------ */
+
+.nf-lens {
+  --nf-handle-angle: 48deg;
+  --nf-handle-w: calc(var(--nf-lens-r) * 0.17);
+  --nf-handle-len: calc(var(--nf-lens-r) * 1.25);
+
+  position: absolute;
+  top: var(--nf-ly);
+  left: var(--nf-lx);
+  z-index: 5;
+  width: calc(var(--nf-lens-r) * 2);
+  height: calc(var(--nf-lens-r) * 2);
+  margin: calc(var(--nf-lens-r) * -1) 0 0 calc(var(--nf-lens-r) * -1);
+  pointer-events: none;
+  will-change: top, left;
+}
+
+.nf-lens-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--nf-handle-len);
+  height: var(--nf-handle-w);
+  margin-top: calc(var(--nf-handle-w) / -2);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--nf-handle), var(--nf-handle-dark));
+  box-shadow: 0 8px 14px -8px rgba(42, 26, 40, 0.6);
+  transform: rotate(var(--nf-handle-angle)) translateX(calc(var(--nf-lens-r) * 0.72));
+  transform-origin: 0 50%;
+}
+
+.nf-lens-handle::after {
+  content: '';
+  position: absolute;
+  top: -18%;
+  right: 0;
+  width: 26%;
+  height: 136%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--nf-handle-dark), color-mix(in srgb, var(--nf-handle-dark) 70%, #000));
+}
+
+.nf-lens-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image:
+    linear-gradient(45deg, var(--nf-check-a) 25%, transparent 25%, transparent 75%, var(--nf-check-a) 75%),
+    linear-gradient(45deg, var(--nf-check-b) 25%, transparent 25%, transparent 75%, var(--nf-check-b) 75%),
+    var(--nf-glass-veil);
+  background-position: 0 0, 6px 6px, 0 0;
+  background-size: 12px 12px, 12px 12px, 100% 100%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nf-ring) 22%, transparent);
+}
+
+.nf-lens-glass::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 24%, var(--nf-shine) 0%, transparent 40%);
+  opacity: 0.42;
+}
+
+.nf-lens-ring {
+  position: absolute;
+  inset: 0;
+  border: clamp(7px, 0.9vw, 11px) solid var(--nf-ring);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px var(--nf-ring-inner),
+    0 22px 34px -20px rgba(42, 26, 40, 0.6);
+}
+
+@media (max-width: 720px) {
+  .nf-page {
+    --nf-lens-r: 52px;
+  }
+
+  .nf-note {
+    letter-spacing: 0.12em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf-found {
+    will-change: auto;
+  }
+
+}
