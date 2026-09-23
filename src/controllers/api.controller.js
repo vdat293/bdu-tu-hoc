@@ -1343,9 +1343,17 @@ export const ApiController = {
           viewerMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
         } catch {}
       }
-      const { scope, scopeId, limit, offset, category, hasAttachments, isPinned } = req.query;
+      const { scope, scopeId, limit, offset, category, hasAttachments, isPinned, source } = req.query;
       if (scope === 'clan' && !viewerMssv) {
         return res.status(401).json({ result: false, message: 'Vui lòng đăng nhập để xem bài viết CLB.' });
+      }
+      const rawSource = String(source || 'all').trim().toLowerCase();
+      let cleanSource = null;
+      if (['web', 'portal'].includes(rawSource)) cleanSource = 'portal';
+      else if (['facebook', 'fb'].includes(rawSource)) cleanSource = 'facebook';
+      else if (['all', ''].includes(rawSource)) cleanSource = null;
+      else {
+        return res.status(400).json({ result: false, message: 'Nguồn bài viết không hợp lệ.' });
       }
       const data = await CommunityService.getPosts({
         scope,
@@ -1356,6 +1364,7 @@ export const ApiController = {
         category: filter === 'announcement' ? 'announcement' : (filter === 'poll' ? 'poll' : (filter === 'discussion' ? 'discussion' : (category || null))),
         hasAttachments: filter === 'material' ? true : (hasAttachments === 'true' ? true : null),
         isPinned: filter === 'pinned' ? true : (isPinned !== undefined ? isPinned : null),
+        source: cleanSource,
         limit,
         offset
       });

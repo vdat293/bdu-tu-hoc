@@ -539,6 +539,17 @@ export function facebookSourceUrl(post) {
   return source?.url || null;
 }
 
+export function isFacebookSourcePost(post) {
+  if (!post) return false;
+  if (String(post.source || '').toLowerCase() === 'facebook') return true;
+  if (String(post.source || '').toLowerCase() === 'portal') return false;
+  return Boolean(facebookSourceUrl(post));
+}
+
+export function sourceLabelForPost(post) {
+  return isFacebookSourcePost(post) ? 'Facebook' : 'Web';
+}
+
 /**
  * Tên tác giả: với bài nhập từ Facebook thì bấm vào tên là mở bài gốc, thay cho
  * thẻ link "Bài gốc trên Facebook" trông như hyperlink của Word.
@@ -743,6 +754,7 @@ function PostDetailModal({
     ? getEquippedFrame(post.author?.equipped_frame_id)
     : null;
   const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
+  const isFbModal = isFacebookSourcePost(post);
   const focusComposer = () => composerInputRef.current?.focus();
 
   return (
@@ -776,6 +788,7 @@ function PostDetailModal({
           postFrame={postFrame}
           authorTitles={titlesForPost(post, viewer, presentation)}
         >
+          <span className={`fbc-source-pill ${isFbModal ? 'is-fb' : 'is-web'}`}>{isFbModal ? 'Facebook' : 'Web'}</span>
           <span className="fbc-scope-pill">{scopeLabel}</span>
           {optionsMenu}
         </PostHeaderBlock>
@@ -882,7 +895,9 @@ export default function ConfessionPage() {
   });
 
   const filter = ['all', 'mine', 'anon'].includes(params.get('filter')) ? params.get('filter') : 'all';
-  const queryKey = useMemo(() => ['confession', auth.user?.mssv, filter], [auth.user?.mssv, filter]);
+  // Khu vực nguồn: web (portal, mặc định) | facebook (crawl) | all (chung cả hai).
+  const sourceTab = ['web', 'facebook', 'all'].includes(params.get('source')) ? params.get('source') : 'web';
+  const queryKey = useMemo(() => ['confession', auth.user?.mssv, filter, sourceTab], [auth.user?.mssv, filter, sourceTab]);
 
   const query = useQuery({
     queryKey,
@@ -894,6 +909,8 @@ export default function ConfessionPage() {
         scopeId: null,
         filter,
         category: filter === 'anon' ? 'confession' : undefined,
+        // Backend map: web -> portal, facebook -> facebook, all -> không lọc.
+        source: sourceTab,
         limit: 50,
         signal
       }),
@@ -1030,14 +1047,28 @@ export default function ConfessionPage() {
 
   const rawPosts = useMemo(() => postsFrom(query.data), [query.data]);
   const posts = useMemo(() => {
-    if (filter === 'mine') return rawPosts.filter((p) => Boolean(p.is_mine));
-    if (filter === 'anon') return rawPosts.filter((p) => Boolean(p.author?.is_anonymous));
-    return rawPosts;
-  }, [rawPosts, filter]);
+    // Lọc client dự phòng: backend đã lọc theo source, nhưng mock/test hoặc
+    // cache cũ có thể vẫn trả trộn. Mặc định ưu tiên bài web trước.
+    let list = rawPosts;
+    if (sourceTab === 'web') list = list.filter((p) => !isFacebookSourcePost(p));
+    else if (sourceTab === 'facebook') list = list.filter((p) => isFacebookSourcePost(p));
+    if (filter === 'mine') return list.filter((p) => Boolean(p.is_mine));
+    if (filter === 'anon') return list.filter((p) => Boolean(p.author?.is_anonymous));
+    return list;
+  }, [rawPosts, filter, sourceTab]);
 
   const updateFilter = (value) => {
     const next = new URLSearchParams(params);
     next.set('filter', value);
+    if (!next.get('source')) next.set('source', sourceTab);
+    setParams(next, { replace: false });
+  };
+
+  const updateSourceTab = (value) => {
+    const next = new URLSearchParams(params);
+    next.set('source', value);
+    // Đổi khu vực nguồn thì reset filter phụ về Tất cả (theo yêu cầu).
+    next.set('filter', 'all');
     setParams(next, { replace: false });
   };
 
@@ -1279,6 +1310,37 @@ export default function ConfessionPage() {
             </div>
           </div>
 
+          {/* Source Tabs: Web / Facebook / Chung — mặc định Web */}
+          <div className="cfs-source-tabs glass-panel" role="tablist" aria-label="Khu vực confession">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceTab === 'web'}
+              className={`forum-filter-pill cfs-source-pill ${sourceTab === 'web' ? 'active' : ''}`}
+              onClick={() => updateSourceTab('web')}
+            >
+              Web BDU
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceTab === 'facebook'}
+              className={`forum-filter-pill cfs-source-pill ${sourceTab === 'facebook' ? 'active' : ''}`}
+              onClick={() => updateSourceTab('facebook')}
+            >
+              Facebook
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceTab === 'all'}
+              className={`forum-filter-pill cfs-source-pill ${sourceTab === 'all' ? 'active' : ''}`}
+              onClick={() => updateSourceTab('all')}
+            >
+              Tất cả
+            </button>
+          </div>
+
           {/* Secondary Filter Bar */}
           <div className="forum-filter-bar glass-panel">
             <div className="forum-filter-tabs">
@@ -1340,7 +1402,11 @@ export default function ConfessionPage() {
                 <span style={{ fontSize: '36px', display: 'block', marginBottom: '10px' }}>💬</span>
                 <h4 style={{ margin: '0 0 6px 0', fontSize: '16px' }}>Chưa có bài viết nào</h4>
                 <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Hãy là người đầu tiên chia sẻ tâm sự, câu hỏi ôn thi hoặc tài liệu học tập!
+                  {sourceTab === 'facebook'
+                    ? 'Chưa có bài nào được crawl từ Facebook về. Hãy quay lại sau!'
+                    : sourceTab === 'web'
+                      ? 'Hãy là người đầu tiên chia sẻ tâm sự, câu hỏi ôn thi hoặc tài liệu học tập!'
+                      : 'Chưa có bài viết nào ở khu vực này.'}
                 </p>
               </div>
             ) : (
@@ -1355,9 +1421,10 @@ export default function ConfessionPage() {
                 const postFrame = equippedPostFrame?.family === 'anime-sukuna' ? equippedPostFrame : null;
                 const authorTitles = titlesForPost(post, auth.user, presentation);
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
+                const isFb = isFacebookSourcePost(post);
 
                 return (
-                  <article id={`cfs-post-${post.id}`} className="forum-post-card fbc-post" key={post.id} data-post-id={post.id}>
+                  <article id={`cfs-post-${post.id}`} className="forum-post-card fbc-post" key={post.id} data-post-id={post.id} data-source={isFb ? 'facebook' : 'portal'}>
                     <PostHeaderBlock
                       post={post}
                       authorName={authorName}
@@ -1366,6 +1433,7 @@ export default function ConfessionPage() {
                       postFrame={postFrame}
                       authorTitles={authorTitles}
                     >
+                      <span className={`fbc-source-pill ${isFb ? 'is-fb' : 'is-web'}`}>{isFb ? 'Facebook' : 'Web'}</span>
                       <span className="fbc-scope-pill">{scopeLabel}</span>
                       <PostOptionsMenu
                         post={post}

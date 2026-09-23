@@ -14,6 +14,7 @@ const post = {
   scope: 'school',
   scope_id: null,
   category: 'confession',
+  source: 'facebook',
   is_anonymous: false,
   is_liked: false,
   is_mine: false,
@@ -66,10 +67,10 @@ vi.mock('../../client/src/api/academics.js', () => ({
   getProfile: vi.fn(() => Promise.resolve({}))
 }));
 
-function renderPage() {
+function renderPage(initialEntry = '/confession?source=all') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const utils = render(
-    <MemoryRouter initialEntries={['/confession']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={client}>
         <ConfessionPage />
       </QueryClientProvider>
@@ -352,5 +353,30 @@ describe('Confession kiểu Facebook', () => {
     renderPage();
     await screen.findByText(post.content);
     expect(screen.getByText('Đã chỉnh sửa')).toBeInTheDocument();
+  });
+
+  it('mặc định tab Web lọc ẩn bài Facebook và hiện badge Web/Facebook ở tab Tất cả', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    const webPost = { ...post, id: 11, source: 'portal', content: 'bài web nội bộ', attachments: [] };
+    getCommunityPosts.mockResolvedValueOnce({ posts: [webPost, post] });
+
+    renderPage('/confession?source=all');
+    await screen.findByText('bài web nội bộ');
+    await screen.findByText(post.content);
+    // Badge nguồn từng bài ở tab chung.
+    expect(screen.getAllByText('Facebook').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Web').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tab Web mặc định (không param source) chỉ hiện bài web', async () => {
+    const { getCommunityPosts } = await import('../../client/src/api/community.js');
+    const webPost = { ...post, id: 12, source: 'portal', content: 'chỉ bài web mới thấy', attachments: [] };
+    getCommunityPosts.mockResolvedValueOnce({ posts: [webPost, post] });
+
+    renderPage('/confession');
+    await screen.findByText('chỉ bài web mới thấy');
+    expect(screen.queryByText(post.content)).not.toBeInTheDocument();
+    // API được gọi kèm source web để backend lọc.
+    expect(getCommunityPosts).toHaveBeenCalledWith('test-token', expect.objectContaining({ source: 'web' }));
   });
 });

@@ -8,6 +8,7 @@ function normalizeMssv(mssv) {
 
 const POST_SCOPES = new Set(['school', 'institute', 'faculty', 'clan']);
 const POST_CATEGORIES = new Set(['discussion', 'announcement', 'material', 'question', 'confession', 'poll']);
+const POST_SOURCES = new Set(['portal', 'facebook']);
 const MAX_ATTACHMENTS = 5;
 const MAX_TITLE_LENGTH = 180;
 const MAX_CONTENT_LENGTH = 10000;
@@ -462,9 +463,9 @@ export const CommunityService = {
 
       const sql = `
         INSERT INTO community_posts (
-          author_mssv, title, content, scope, scope_id, is_anonymous, attachments, category, is_pinned
+          author_mssv, title, content, scope, scope_id, is_anonymous, attachments, category, is_pinned, source
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, 'portal')
         RETURNING *;
       `;
       const result = await client.query(sql, [
@@ -516,6 +517,7 @@ export const CommunityService = {
     category = null,
     hasAttachments = null,
     isPinned = null,
+    source = null,
     limit = 20,
     offset = 0
   } = {}) {
@@ -564,6 +566,12 @@ export const CommunityService = {
       params.push(normalizeBoolean(isPinned));
       conditions.push(`p.is_pinned = $${params.length}`);
     }
+    if (source !== null && source !== undefined && String(source).trim() !== '') {
+      const cleanSource = String(source).trim().toLowerCase();
+      if (!POST_SOURCES.has(cleanSource)) throw httpError('Nguồn bài viết không hợp lệ.');
+      params.push(cleanSource);
+      conditions.push(`COALESCE(p.source, 'portal') = $${params.length}`);
+    }
 
     if (scope === 'clan' && viewerMssv) {
       const member = await query(
@@ -599,6 +607,7 @@ export const CommunityService = {
         p.comment_count,
         COALESCE(p.category, 'discussion') AS category,
         COALESCE(p.is_pinned, false) AS is_pinned,
+        COALESCE(p.source, 'portal') AS source,
         p.created_at,
         p.updated_at,
         p.edited_at,
@@ -673,6 +682,7 @@ export const CommunityService = {
         scope_id: row.scope_id,
         category: row.category,
         is_pinned: row.is_pinned,
+        source: row.source || 'portal',
         is_anonymous: row.is_anonymous,
         attachments: row.attachments || [],
         like_count: row.like_count,
@@ -728,6 +738,7 @@ export const CommunityService = {
         p.comment_count,
         COALESCE(p.category, 'discussion') AS category,
         COALESCE(p.is_pinned, false) AS is_pinned,
+        COALESCE(p.source, 'portal') AS source,
         p.created_at,
         p.updated_at,
         p.edited_at,
@@ -780,6 +791,7 @@ export const CommunityService = {
       scope_id: row.scope_id,
       category: row.category,
       is_pinned: row.is_pinned,
+      source: row.source || 'portal',
       is_anonymous: row.is_anonymous,
       attachments: row.attachments || [],
       like_count: row.like_count,
