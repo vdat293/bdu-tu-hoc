@@ -99,7 +99,7 @@
           </div>
         </div>
 
-        <!-- 3 KHỐI TRẠNG THÁI: DANH HIỆU SỞ HỮU, KHUNG SỞ HỮU, TRẠNG THÁI AVATAR -->
+        <!-- 3 KHỐI TRẠNG THÁI: DANH HIỆU, KHUNG, AVATAR -->
         <div class="status-grid-three">
 
           <!-- 1. Danh hiệu đang sở hữu -->
@@ -242,18 +242,18 @@
           <div>
             <p class="admin-eyebrow">QUẢN TRỊ CATALOG</p>
             <h2>Danh mục item toàn hệ thống</h2>
-            <p class="admin-field-hint">Thêm, sửa, hoặc tắt các khung và danh hiệu trực tiếp trên web mà không cần đụng tới database.</p>
+            <p class="admin-field-hint">Quản lý khung và danh hiệu trong một catalog.</p>
           </div>
           <div class="catalog-heading-actions">
             <span id="catalog-count" class="admin-count">0</span>
-            <button id="btn-open-create-item" class="admin-button admin-button-primary" type="button">➕ Thêm Khung / Danh hiệu mới</button>
+            <button id="btn-open-create-item" class="admin-button admin-button-primary" type="button">➕ Thêm vật phẩm mới</button>
           </div>
         </div>
 
         <!-- FORM TẠO / CHỈNH SỬA ITEM (ẨN MẶC ĐỊNH) -->
         <div id="item-editor-card" class="item-editor-card is-hidden">
           <div class="item-editor-header">
-            <h3 id="item-editor-title">Tạo Khung / Danh hiệu mới</h3>
+            <h3 id="item-editor-title">Tạo vật phẩm mới</h3>
             <button id="btn-close-item-editor" class="btn-close-text" type="button">✕ Đóng</button>
           </div>
           <form id="item-editor-form" class="admin-form">
@@ -262,7 +262,7 @@
               <label>Loại Item
                 <select id="item-editor-type" class="admin-input" required>
                   <option value="frame">Khung nhân vật (frame)</option>
-                  <option value="title">Danh hiệu / Name tag (title)</option>
+                  <option value="title">Danh hiệu (title)</option>
                   <option value="capability">Tính năng đặc biệt (capability)</option>
                 </select>
               </label>

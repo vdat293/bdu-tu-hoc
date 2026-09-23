@@ -131,11 +131,13 @@ function renderIdentityTitleBadges(titles, extraClass = '') {
   if (!Array.isArray(titles) || !titles.length) return '';
   const allowedTones = new Set(['member', 'gold', 'silver', 'bronze', 'blue', 'emerald', 'violet', 'youth', 'chatgpt', 'charm', 'ai']);
   const allowedRarities = new Set(['rare', 'epic', 'legendary', 'vip', 'youth', 'ai', 'charm']);
+  const allowedGemAssets = new Set(['green', 'blue', 'orange', 'gold', 'pink', 'purple']);
   return `
     <span class="identity-title-badges ${escapeHtml(extraClass)}">
       ${titles.slice(0, 4).map((title) => {
         const tone = allowedTones.has(title?.tone) ? title.tone : 'member';
         const rarity = allowedRarities.has(title?.rarity) ? ` rarity-${title.rarity}` : '';
+        const gemAsset = allowedGemAssets.has(title?.gem_asset) ? title.gem_asset : '';
         const rawKey = String(title?.asset_key || title?.id || '').replace(/^(title|achievement):/, '').trim().toLowerCase();
         const safeKey = rawKey.replace(/[^a-z0-9_-]/g, '-');
         const customClass = safeKey ? ` title-${safeKey}` : '';
@@ -176,7 +178,9 @@ function renderIdentityTitleBadges(titles, extraClass = '') {
                               : isTayTo
                                 ? `<span class="identity-title-icon-tayto" aria-hidden="true">💪</span>`
                                 : '';
-        return `<span class="identity-title-badge tone-${tone}${rarity}${customClass}" data-title-id="${escapeHtml(title?.id || '')}" title="${escapeHtml(title?.detail || title?.label || '')}">${iconPrefix}${escapeHtml(title?.label || '')}</span>`;
+        const gemMarkup = gemAsset ? `<span class="title-gem-backdrop" aria-hidden="true"></span>` : '';
+        const labelMarkup = gemAsset ? `<span class="title-gem-label">${escapeHtml(title?.label || '')}</span>` : escapeHtml(title?.label || '');
+        return `<span class="identity-title-badge tone-${tone}${rarity}${gemAsset ? ` has-title-gem gem-${gemAsset}` : ''}${customClass}" data-title-id="${escapeHtml(title?.id || '')}" title="${escapeHtml(title?.detail || title?.label || '')}">${gemMarkup}${iconPrefix}${labelMarkup}</span>`;
       }).join('')}
     </span>
   `;
@@ -6308,7 +6312,45 @@ function buildAidtiSignatureFrameConfig() {
   };
 }
 
+let fantasyFrameCatalog = [];
+let fantasyFrameCatalogPromise = null;
+
+function ensureFantasyFrameCatalog() {
+  if (!AppState.token || fantasyFrameCatalogPromise) return;
+  fantasyFrameCatalogPromise = BduApi.getIdentityFrames(AppState.token)
+    .then((frames) => {
+      fantasyFrameCatalog = frames.filter((item) => /^(violet|relic)-[1-5]$/.test(item.key)
+        && item.collection === item.key.split('-')[0]
+        && item.asset_url === `/assets/frames/${item.key}.webp`);
+      updateForumUserWidgets();
+      renderForumFeed();
+      const modal = document.getElementById('modal-frame-preview');
+      if (modal && !modal.classList.contains('hidden')) renderFrameCollectionModal();
+    })
+    .catch(() => { fantasyFrameCatalog = []; });
+}
+
+function getFantasyFrameConfig(key) {
+  const item = fantasyFrameCatalog.find((frame) => frame.key === key);
+  if (!item) return null;
+  return {
+    key,
+    scope: item.collection,
+    tier: 'fantasy',
+    frameFamily: 'fantasy',
+    frameSvg: item.asset_url,
+    title: item.label,
+    introEffect: 'elite-pulse',
+    themeKey: item.collection,
+    icon: '✦',
+    rankLabel: 'FANTASY',
+    scopeLabel: item.collection === 'violet' ? 'Tử Tinh' : 'Thánh Vật',
+    badgeText: item.label
+  };
+}
+
 function getAcademicAvatarFrame(rankingData) {
+  ensureFantasyFrameCatalog();
   // 1. Kiểm tra nếu người dùng đang chủ động chọn thử khung (Preview Mode)
   const previewTier = AppState.confession?.framePreview;
   const previewFacultyCode = hasFullFramePreviewAccess() ? 'TH' : normalizeFacultyCode(rankingData);
@@ -6321,6 +6363,7 @@ function getAcademicAvatarFrame(rankingData) {
       : (previewTier === 'top-2' ? 'vien-top' : (previewTier === 'top-4-5' ? 'khoa-top' : (previewTier === 'top-3' ? 'lop-top' : (previewTier === 'top-6-10' ? 'truong-top' : previewTier))));
     const previewAccess = getStudentAcademicUnlockedFrames()?.[previewKey];
     if (!previewAccess?.unlocked) return null;
+    if (getFantasyFrameConfig(previewKey)) return getFantasyFrameConfig(previewKey);
     if (previewTier === 'aidti-bdu') {
       return buildAidtiSignatureFrameConfig();
     } else if (previewTier === 'anime-gojo' || previewTier === 'anime-itachi' || previewTier === 'anime-sukuna') {
@@ -6598,14 +6641,26 @@ const AIDTI_SIGNATURE_FRAME_COLLECTION = [
 ];
 
 function getAcademicFrameCollection(rankingData) {
+  ensureFantasyFrameCatalog();
+  const fantasy = fantasyFrameCatalog.map((item) => ({
+    key: item.key,
+    scope: item.collection,
+    family: 'fantasy',
+    tier: 'fantasy',
+    svg: item.asset_url,
+    icon: '✦',
+    tag: item.collection === 'violet' ? 'TỬ TINH' : 'THÁNH VẬT',
+    title: item.label,
+    desc: item.unlock_hint || 'Điều kiện nhiệm vụ sẽ cập nhật sau'
+  }));
   if (!isThFaculty(rankingData) && !hasFullFramePreviewAccess()) {
-    return [...AIDTI_SIGNATURE_FRAME_COLLECTION, ...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION];
+    return [...AIDTI_SIGNATURE_FRAME_COLLECTION, ...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION, ...fantasy];
   }
   return [...AIDTI_SIGNATURE_FRAME_COLLECTION, ...ANIME_SIGNATURE_FRAME_COLLECTION, ...ACADEMIC_FRAME_COLLECTION.flatMap(item => {
     if (item.key === 'khoa-1') return KHOA_TH_FRAME_COLLECTION;
     if (item.key === 'khoa-top') return [];
     return [item];
-  })];
+  }), ...fantasy];
 }
 
 // Hàm kiểm tra các khung sinh viên được phép xài dựa trên thứ hạng thực tế
@@ -6657,6 +6712,14 @@ function getStudentAcademicUnlockedFrames() {
     'real': { unlocked: true, currentRank: 1, req: 'Mặc định học thuật' }
   };
 
+  fantasyFrameCatalog.forEach((item) => {
+    unlockedFrames[item.key] = {
+      unlocked: false,
+      currentRank: 0,
+      req: item.unlock_hint || 'Điều kiện nhiệm vụ sẽ cập nhật sau'
+    };
+  });
+
   if (hasAnimeFrameAccess()) {
     unlockedFrames['anime-gojo'].unlocked = true;
     unlockedFrames['anime-gojo'].req = 'Độc quyền Signature';
@@ -6686,6 +6749,7 @@ function getStudentAcademicUnlockedFrames() {
 
 // Khởi tạo và kết xuất giao diện bộ sưu tập khung vinh danh
 function renderFrameCollectionModal() {
+  ensureFantasyFrameCatalog();
   const grid = document.getElementById('frame-picker-grid');
   const summaryEl = document.getElementById('frame-picker-user-rank-summary');
   if (!grid) return;
@@ -6761,7 +6825,7 @@ function renderFrameCollectionModal() {
             <div class="mini-avatar-circle">${item.icon}</div>
             ${item.family === 'aidti-bdu'
               ? `<img class="avatar-frame-overlay aidti-frame-art-mini" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`
-              : `<img class="avatar-frame-overlay ${item.art ? 'anime-frame-art-mini' : ''}" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`}
+              : `<img class="avatar-frame-overlay ${item.family === 'fantasy' ? 'fantasy-frame-overlay' : ''} ${item.art ? 'anime-frame-art-mini' : ''}" src="${item.art || item.svg}" alt="${escapeHtml(item.title)}">`}
             ${item.character ? `<img class="anime-frame-character is-${item.characterSide}" src="${item.character}" alt="" loading="lazy" decoding="async">` : ''}
             ${item.family === 'anime-sukuna' ? `<div class="sukuna-domain-stage" aria-hidden="true">
               <span class="sukuna-domain-crest"></span>
@@ -6789,7 +6853,7 @@ function renderFrameCollectionModal() {
 window.handleFrameCardClick = function(key, isUnlocked, reqText) {
   if (!isUnlocked) {
     if (typeof showToast === 'function') {
-      showToast(`🔒 Bạn chưa đạt điều kiện mở khóa khung này! Yêu cầu: ${reqText}. Hãy tiếp tục nâng cao GPA và tín chỉ để đạt chuẩn!`, 'warning');
+      showToast(`🔒 Khung chưa mở khóa. ${reqText}`, 'warning');
     }
     return;
   }
@@ -6879,7 +6943,7 @@ window.selectAvatarFramePreview = function(tier) {
     });
   }
   if (typeof showToast === 'function') {
-    showToast(`Đã trang bị: ${labels[tier] || tier}`, 'success');
+    showToast(`Đã trang bị: ${getFantasyFrameConfig(tier)?.title || labels[tier] || tier}`, 'success');
   }
 };
 
@@ -6926,6 +6990,8 @@ const FRAME_CINEMATIC_THEMES = {
     rgb: '52, 211, 153',
     rarity: 'EPIC'
   },
+  violet: { primary: '#c084fc', secondary: '#8b5cf6', highlight: '#f5d0fe', rgb: '192, 132, 252', rarity: 'FANTASY' },
+  relic: { primary: '#fbbf24', secondary: '#fb7185', highlight: '#fff7ed', rgb: '251, 191, 36', rarity: 'FANTASY' },
   'khoa-th-1': {
     primary: '#00e5ff',
     secondary: '#8b5cf6',
@@ -7030,7 +7096,7 @@ function prepareFrameCinematic(frameInfo) {
   if (title) title.textContent = frameInfo.title;
   if (rank) rank.textContent = frameInfo.rankLabel || `#${frameInfo.rank} ${frameInfo.scopeUpper}`;
   const rarity = theme.rarity || (frameInfo.rank === 1 ? 'LEGENDARY' : (frameInfo.rank === 2 ? 'MYTHIC' : (frameInfo.rank === 3 ? 'EPIC' : 'ELITE')));
-  if (kicker) kicker.textContent = `${rarity} • ${frameInfo.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}`;
+  if (kicker) kicker.textContent = `${rarity} • ${frameInfo.frameFamily === 'fantasy' ? 'BỘ SƯU TẬP FANTASY' : frameInfo.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}`;
 
   if (!particleField || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const particles = document.createDocumentFragment();
@@ -7128,7 +7194,7 @@ function renderAcademicFrameMarkup(frameInfo) {
       <img class="anime-frame-art anime-art-fragment anime-art-fragment-c" src="${safeArt}" alt="" aria-hidden="true">
     </div>${characterMarkup}${awakeningMarkup}`;
   }
-  return `<img class="avatar-frame-overlay" src="${safeSvg}" alt="${safeTitle}">${openingHalves}${characterMarkup}`;
+  return `<img class="avatar-frame-overlay ${frameInfo.frameFamily === 'fantasy' ? 'fantasy-frame-overlay' : ''}" src="${safeSvg}" alt="${safeTitle}">${openingHalves}${characterMarkup}`;
 }
 
 // Cinematic mở khóa: dựng portal, tia sáng, hạt năng lượng và title reveal kiểu game.
@@ -7194,7 +7260,8 @@ function updateForumUserWidgets() {
     heroAvatarWrap.classList.remove(
       'has-frame-top-1', 'has-frame-top-2', 'has-frame-top-3', 'has-frame-top-4-5', 'has-frame-top-6-10',
       'has-frame-scope-truong', 'has-frame-scope-vien', 'has-frame-scope-khoa', 'has-frame-scope-lop', 'has-frame-scope-anime',
-      'has-frame-scope-aidti', 'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi', 'has-frame-anime-sukuna', 'has-frame-aidti-bdu'
+      'has-frame-scope-aidti', 'has-frame-scope-violet', 'has-frame-scope-relic',
+      'has-frame-khoa-th', 'has-frame-anime-gojo', 'has-frame-anime-itachi', 'has-frame-anime-sukuna', 'has-frame-aidti-bdu', 'has-frame-fantasy'
     );
   }
 
@@ -7456,11 +7523,9 @@ function renderConfessionCardHtml(post) {
   // Khung & nhãn xếp hạng học thuật (thay thế hoàn toàn 14 sao)
   const frameInfo = getAcademicAvatarFrame(AppState.academicRanking);
   const postFrameKey = String(post.author?.equipped_frame_id || '').replace(/^frame:/, '').trim();
-  // Chỉ khung Sukuna được phép hiển thị trên avatar bài đăng; các khung khác
-  // vẫn chỉ xuất hiện ở banner/hồ sơ cho tới khi giao diện feed ổn định hơn.
   const postFrame = !isAnon && postFrameKey === 'anime-sukuna'
     ? buildAnimeSignatureFrameConfig(postFrameKey)
-    : null;
+    : (!isAnon ? getFantasyFrameConfig(postFrameKey) : null);
   const inlineFrameMarkup = postFrame ? renderAcademicFrameMarkup(postFrame) : '';
   let rankTagHtml = '';
   if (isAnon) {

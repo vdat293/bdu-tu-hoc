@@ -90,10 +90,10 @@ export const CLAN_ROLE_CAPABILITIES = {
 };
 
 /**
- * Bản đồ dự phòng: Nametag / Danh hiệu đặc thù gắn với Capability
+ * Bản đồ dự phòng: Danh hiệu đặc thù gắn với Capability
  * (Ngay cả khi metadata trong DB chưa kịp đồng bộ)
  */
-export const NAMETAG_CAPABILITIES_MAP = {
+export const TITLE_CAPABILITIES_MAP = {
   'title:ttcds': ['clan:create', 'clan:verified_tag'],
   'ttcds': ['clan:create', 'clan:verified_tag'],
   'achievement:ttcds': ['clan:create', 'clan:verified_tag']
@@ -167,7 +167,7 @@ export const PermissionService = {
   },
 
   /**
-   * Lấy toàn bộ capabilities toàn cục của một sinh viên (System Roles + Nametag grants)
+   * Lấy toàn bộ capabilities toàn cục của một sinh viên (System Roles + Danh hiệu được cấp)
    */
   async getGlobalCapabilities(mssv) {
     const cleanMssv = normalizeMssv(mssv);
@@ -190,7 +190,7 @@ export const PermissionService = {
       roleCaps.forEach((c) => caps.add(c));
     }
 
-    // 3. Lấy Nametag / Entitlements từ identity_entitlement_grants
+    // 3. Lấy danh hiệu / entitlements từ identity_entitlement_grants
     const grantRows = await query(`
       SELECT items.id AS item_id, items.metadata
       FROM identity_entitlement_grants grants
@@ -207,7 +207,7 @@ export const PermissionService = {
       itemCaps.forEach((c) => caps.add(c));
 
       // Từ default mapping
-      const mappedCaps = NAMETAG_CAPABILITIES_MAP[row.item_id] || [];
+      const mappedCaps = TITLE_CAPABILITIES_MAP[row.item_id] || [];
       mappedCaps.forEach((c) => caps.add(c));
     }
 
@@ -221,7 +221,7 @@ export const PermissionService = {
     `, [cleanMssv]);
 
     for (const row of achRes.rows) {
-      const mappedCaps = NAMETAG_CAPABILITIES_MAP[row.achievement_id] || [];
+      const mappedCaps = TITLE_CAPABILITIES_MAP[row.achievement_id] || [];
       mappedCaps.forEach((c) => caps.add(c));
     }
 
@@ -229,7 +229,7 @@ export const PermissionService = {
     const studentRes = await query('SELECT displayed_title_ids FROM students WHERE mssv = $1', [cleanMssv]);
     const titles = Array.isArray(studentRes.rows[0]?.displayed_title_ids) ? studentRes.rows[0].displayed_title_ids : [];
     for (const titleId of titles) {
-      const mappedCaps = NAMETAG_CAPABILITIES_MAP[titleId] || [];
+      const mappedCaps = TITLE_CAPABILITIES_MAP[titleId] || [];
       mappedCaps.forEach((c) => caps.add(c));
     }
 

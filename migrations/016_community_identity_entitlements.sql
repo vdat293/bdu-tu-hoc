@@ -49,9 +49,16 @@ CREATE TABLE IF NOT EXISTS identity_entitlement_grants (
   CONSTRAINT identity_grants_expiry_check CHECK (expires_at IS NULL OR expires_at > starts_at)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS identity_entitlement_active_unique_idx
-  ON identity_entitlement_grants (mssv, item_id)
-  WHERE revoked_at IS NULL;
+-- The newer source-aware index supersedes this legacy index. Migrations are
+-- replayed on startup, so do not recreate it after migration 048 has run.
+DO $$
+BEGIN
+  IF to_regclass('identity_entitlement_source_unique_idx') IS NULL THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS identity_entitlement_active_unique_idx
+      ON identity_entitlement_grants (mssv, item_id)
+      WHERE revoked_at IS NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS identity_entitlement_mssv_idx
   ON identity_entitlement_grants (mssv, revoked_at, expires_at);
@@ -116,12 +123,15 @@ SELECT grants.mssv, 'title:ttcds', 'migration', NULL, grants.note, grants.grante
 FROM manual_achievement_grants grants
 WHERE grants.achievement_id = 'ttcds'
   AND grants.is_active = TRUE
+  AND NOT EXISTS (
+    SELECT 1 FROM identity_entitlement_grants existing
+    WHERE existing.mssv = grants.mssv AND existing.item_id = 'title:ttcds'
+  )
 ON CONFLICT DO NOTHING;
 
 -- Preserve the existing Anime Signature allow-list as data. 24050126 keeps its
 -- all-frame preview capability instead of a frontend-only allow-list.
-INSERT INTO identity_entitlement_grants (mssv, item_id, source, reason)
-VALUES
+WITH seed (mssv, item_id, source, reason) AS (VALUES
   ('24050126', 'capability:frame-preview-all', 'migration', 'Chuyển quyền preview toàn bộ khung từ frontend sang server'),
   ('21050008', 'frame:anime-gojo', 'migration', 'Chuyển quyền Anime Signature từ frontend sang server'),
   ('21050008', 'frame:anime-itachi', 'migration', 'Chuyển quyền Anime Signature từ frontend sang server'),
@@ -135,6 +145,14 @@ VALUES
   ('22050090', 'frame:anime-itachi', 'migration', 'Chuyển quyền Anime Signature từ frontend sang server'),
   ('22050101', 'frame:anime-gojo', 'migration', 'Chuyển quyền Anime Signature từ frontend sang server'),
   ('22050101', 'frame:anime-itachi', 'migration', 'Chuyển quyền Anime Signature từ frontend sang server')
+)
+INSERT INTO identity_entitlement_grants (mssv, item_id, source, reason)
+SELECT seed.mssv, seed.item_id, seed.source, seed.reason
+FROM seed
+WHERE NOT EXISTS (
+  SELECT 1 FROM identity_entitlement_grants existing
+  WHERE existing.mssv = seed.mssv AND existing.item_id = seed.item_id
+)
 ON CONFLICT DO NOTHING;
 
 -- Keep grants addressable even before a recipient's first login. The normal

@@ -181,7 +181,7 @@
       descInput.value = item.description || '';
       manualInput.checked = item.metadata?.manual_grantable !== false;
     } else {
-      title.textContent = 'Tạo Khung / Danh hiệu mới';
+      title.textContent = 'Tạo vật phẩm mới';
       idInput.disabled = false;
       idInput.value = 'frame:';
       typeInput.disabled = false;
@@ -302,8 +302,9 @@
 
       // 2. Phân loại và hiển thị Khung đang sở hữu
       const activeFrames = grants.filter((g) => g.item_type === 'frame' && !g.revoked_at);
-      $('#current-frames-count').textContent = String(activeFrames.length);
-      $('#stat-frames-count').textContent = String(activeFrames.length);
+      const ownedFrameCount = new Set(activeFrames.map((g) => g.item_id)).size;
+      $('#current-frames-count').textContent = String(ownedFrameCount);
+      $('#stat-frames-count').textContent = String(ownedFrameCount);
       const framesList = $('#current-frames-list');
       if (framesList) {
         framesList.innerHTML = activeFrames.length ? activeFrames.map((g) => `
@@ -313,9 +314,9 @@
                 <strong>${escapeHtml(g.label || g.item_id)}</strong>
                 <span class="rarity-badge rarity-${escapeHtml(g.rarity || 'common')}">${escapeHtml(g.rarity || 'thường')}</span>
               </div>
-              <small>${escapeHtml(g.item_id)}${g.reason ? ` · Lý do: ${escapeHtml(g.reason)}` : ''}</small>
+              <small>${escapeHtml(g.item_id)} · Nguồn: ${g.source === 'quest' ? `Nhiệm vụ ${escapeHtml(g.source_ref || '')}` : g.source === 'manual' ? 'Admin' : escapeHtml(g.source || 'Hệ thống')}${g.reason ? ` · Lý do: ${escapeHtml(g.reason)}` : ''}</small>
             </div>
-            <button class="btn-revoke" type="button" data-revoke-grant="${g.id}">Thu hồi</button>
+            <button class="btn-revoke" type="button" data-revoke-grant="${g.id}">Thu hồi nguồn này</button>
           </div>
         `).join('') : '<p class="admin-empty">Sinh viên chưa sở hữu khung nào.</p>';
       }

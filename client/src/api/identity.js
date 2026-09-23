@@ -5,6 +5,11 @@ export async function getMyIdentityPresentation(token, { signal } = {}) {
   return unwrap(data, data);
 }
 
+export async function getIdentityFrames(token, { signal } = {}) {
+  const data = await request('/api/identity/frames', { token, signal, defaultMessage: 'Không thể tải bộ sưu tập khung.' });
+  return unwrap(data, data);
+}
+
 export async function updateMyIdentityPresentation(token, selectedTitleIds) {
   const data = await request('/api/students/me/presentation', {
     method: 'PUT', token, body: { selectedTitleIds }, defaultMessage: 'Không thể cập nhật danh hiệu hiển thị.'

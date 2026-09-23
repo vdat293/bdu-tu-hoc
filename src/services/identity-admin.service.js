@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
+import { IdentityRewardService } from './identity-reward.service.js';
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();
@@ -179,7 +180,7 @@ export const IdentityAdminService = {
     const safeOrder = Number(sortOrder) || 100;
 
     if (!/^(frame|title|capability):[a-z0-9_-]{2,64}$/i.test(cleanId)) {
-      throw httpError('Mã ID không hợp lệ. Phải có tiền tố frame: hoặc title: hoặc capability: (ví dụ: frame:anime-sukuna)');
+      throw httpError('Mã ID không hợp lệ. Phải có tiền tố frame:, title: hoặc capability:.');
     }
     if (!['frame', 'title', 'capability'].includes(cleanType)) {
       throw httpError('Loại item phải là frame, title hoặc capability.');
@@ -309,7 +310,7 @@ export const IdentityAdminService = {
     const cleanMssv = normalizeMssv(mssv);
     if (!cleanMssv) throw httpError('MSSV không hợp lệ.');
     const result = await query(`
-      SELECT grants.id, grants.mssv, grants.item_id, grants.source,
+      SELECT grants.id, grants.mssv, grants.item_id, grants.source, grants.source_ref, grants.evidence,
              grants.granted_by_mssv, grants.reason, grants.starts_at,
              grants.expires_at, grants.revoked_at, grants.revoked_by_mssv,
              grants.revoke_reason, grants.created_at, grants.updated_at,
@@ -343,6 +344,19 @@ export const IdentityAdminService = {
       );
       if (!item.rowCount) throw httpError('Không tìm thấy item đang hoạt động.', 404);
 
+      if (item.rows[0].item_type === 'frame') {
+        const { grant } = await IdentityRewardService.grantFrame({
+          mssv: cleanMssv,
+          itemId: cleanItemId,
+          source: 'manual',
+          actorMssv: cleanActor,
+          reason: cleanReason(reason),
+          startsAt: cleanStartsAt,
+          expiresAt: cleanExpiresAt
+        }, client);
+        return grant;
+      }
+
       await client.query(`
         INSERT INTO students (mssv, full_name, is_active)
         VALUES ($1, '', FALSE)
@@ -353,7 +367,7 @@ export const IdentityAdminService = {
         INSERT INTO identity_entitlement_grants
           (mssv, item_id, source, granted_by_mssv, reason, starts_at, expires_at)
         VALUES ($1, $2, 'manual', $3, $4, $5, $6)
-        ON CONFLICT (mssv, item_id) WHERE revoked_at IS NULL
+        ON CONFLICT (mssv, item_id, source, source_ref) WHERE revoked_at IS NULL
         DO UPDATE SET
           granted_by_mssv = EXCLUDED.granted_by_mssv,
           reason = EXCLUDED.reason,

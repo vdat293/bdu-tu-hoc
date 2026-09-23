@@ -1,4 +1,6 @@
 import { isDatabaseConfigured, query } from '../db/database.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const MAX_DISPLAYED_TITLES = 4;
 const RANK_LIMIT = 10;
@@ -417,9 +419,12 @@ function buildTitleCatalog(row) {
   // Manual titles are catalog data, not frontend allow-lists. Keep them in
   // the same selection surface as achievement titles while preserving their
   // grant metadata for audit/debugging.
+  const seenGrantedTitleIds = new Set();
   (Array.isArray(row.manual_entitlements) ? row.manual_entitlements : [])
     .filter((item) => item.item_type === 'title')
     .forEach((item) => {
+      if (seenGrantedTitleIds.has(item.id)) return;
+      seenGrantedTitleIds.add(item.id);
       titles.push({
         id: item.id,
         label: item.label,
@@ -427,6 +432,7 @@ function buildTitleCatalog(row) {
         tone: item.metadata?.tone || (item.asset_key === 'chatgpt' ? 'chatgpt' : item.asset_key === 'pho-bi-thu-doan' ? 'youth' : 'violet'),
         rarity: item.rarity || 'common',
         asset_key: item.asset_key,
+        gem_asset: item.metadata?.gem_asset || null,
         category: 'manual',
         grant_id: item.grant_id,
         priority: item.display_policy === 'mandatory' ? 1 : 6
@@ -759,7 +765,23 @@ export const IdentityPresentationService = {
   // Catalog khung đang bật, dùng cho các site độc lập (ví dụ /games) để vẽ khung
   // và chọn hiệu ứng cinematic mà không phải nhúng CSS của portal.
   async listFrameCatalog() {
-    if (!isDatabaseConfigured()) return [];
+    if (!isDatabaseConfigured()) {
+      const items = JSON.parse(await fs.readFile(path.resolve(process.cwd(), 'src/config/identity-items.json'), 'utf8'));
+      return items.filter((item) => item.item_type === 'frame').map((item) => ({
+        id: item.id,
+        key: item.asset_key || item.id.replace(/^frame:/, ''),
+        label: item.label,
+        description: item.description || null,
+        rarity: item.rarity || 'common',
+        asset_key: item.asset_key || null,
+        asset_url: item.metadata?.asset_url || null,
+        collection: item.metadata?.collection || null,
+        unlock_hint: item.metadata?.unlock_hint || null,
+        motion: item.metadata?.motion || null,
+        metadata: item.metadata || {},
+        sort_order: Number(item.sort_order || 0)
+      }));
+    }
     const result = await query(`
       SELECT id, label, description, rarity, asset_key, metadata, sort_order
       FROM identity_items
@@ -773,6 +795,9 @@ export const IdentityPresentationService = {
       description: row.description || null,
       rarity: row.rarity || 'common',
       asset_key: row.asset_key || null,
+      asset_url: row.metadata?.asset_url || null,
+      collection: row.metadata?.collection || null,
+      unlock_hint: row.metadata?.unlock_hint || null,
       motion: row.metadata?.motion || null,
       metadata: row.metadata || {},
       sort_order: Number(row.sort_order || 0)
@@ -784,6 +809,7 @@ export const IdentityPresentationInternals = {
   MAX_DISPLAYED_TITLES,
   buildTitleCatalog,
   buildFrameAccess,
+  mapPresentationRow,
   extractProfileIdentity,
   extractProfileAcademicInfo,
   resolveStudentAcademicContext,

@@ -57,6 +57,7 @@ vi.mock('../../client/src/api/community.js', () => ({
 }));
 
 vi.mock('../../client/src/api/identity.js', () => ({
+  getIdentityFrames: vi.fn(() => Promise.resolve({ frames: [] })),
   getMyIdentityPresentation: vi.fn(() => Promise.resolve({ name: 'Sinh viên kiểm thử', selected_titles: [], available_titles: [], frame_access: {} })),
   updateMyEquippedFrame: vi.fn(),
   updateMyIdentityPresentation: vi.fn()

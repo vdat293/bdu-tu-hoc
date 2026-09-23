@@ -298,6 +298,14 @@ const BduApi = {
     return data.data;
   },
 
+  async getIdentityFrames(token) {
+    const response = await fetch('/api/identity/frames', {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+    });
+    const data = await this.handleResponse(response, 'Không thể tải bộ sưu tập khung.');
+    return data.data?.frames || [];
+  },
+
   async updateMyIdentityPresentation(token, selectedTitleIds) {
     const response = await fetch('/api/students/me/presentation', {
       method: 'PUT',

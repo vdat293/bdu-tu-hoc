@@ -101,7 +101,7 @@ export const StudentService = {
   },
 
   /**
-   * Kiểm tra sinh viên có quyền tạo CLB hay không (sở hữu nametag #TTCDS hoặc là Owner)
+   * Kiểm tra sinh viên có quyền tạo CLB hay không (sở hữu danh hiệu #TTCDS hoặc là Owner)
    */
   async canCreateClan(mssv) {
     return PermissionService.can(mssv, 'clan:create');

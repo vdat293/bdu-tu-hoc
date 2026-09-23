@@ -46,6 +46,8 @@ const FRAME_THEMES = {
   'anime-gojo': { primary: '#8ad2ff', secondary: '#5a6cff', highlight: '#eaf6ff' },
   'anime-itachi': { primary: '#ff7b7b', secondary: '#8a4bff', highlight: '#ffe3e3' },
   'anime-sukuna': { primary: '#ff7a9c', secondary: '#6d5bff', highlight: '#ffe0ea' },
+  violet: { primary: '#c084fc', secondary: '#8b5cf6', highlight: '#f5d0fe' },
+  relic: { primary: '#fbbf24', secondary: '#fb7185', highlight: '#fff7ed' },
   default: { primary: '#3ddc97', secondary: '#61a8ff', highlight: '#e9fff6' }
 };
 
@@ -62,15 +64,19 @@ export function frameInfo(frameId) {
   const local = FRAME_ASSETS[key] || null;
   const remote = catalog.get(key) || null;
   const rarity = remote?.rarity || local?.rarity || 'common';
-  const scope = local?.scope || (key.startsWith('anime') ? 'anime' : key.startsWith('aidti') ? 'aidti' : key.split('-')[0]);
+  const remoteAsset = String(remote?.asset_url || remote?.metadata?.asset_url || '');
+  const isFantasy = /^(violet|relic)-[1-5]$/.test(key)
+    && remote?.collection === key.split('-')[0]
+    && remoteAsset === `/assets/frames/${key}.webp`;
+  const scope = (isFantasy ? remote.collection : null) || local?.scope || (key.startsWith('anime') ? 'anime' : key.startsWith('aidti') ? 'aidti' : key.split('-')[0]);
   const theme = FRAME_THEMES[key] || FRAME_THEMES[scope] || (key.startsWith('anime') ? FRAME_THEMES['anime-gojo'] : FRAME_THEMES.default);
   return {
     key,
     label: remote?.label || key,
-    asset: local?.src || null,
+    asset: local?.src || (isFantasy ? remoteAsset : null),
     rarity,
     scope,
-    tier: local?.tier || (rarity === 'legendary' ? 'legendary' : 'plain'),
+    tier: local?.tier || (isFantasy ? 'fantasy' : (rarity === 'legendary' ? 'legendary' : 'plain')),
     theme,
     motion: remote?.motion || null
   };
@@ -107,8 +113,12 @@ export function titleBadgesHtml(titles, max = 4) {
   if (!list.length) return '';
   const shown = list.slice(0, max);
   const more = list.length - shown.length;
-  return `<span class="id-title-badges">${shown.map((title) => `
-    <span class="id-title-badge${title.tone ? ` tone-${esc(title.tone)}` : ''}${title.rarity ? ` rarity-${esc(title.rarity)}` : ''}">${esc(title.label || title.id || '')}</span>`).join('')}${more > 0 ? `<span class="id-title-badge id-title-badge--more">+${more}</span>` : ''}</span>`;
+  return `<span class="id-title-badges">${shown.map((title) => {
+    const gem = ['green', 'blue', 'orange', 'gold', 'pink', 'purple'].includes(title.gem_asset) ? title.gem_asset : '';
+    const gemClass = gem ? ` has-title-gem gem-${gem}` : '';
+    const content = esc(title.label || title.id || '');
+    return `<span class="id-title-badge${title.tone ? ` tone-${esc(title.tone)}` : ''}${title.rarity ? ` rarity-${esc(title.rarity)}` : ''}${gemClass}">${gem ? `<span class="title-gem-backdrop" aria-hidden="true"></span><span class="title-gem-label">${content}</span>` : content}</span>`;
+  }).join('')}${more > 0 ? `<span class="id-title-badge id-title-badge--more">+${more}</span>` : ''}</span>`;
 }
 
 // Danh hiệu riêng của Game Hub (server trả trong `player.game_titles`). Mỗi entry

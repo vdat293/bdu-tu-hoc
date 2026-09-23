@@ -46,10 +46,10 @@ async function runTest() {
       },
       'Phải chặn tạo CLB với mã lỗi 403'
     );
-    console.log('✅ PASSED: Chặn tạo CLB đối với sinh viên không có nametag #TTCDS thành công.');
+    console.log('✅ PASSED: Chặn tạo CLB đối với sinh viên không có danh hiệu #TTCDS thành công.');
 
     // 2. Cấp danh hiệu #TTCDS cho LEADER_MSSV và tạo CLB
-    console.log('--- [Test 2] Cấp nametag #TTCDS và tạo CLB thành công ---');
+    console.log('--- [Test 2] Cấp danh hiệu #TTCDS và tạo CLB thành công ---');
     // Đảm bảo item title:ttcds tồn tại trong identity_items
     await query(`
       INSERT INTO identity_items (id, item_type, label, description, rarity, asset_key, display_policy)
@@ -77,7 +77,7 @@ async function runTest() {
     });
     assert.ok(clan && clan.id, 'Phải tạo được CLB');
     assert.equal(clan.leader_mssv, LEADER_MSSV);
-    console.log('✅ PASSED: Sinh viên có nametag #TTCDS tạo CLB thành công.');
+    console.log('✅ PASSED: Sinh viên có danh hiệu #TTCDS tạo CLB thành công.');
 
     // 3. Gửi yêu cầu xin tham gia CLB (requestJoinClan)
     console.log('--- [Test 3] Sinh viên gửi yêu cầu xin gia nhập CLB ---');

@@ -235,7 +235,7 @@ async function enrichCourseIdentities(records) {
   );
   return records.map((record) => {
     const presentation = presentations.get(record.author?.mssv);
-    if (!presentation) return record;
+    if (!presentation || record.author?.is_anonymous) return record;
     return {
       ...record,
       author: {

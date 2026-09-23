@@ -20074,6 +20074,101 @@ body.theme-dark .learning-drive-icon.github-icon {
   font-weight: 800;
 }
 
+/* Fantasy collection: the transparent source art is sized to its avatar aperture. */
+.has-frame-fantasy .fantasy-frame-overlay {
+  width: 152%;
+  height: 152%;
+  object-fit: contain;
+  animation: frame-subtle-pulse 4.8s ease-in-out infinite alternate;
+}
+
+.has-frame-violet .fantasy-frame-overlay,
+.has-frame-scope-violet .fantasy-frame-overlay {
+  width: 145%;
+  height: 145%;
+  filter: drop-shadow(0 0 7px rgba(192, 132, 252, .45));
+}
+
+.has-frame-relic .fantasy-frame-overlay,
+.has-frame-scope-relic .fantasy-frame-overlay {
+  filter: drop-shadow(0 0 7px rgba(251, 191, 36, .38));
+}
+
+#tab-confession #cfs-hero-avatar-wrap.has-frame-fantasy .avatar-frame-artwork {
+  transform: none;
+}
+
+.mini-avatar-wrap.has-frame-fantasy .fantasy-frame-overlay {
+  width: 152%;
+  height: 152%;
+}
+
+.forum-avatar.has-inline-frame.has-frame-fantasy .fantasy-frame-overlay {
+  width: 160%;
+  height: 160%;
+}
+
+.fantasy-collection-heading {
+  grid-column: 1 / -1;
+  margin: 12px 0 0;
+  font-size: .92rem;
+}
+
+.fantasy-frame-card.is-locked {
+  opacity: .78;
+}
+
+.fantasy-frame-card.is-locked .frame-mini-preview {
+  filter: saturate(.62);
+}
+
+/* Six gemstone title tags: static artwork only. */
+.identity-title-badge.has-title-gem {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 3px 14px;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  overflow: visible;
+  box-shadow: none;
+  animation: none !important;
+  filter: none;
+  line-height: 1.15;
+}
+.identity-title-badge.has-title-gem::before,
+.identity-title-badge.has-title-gem::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+}
+.title-gem-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: -2px;
+  border: 12px solid transparent;
+  border-image-source: var(--title-gem-art);
+  border-image-slice: 28% 24% 28% 24% fill;
+  border-image-width: 12px 15px;
+  border-image-repeat: stretch;
+  pointer-events: none;
+}
+.title-gem-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.identity-title-badge.has-title-gem.gem-green { --title-gem-art: url('/assets/title-tags/green.webp'); color: #062c17 !important; text-shadow: 0 1px 1px rgba(255,255,255,.45); }
+.identity-title-badge.has-title-gem.gem-blue { --title-gem-art: url('/assets/title-tags/blue.webp'); color: #fff !important; text-shadow: 0 1px 2px #06326c; }
+.identity-title-badge.has-title-gem.gem-orange { --title-gem-art: url('/assets/title-tags/orange.webp'); color: #4b2600 !important; text-shadow: 0 1px 1px rgba(255,255,255,.5); }
+.identity-title-badge.has-title-gem.gem-gold { --title-gem-art: url('/assets/title-tags/gold.webp'); color: #4b2600 !important; text-shadow: 0 1px 1px rgba(255,255,255,.5); }
+.identity-title-badge.has-title-gem.gem-pink { --title-gem-art: url('/assets/title-tags/pink.webp'); color: #64132c !important; text-shadow: 0 1px 1px rgba(255,255,255,.5); }
+.identity-title-badge.has-title-gem.gem-purple { --title-gem-art: url('/assets/title-tags/purple.webp'); color: #351271 !important; text-shadow: 0 1px 1px rgba(255,255,255,.5); }
+.identity-title-badge.has-title-gem.gem-blue .title-gem-label { background: rgba(3, 24, 73, .42); border-radius: 3px; padding-inline: 2px; }
+.identity-title-badge.has-title-gem.gem-pink .title-gem-label,
+.identity-title-badge.has-title-gem.gem-purple .title-gem-label { background: rgba(255, 255, 255, .34); border-radius: 3px; padding-inline: 2px; }
+
 .composer-hint {
   font-size: 0.72rem;
   color: var(--text-muted);

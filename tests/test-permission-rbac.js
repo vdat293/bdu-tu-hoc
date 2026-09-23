@@ -51,7 +51,7 @@ async function runPermissionRbacTest() {
       VALUES ($1, 'identity_admin', TRUE);
     `, [ADMIN_MSSV]);
 
-    // Cấp nametag #TTCDS cho TTCDS_MSSV
+    // Cấp danh hiệu #TTCDS cho TTCDS_MSSV
     await query(`
       INSERT INTO identity_items (id, item_type, label, description, rarity, asset_key, display_policy, metadata)
       VALUES ('title:ttcds', 'title', '#TTCDS', 'Trung tâm Chuyển đổi số', 'vip', 'ttcds', 'auto_equip', '{"capabilities":["clan:create"]}')
@@ -77,12 +77,12 @@ async function runPermissionRbacTest() {
     assert.equal(ownerCanRandom, true, 'Owner có wildcard * nên match mọi quyền');
     console.log('✅ PASSED: System Owner sở hữu toàn quyền hệ thống (*).');
 
-    console.log('--- [Test 2] Kiểm thử Quyền Nametag (#TTCDS) ---');
+    console.log('--- [Test 2] Kiểm thử Quyền danh hiệu (#TTCDS) ---');
     const ttcdsCanCreate = await PermissionService.can(TTCDS_MSSV, 'clan:create');
     const regularCanCreate = await PermissionService.can(REGULAR_MSSV, 'clan:create');
     assert.equal(ttcdsCanCreate, true, 'Sinh viên sở hữu #TTCDS phải có quyền clan:create');
     assert.equal(regularCanCreate, false, 'Sinh viên thường không có quyền clan:create');
-    console.log('✅ PASSED: Nametag #TTCDS cấp chính xác capability clan:create.');
+    console.log('✅ PASSED: Danh hiệu #TTCDS cấp chính xác capability clan:create.');
 
     console.log('--- [Test 3] Kiểm thử Phân quyền System Roles (identity_admin) ---');
     const adminCanGrant = await PermissionService.can(ADMIN_MSSV, 'identity:grant');

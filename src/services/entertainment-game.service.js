@@ -234,7 +234,8 @@ async function enrichPlayers(players) {
           label: title.label,
           tone: title.tone || null,
           rarity: title.rarity || null,
-          asset_key: title.asset_key || null
+          asset_key: title.asset_key || null,
+          gem_asset: title.gem_asset || null
         }))
       } : {}),
       stats,

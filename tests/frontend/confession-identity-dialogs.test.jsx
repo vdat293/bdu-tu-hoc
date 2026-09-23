@@ -38,6 +38,7 @@ vi.mock('../../client/src/api/community.js', () => ({
 }));
 
 vi.mock('../../client/src/api/identity.js', () => ({
+  getIdentityFrames: vi.fn(() => Promise.resolve({ frames: [{ key: 'violet-1', label: 'Tử Tinh Sơ Khai', rarity: 'common', collection: 'violet', asset_url: '/assets/frames/violet-1.webp', unlock_hint: 'Điều kiện nhiệm vụ sẽ cập nhật sau' }] })),
   getMyIdentityPresentation: vi.fn(() => Promise.resolve(presentation)),
   updateMyEquippedFrame: vi.fn(),
   updateMyIdentityPresentation: vi.fn()
@@ -108,6 +109,8 @@ describe('Confession identity dialogs', () => {
     expect(screen.getByRole('button', { name: 'Đang dùng tự động' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Đang dùng tự động' })).not.toHaveAttribute('aria-pressed');
     expect(screen.getByRole('button', { name: 'Trang bị' })).not.toHaveAttribute('aria-pressed');
+    await screen.findByText('Tử Tinh Sơ Khai');
+    expect(screen.getByRole('button', { name: 'Chưa mở khóa' })).toBeDisabled();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Bộ Sưu Tập Khung Avatar Vinh Danh/ })).not.toBeInTheDocument());

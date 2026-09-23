@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getStudentProfile } from '../../api/students.js';
+import { getIdentityFrames } from '../../api/identity.js';
 import { useAuth } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import {
@@ -10,7 +11,8 @@ import {
   TitleBadges,
   getEquippedFrame,
   getFrameCinematicMetadata,
-  getIdentityName
+  getIdentityName,
+  setFrameCatalog
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
 
@@ -67,6 +69,17 @@ export default function ConfessionProfilePage() {
     queryFn: ({ signal }) => getStudentProfile(token, mssv, { signal }),
     enabled: Boolean(token && mssv),
     staleTime: 60_000
+  });
+
+  useQuery({
+    queryKey: ['identity-frames'],
+    queryFn: async ({ signal }) => {
+      const data = await getIdentityFrames(token, { signal });
+      setFrameCatalog(data.frames);
+      return data;
+    },
+    enabled: Boolean(token),
+    staleTime: 5 * 60 * 1000
   });
 
   const profile = profileQuery.data || null;
@@ -189,7 +202,7 @@ export default function ConfessionProfilePage() {
           <div ref={announcementRef} className="frame-unlock-announcement" aria-hidden="true">
             <span className="frame-unlock-kicker">
               {equippedFrame
-                ? `${frameMeta?.theme?.rarity || 'VINH DANH'} • ${equippedFrame.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'HỌC THUẬT'}`
+                ? `${frameMeta?.theme?.rarity || 'VINH DANH'} • ${equippedFrame.family === 'fantasy' ? 'FANTASY' : equippedFrame.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'HỌC THUẬT'}`
                 : 'VINH DANH HỌC THUẬT'}
             </span>
             <strong>{equippedFrame?.title || 'THÀNH VIÊN BDU'}</strong>

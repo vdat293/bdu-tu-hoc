@@ -42,7 +42,9 @@
     "metadata": {
       "manual_grantable": true,
       "source": "config",
-      "capabilities": ["clan:create"]
+      "capabilities": [
+        "clan:create"
+      ]
     }
   },
   {
@@ -475,6 +477,312 @@
     "metadata": {
       "manual_grantable": false,
       "source": "config"
+    }
+  },
+  {
+    "id": "frame:violet-1",
+    "item_type": "frame",
+    "label": "Tử Tinh Sơ Khai",
+    "description": "Khung fantasy bộ Tử Tinh.",
+    "rarity": "common",
+    "asset_key": "violet-1",
+    "display_policy": "optional",
+    "sort_order": 60,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "violet",
+      "asset_url": "/assets/frames/violet-1.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:violet-2",
+    "item_type": "frame",
+    "label": "Tử Vũ Khai Hoa",
+    "description": "Khung fantasy bộ Tử Tinh.",
+    "rarity": "rare",
+    "asset_key": "violet-2",
+    "display_policy": "optional",
+    "sort_order": 61,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "violet",
+      "asset_url": "/assets/frames/violet-2.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:violet-3",
+    "item_type": "frame",
+    "label": "Tử Miện Huyền Quang",
+    "description": "Khung fantasy bộ Tử Tinh.",
+    "rarity": "epic",
+    "asset_key": "violet-3",
+    "display_policy": "optional",
+    "sort_order": 62,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "violet",
+      "asset_url": "/assets/frames/violet-3.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:violet-4",
+    "item_type": "frame",
+    "label": "Tử Tinh Hộ Giới",
+    "description": "Khung fantasy bộ Tử Tinh.",
+    "rarity": "epic",
+    "asset_key": "violet-4",
+    "display_policy": "optional",
+    "sort_order": 63,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "violet",
+      "asset_url": "/assets/frames/violet-4.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:violet-5",
+    "item_type": "frame",
+    "label": "Tử Vương Tinh Vực",
+    "description": "Khung fantasy bộ Tử Tinh.",
+    "rarity": "legendary",
+    "asset_key": "violet-5",
+    "display_policy": "optional",
+    "sort_order": 64,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "violet",
+      "asset_url": "/assets/frames/violet-5.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:relic-1",
+    "item_type": "frame",
+    "label": "Hổ Phách Hỏa Tinh",
+    "description": "Khung fantasy bộ Thánh Vật.",
+    "rarity": "epic",
+    "asset_key": "relic-1",
+    "display_policy": "optional",
+    "sort_order": 65,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "relic",
+      "asset_url": "/assets/frames/relic-1.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:relic-2",
+    "item_type": "frame",
+    "label": "Kim Tinh Vương Miện",
+    "description": "Khung fantasy bộ Thánh Vật.",
+    "rarity": "legendary",
+    "asset_key": "relic-2",
+    "display_policy": "optional",
+    "sort_order": 66,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "relic",
+      "asset_url": "/assets/frames/relic-2.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:relic-3",
+    "item_type": "frame",
+    "label": "Bạch Dực Hồng Tâm",
+    "description": "Khung fantasy bộ Thánh Vật.",
+    "rarity": "legendary",
+    "asset_key": "relic-3",
+    "display_policy": "optional",
+    "sort_order": 67,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "relic",
+      "asset_url": "/assets/frames/relic-3.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:relic-4",
+    "item_type": "frame",
+    "label": "Thạch Ấn Cổ Vệ",
+    "description": "Khung fantasy bộ Thánh Vật.",
+    "rarity": "common",
+    "asset_key": "relic-4",
+    "display_policy": "optional",
+    "sort_order": 68,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "relic",
+      "asset_url": "/assets/frames/relic-4.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "frame:relic-5",
+    "item_type": "frame",
+    "label": "Đồng Giáp Lam Quang",
+    "description": "Khung fantasy bộ Thánh Vật.",
+    "rarity": "rare",
+    "asset_key": "relic-5",
+    "display_policy": "optional",
+    "sort_order": 69,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "collection": "relic",
+      "asset_url": "/assets/frames/relic-5.webp",
+      "unlock_hint": "Điều kiện nhiệm vụ sẽ cập nhật sau",
+      "reward_sources": [
+        "manual",
+        "quest"
+      ]
+    }
+  },
+  {
+    "id": "title:ngoc-luc-bao",
+    "item_type": "title",
+    "label": "#Ngọc Lục Bảo",
+    "description": "Danh hiệu mới với nền ngọc Ngọc Lục Bảo.",
+    "rarity": "rare",
+    "asset_key": "ngoc-luc-bao",
+    "display_policy": "optional",
+    "sort_order": 70,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "emerald",
+      "gem_asset": "green"
+    }
+  },
+  {
+    "id": "title:lam-tinh",
+    "item_type": "title",
+    "label": "#Lam Tinh",
+    "description": "Danh hiệu mới với nền ngọc Lam Tinh.",
+    "rarity": "rare",
+    "asset_key": "lam-tinh",
+    "display_policy": "optional",
+    "sort_order": 71,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "blue",
+      "gem_asset": "blue"
+    }
+  },
+  {
+    "id": "title:ho-phach",
+    "item_type": "title",
+    "label": "#Hổ Phách",
+    "description": "Danh hiệu mới với nền ngọc Hổ Phách.",
+    "rarity": "rare",
+    "asset_key": "ho-phach",
+    "display_policy": "optional",
+    "sort_order": 72,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "bronze",
+      "gem_asset": "orange"
+    }
+  },
+  {
+    "id": "title:kim-quang",
+    "item_type": "title",
+    "label": "#Kim Quang",
+    "description": "Danh hiệu mới với nền ngọc Kim Quang.",
+    "rarity": "epic",
+    "asset_key": "kim-quang",
+    "display_policy": "optional",
+    "sort_order": 73,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "gold",
+      "gem_asset": "gold"
+    }
+  },
+  {
+    "id": "title:hong-ngoc",
+    "item_type": "title",
+    "label": "#Hồng Ngọc",
+    "description": "Danh hiệu mới với nền ngọc Hồng Ngọc.",
+    "rarity": "epic",
+    "asset_key": "hong-ngoc",
+    "display_policy": "optional",
+    "sort_order": 74,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "charm",
+      "gem_asset": "pink"
+    }
+  },
+  {
+    "id": "title:tu-tinh",
+    "item_type": "title",
+    "label": "#Tử Tinh",
+    "description": "Danh hiệu mới với nền ngọc Tử Tinh.",
+    "rarity": "legendary",
+    "asset_key": "tu-tinh",
+    "display_policy": "optional",
+    "sort_order": 75,
+    "metadata": {
+      "manual_grantable": true,
+      "source": "config",
+      "tone": "violet",
+      "gem_asset": "purple"
     }
   },
   {

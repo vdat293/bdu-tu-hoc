@@ -195,3 +195,45 @@
   .fx-rays { width: 360px; height: 360px; }
   .fx-name { font-size: 18px; }
 }
+
+.id-avatar--tier-fantasy .id-avatar-frame {
+  inset: -28%;
+  width: 156%;
+  height: 156%;
+}
+
+.id-title-badge.has-title-gem {
+  position: relative;
+  isolation: isolate;
+  min-height: 23px;
+  padding: 2px 11px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
+  animation: none !important;
+  text-shadow: none;
+  filter: none;
+}
+.id-title-badge.has-title-gem .title-gem-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: -2px;
+  border: 10px solid transparent;
+  border-image-source: var(--title-gem-art);
+  border-image-slice: 28% 24% 28% 24% fill;
+  border-image-width: 10px 13px;
+  border-image-repeat: stretch;
+  pointer-events: none;
+}
+.id-title-badge.has-title-gem .title-gem-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.id-title-badge.has-title-gem.gem-green { --title-gem-art: url('/assets/title-tags/green.webp'); color: #062c17; }
+.id-title-badge.has-title-gem.gem-blue { --title-gem-art: url('/assets/title-tags/blue.webp'); color: #fff; text-shadow: 0 1px 2px #06326c; }
+.id-title-badge.has-title-gem.gem-orange { --title-gem-art: url('/assets/title-tags/orange.webp'); color: #4b2600; }
+.id-title-badge.has-title-gem.gem-gold { --title-gem-art: url('/assets/title-tags/gold.webp'); color: #4b2600; }
+.id-title-badge.has-title-gem.gem-pink { --title-gem-art: url('/assets/title-tags/pink.webp'); color: #64132c; }
+.id-title-badge.has-title-gem.gem-purple { --title-gem-art: url('/assets/title-tags/purple.webp'); color: #351271; }
+.id-title-badge.has-title-gem.gem-blue .title-gem-label { background: rgba(3, 24, 73, .42); border-radius: 3px; padding-inline: 2px; }
+.id-title-badge.has-title-gem.gem-pink .title-gem-label,
+.id-title-badge.has-title-gem.gem-purple .title-gem-label { background: rgba(255, 255, 255, .34); border-radius: 3px; padding-inline: 2px; }

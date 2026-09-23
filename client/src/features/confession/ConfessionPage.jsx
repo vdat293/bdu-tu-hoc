@@ -11,7 +11,7 @@ import {
   addCommunityPostComment,
   updateCommunityPost
 } from '../../api/community.js';
-import { getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
+import { getIdentityFrames, getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
 import { useAuth, useRealtimeRoom, useRealtimeStatus, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
@@ -20,12 +20,14 @@ import {
   FrameArtwork,
   getAutomaticFrame,
   getEquippedFrame,
+  getFantasyFrames,
   getFrameOptions,
   getFrameCinematicMetadata,
   getIdentityName,
   getIdentityPhoto,
   getInitials,
-  TitleBadges
+  TitleBadges,
+  setFrameCatalog
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
@@ -750,9 +752,8 @@ function PostDetailModal({
   const isAnon = Boolean(post.author?.is_anonymous);
   const authorName = isAnon ? 'Sinh viên giấu tên' : post.author?.name || 'Sinh viên BDU';
   const author = postAvatarUser(post, viewer, presentation);
-  const postFrame = !isAnon && getEquippedFrame(post.author?.equipped_frame_id)?.family === 'anime-sukuna'
-    ? getEquippedFrame(post.author?.equipped_frame_id)
-    : null;
+  const equippedPostFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
+  const postFrame = ['anime-sukuna', 'fantasy'].includes(equippedPostFrame?.family) ? equippedPostFrame : null;
   const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
   const isFbModal = isFacebookSourcePost(post);
   const focusComposer = () => composerInputRef.current?.focus();
@@ -930,6 +931,17 @@ export default function ConfessionPage() {
     staleTime: 5 * 60 * 1000
   });
 
+  useQuery({
+    queryKey: ['identity-frames'],
+    queryFn: async ({ signal }) => {
+      const data = await getIdentityFrames(auth.token, { signal });
+      setFrameCatalog(data.frames);
+      return data;
+    },
+    enabled: Boolean(auth.token),
+    staleTime: 5 * 60 * 1000
+  });
+
   const profileQuery = useQuery({
     queryKey: ['profile', auth.user?.mssv],
     queryFn: ({ signal }) => getProfile(auth.token, { idsv: auth.user?.idsv, mssv: auth.user?.mssv, signal }),
@@ -1095,6 +1107,7 @@ export default function ConfessionPage() {
   const selectedTitles = presentation?.selected_titles?.length ? presentation.selected_titles : [memberTitle()];
   const equippedFrame = getEquippedFrame(presentation?.equipped_frame_id) || getAutomaticFrame(rankingQuery.data);
   const frameOptions = getFrameOptions(presentation?.frame_access);
+  const fantasyFrames = getFantasyFrames(presentation?.frame_access);
   const identityUser = { ...auth.user, name: displayName, photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data) };
   const frameCinematic = getFrameCinematicMetadata(equippedFrame);
   const identityReady = presentationQuery.isFetched && profileQuery.isFetched;
@@ -1245,7 +1258,7 @@ export default function ConfessionPage() {
           </button>
 
           <div ref={frameAnnouncementRef} id="frame-unlock-announcement" className="frame-unlock-announcement" aria-hidden="true">
-            <span className="frame-unlock-kicker">{frameCinematic ? `${frameCinematic.theme.rarity} • ${equippedFrame?.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}` : 'VINH DANH HỌC THUẬT'}</span>
+            <span className="frame-unlock-kicker">{frameCinematic ? `${frameCinematic.theme.rarity} • ${equippedFrame?.family === 'fantasy' ? 'BỘ SƯU TẬP FANTASY' : equippedFrame?.scope === 'anime' ? 'DOMAIN SIGNATURE' : 'VINH DANH HỌC THUẬT'}` : 'VINH DANH HỌC THUẬT'}</span>
             <strong id="frame-unlock-title">{equippedFrame?.title || 'KHUNG HUYỀN THOẠI'}</strong>
             <span id="frame-unlock-rank">{frameCinematic?.rankLabel || 'TOP 1 TOÀN TRƯỜNG'}</span>
           </div>
@@ -1416,9 +1429,7 @@ export default function ConfessionPage() {
                 const isLiked = Boolean(post.is_liked);
                 const author = postAvatarUser(post, identityUser, presentation);
                 const equippedPostFrame = !isAnon ? getEquippedFrame(post.author?.equipped_frame_id) : null;
-                // Only the Sukuna signature is allowed on forum avatars for now;
-                // every other equipped frame stays on the hero/identity surfaces.
-                const postFrame = equippedPostFrame?.family === 'anime-sukuna' ? equippedPostFrame : null;
+                const postFrame = ['anime-sukuna', 'fantasy'].includes(equippedPostFrame?.family) ? equippedPostFrame : null;
                 const authorTitles = titlesForPost(post, auth.user, presentation);
                 const scopeLabel = post.scope === 'faculty' ? 'Viện / Khoa' : post.scope === 'institute' ? 'Viện' : post.scope === 'clan' ? 'CLB / Nhóm' : 'Toàn trường';
                 const isFb = isFacebookSourcePost(post);
@@ -1947,7 +1958,7 @@ export default function ConfessionPage() {
                   <span className="frame-picker-title-full" aria-hidden="true">Bộ Sưu Tập Khung Avatar Vinh Danh</span>
                   <span className="frame-picker-title-short" aria-hidden="true">Khung đại diện</span>
                 </h3>
-                <p id="frame-picker-description">Chỉ hiển thị các khung đã được hệ thống mở khóa cho bạn.</p>
+                <p id="frame-picker-description">Xem trước bộ khung fantasy và trang bị những khung bạn đã mở khóa.</p>
               </div>
               <button ref={frameCloseButtonRef} type="button" className="identity-dialog-close" onClick={closeFramePicker} title="Đóng" aria-label="Đóng bộ sưu tập khung">✕</button>
             </header>
@@ -2004,12 +2015,39 @@ export default function ConfessionPage() {
                     </article>
                   );
                 })}
+                {fantasyFrames.length > 0 && <h4 className="fantasy-collection-heading">Bộ sưu tập Fantasy</h4>}
+                {fantasyFrames.map((frame) => {
+                  const isActive = presentation?.equipped_frame_id === `frame:${frame.key}`;
+                  return (
+                    <article className={`frame-option-card fantasy-frame-card ${frame.locked ? 'is-locked' : 'is-unlocked'} ${isActive ? 'is-active' : ''}`} key={frame.key}>
+                      <div className="frame-mini-preview">
+                        <div className={`mini-avatar-wrap has-frame-fantasy has-frame-${frame.collection}`}>
+                          <div className="mini-avatar-circle"><AvatarContent user={identityUser} presentation={presentation} /></div>
+                          <FrameArtwork frame={frame} />
+                        </div>
+                      </div>
+                      <div className="frame-option-info">
+                        <span className={`frame-tag tier-${frame.rarity}`}>{frame.collection === 'violet' ? 'TỬ TINH' : 'THÁNH VẬT'} · {frame.rarity.toUpperCase()}</span>
+                        <h4>{frame.title}</h4>
+                        <p>{frame.locked ? frame.unlockHint : (isActive ? 'Khung này đang hiển thị.' : 'Có thể trang bị ngay.')}</p>
+                        <div className="frame-option-action-row">
+                          {isActive && <span className="frame-equipped-state">Đang trang bị</span>}
+                          <button type="button" className="btn btn-primary btn-sm frame-option-action"
+                            onClick={() => equipFrame.mutate(frame.key)}
+                            disabled={equipFrame.isPending || frame.locked || isActive}>
+                            {frame.locked ? 'Chưa mở khóa' : (isActive ? 'Đang dùng' : 'Trang bị')}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
-              {!frameOptions.length && <p className="frame-picker-empty">Bạn chưa mở khóa khung riêng nào. Khung tự động sẽ cập nhật theo thành tích của bạn.</p>}
+              {!frameOptions.length && !fantasyFrames.length && <p className="frame-picker-empty">Bạn chưa mở khóa khung riêng nào. Khung tự động sẽ cập nhật theo thành tích của bạn.</p>}
             </div>
 
             <footer className="frame-picker-footer">
-              <span>Thành tích mới sẽ tự mở khóa khung tương ứng.</span>
+              <span>Khung thành tích mở theo xếp hạng; khung Fantasy hiện do admin cấp quyền.</span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={closeFramePicker}>
                 Đóng
               </button>

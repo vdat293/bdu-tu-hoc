@@ -1,6 +1,6 @@
 const TITLE_TONES = new Set(['member', 'gold', 'silver', 'bronze', 'blue', 'emerald', 'violet', 'youth', 'chatgpt', 'charm', 'ai']);
 const TITLE_RARITIES = new Set(['rare', 'epic', 'legendary', 'vip', 'youth', 'ai', 'charm']);
-
+const TITLE_GEM_ASSETS = new Set(['green', 'blue', 'orange', 'gold', 'pink', 'purple']);
 function imageUrl(value) {
   if (!value) return '';
   if (/^(https?:|data:|\/)/.test(value)) return value;
@@ -67,15 +67,19 @@ export function TitleBadges({ titles = [], className = '' }) {
         const itemKey = titleKey(title);
         const tone = TITLE_TONES.has(title?.tone) ? title.tone : 'member';
         const rarity = TITLE_RARITIES.has(title?.rarity) ? `rarity-${title.rarity}` : '';
+        const gemAsset = TITLE_GEM_ASSETS.has(title?.gem_asset) ? title.gem_asset : null;
         return (
           <span
-            className={`identity-title-badge tone-${tone} ${rarity} ${itemKey ? `title-${itemKey}` : ''}`.trim()}
+            className={`identity-title-badge tone-${tone} ${rarity} ${gemAsset ? `has-title-gem gem-${gemAsset}` : ''} ${itemKey ? `title-${itemKey}` : ''}`.trim()}
             data-title-id={title?.id || ''}
             key={title?.id || `${title?.label || 'title'}-${index}`}
             title={title?.detail || title?.label || ''}
           >
+            {gemAsset && <span className="title-gem-backdrop" aria-hidden="true" />}
             <TitleIcon title={title} itemKey={itemKey} />
-            {title?.label || title?.name || title?.title || title?.code || 'Danh hiệu BDU'}
+            {gemAsset
+              ? <span className="title-gem-label">{title?.label || title?.name || title?.title || title?.code || 'Danh hiệu BDU'}</span>
+              : (title?.label || title?.name || title?.title || title?.code || 'Danh hiệu BDU')}
           </span>
         );
       })}
@@ -116,6 +120,39 @@ const FRAME_DEFINITIONS = {
   }
 };
 
+const catalogFrames = new Map();
+
+export function setFrameCatalog(frames) {
+  catalogFrames.clear();
+  for (const item of Array.isArray(frames) ? frames : []) {
+    const key = String(item?.key || '').trim();
+    const src = String(item?.asset_url || item?.metadata?.asset_url || '');
+    const collection = String(item?.collection || item?.metadata?.collection || '');
+    if (!/^(violet|relic)-[1-5]$/.test(key) || collection !== key.split('-')[0] || src !== `/assets/frames/${key}.webp`) continue;
+    catalogFrames.set(key, {
+      key,
+      title: item.label || key,
+      description: item.description || '',
+      rarity: item.rarity || 'common',
+      collection,
+      unlockHint: item.unlock_hint || item.metadata?.unlock_hint || 'Điều kiện nhiệm vụ sẽ cập nhật sau',
+      tier: 'fantasy',
+      scope: collection,
+      family: 'fantasy',
+      themeKey: collection,
+      introEffect: 'elite-pulse',
+      rank: 0,
+      src
+    });
+  }
+}
+
+export function getFantasyFrames(frameAccess) {
+  const owned = new Set(Array.isArray(frameAccess?.keys) ? frameAccess.keys : []);
+  return [...catalogFrames.values()]
+    .map((frame) => ({ ...frame, locked: !(frameAccess?.all || owned.has(frame.key)) }));
+}
+
 export const FRAME_CINEMATIC_THEMES = {
   'truong-1': { primary: '#22d3ee', secondary: '#8b5cf6', highlight: '#fef3c7', rgb: '34, 211, 238', rarity: 'SOVEREIGN' },
   'truong-2': { primary: '#60a5fa', secondary: '#6366f1', highlight: '#f8fafc', rgb: '96, 165, 250', rarity: 'CELESTIAL' },
@@ -131,7 +168,9 @@ export const FRAME_CINEMATIC_THEMES = {
   'anime-gojo': { primary: '#67e8f9', secondary: '#8b5cf6', highlight: '#f0f9ff', rgb: '103, 232, 249', rarity: 'LIMITLESS' },
   'anime-itachi': { primary: '#ef4444', secondary: '#0a0a0f', highlight: '#fecaca', rgb: '239, 68, 68', rarity: 'GENJUTSU' },
   'anime-sukuna': { primary: '#fb7185', secondary: '#312e81', highlight: '#fde68a', rgb: '251, 113, 133', rarity: 'MALEVOLENT' },
-  'aidti-bdu': { primary: '#ef233c', secondary: '#2563eb', highlight: '#ffffff', rgb: '239, 35, 60', rarity: 'AIDTI SIGNATURE' }
+  'aidti-bdu': { primary: '#ef233c', secondary: '#2563eb', highlight: '#ffffff', rgb: '239, 35, 60', rarity: 'AIDTI SIGNATURE' },
+  violet: { primary: '#c084fc', secondary: '#8b5cf6', highlight: '#f5d0fe', rgb: '192, 132, 252', rarity: 'FANTASY' },
+  relic: { primary: '#fbbf24', secondary: '#fb7185', highlight: '#fff7ed', rgb: '251, 191, 36', rarity: 'FANTASY' }
 };
 
 export function getFrameCinematicMetadata(frame) {
@@ -141,13 +180,13 @@ export function getFrameCinematicMetadata(frame) {
     ...frame,
     theme,
     introEffect: frame.introEffect || 'elite-pulse',
-    rankLabel: frame.rank > 0 ? `#${frame.rank} ${String(frame.scope || '').toUpperCase()}` : frame.scope === 'aidti' ? 'TRUNG TÂM CHUYỂN ĐỔI SỐ' : 'SIGNATURE'
+    rankLabel: frame.rank > 0 ? `#${frame.rank} ${String(frame.scope || '').toUpperCase()}` : frame.scope === 'aidti' ? 'TRUNG TÂM CHUYỂN ĐỔI SỐ' : frame.family === 'fantasy' ? 'FANTASY' : 'SIGNATURE'
   };
 }
 
 export function getEquippedFrame(frameId) {
   const key = String(frameId || '').replace(/^frame:/, '').trim();
-  return FRAME_DEFINITIONS[key] ? { key, ...FRAME_DEFINITIONS[key] } : null;
+  return FRAME_DEFINITIONS[key] ? { key, ...FRAME_DEFINITIONS[key] } : (catalogFrames.get(key) || null);
 }
 
 export function getFrameOptions(frameAccess) {
@@ -221,7 +260,7 @@ export function FrameArtwork({ frame }) {
       </div>}
     </div>;
   }
-  return <div className="avatar-frame-artwork"><img className="avatar-frame-overlay" src={frame.src} alt={`Khung ${frame.title}`} decoding="async" /></div>;
+  return <div className="avatar-frame-artwork"><img className={`avatar-frame-overlay${frame.family === 'fantasy' ? ' fantasy-frame-overlay' : ''}`} src={frame.src} alt={`Khung ${frame.title}`} decoding="async" /></div>;
 }
 
 export function IdentitySummary({ user, presentation }) {
