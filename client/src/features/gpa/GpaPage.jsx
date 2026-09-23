@@ -14,6 +14,24 @@ import {
   getSemesters,
   latestSummary
 } from './grades.js';
+import {
+  computeCumulativeSimulation,
+  computeSemesterSimulation,
+  FORMULAS,
+  formulaDescription,
+  getFormula,
+  getRealMidterm,
+  getSemesterId,
+  isKnownFormula,
+  isSimulatable,
+  isValidScore,
+  loadSimState,
+  makeSimKey,
+  parseScore,
+  projectedCredits,
+  resolveSimulatedCourse,
+  saveSimState
+} from './simulate.js';
 
 function downloadCsv(content, filename) {
   const link = document.createElement('a');
@@ -157,6 +175,15 @@ function extractComponentDetailList(course) {
   return list;
 }
 
+function formatCount(value) {
+  if (value === null || value === undefined) return '--';
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function finiteOrNull(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
 export default function GpaPage() {
   const auth = useAuth();
   const [params, setParams] = useSearchParams();
@@ -164,10 +191,45 @@ export default function GpaPage() {
   const status = params.get('status') || 'ALL';
   const queryText = params.get('q') || '';
   const [selectedCourse, setSelectedCourse] = useState(null);
+  // Tính thử điểm còn thiếu: mặc định là bảng điểm bình thường.
+  // Bấm nút mở → bắt buộc hiện hộp thoại → xác nhận mới vào phiên tính thử.
+  const [simEntries, setSimEntries] = useState({});
+  const [simLoadedFor, setSimLoadedFor] = useState('');
+  const [expandedSim, setExpandedSim] = useState({});
+  const [pendingSimSem, setPendingSimSem] = useState(null);
+  const [disclaimerChecked, setDisclaimerChecked] = useState(false);
   const isPhoneViewport = usePhoneViewport();
   const detailDialogRef = useRef(null);
   const detailCloseRef = useRef(null);
   const detailOpenerRef = useRef(null);
+  const simDialogRef = useRef(null);
+  const simCloseRef = useRef(null);
+  const simOpenerRef = useRef(null);
+
+  const storageKey = (auth.user?.mssv || 'guest').toString().trim() || 'guest';
+
+  // Nạp điểm tính thử đã lưu trên máy này (theo từng MSSV).
+  // Kỳ nào còn điểm thử dở dang thì mở sẵn phiên đó để sinh viên làm tiếp.
+  useEffect(() => {
+    if (simLoadedFor === storageKey) return;
+    const saved = loadSimState(typeof window !== 'undefined' ? window.localStorage : null, storageKey);
+    setSimEntries(saved.entries);
+    setSimLoadedFor(storageKey);
+    setExpandedSim((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(saved.entries)) {
+        const sep = key.indexOf('::');
+        if (sep > 0) next[key.slice(0, sep)] = true;
+      }
+      return next;
+    });
+  }, [simLoadedFor, storageKey]);
+
+  // Lưu tạm mỗi khi sinh viên nhập (vẫn chỉ nằm trên máy này).
+  useEffect(() => {
+    if (simLoadedFor !== storageKey) return;
+    saveSimState(typeof window !== 'undefined' ? window.localStorage : null, storageKey, { ack: true, entries: simEntries });
+  }, [simEntries, simLoadedFor, storageKey]);
 
   const grades = useQuery({
     queryKey: ['grades', auth.user?.mssv],
@@ -262,10 +324,124 @@ export default function GpaPage() {
     setSelectedCourse({ ...course, sem_name: semTitle });
   };
 
+  const closeSimDisclaimer = () => {
+    setPendingSimSem(null);
+    setDisclaimerChecked(false);
+  };
+
+  useViewportDialog(
+    Boolean(pendingSimSem),
+    closeSimDisclaimer,
+    simDialogRef,
+    simCloseRef,
+    simOpenerRef
+  );
+
+  // Mỗi lần bấm nút mở từ trạng thái bình thường đều bắt buộc hiện hộp thoại.
+  const requestSimExpand = (semId, opener) => {
+    simOpenerRef.current = opener || null;
+    setDisclaimerChecked(false);
+    setPendingSimSem(semId);
+  };
+
+  const confirmSimDisclaimer = () => {
+    if (!disclaimerChecked || !pendingSimSem) return;
+    setExpandedSim((prev) => ({ ...prev, [pendingSimSem]: true }));
+    setPendingSimSem(null);
+    setDisclaimerChecked(false);
+  };
+
+  const setSimValue = (semId, maMon, field, value) => {
+    // Chỉ giữ số và dấu chấm/phẩy thập phân để ô nhập luôn hợp lệ.
+    const cleaned = String(value ?? '').replace(/[^\d.,]/g, '').slice(0, 5);
+    const key = makeSimKey(semId, maMon);
+    setSimEntries((prev) => {
+      const prevEntry = prev[key] || { gk: '', ck: '' };
+      const nextEntry = { ...prevEntry, [field]: cleaned };
+      if (nextEntry.gk === '' && nextEntry.ck === '' && !nextEntry.formula) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: nextEntry };
+    });
+  };
+
+  const clearSemesterSim = (semId) => {
+    setSimEntries((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(`${semId}::`)) delete next[key];
+      }
+      return next;
+    });
+  };
+
+  const setSimFormula = (semId, maMon, formulaId) => {
+    if (!isKnownFormula(formulaId)) return;
+    const key = makeSimKey(semId, maMon);
+    setSimEntries((prev) => {
+      const prevEntry = prev[key] || { gk: '', ck: '' };
+      return { ...prev, [key]: { ...prevEntry, formula: String(formulaId) } };
+    });
+  };
+
+  // Kết thúc dự đoán của một học kỳ: xóa điểm thử kỳ đó và về lại bảng bình thường.
+  const endSemesterSim = (semId) => {
+    clearSemesterSim(semId);
+    setExpandedSim((prev) => ({ ...prev, [semId]: false }));
+  };
+
+  // Kết thúc toàn bộ dự đoán: xóa mọi điểm thử và về lại bảng điểm bình thường.
+  const endAllSim = () => {
+    setSimEntries({});
+    setExpandedSim({});
+  };
+
+  const formatSimGpa = (value) => (value === null || value === undefined ? '--' : Number(value).toFixed(2));
+
+  // GPA tính thử theo từng học kỳ (tính trên toàn bộ môn của kỳ, không theo bộ lọc).
+  const simInfoBySem = useMemo(() => {
+    const map = {};
+    for (const sem of semesters) {
+      const semId = getSemesterId(sem);
+      map[semId] = computeSemesterSimulation(sem.ds_diem_mon_hoc || [], simEntries, semId);
+    }
+    return map;
+  }, [semesters, simEntries]);
+
+  const cumulativeSim = useMemo(
+    () => computeCumulativeSimulation(semesters, simEntries),
+    [semesters, simEntries]
+  );
+
+  const hasAnySim = useMemo(
+    () => Object.values(simInfoBySem).some((info) => info?.hasSimulation),
+    [simInfoBySem]
+  );
+
+  // Khi đang tính thử: số thử lên làm số chính, số thật xuống dòng phụ.
+  const showSimHero = hasAnySim && cumulativeSim.sim.gpa4 !== null;
+  const heroSim10 = showSimHero && cumulativeSim.sim.gpa10 !== null
+    ? formatSimGpa(cumulativeSim.sim.gpa10)
+    : null;
+  const heroProjectedCredits = hasAnySim ? projectedCredits(summary.credits, cumulativeSim) : null;
+
   if (grades.isLoading) return <GpaPageSkeleton />;
 
   return (
     <section id="tab-grades" className="tab-pane active">
+      {hasAnySim && (
+        <div className="sim-banner" role="status">
+          <span>
+            Bạn đang xem <strong>kết quả tính thử</strong> — điểm nhập thử chỉ nằm trên máy này,
+            không gửi về trường và không thay đổi bảng điểm thật.
+          </span>
+          <button type="button" className="sim-banner-btn" onClick={endAllSim}>
+            Kết thúc dự đoán
+          </button>
+        </div>
+      )}
       {/* Student Hero Header */}
       <div className="hero-section glass-panel">
         <div className="hero-profile">
@@ -317,8 +493,19 @@ export default function GpaPage() {
           <div className="stat-card">
             <div className="stat-icon icon-gpa-10">10</div>
             <div className="stat-info">
-              <span className="stat-title">GPA Tích Lũy (10)</span>
-              <h3 id="stat-gpa-10" className="stat-value text-gradient-amber">{summary.gpa10}</h3>
+              <span className="stat-title">GPA Tích Lũy (10){heroSim10 && <span className="sim-badge">Thử</span>}</span>
+              <h3
+                id="stat-gpa-10"
+                className={`stat-value${heroSim10 ? ' sim-tk' : ' text-gradient-amber'}`}
+                title={heroSim10 ? `Điểm thật do trường công bố: ${summary.gpa10}. Đây là GPA tính thử, không phải điểm thật.` : undefined}
+              >
+                {heroSim10 || summary.gpa10}
+              </h3>
+              {heroSim10 && (
+                <span className="stat-rank-caption">
+                  Thực tế: {summary.gpa10}
+                </span>
+              )}
               <span id="stat-gpa-10-school-rank" className="stat-rank-caption" title={formatRankTitle(gpaRank)}>
                 {formatRankCaption(gpaRank)}
               </span>
@@ -328,8 +515,19 @@ export default function GpaPage() {
           <div className="stat-card">
             <div className="stat-icon icon-gpa-4">4.0</div>
             <div className="stat-info">
-              <span className="stat-title">GPA Tích Lũy (4.0)</span>
-              <h3 id="stat-gpa-4" className="stat-value text-gradient-emerald">{summary.gpa4}</h3>
+              <span className="stat-title">GPA Tích Lũy (4.0){showSimHero && <span className="sim-badge">Thử</span>}</span>
+              <h3
+                id="stat-gpa-4"
+                className={`stat-value${showSimHero ? ' sim-tk' : ' text-gradient-emerald'}`}
+                title={showSimHero ? `Điểm thật do trường công bố: ${summary.gpa4}. Đây là GPA tính thử, không phải điểm thật.` : undefined}
+              >
+                {showSimHero ? formatSimGpa(cumulativeSim.sim.gpa4) : summary.gpa4}
+              </h3>
+              {showSimHero && (
+                <span className="stat-rank-caption">
+                  Thực tế: {summary.gpa4}
+                </span>
+              )}
               <span id="stat-gpa-school-rank" className="stat-rank-caption" title={formatRankTitle(gpaRank)}>
                 {formatRankCaption(gpaRank)}
               </span>
@@ -341,6 +539,11 @@ export default function GpaPage() {
             <div className="stat-info">
               <span className="stat-title">Tín Chỉ Đạt</span>
               <h3 id="stat-credits" className="stat-value text-gradient-blue">{summary.credits} TC</h3>
+              {heroProjectedCredits !== null && (
+                <span className="stat-rank-caption sim-caption" title="Tổng tín chỉ dự kiến nếu các môn tính thử đều đạt như đã nhập.">
+                  Dự kiến: {heroProjectedCredits} TC
+                </span>
+              )}
               <span id="stat-credit-school-rank" className="stat-rank-caption" title={formatRankTitle(creditRank)}>
                 {formatRankCaption(creditRank)}
               </span>
@@ -350,13 +553,19 @@ export default function GpaPage() {
           <div className="stat-card">
             <div className="stat-icon icon-rank">XL</div>
             <div className="stat-info">
-              <span className="stat-title">Xếp Loại</span>
+              <span className="stat-title">Xếp Loại{showSimHero && <span className="sim-badge">Thử</span>}</span>
               <h3
                 id="stat-rank"
-                className={`stat-value${summary.rank === 'Chưa xếp loại' ? ' stat-value-unavailable' : ' text-gradient-purple'}`}
+                className={`stat-value${showSimHero ? ' sim-tk' : (summary.rank === 'Chưa xếp loại' ? ' stat-value-unavailable' : ' text-gradient-purple')}`}
+                title={showSimHero ? `Xếp loại thật do trường công bố: ${summary.rank}. Đây là xếp loại tính thử.` : undefined}
               >
-                {summary.rank}
+                {showSimHero ? cumulativeSim.sim.rank : summary.rank}
               </h3>
+              {showSimHero && (
+                <span className="stat-rank-caption">
+                  Thực tế: {summary.rank}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -491,13 +700,23 @@ export default function GpaPage() {
         <div id="semester-groups-container" className="semester-groups-container">
           {filteredSemesters.map((sem) => {
             const semTitle = sem.ten_hoc_ky || `Học kỳ ${sem.hoc_ky}`;
+            const semId = getSemesterId(sem);
+            const simInfo = simInfoBySem[semId] || { simulatableCount: 0, simulatedCompleteCount: 0, excludedCount: 0, hasSimulation: false, real: { gpa10: null, gpa4: null, rank: 'Chưa xếp loại', earnedCredits: 0 }, sim: { gpa10: null, gpa4: null, rank: 'Chưa xếp loại', earnedCredits: 0 } };
+            const isExpanded = Boolean(expandedSim[semId]);
             return (
               <div className="semester-block" key={sem.hoc_ky || semTitle}>
                 <div className="semester-header">
                   <div className="sem-title">{semTitle}</div>
-                  <div className="sem-meta">
-                    Môn học: <strong>{sem.courses.length}</strong> | Tín chỉ HK: <strong>{sem.credits}</strong> | GPA HK (10): <strong>{formatScore(sem.dtb_hk_he10)}</strong> | GPA HK (4): <strong>{formatScore(sem.dtb_hk_he4)}</strong>
-                  </div>
+                  {simInfo.simulatableCount > 0 && !isExpanded && (
+                    <button
+                      type="button"
+                      className="btn-action-sm sim-open-btn"
+                      title="Nhập điểm dự kiến cho các môn chưa có điểm để xem GPA thử của học kỳ này"
+                      onClick={(event) => requestSimExpand(semId, event.currentTarget)}
+                    >
+                      <span>Dự đoán điểm ({simInfo.simulatableCount})</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="table-responsive">
@@ -525,10 +744,21 @@ export default function GpaPage() {
                       ) : (
                         sem.courses.map((c, idx) => {
                           const result = getCourseResult(c);
+                          const simulatable = isSimulatable(c);
+                          const simKey = makeSimKey(semId, c.ma_mon);
+                          const simEntry = simEntries[simKey] || { gk: '', ck: '' };
+                          const realGk = getRealMidterm(c);
+                          const showSimInputs = isExpanded && simulatable;
+                          const simFormula = getFormula(simEntry.formula);
+                          const resolved = simulatable ? resolveSimulatedCourse(c, simEntry) : null;
+                          const hasGkValue = c.diem_giua_ky !== undefined && c.diem_giua_ky !== null && c.diem_giua_ky !== '';
+                          const hasThiValue = c.diem_thi !== undefined && c.diem_thi !== null && c.diem_thi !== '';
+                          const gkError = showSimInputs && realGk === null && simEntry.gk !== '' && !isValidScore(simEntry.gk);
+                          const ckError = showSimInputs && simEntry.ck !== '' && !isValidScore(simEntry.ck);
                           return (
                             <tr
                               key={`${c.ma_mon}-${idx}`}
-                              className="course-row"
+                              className={`course-row${resolved?.complete ? ' sim-row' : ''}`}
                               tabIndex={0}
                               role="button"
                               aria-label={`Xem chi tiết điểm môn ${c.ten_mon || c.ma_mon || 'học phần'}`}
@@ -544,15 +774,95 @@ export default function GpaPage() {
                               <td className="col-code"><code>{c.ma_mon || '--'}</code></td>
                               <td className="course-name-cell col-name" title="Bấm để xem chi tiết điểm thành phần">
                                 {c.ten_mon || '--'}
+                                {resolved?.complete && (
+                                  <span className="sim-badge" title="Điểm do bạn nhập thử trên máy này, không phải điểm thật.">Tính thử</span>
+                                )}
+                                {showSimInputs && (
+                                  <select
+                                    className="sim-formula-select"
+                                    aria-label={`Cách tính điểm môn ${c.ten_mon || c.ma_mon || 'học phần'}`}
+                                    title="Mỗi môn có thể có cách tính khác nhau. Chọn đúng cách tính của môn này."
+                                    value={simFormula.id}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(e) => setSimFormula(semId, c.ma_mon, e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                  >
+                                    {FORMULAS.map((formula) => (
+                                      <option key={formula.id} value={formula.id}>{formula.label}</option>
+                                    ))}
+                                  </select>
+                                )}
                               </td>
                               <td className="col-tc"><strong>{c.so_tin_chi || 0}</strong></td>
-                              <td className="col-gk">{c.diem_giua_ky !== undefined && c.diem_giua_ky !== null && c.diem_giua_ky !== '' ? c.diem_giua_ky : '--'}</td>
-                              <td className="col-thi">{c.diem_thi !== undefined && c.diem_thi !== null && c.diem_thi !== '' ? c.diem_thi : '--'}</td>
-                              <td className="col-tk10"><strong>{formatScore(c.diem_tk)}</strong></td>
-                              <td className="col-h4"><strong>{formatScore(c.diem_tk_so)}</strong></td>
-                              <td className="col-chu"><span className={`grade-pill ${getGradeLetterClass(c.diem_tk_chu)}`}>{c.diem_tk_chu || '--'}</span></td>
+                              <td className="col-gk" onClick={(event) => { if (showSimInputs) event.stopPropagation(); }}>
+                                {showSimInputs ? (
+                                  !simFormula.needsGk ? (
+                                    <span title="Môn này chỉ tính điểm thi nên không cần điểm giữa kỳ.">—</span>
+                                  ) : realGk !== null ? (
+                                    <span title="Điểm giữa kỳ thật của bạn, được giữ nguyên khi tính thử.">{realGk} 🔒</span>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      className={`sim-input${gkError ? ' sim-input-error' : ''}`}
+                                      aria-label={`Điểm giữa kỳ tính thử môn ${c.ten_mon || c.ma_mon || 'học phần'}`}
+                                      placeholder="GK"
+                                      title={gkError ? 'Điểm từ 0 đến 10.' : 'Nhập điểm giữa kỳ dự kiến (0–10).'}
+                                      value={simEntry.gk}
+                                      onChange={(e) => setSimValue(semId, c.ma_mon, 'gk', e.target.value)}
+                                      onKeyDown={(e) => e.stopPropagation()}
+                                    />
+                                  )
+                                ) : (hasGkValue ? c.diem_giua_ky : '--')}
+                              </td>
+                              <td className="col-thi" onClick={(event) => { if (showSimInputs) event.stopPropagation(); }}>
+                                {showSimInputs ? (
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    className={`sim-input${ckError ? ' sim-input-error' : ''}`}
+                                    aria-label={`Điểm thi tính thử môn ${c.ten_mon || c.ma_mon || 'học phần'}`}
+                                    placeholder="Thi"
+                                    title={ckError ? 'Điểm từ 0 đến 10.' : `Nhập điểm thi dự kiến (0–10). ${formulaDescription(simFormula.id)}.`}
+                                    value={simEntry.ck}
+                                    onChange={(e) => setSimValue(semId, c.ma_mon, 'ck', e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                  />
+                                ) : (hasThiValue ? c.diem_thi : '--')}
+                              </td>
+                              <td className="col-tk10">
+                                {resolved?.complete ? (
+                                  <strong className="sim-tk" title={`${formulaDescription(resolved.formulaId)}. Đây không phải điểm thật.`}>
+                                    {resolved.tk10.toFixed(2)}
+                                  </strong>
+                                ) : (
+                                  <strong>{formatScore(c.diem_tk)}</strong>
+                                )}
+                              </td>
+                              <td className="col-h4">
+                                {resolved?.complete ? (
+                                  <strong className="sim-tk" title="Điểm hệ 4 tính thử, không phải điểm thật.">{resolved.he4.toFixed(1)}</strong>
+                                ) : (
+                                  <strong>{formatScore(c.diem_tk_so)}</strong>
+                                )}
+                              </td>
+                              <td className="col-chu">
+                                {resolved?.complete ? (
+                                  <span className={`grade-pill ${getGradeLetterClass(resolved.chu)}`} title="Điểm chữ tính thử, không phải điểm thật.">{resolved.chu}</span>
+                                ) : (
+                                  <span className={`grade-pill ${getGradeLetterClass(c.diem_tk_chu)}`}>{c.diem_tk_chu || '--'}</span>
+                                )}
+                              </td>
                               <td className="col-kq">
-                                {result.status === 'passed' ? (
+                                {resolved?.complete ? (
+                                  resolved.passed ? (
+                                    <span className="tag tag-active" title="Kết quả tính thử, không phải kết quả thật.">Đạt (thử)</span>
+                                  ) : (
+                                    <span className="tag" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }} title="Kết quả tính thử, không phải kết quả thật.">
+                                      Chưa đạt (thử)
+                                    </span>
+                                  )
+                                ) : result.status === 'passed' ? (
                                   <span className="tag tag-active">Đạt</span>
                                 ) : result.status === 'failed' ? (
                                   <span className="tag" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>
@@ -569,6 +879,93 @@ export default function GpaPage() {
                     </tbody>
                   </table>
                 </div>
+                <div className="sem-summary" aria-label={`Tổng kết ${semTitle}`}>
+                  <div className="sem-stat">
+                    <span className="sem-stat-label">Môn học:</span>
+                    <strong>{sem.courses.length}</strong>
+                  </div>
+                  <div className="sem-stat">
+                    <span className="sem-stat-label">Tín chỉ HK:</span>
+                    <strong>{sem.credits}</strong>
+                  </div>
+                  <div className="sem-stat">
+                    <span className="sem-stat-label">GPA HK (10):</span>
+                    {simInfo.hasSimulation && simInfo.sim.gpa10 !== null ? (
+                      <strong
+                        className="sim-tk"
+                        title={`Điểm thật do trường công bố: ${formatScore(sem.dtb_hk_he10)}. Đây là GPA tính thử, không phải điểm thật.`}
+                      >
+                        {formatSimGpa(simInfo.sim.gpa10)} (thử)
+                      </strong>
+                    ) : (
+                      <strong className="sem-gpa">{formatScore(sem.dtb_hk_he10)}</strong>
+                    )}
+                  </div>
+                  <div className="sem-stat">
+                    <span className="sem-stat-label">GPA HK (4):</span>
+                    {simInfo.hasSimulation && simInfo.sim.gpa4 !== null ? (
+                      <strong
+                        className="sim-tk"
+                        title={`Điểm thật do trường công bố: ${formatScore(sem.dtb_hk_he4)}. Đây là GPA tính thử, không phải điểm thật.`}
+                      >
+                        {formatSimGpa(simInfo.sim.gpa4)} (thử)
+                      </strong>
+                    ) : (
+                      <strong className="sem-gpa">{formatScore(sem.dtb_hk_he4)}</strong>
+                    )}
+                  </div>
+                  {(() => {
+                    // Số tích lũy từng kỳ do API trả về: hiển thị thẳng, không tự tính.
+                    const cumCredits = finiteOrNull(parseScore(sem.so_tin_chi_dat_tich_luy));
+                    const cum10 = finiteOrNull(parseScore(sem.dtb_tich_luy_he_10));
+                    const cum4 = finiteOrNull(parseScore(sem.dtb_tich_luy_he_4));
+                    if (cumCredits === null && cum10 === null && cum4 === null) return null;
+                    return (
+                      <>
+                        <div className="sem-stat">
+                          <span className="sem-stat-label">Tín chỉ tích lũy:</span>
+                          <strong>{formatCount(cumCredits)}</strong>
+                        </div>
+                        <div className="sem-stat">
+                          <span className="sem-stat-label">GPA tích lũy (10):</span>
+                          <strong className="sem-gpa">{formatSimGpa(cum10)}</strong>
+                        </div>
+                        <div className="sem-stat">
+                          <span className="sem-stat-label">GPA tích lũy (4):</span>
+                          <strong className="sem-gpa">{formatSimGpa(cum4)}</strong>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                {isExpanded && simInfo.simulatableCount > 0 && (
+                  <div className="sim-result-bar" aria-live="polite">
+                    {simInfo.hasSimulation ? (
+                      <span>
+                        Tính thử học kỳ này: <strong>GPA {formatSimGpa(simInfo.sim.gpa4)}</strong>
+                        {' '}(thực tế {formatSimGpa(simInfo.real.gpa4)}) · Xếp loại thử: <strong>{simInfo.sim.rank}</strong>
+                        {simInfo.excludedCount > 0 && (
+                          <> · Các môn kỹ năng, quân sự, thể dục không cộng vào GPA.</>
+                        )}
+                      </span>
+                    ) : (
+                      <span>
+                        Nhập điểm dự kiến ở các môn chưa có điểm để xem GPA thử.
+                        {' '}Mỗi môn có cách tính riêng (mặc định 40% giữa kỳ + 60% thi). Môn đã có điểm tổng kết được giữ nguyên.
+                      </span>
+                    )}
+                    <span className="sim-result-actions">
+                      <button
+                        type="button"
+                        className="sim-link-btn"
+                        title="Xóa hết điểm đã nhập thử trong học kỳ này và về lại bảng điểm bình thường."
+                        onClick={() => endSemesterSim(semId)}
+                      >
+                        Kết thúc dự đoán
+                      </button>
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -668,6 +1065,68 @@ export default function GpaPage() {
             <div className="modal-footer">
               <button id="modal-btn-dismiss" type="button" className="btn btn-secondary" onClick={closeCourseDetails}>
                 Đóng
+              </button>
+            </div>
+        </ViewportModal>
+      )}
+
+      {/* Hộp thoại: Tính thử chỉ là mô phỏng, không phải sửa điểm thật */}
+      {pendingSimSem && (
+        <ViewportModal
+          id="sim-disclaimer-modal"
+          title="Tính thử điểm"
+          labelledBy="sim-disclaimer-title"
+          onClose={closeSimDisclaimer}
+          dialogRef={simDialogRef}
+          className="gpa-sim-dialog"
+        >
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <h3 id="sim-disclaimer-title" className="modal-title">Đây chỉ là tính thử, không phải sửa điểm</h3>
+              </div>
+              <button
+                ref={simCloseRef}
+                type="button"
+                className="modal-close-btn"
+                title="Đóng"
+                aria-label="Đóng hộp thoại tính thử điểm"
+                onClick={closeSimDisclaimer}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="18" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <ul className="sim-disclaimer-list">
+                <li>Điểm bạn nhập <strong>chỉ nằm trên máy này</strong>, không gửi về trường và không làm thay đổi bảng điểm thật.</li>
+                <li>Môn nào <strong>đã có điểm tổng kết sẽ bị khóa</strong>, không tính thử được.</li>
+                <li>Tổng kết tính theo <strong>cách tính của từng môn</strong> (mặc định 40% điểm giữa kỳ + 60% điểm thi, bạn có thể đổi ngay trong bảng). Các môn kỹ năng, quân sự, thể dục không cộng vào GPA.</li>
+              </ul>
+              <label className="sim-ack-row">
+                <input
+                  type="checkbox"
+                  checked={disclaimerChecked}
+                  onChange={(e) => setDisclaimerChecked(e.target.checked)}
+                />
+                <span>Tôi đã hiểu, đây chỉ là tính thử.</span>
+              </label>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={closeSimDisclaimer}>
+                Để sau
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!disclaimerChecked}
+                title={disclaimerChecked ? 'Mở bảng nhập điểm tính thử.' : 'Bạn cần xác nhận đã hiểu trước khi bắt đầu.'}
+                onClick={confirmSimDisclaimer}
+              >
+                Bắt đầu tính thử
               </button>
             </div>
         </ViewportModal>

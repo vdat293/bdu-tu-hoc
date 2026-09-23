@@ -3722,3 +3722,170 @@ body.theme-dark .survey-settings-note {
   font-weight: 700;
   cursor: pointer;
 }
+/* ==========================================================================
+   GPA tinh thu: chi la mo phong tren may nay.
+   ========================================================================== */
+.sim-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: inherit;
+  font-size: 0.9rem;
+}
+.sim-banner-btn {
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sim-banner-btn:hover { background: rgba(245, 158, 11, 0.2); }
+
+.sim-caption { display: block; margin-top: 2px; color: #c084fc; }
+
+.sim-open-btn { margin-top: 0; flex: 0 0 auto; }
+
+/* Dai tong ket hoc ky nam duoi bang: nen rieng, so noi bat. */
+.sem-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 26px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bdu-light) 7%, transparent);
+  font-size: 0.85rem;
+}
+.sem-stat { display: inline-flex; align-items: baseline; gap: 7px; }
+.sem-stat-label { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
+.sem-stat strong { font-weight: 800; font-size: 0.95rem; }
+.sem-stat .sem-gpa { color: var(--bdu-light); }
+.sem-stat strong.sim-tk { color: #c084fc; }
+
+.course-row.sim-row td { background: rgba(168, 85, 247, 0.07); }
+
+.sim-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  vertical-align: middle;
+}
+.sim-tag-excluded {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+
+.sim-input {
+  width: 56px;
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(168, 85, 247, 0.55);
+  background: rgba(168, 85, 247, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 4px 2px;
+}
+.sim-input::placeholder { font-weight: 400; opacity: 0.6; }
+.sim-input:focus { outline: 2px solid rgba(168, 85, 247, 0.7); outline-offset: 1px; }
+.sim-input-error { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+.sim-tk { color: #c084fc; }
+
+.sim-result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px dashed rgba(168, 85, 247, 0.5);
+  background: rgba(168, 85, 247, 0.07);
+  font-size: 0.9rem;
+}
+.sim-result-actions { display: flex; gap: 12px; }
+.sim-link-btn {
+  border: 0;
+  background: none;
+  padding: 8px 4px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #c084fc;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sim-link-btn:disabled { color: var(--text-muted); cursor: not-allowed; text-decoration: none; }
+
+.sim-disclaimer-list { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 8px; line-height: 1.55; }
+.sim-ack-row { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.sim-ack-row input { width: 20px; height: 20px; accent-color: #a855f7; }
+
+@media (max-width: 680px) {
+  .sim-result-bar { flex-direction: column; align-items: stretch; }
+  .sim-result-actions { justify-content: flex-end; }
+  .sim-input { width: 72px; }
+}
+
+/* So thu lam so chinh: de moi mau gradient cua the hero. */
+.stat-value.sim-tk {
+  color: #c084fc;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+.stat-title .sim-badge { margin-left: 6px; }
+
+/* O chon cach tinh diem cua tung mon khi tinh thu: pill nhe, nam rieng 1 dong. */
+.sim-formula-select {
+  display: block;
+  margin-top: 4px;
+  max-width: max-content;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px dashed rgba(168, 85, 247, 0.4);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.sim-formula-select:hover { color: inherit; border-style: solid; }
+.sim-formula-select:focus { outline: 2px solid rgba(168, 85, 247, 0.7); outline-offset: 1px; }
+
+/* Thanh ket qua bam day khoi hoc ky. */
+.sim-result-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
