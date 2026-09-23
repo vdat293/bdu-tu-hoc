@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS game_rooms (
   id BIGSERIAL PRIMARY KEY,
   room_code VARCHAR(16) NOT NULL UNIQUE,
   name VARCHAR(80),
-  game_type TEXT NOT NULL CHECK (game_type IN ('caro', 'tic_tac_toe', 'chess', 'xiangqi', 'go', 'connect4')),
+  game_type TEXT NOT NULL CHECK (game_type IN ('caro', 'tic_tac_toe', 'chess', 'xiangqi', 'go', 'connect4', 'battleship', 'checkers', 'backgammon')),
   visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private')),
   allow_spectators BOOLEAN NOT NULL DEFAULT TRUE,
   status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'active', 'finished', 'expired', 'cancelled')),
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS game_rooms (
   state JSONB NOT NULL,
   state_version BIGINT NOT NULL DEFAULT 0 CHECK (state_version >= 0),
   winner_seat SMALLINT CHECK (winner_seat IS NULL OR winner_seat IN (1, 2)),
-  result TEXT CHECK (result IS NULL OR result IN ('win', 'draw', 'resigned', 'expired', 'cancelled')),
+  result TEXT CHECK (result IS NULL OR result IN ('win', 'draw', 'resigned', 'expired', 'cancelled', 'timeout', 'forfeit')),
   expires_at TIMESTAMPTZ NOT NULL,
   last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   finished_at TIMESTAMPTZ,
@@ -25,7 +25,7 @@ ALTER TABLE game_rooms ADD COLUMN IF NOT EXISTS name VARCHAR(80);
 ALTER TABLE game_rooms ADD COLUMN IF NOT EXISTS allow_spectators BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE game_rooms DROP CONSTRAINT IF EXISTS game_rooms_game_type_check;
 ALTER TABLE game_rooms ADD CONSTRAINT game_rooms_game_type_check
-  CHECK (game_type IN ('caro', 'tic_tac_toe', 'chess', 'xiangqi', 'go', 'connect4'));
+  CHECK (game_type IN ('caro', 'tic_tac_toe', 'chess', 'xiangqi', 'go', 'connect4', 'battleship', 'checkers', 'backgammon'));
 
 CREATE TABLE IF NOT EXISTS game_room_players (
   room_id BIGINT NOT NULL REFERENCES game_rooms(id) ON DELETE CASCADE,
