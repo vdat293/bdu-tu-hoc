@@ -34,12 +34,25 @@ export function hasHtml(value) {
   return /<[a-z][^>]*>/i.test(String(value ?? ''));
 }
 
+// Đáp án nhiều lựa chọn chấp nhận được lưu dạng 'do|finish|complete'.
+export function acceptedAnswers(correctAnswer) {
+  const values = Array.isArray(correctAnswer)
+    ? correctAnswer
+    : String(correctAnswer ?? '').split('|');
+  return values.map((value) => String(value ?? '').trim()).filter(Boolean);
+}
+
 export function isAnswerCorrect(type, response, correctAnswer) {
-  if (type === 'arrange_words') {
-    const joined = Array.isArray(response) ? response.join(' ') : String(response ?? '');
-    return normalizeAnswer(joined) === normalizeAnswer(correctAnswer);
-  }
-  return normalizeAnswer(response) === normalizeAnswer(correctAnswer);
+  const joined = type === 'arrange_words' && Array.isArray(response)
+    ? response.join(' ')
+    : String(response ?? '');
+  const normalized = normalizeAnswer(joined);
+  if (!normalized) return false;
+  return acceptedAnswers(correctAnswer).some((answer) => normalizeAnswer(answer) === normalized);
+}
+
+export function formatCorrectAnswer(correctAnswer) {
+  return acceptedAnswers(correctAnswer).join(' / ') || String(correctAnswer ?? '');
 }
 
 export function buildItems(payload) {

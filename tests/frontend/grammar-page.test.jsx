@@ -173,6 +173,50 @@ describe('grammar lesson page', () => {
     fireEvent.click(await screen.findByText('are'));
     expect(await screen.findByText('✗ Chưa đúng')).toBeTruthy();
     expect(screen.getByText('I luôn đi với am.')).toBeTruthy();
+    const correctOptions = document.querySelectorAll('.gr-option.is-correct');
+    expect(correctOptions.length).toBe(1);
+    expect(correctOptions[0].textContent).toContain('am');
+  });
+
+  it('dien tu: chap nhan moi dap an trong nhom do|finish|complete', async () => {
+    mocks.getGrammarLesson.mockResolvedValue({
+      lesson: { ...LESSON_PAYLOAD.lesson, question_count: 1, exercise_count: 1 },
+      rules: [],
+      exercises: [{
+        id: 'e4', type: 'fill_blank', question: 'Điền từ thích hợp: I __ my homework every evening.',
+        option_a: '', option_b: '', option_c: '', option_d: '',
+        correct_answer: 'do|finish|complete', explanation: 'Thì hiện tại đơn.', hint: 'Động từ chỉ làm bài', order: 1
+      }],
+      readings: [],
+      progress: null
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+    fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'finish' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    expect(await screen.findByText('✓ Chính xác!')).toBeTruthy();
+  });
+
+  it('dien tu sai thi hien day du cac dap an duoc chap nhan', async () => {
+    mocks.getGrammarLesson.mockResolvedValue({
+      lesson: { ...LESSON_PAYLOAD.lesson, question_count: 1, exercise_count: 1 },
+      rules: [],
+      exercises: [{
+        id: 'e5', type: 'fill_blank', question: 'Điền từ thích hợp: I __ my homework every evening.',
+        option_a: '', option_b: '', option_c: '', option_d: '',
+        correct_answer: 'do|finish|complete', explanation: 'Thì hiện tại đơn.', hint: 'Động từ chỉ làm bài', order: 1
+      }],
+      readings: [],
+      progress: null
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+    fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'doing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    expect(await screen.findByText('✗ Chưa đúng')).toBeTruthy();
+    expect(screen.getByText('do / finish / complete')).toBeTruthy();
   });
 
   it('sap xep tu: bam chip theo thu tu va kiem tra', async () => {

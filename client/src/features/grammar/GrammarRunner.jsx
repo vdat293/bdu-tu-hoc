@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GRAMMAR_TIMER_SECONDS, hasHtml, isAnswerCorrect, optionColumns, parseArrangeWords, plainText } from './grammar-lib.js';
+import { GRAMMAR_TIMER_SECONDS, formatCorrectAnswer, hasHtml, isAnswerCorrect, optionColumns, parseArrangeWords, plainText } from './grammar-lib.js';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -210,7 +210,7 @@ export default function GrammarRunner({
                     {question.kind === 'reading' ? `${question.reading_title} · ` : ''}{plainText(question.question)}
                   </p>
                   <p className="gr-review-a">
-                    Đáp án đúng: <strong>{question.correct_answer}</strong>
+                    Đáp án đúng: <strong>{formatCorrectAnswer(question.correct_answer)}</strong>
                     {entry.response
                       ? <> · Bạn chọn: <em>{Array.isArray(entry.response) ? entry.response.join(' ') : entry.response}</em></>
                       : ' · Hết giờ'}
@@ -268,7 +268,7 @@ export default function GrammarRunner({
         {showOptions ? (
           <div className="gr-options">
             {options.map((option, i) => {
-              const isCorrect = String(option) === String(item.correct_answer);
+              const isCorrect = isAnswerCorrect(item.type, option, item.correct_answer);
               const isChosen = reveal?.response === option;
               const classes = ['gr-option'];
               if (reveal) {
@@ -373,7 +373,7 @@ export default function GrammarRunner({
             <strong>
               {reveal.correct ? '✓ Chính xác!' : reveal.timedOut ? '⏰ Hết giờ!' : '✗ Chưa đúng'}
             </strong>
-            {!reveal.correct ? <span> Đáp án đúng: <b>{item.correct_answer}</b></span> : null}
+            {!reveal.correct ? <span> Đáp án đúng: <b>{formatCorrectAnswer(item.correct_answer)}</b></span> : null}
             {item.explanation ? <RichText value={item.explanation} className="gr-feedback-explain" /> : null}
             <div className="gr-feedback-actions">
               <button className="btn btn-primary" type="button" onClick={goNext}>
