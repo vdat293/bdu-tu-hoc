@@ -30,22 +30,34 @@ import {
   setFrameCatalog
 } from '../../components/identity/Identity.jsx';
 import { useFrameCinematic } from '../../components/identity/useFrameCinematic.js';
+import { useAvatarUpload } from '../../components/identity/useAvatarUpload.js';
+import AvatarCropDialog from '../../components/identity/AvatarCropDialog.jsx';
+import AvatarManagerDialog from '../../components/identity/AvatarManagerDialog.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import MentionAutocomplete from './MentionAutocomplete.jsx';
 import { renderContentWithMentions } from './renderMentions.jsx';
+import {
+  ALL_IMAGE_ACCEPT,
+  CommentMedia,
+  ImageDraftGrid,
+  MAX_COMMENT_IMAGES,
+  MAX_POST_IMAGES,
+  MediaFileInput,
+  STILL_IMAGE_ACCEPT,
+  uploadDraftImages,
+  useImageDraft
+} from './ImageComposer.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import {
   ChevronDownIcon,
   CommentIcon,
   DotsIcon,
   EditIcon,
-  EmojiIcon,
   GifIcon,
   GlobeIcon,
   PhotoIcon,
   SendIcon,
   ShareIcon,
-  StickerIcon,
   ThumbIcon,
   TrashIcon
 } from './facebook-icons.jsx';
@@ -325,6 +337,7 @@ function PostAttachments({ attachments, sourceUrl = null }) {
               rel="noopener noreferrer"
             >
               <img src={photo.url} alt={photo.title || 'Ảnh bài viết'} loading="lazy" decoding="async" />
+              {photo.animated && <span className="fbc-gif-badge">GIF</span>}
             </a>
           ))}
         </div>
@@ -364,6 +377,7 @@ function CommentItem({ comment, isReply = false, onReply }) {
         <div className="fbc-bubble">
           <span className="fbc-bubble-name">{name}</span>
           <span className="fbc-bubble-text">{renderContentWithMentions(comment.content, comment.mentions)}</span>
+          <CommentMedia attachments={comment.attachments} />
         </div>
         <div className="fbc-comment-meta">
           {onReply && !comment.is_deleted ? (
@@ -385,6 +399,7 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
   const [replyTarget, setReplyTarget] = useState(null);
   const [expandedThreads, setExpandedThreads] = useState({});
   const mentionInputRef = useRef(null);
+  const commentImages = useImageDraft(MAX_COMMENT_IMAGES);
   const client = useQueryClient();
   const { notify } = useToasts();
   useRealtimeRoom(postId ? `community-post:${postId}` : null, Boolean(token));
@@ -404,20 +419,32 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
   });
 
   const commentMutation = useMutation({
-    mutationFn: () => addCommunityPostComment(token, postId, {
-      content: newComment.trim(),
-      ...(replyTarget ? { parentId: replyTarget.id } : {}),
-      isAnonymous
-    }),
+    mutationFn: async () => {
+      const uploaded = await uploadDraftImages(token, commentImages.images, 'comment');
+      return addCommunityPostComment(token, postId, {
+        content: newComment.trim(),
+        ...(replyTarget ? { parentId: replyTarget.id } : {}),
+        isAnonymous,
+        attachments: uploaded
+      });
+    },
     onSuccess: () => {
       setNewComment('');
       setReplyTarget(null);
+      commentImages.clear();
       client.invalidateQueries({ queryKey: ['post-comments', String(postId)] });
       client.invalidateQueries({ queryKey: ['confession'] });
       notify('Đã gửi bình luận.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
   });
+
+  const handleCommentFiles = (fileList) => {
+    const result = commentImages.addFiles(fileList);
+    if (result.skipped > 0) {
+      notify(`Chỉ đính kèm tối đa ${MAX_COMMENT_IMAGES} ảnh mỗi bình luận.`, 'warning');
+    }
+  };
 
   // API trả về danh sách phẳng; gom reply về đúng bình luận gốc như Facebook.
   const threads = useMemo(() => {
@@ -479,7 +506,7 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
         className="fbc-composer"
         onSubmit={(event) => {
           event.preventDefault();
-          if (newComment.trim()) commentMutation.mutate();
+          if (newComment.trim() || commentImages.images.length > 0) commentMutation.mutate();
         }}
       >
         <span className={`fbc-avatar ${isAnonymous ? 'fbc-avatar-anon' : ''}`.trim()}>
@@ -492,6 +519,11 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
               <button type="button" onClick={() => setReplyTarget(null)} aria-label="Huỷ trả lời">×</button>
             </div>
           )}
+          <ImageDraftGrid
+            images={commentImages.images}
+            onRemove={commentImages.removeImage}
+            disabled={commentMutation.isPending}
+          />
           <div className="fbc-composer-row">
             <MentionAutocomplete value={newComment} onChange={setNewComment} token={token} inputRef={mergeCommentInputRefs} dropUp>
               <input
@@ -512,16 +544,44 @@ function PostCommentsInline({ postId, token, viewer, presentation, composerInput
               <span className="fbc-anon-mark" aria-hidden="true">{isAnonymous ? '✓' : ''}</span>
               Ẩn danh
             </button>
-            <span className="fbc-composer-tools" aria-hidden="true">
-              <EmojiIcon size={19} />
-              <PhotoIcon size={19} />
-              <GifIcon size={19} />
-              <StickerIcon size={19} />
+            <span className="fbc-composer-tools">
+              <button
+                type="button"
+                className="fbc-tool-btn"
+                onClick={() => document.getElementById(`fbc-photo-input-${postId}`)?.click()}
+                title="Đính kèm ảnh"
+                aria-label="Đính kèm ảnh"
+                disabled={commentMutation.isPending || commentImages.images.length >= MAX_COMMENT_IMAGES}
+              >
+                <PhotoIcon size={19} />
+              </button>
+              <button
+                type="button"
+                className="fbc-tool-btn"
+                onClick={() => document.getElementById(`fbc-gif-input-${postId}`)?.click()}
+                title="Đính kèm GIF"
+                aria-label="Đính kèm GIF"
+                disabled={commentMutation.isPending || commentImages.images.length >= MAX_COMMENT_IMAGES}
+              >
+                <GifIcon size={19} />
+              </button>
             </span>
+            <MediaFileInput
+              id={`fbc-photo-input-${postId}`}
+              accept={STILL_IMAGE_ACCEPT}
+              onFiles={handleCommentFiles}
+              disabled={commentMutation.isPending || commentImages.images.length >= MAX_COMMENT_IMAGES}
+            />
+            <MediaFileInput
+              id={`fbc-gif-input-${postId}`}
+              accept="image/gif"
+              onFiles={handleCommentFiles}
+              disabled={commentMutation.isPending || commentImages.images.length >= MAX_COMMENT_IMAGES}
+            />
             <button
               type="submit"
               className="fbc-send"
-              disabled={commentMutation.isPending || !newComment.trim()}
+              disabled={commentMutation.isPending || (!newComment.trim() && commentImages.images.length === 0)}
               aria-label="Gửi bình luận"
             >
               <SendIcon size={17} />
@@ -894,6 +954,8 @@ export default function ConfessionPage() {
     isAnonymous: true,
     category: 'confession'
   });
+  const createImages = useImageDraft(MAX_POST_IMAGES);
+  const editImages = useImageDraft(MAX_POST_IMAGES);
 
   const filter = ['all', 'mine', 'anon'].includes(params.get('filter')) ? params.get('filter') : 'all';
   // Khu vực nguồn: web (portal, mặc định) | facebook (crawl) | all (chung cả hai).
@@ -977,17 +1039,47 @@ export default function ConfessionPage() {
     onError: (error) => notify(error.message, 'error')
   });
 
+  // Ảnh đại diện dùng chung một hook với trang GPA: upload ở đâu cũng đồng bộ.
+  const {
+    upload: avatarUpload,
+    remove: avatarRemove,
+    startCrop: startAvatarCrop,
+    cancelCrop: cancelAvatarCrop,
+    confirmCrop: confirmAvatarCrop,
+    cropFile: avatarCropFile
+  } = useAvatarUpload();
+
+  const handleAvatarFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    startAvatarCrop(file);
+  };
+
+  const [avatarManagerOpen, setAvatarManagerOpen] = useState(false);
+
+  const pickAvatarFromDevice = () => {
+    setAvatarManagerOpen(false);
+    document.getElementById('cfs-avatar-input')?.click();
+  };
+
   const create = useMutation({
-    mutationFn: () =>
-      createCommunityPost(auth.token, {
+    mutationFn: async () => {
+      const uploaded = await uploadDraftImages(auth.token, createImages.images, 'post');
+      return createCommunityPost(auth.token, {
         title: draft.title.trim() || 'BDU Confession',
         content: draft.content.trim(),
         scope: draft.scope,
         scopeId: null,
         category: draft.category,
         isAnonymous: draft.isAnonymous,
-        attachments: draft.url.trim() ? [{ url: draft.url.trim(), title: draft.urlTitle.trim() || draft.title.trim() || 'Tài liệu đính kèm' }] : []
-      }),
+        attachments: [
+          ...(draft.url.trim()
+            ? [{ url: draft.url.trim(), title: draft.urlTitle.trim() || draft.title.trim() || 'Tài liệu đính kèm' }]
+            : []),
+          ...uploaded
+        ]
+      });
+    },
     onSuccess: () => {
       setDraft({
         title: '',
@@ -998,12 +1090,20 @@ export default function ConfessionPage() {
         isAnonymous: true,
         category: 'confession'
       });
+      createImages.clear();
       setShowCreateModal(false);
       client.invalidateQueries({ queryKey: ['confession'] });
       notify('Đã đăng bài viết thành công.', 'success');
     },
     onError: (error) => notify(error.message, 'error')
   });
+
+  const handleCreateFiles = (fileList) => {
+    const result = createImages.addFiles(fileList);
+    if (result.skipped > 0) {
+      notify(`Mỗi bài viết chỉ đính kèm tối đa ${MAX_POST_IMAGES} ảnh.`, 'warning');
+    }
+  };
 
   const like = useMutation({
     mutationFn: (postId) => toggleCommunityPostLike(auth.token, postId),
@@ -1021,7 +1121,13 @@ export default function ConfessionPage() {
   });
 
   const update = useMutation({
-    mutationFn: ({ postId, changes }) => updateCommunityPost(auth.token, postId, changes),
+    mutationFn: async ({ postId, changes, newImages = [] }) => {
+      const uploaded = await uploadDraftImages(auth.token, newImages, 'post');
+      return updateCommunityPost(auth.token, postId, {
+        ...changes,
+        attachments: [...(Array.isArray(changes.attachments) ? changes.attachments : []), ...uploaded]
+      });
+    },
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['confession'] });
       notify('Đã cập nhật bài viết.', 'success');
@@ -1034,16 +1140,19 @@ export default function ConfessionPage() {
     setEditDraft({
       title: post.title && post.title !== 'BDU Confession' ? post.title : '',
       content: post.content || '',
-      isAnonymous: Boolean(post.is_anonymous ?? post.author?.is_anonymous)
+      isAnonymous: Boolean(post.is_anonymous ?? post.author?.is_anonymous),
+      attachments: Array.isArray(post.attachments) ? post.attachments : []
     });
+    editImages.clear();
     setPostMenuId(null);
     setEditPostId(post.id);
-  }, []);
+  }, [editImages]);
 
   const submitEditPost = () => {
     if (editPostId === null) return;
     const content = editDraft.content.trim();
-    if (!content) {
+    const existingImages = (editDraft.attachments || []).filter((item) => item?.type === 'image' && item.url);
+    if (!content && existingImages.length === 0 && editImages.images.length === 0) {
       notify('Vui lòng nhập nội dung bài viết.', 'warning');
       return;
     }
@@ -1052,9 +1161,34 @@ export default function ConfessionPage() {
       changes: {
         title: editDraft.title.trim() || 'BDU Confession',
         content,
-        isAnonymous: editDraft.isAnonymous
+        isAnonymous: editDraft.isAnonymous,
+        // Giữ nguyên ảnh hiện có (người dùng đã chủ động gỡ thì đã bị lọc
+        // khỏi editDraft.attachments); ảnh mới upload thêm ở mutationFn.
+        attachments: editDraft.attachments || []
+      },
+      newImages: editImages.images
+    }, {
+      onSuccess: () => {
+        setEditPostId(null);
+        editImages.clear();
       }
-    }, { onSuccess: () => setEditPostId(null) });
+    });
+  };
+
+  const handleEditFiles = (fileList) => {
+    const result = editImages.addFiles(fileList);
+    if (result.skipped > 0) {
+      notify(`Mỗi bài viết chỉ đính kèm tối đa ${MAX_POST_IMAGES} ảnh.`, 'warning');
+    }
+  };
+
+  const removeExistingEditImage = (target) => {
+    setEditDraft((current) => ({
+      ...current,
+      attachments: (current.attachments || []).filter((item) => (
+        item?.type !== 'image' || item?.url !== target?.url
+      ))
+    }));
   };
 
   const rawPosts = useMemo(() => postsFrom(query.data), [query.data]);
@@ -1183,6 +1317,7 @@ export default function ConfessionPage() {
     : posts.find((item) => String(item.id) === String(editPostId))
     || (openPost && String(openPost.id) === String(editPostId) ? openPost : null);
   const editAuthor = editingPost ? postAvatarUser(editingPost, identityUser, presentation) : identityUser;
+  const existingEditImages = (editDraft.attachments || []).filter((item) => item?.type === 'image' && item.url);
   const editAuthorName = editDraft.isAnonymous
     ? 'Sinh viên giấu tên (Confession)'
     : (editingPost?.author?.name || displayName);
@@ -1514,16 +1649,35 @@ export default function ConfessionPage() {
                 <div className="widget-user-meta">
                   <h4 id="widget-user-name" className="widget-user-name">{displayName}</h4>
                   <p id="widget-user-mssv" className="widget-user-mssv">MSSV: {auth.user?.mssv || '---'}</p>
-                  <TitleBadges titles={selectedTitles} className="identity-title-widget" />
-                  <button
-                    id="btn-title-customizer"
-                    className="btn-title-customizer"
-                    type="button"
-                    onClick={openTitleCustomizer}
-                  >
-                    Chọn danh hiệu
-                  </button>
                 </div>
+              </div>
+              <div className="widget-user-titles">
+                <TitleBadges titles={selectedTitles} className="identity-title-widget" />
+                <button
+                  id="btn-title-customizer"
+                  className="btn-title-customizer"
+                  type="button"
+                  onClick={openTitleCustomizer}
+                >
+                  Chọn danh hiệu
+                </button>
+              </div>
+              <div className="widget-avatar-actions">
+                <button
+                  type="button"
+                  className="btn-widget-action btn-widget-avatar-upload"
+                  onClick={() => setAvatarManagerOpen(true)}
+                  disabled={avatarUpload.isPending}
+                >
+                  {avatarUpload.isPending ? 'Đang tải ảnh...' : 'Đổi ảnh đại diện'}
+                </button>
+                <input
+                  id="cfs-avatar-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  onChange={handleAvatarFile}
+                />
               </div>
               <div className="widget-user-actions">
                 <button
@@ -1758,7 +1912,6 @@ export default function ConfessionPage() {
                   rows={4}
                   maxLength={10000}
                   placeholder="Bạn đang nghĩ gì thế? Chia sẻ tài liệu, câu hỏi ôn tập, review môn học hoặc tâm sự... (gõ @ để tag bạn bè)"
-                  required
                 />
               </MentionAutocomplete>
             </div>
@@ -1790,9 +1943,38 @@ export default function ConfessionPage() {
               )}
             </div>
 
+            <div className="fb-media-draft-block">
+              <ImageDraftGrid
+                images={createImages.images}
+                onRemove={createImages.removeImage}
+                disabled={create.isPending}
+              />
+              {createImages.images.length > 0 && (
+                <small className="fb-media-hint">
+                  {createImages.images.length}/{MAX_POST_IMAGES} ảnh · JPG, PNG, WebP, GIF (tối đa 8MB mỗi ảnh)
+                </small>
+              )}
+              <MediaFileInput
+                id="cfs-post-media-input"
+                accept={ALL_IMAGE_ACCEPT}
+                onFiles={handleCreateFiles}
+                disabled={create.isPending || createImages.images.length >= MAX_POST_IMAGES}
+              />
+            </div>
+
             <div className="fb-add-to-post-box">
               <span className="fb-add-to-post-label">Thêm vào bài viết của bạn</span>
               <div className="fb-add-actions">
+                <button
+                  type="button"
+                  className="fb-add-btn"
+                  id="fb-tool-media"
+                  title="Thêm ảnh hoặc GIF"
+                  onClick={() => document.getElementById('cfs-post-media-input')?.click()}
+                  disabled={create.isPending || createImages.images.length >= MAX_POST_IMAGES}
+                >
+                  🖼️ Ảnh/GIF {createImages.images.length > 0 ? `(${createImages.images.length})` : ''}
+                </button>
                 <button
                   type="button"
                   className="fb-add-btn"
@@ -1842,13 +2024,13 @@ export default function ConfessionPage() {
               id="btn-submit-cfs"
               className="btn btn-primary fb-submit-post-btn"
               onClick={() => {
-                if (!draft.content.trim()) {
-                  notify('Vui lòng nhập nội dung bài viết.', 'warning');
+                if (!draft.content.trim() && createImages.images.length === 0) {
+                  notify('Vui lòng nhập nội dung bài viết hoặc chọn ảnh.', 'warning');
                   return;
                 }
                 create.mutate();
               }}
-              disabled={create.isPending || !draft.content.trim()}
+              disabled={create.isPending || (!draft.content.trim() && createImages.images.length === 0)}
             >
               {create.isPending ? 'Đang đăng...' : 'Đăng'}
             </button>
@@ -1920,9 +2102,48 @@ export default function ConfessionPage() {
                   rows={4}
                   maxLength={10000}
                   placeholder="Nội dung bài viết... (gõ @ để tag bạn bè)"
-                  required
                 />
               </MentionAutocomplete>
+            </div>
+
+            <div className="fb-media-draft-block">
+              {existingEditImages.length > 0 && (
+                <div className={`media-draft-grid is-count-${Math.min(existingEditImages.length, 4)}`}>
+                  {existingEditImages.map((photo, index) => (
+                    <div className="media-draft-item" key={photo.key || `${photo.url}-${index}`}>
+                      <img src={photo.url} alt="" />
+                      {photo.animated && <span className="fbc-gif-badge">GIF</span>}
+                      <button
+                        type="button"
+                        className="media-draft-remove"
+                        onClick={() => removeExistingEditImage(photo)}
+                        aria-label="Xoá ảnh khỏi bài viết"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <ImageDraftGrid images={editImages.images} onRemove={editImages.removeImage} disabled={update.isPending} />
+              <div className="fb-media-actions">
+                <button
+                  type="button"
+                  className="fb-add-btn"
+                  id="fb-tool-edit-media"
+                  onClick={() => document.getElementById('cfs-edit-media-input')?.click()}
+                  disabled={update.isPending || (existingEditImages.length + editImages.images.length) >= MAX_POST_IMAGES}
+                >
+                  🖼️ Ảnh/GIF
+                </button>
+                <small className="fb-media-hint">JPG, PNG, WebP, GIF · tối đa {MAX_POST_IMAGES} ảnh</small>
+              </div>
+              <MediaFileInput
+                id="cfs-edit-media-input"
+                accept={ALL_IMAGE_ACCEPT}
+                onFiles={handleEditFiles}
+                disabled={update.isPending || (existingEditImages.length + editImages.images.length) >= MAX_POST_IMAGES}
+              />
             </div>
           </div>
 
@@ -1932,7 +2153,7 @@ export default function ConfessionPage() {
               id="btn-submit-cfs-edit"
               className="btn btn-primary fb-submit-post-btn"
               onClick={submitEditPost}
-              disabled={update.isPending || !editDraft.content.trim()}
+              disabled={update.isPending || (!editDraft.content.trim() && existingEditImages.length === 0 && editImages.images.length === 0)}
             >
               {update.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
             </button>
@@ -2057,6 +2278,27 @@ export default function ConfessionPage() {
         document.body
       )}
       {confirmUI}
+
+      <AvatarManagerDialog
+        open={avatarManagerOpen}
+        user={identityUser}
+        presentation={presentation}
+        pending={avatarUpload.isPending}
+        removePending={avatarRemove.isPending}
+        onClose={() => setAvatarManagerOpen(false)}
+        onPickFile={pickAvatarFromDevice}
+        onRemove={() => {
+          setAvatarManagerOpen(false);
+          avatarRemove.mutate();
+        }}
+      />
+
+      <AvatarCropDialog
+        file={avatarCropFile}
+        pending={avatarUpload.isPending}
+        onCancel={cancelAvatarCrop}
+        onConfirm={confirmAvatarCrop}
+      />
     </section>
   );
 }

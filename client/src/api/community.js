@@ -97,6 +97,13 @@ export async function getCommunityPosts(token, { scope = 'school', scopeId = nul
 }
 
 export async function createCommunityPost(token, postData) { const data = await request('/api/community/posts', { method: 'POST', token, body: postData, defaultMessage: 'Không thể đăng bài viết.' }); return unwrap(data, data); }
+export async function uploadCommunityMedia(token, file, kind = 'post') {
+  const body = new FormData();
+  body.append('kind', kind);
+  body.append('file', file);
+  const data = await request('/api/community/media', { method: 'POST', token, body, defaultMessage: 'Không thể tải ảnh lên.' });
+  return unwrap(data, data);
+}
 export async function updateCommunityPost(token, postId, changes) { const data = await request(`/api/community/posts/${encodeURIComponent(postId)}`, { method: 'PATCH', token, body: changes, defaultMessage: 'Không thể chỉnh sửa bài viết.' }); return unwrap(data, data); }
 export async function deleteCommunityPost(token, postId) { return request(`/api/community/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', token, defaultMessage: 'Không thể xóa bài viết.' }); }
 export async function toggleCommunityPostLike(token, postId) { const data = await request(`/api/community/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', token, defaultMessage: 'Không thể tương tác like.' }); return unwrap(data, data); }

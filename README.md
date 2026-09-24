@@ -83,7 +83,7 @@ npm install
 ```
 
 3. Sao chép `.env.example` thành `.env`, cấu hình `DATABASE_URL`, `CDS_USER`,
-   `CDS_PASSWORD`, sau đó chạy migration:
+   `CDS_PASSWORD` và nhóm `R2_*` (xem mục "Ảnh & Cloudflare R2"), sau đó chạy migration:
 
 ```bash
 npm run db:setup:dev # Chỉ dùng khi DATABASE_URL trỏ tới PostgreSQL localhost
@@ -212,7 +212,9 @@ tự xóa cache sau deploy:
 * `/app-assets/*` có hash trong tên nên `immutable, max-age=1y` an toàn.
 * JS/CSS/HTML legacy trong `public/` không có hash nên trả `no-cache,
   must-revalidate` (browser/CDN nhận 304 qua ETag, file đổi được phục vụ ngay).
-* `/media/avatars` có tên timestamp + hash; `/media/fb-import` revalidate mỗi
+* `/media/r2/*` stream ảnh từ Cloudflare R2 khi chưa gắn custom domain/r2.dev
+  (cache `immutable, max-age=1y`); khi có `R2_PUBLIC_BASE_URL` ảnh mới trỏ
+  thẳng CDN, URL cũ vẫn hoạt động qua proxy. `/media/fb-import` revalidate mỗi
   ngày vì tên file có thể bị ghi đè khi bài viết được import lại.
 
 `npm run build:client` sinh `dist/client/build.json` và tự stamp `?v=<BUILD_ID>`
@@ -239,6 +241,50 @@ cấp loại trừ HTML và `/api/version` khỏi cache — đó là thứ duy n
 
 Muốn build id cố định/đọc được thay vì timestamp, truyền lúc build:
 `BUILD_ID=$(date +%Y%m%d%H%M%S) docker compose up -d --build`.
+
+### Ảnh & Cloudflare R2
+
+Toàn bộ ảnh người dùng (avatar, ảnh bài viết, ảnh/GIF bình luận Confession) được
+lưu trên Cloudflare R2; server **không ghi file ảnh runtime xuống VPS** và
+database chỉ giữ URL/object key.
+
+Cấu hình trong `.env` (xem đầy đủ ở `.env.example`):
+
+```env
+R2_ACCOUNT_ID=<account id>
+R2_ACCESS_KEY_ID=<Access Key ID>
+R2_SECRET_ACCESS_KEY=<Secret Access Key>
+R2_BUCKET=bdu-webapp
+R2_ENDPOINT=                  # bỏ trống để tự suy ra từ R2_ACCOUNT_ID
+R2_PUBLIC_BASE_URL=           # bỏ trống -> phục vụ qua /media/r2/<key>
+```
+
+* Tạo token tại **Cloudflare Dashboard → R2 → API → Manage API Tokens** với
+  quyền **Object Read & Write** đúng bucket.
+* Chưa gắn custom domain: ảnh trả về `/media/r2/<key>` và được server stream từ
+  R2 kèm cache 1 năm. Khi gắn custom domain (hoặc bật R2.dev subdomain), điền
+  `R2_PUBLIC_BASE_URL` để ảnh mới trỏ thẳng CDN — URL cũ trong DB vẫn chạy qua
+  proxy nên không cần migrate lại.
+* Giới hạn tải lên: `AVATAR_MAX_SIZE_MB` (avatar), `MEDIA_IMAGE_MAX_MB`,
+  `MEDIA_GIF_MAX_MB`, `MEDIA_IMAGE_MAX_PIXELS`, `MEDIA_GIF_MAX_FRAMES`,
+  `MEDIA_UPLOAD_RATE_LIMIT_PER_HOUR`; ảnh tĩnh được resize tối đa 1600px và
+  chuyển WebP, GIF giữ nguyên animation.
+* Ảnh đại diện có popup căn chỉnh/cắt vuông (kéo + zoom) trước khi upload, dùng
+  chung cho Confession và GPA.
+* Bài viết bị xoá (soft delete) vẫn giữ ảnh thêm `MEDIA_POST_DELETE_RETENTION_DAYS`
+  ngày (mặc định 7) rồi `MediaCleanupService` tự dọn khỏi R2 theo chu kỳ
+  `MEDIA_CLEANUP_INTERVAL_MINUTES`.
+* Avatar do sinh viên tự upload ở trang Confession hoặc ngay tại hero trang GPA
+  (hai kênh dùng chung một API và đồng bộ với nhau); admin-tool chỉ còn tra cứu
+  và gỡ ảnh vi phạm. Ảnh cũ trong `data/avatars` migrate bằng:
+
+```bash
+node scripts/migrate-avatars-to-r2.js          # xem trước
+node scripts/migrate-avatars-to-r2.js --apply  # upload + cập nhật DB
+```
+
+Sau khi migrate xong và kiểm tra ảnh hiển thị đúng, có thể xoá volume
+`data/avatars` cũ.
 
 ### Site Giải trí độc lập
 

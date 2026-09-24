@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
+import { MediaStorageService } from './media-storage.service.js';
 
 const OUTPUT_SIZE = 512;
 const DEFAULT_MAX_SIZE_MB = 3;
 const ALLOWED_INPUT_FORMATS = new Set(['jpeg', 'png', 'webp']);
+const AVATAR_PREFIX = 'avatars';
 
 function httpError(message, status = 400) {
   const error = new Error(message);
@@ -22,28 +23,22 @@ function requireDatabase() {
   if (!isDatabaseConfigured()) throw httpError('Database chưa được cấu hình.', 503);
 }
 
-function storageDir() {
-  return path.resolve(process.env.AVATAR_STORAGE_DIR || path.join(process.cwd(), 'data', 'avatars'));
-}
-
 function maxUploadBytes() {
   const mb = Math.max(1, Math.min(10, Number(process.env.AVATAR_MAX_SIZE_MB) || DEFAULT_MAX_SIZE_MB));
   return Math.trunc(mb * 1024 * 1024);
 }
 
 function publicUrl(storageKey) {
-  return `/media/avatars/${encodeURIComponent(storageKey)}`;
+  return MediaStorageService.publicUrl(storageKey);
 }
 
-async function ensureStorageDir() {
-  await fs.mkdir(storageDir(), { recursive: true, mode: 0o750 });
+function avatarObjectKey(cleanMssv, hash) {
+  const fileName = `${hash.slice(0, 16)}-${Date.now()}.webp`;
+  return `${AVATAR_PREFIX}/${cleanMssv}/${fileName}`;
 }
 
-async function safeUnlink(storageKey) {
-  if (!storageKey || path.basename(storageKey) !== storageKey) return;
-  await fs.unlink(path.join(storageDir(), storageKey)).catch((error) => {
-    if (error.code !== 'ENOENT') console.warn('[AvatarOverride] Không thể xóa file cũ:', error.message);
-  });
+function safeOriginalName(file) {
+  return path.basename(String(file?.originalname || 'avatar')).slice(0, 180);
 }
 
 async function processAvatarBuffer(buffer) {
@@ -88,13 +83,7 @@ function mapRow(row) {
 }
 
 export const AvatarOverrideService = {
-  getStorageDir: storageDir,
   getMaxUploadBytes: maxUploadBytes,
-
-  async ensureStorage() {
-    await ensureStorageDir();
-    return storageDir();
-  },
 
   async getByMssv(mssv) {
     requireDatabase();
@@ -165,16 +154,15 @@ export const AvatarOverrideService = {
 
     const { inputMetadata, processed } = await processAvatarBuffer(file.buffer);
     const hash = crypto.createHash('sha256').update(processed.data).digest('hex');
-    const storageKey = `${cleanMssv}-${hash.slice(0, 16)}-${Date.now()}.webp`;
-    const finalPath = path.join(storageDir(), storageKey);
-    const tempPath = path.join(storageDir(), `.${storageKey}.${crypto.randomUUID()}.tmp`);
-    await ensureStorageDir();
+    const storageKey = avatarObjectKey(cleanMssv, hash);
     try {
-      await fs.writeFile(tempPath, processed.data, { mode: 0o640 });
-      await fs.rename(tempPath, finalPath);
+      await MediaStorageService.putObject({
+        key: storageKey,
+        buffer: processed.data,
+        contentType: 'image/webp'
+      });
     } catch (error) {
-      await fs.unlink(tempPath).catch(() => {});
-      throw httpError(`Không thể lưu ảnh trên VPS: ${error.message}`, 500);
+      throw httpError(`Không thể lưu ảnh trên Cloudflare R2: ${error.message}`, error.status || 500);
     }
 
     let previousStorageKey = null;
@@ -212,7 +200,7 @@ export const AvatarOverrideService = {
           cleanMssv,
           urlImg,
           storageKey,
-          path.basename(String(file.originalname || 'avatar')),
+          safeOriginalName(file),
           processed.data.length,
           processed.info.width,
           processed.info.height,
@@ -224,7 +212,7 @@ export const AvatarOverrideService = {
             (mssv, action, actor_mssv, url_img, storage_key, metadata)
           VALUES ($1, 'upload', $2, $3, $4, $5::jsonb);
         `, [cleanMssv, cleanActor, urlImg, storageKey, JSON.stringify({
-          original_filename: path.basename(String(file.originalname || 'avatar')),
+          original_filename: safeOriginalName(file),
           input_format: inputMetadata.format,
           output_bytes: processed.data.length,
           width: processed.info.width,
@@ -233,11 +221,13 @@ export const AvatarOverrideService = {
         })]);
       });
     } catch (error) {
-      await safeUnlink(storageKey);
+      await MediaStorageService.deleteObject(storageKey);
       throw error;
     }
 
-    if (previousStorageKey && previousStorageKey !== storageKey) await safeUnlink(previousStorageKey);
+    if (previousStorageKey && previousStorageKey !== storageKey) {
+      await MediaStorageService.deleteObject(previousStorageKey);
+    }
     return this.getByMssv(cleanMssv);
   },
 
@@ -267,7 +257,7 @@ export const AvatarOverrideService = {
         VALUES ($1, 'remove', $2, $3, $4);
       `, [cleanMssv, cleanActor, previous.rows[0].url_img, previousStorageKey]);
     });
-    await safeUnlink(previousStorageKey);
+    await MediaStorageService.deleteObject(previousStorageKey);
     return this.getByMssv(cleanMssv);
   }
 };

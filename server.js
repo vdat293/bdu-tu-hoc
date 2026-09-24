@@ -6,6 +6,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'node:stream';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'url';
 import apiRoutes from './src/routes/api.routes.js';
@@ -15,7 +16,8 @@ import { ReminderSchedulerService } from './src/services/reminder-scheduler.serv
 import { OutboxMailerService } from './src/services/outbox-mailer.service.js';
 import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
-import { AvatarOverrideService } from './src/services/avatar-override.service.js';
+import { MediaStorageService } from './src/services/media-storage.service.js';
+import { MediaCleanupService } from './src/services/media-cleanup.service.js';
 import { IdentityAdminService } from './src/services/identity-admin.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
@@ -28,7 +30,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const avatarStorageDir = AvatarOverrideService.getStorageDir();
 const fbImportMediaDir = path.resolve(__dirname, process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import');
 const clientDistDir = path.join(__dirname, 'dist', 'client');
 const clientIndexPath = path.join(clientDistDir, 'index.html');
@@ -38,9 +39,6 @@ const hasReactClientBuild = fs.existsSync(clientIndexPath);
 const tempDir = path.join(__dirname, 'temp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
-}
-if (!fs.existsSync(avatarStorageDir)) {
-  fs.mkdirSync(avatarStorageDir, { recursive: true, mode: 0o750 });
 }
 // Ảnh kéo từ Facebook được lưu cục bộ vì URL CDN của Facebook có chữ ký hết hạn.
 if (!fs.existsSync(fbImportMediaDir)) {
@@ -58,18 +56,35 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(attachRequestContext);
 app.use(TrafficService.middleware());
-app.use('/media/avatars', express.static(avatarStorageDir, {
-  dotfiles: 'deny',
-  immutable: true,
-  maxAge: '1y',
-  // 301 của serve-static là redirect cacheable, CDN phía trước có thể nhân bản
-  // thành vòng lặp với người dùng thật — luôn tắt redirect ở mọi mount tĩnh.
-  redirect: false,
-  setHeaders(res) {
+// Ảnh/avatar người dùng nằm trên Cloudflare R2 (không ghi file runtime xuống
+// VPS). Khi bucket chưa gắn custom domain/r2.dev, route này stream object từ R2
+// và cache mạnh ở tầng CDN phía trước. Khi có R2_PUBLIC_BASE_URL, URL ảnh mới
+// sẽ trỏ thẳng CDN còn route này vẫn phục vụ các URL cũ đã lưu trong DB.
+app.get('/media/r2/*', async (req, res) => {
+  try {
+    const object = await MediaStorageService.getObject(req.params[0] || '');
+    res.setHeader('Content-Type', object.contentType);
+    if (object.contentLength) res.setHeader('Content-Length', String(object.contentLength));
+    if (object.etag) res.setHeader('ETag', object.etag);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    const body = object.body;
+    // AWS SDK v3 trả Node Readable ở runtime Node; chỉ chuyển đổi khi gặp
+    // web ReadableStream (ví dụ môi trường có fetch stream).
+    if (body && typeof body.pipe === 'function') body.pipe(res);
+    else Readable.fromWeb(body).pipe(res);
+  } catch (error) {
+    if (error?.status === 404) {
+      return res.status(404).json({ result: false, message: 'Không tìm thấy ảnh.' });
+    }
+    if (error?.status === 503) {
+      return res.status(503).json({ result: false, message: error.message });
+    }
+    console.error('[media] Lỗi stream ảnh R2:', error.message);
+    if (!res.headersSent) return res.status(502).json({ result: false, message: 'Không thể tải ảnh.' });
+    res.destroy?.();
   }
-}));
-app.use('/media/avatars', (req, res) => res.status(404).json({ result: false, message: 'Không tìm thấy ảnh đại diện.' }));
+});
 app.use('/media/fb-import', express.static(fbImportMediaDir, {
   dotfiles: 'deny',
   // Tên file dạng `<index>.<ext>` có thể bị ghi đè khi bài viết được import lại
@@ -224,6 +239,7 @@ server.listen(PORT, () => {
   TrafficService.start();
   FacebookImportService.start();
   AssetHistoryService.start();
+  MediaCleanupService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {
     if (res?.synced) {
       console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);
@@ -241,6 +257,7 @@ async function shutdown(signal) {
   TrafficService.stop();
   EntertainmentGameService.stop();
   AssetHistoryService.stop();
+  MediaCleanupService.stop();
   await FacebookImportService.stop().catch(() => {});
   CommunityRealtime.close();
   await TrafficService.flush().catch(() => {});

@@ -489,18 +489,6 @@ const BduApi = {
     return data.data;
   },
 
-  async uploadAdminAvatar(token, mssv, file) {
-    const body = new FormData();
-    body.append('avatar', file);
-    const response = await fetch(`/api/admin/avatars/${encodeURIComponent(mssv)}`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body
-    });
-    const data = await this.handleResponse(response, 'Không thể cập nhật ảnh đại diện.');
-    return data.data;
-  },
-
   async deleteAdminAvatar(token, mssv) {
     const response = await fetch(`/api/admin/avatars/${encodeURIComponent(mssv)}`, {
       method: 'DELETE',

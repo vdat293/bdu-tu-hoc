@@ -1,17 +1,26 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import GpaPage from '../../client/src/features/gpa/GpaPage.jsx';
 import { getGrades, getMyAcademicRanking } from '../../client/src/api/academics.js';
+import { uploadMyAvatar, deleteMyAvatar, getMyIdentityPresentation } from '../../client/src/api/identity.js';
 
 vi.mock('../../client/src/app/providers.jsx', () => ({
-  useAuth: () => ({ token: 'test-token', user: { mssv: '23012345', name: 'Sinh Viên Test' } })
+  useAuth: () => ({ token: 'test-token', user: { mssv: '23012345', name: 'Sinh Viên Test' } }),
+  useToasts: () => ({ notify: vi.fn() })
 }));
 
 vi.mock('../../client/src/api/academics.js', () => ({
   getGrades: vi.fn(),
-  getMyAcademicRanking: vi.fn(async () => ({}))
+  getMyAcademicRanking: vi.fn(async () => ({})),
+  getProfile: vi.fn(async () => ({}))
+}));
+
+vi.mock('../../client/src/api/identity.js', () => ({
+  getMyIdentityPresentation: vi.fn(async () => ({ avatar_source: 'initials' })),
+  uploadMyAvatar: vi.fn(async () => ({ source: 'override' })),
+  deleteMyAvatar: vi.fn(async () => ({}))
 }));
 
 const SEMESTERS = [
@@ -68,10 +77,32 @@ beforeEach(() => {
       removeListener: vi.fn()
     }))
   });
+  // jsdom không nạp ảnh thật: giả lập Image để popup cắt ảnh nhận kích thước.
+  const RealImage = window.Image;
+  class MockImage {
+    constructor() {
+      this.naturalWidth = 800;
+      this.naturalHeight = 600;
+      this.onload = null;
+      this.onerror = null;
+    }
+    set src(value) {
+      this._src = value;
+      queueMicrotask(() => this.onload?.());
+    }
+    get src() {
+      return this._src;
+    }
+  }
+  window.Image = MockImage;
+  window.__restoreRealImage = () => { window.Image = RealImage; };
   getGrades.mockResolvedValue({ data: { ds_diem_hocky: SEMESTERS } });
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  window.__restoreRealImage?.();
+  cleanup();
+});
 
 describe('gpa simulation end-to-end on GpaPage', () => {
   it('mặc định là bảng thường, mở tính thử phải qua hộp thoại', async () => {
@@ -133,4 +164,63 @@ describe('gpa simulation end-to-end on GpaPage', () => {
     await openPrediction();
     expect(screen.queryByLabelText(/tính thử môn Môn đã có điểm/)).not.toBeInTheDocument();
   });
+
+  it('bấm avatar mở popup ảnh đại diện, chọn ảnh mới rồi qua popup căn chỉnh', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Môn chưa có điểm');
+
+    const avatarButton = screen.getByRole('button', { name: 'Ảnh đại diện' });
+    expect(avatarButton).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(avatarButton);
+
+    const manager = await screen.findByRole('dialog', { name: 'Ảnh đại diện' });
+    expect(within(manager).getByRole('button', { name: /Tải ảnh từ máy/ })).toBeInTheDocument();
+    expect(within(manager).queryByRole('button', { name: /Gỡ ảnh hiện tại/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(manager).getByRole('button', { name: /Tải ảnh từ máy/ }));
+
+    const fileInput = container.querySelector('#hero-avatar + input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    const file = new File(['avatar'], 'avatar.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    const cropDialog = await screen.findByRole('dialog', { name: 'Chỉnh ảnh đại diện' });
+    expect(uploadMyAvatar).not.toHaveBeenCalled();
+    fireEvent.click(within(cropDialog).getByRole('button', { name: 'Chọn ảnh này' }));
+
+    await waitFor(() => expect(uploadMyAvatar).toHaveBeenCalledWith('test-token', file));
+  });
+
+  it('popup ảnh đại diện có mục gỡ ảnh khi đang dùng ảnh tự upload', async () => {
+    getMyIdentityPresentation.mockResolvedValueOnce({
+      avatar_source: 'override',
+      avatar_url: '/media/r2/avatars/23012345/abc.webp'
+    });
+    renderPage();
+    await screen.findByText('Môn chưa có điểm');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ảnh đại diện' }));
+    const manager = await screen.findByRole('dialog', { name: 'Ảnh đại diện' });
+    fireEvent.click(within(manager).getByRole('button', { name: /Gỡ ảnh hiện tại/ }));
+
+    await waitFor(() => expect(deleteMyAvatar).toHaveBeenCalledWith('test-token'));
+  });
+
+  it('huỷ popup căn chỉnh thì không upload ảnh', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Môn chưa có điểm');
+    fireEvent.click(screen.getByRole('button', { name: 'Ảnh đại diện' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tải ảnh từ máy/ }));
+
+    const fileInput = container.querySelector('#hero-avatar + input[type="file"]');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['avatar'], 'avatar.png', { type: 'image/png' })] }
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Chỉnh ảnh đại diện' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Huỷ' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chỉnh ảnh đại diện' })).not.toBeInTheDocument());
+    expect(uploadMyAvatar).not.toHaveBeenCalled();
+  });
+
 });

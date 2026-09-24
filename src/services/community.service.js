@@ -1,6 +1,9 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
 import { PermissionService, SYSTEM_ROLE_LEVELS } from './permission.service.js';
+import { MediaUploadService } from './media-upload.service.js';
+import { MediaStorageService } from './media-storage.service.js';
+import { MediaCleanupService } from './media-cleanup.service.js';
 
 function normalizeMssv(mssv) {
   return String(mssv || '').trim().toUpperCase();
@@ -98,6 +101,7 @@ function mapCommentRow(row, viewerMssv = null, permissions = {}) {
     post_id: row.post_id,
     parent_id: row.parent_id,
     content: isDeleted ? 'Bình luận đã bị xoá.' : row.content,
+    attachments: isDeleted ? [] : (Array.isArray(row.attachments) ? row.attachments : []),
     created_at: row.created_at,
     updated_at: row.updated_at,
     edited_at: row.edited_at || null,
@@ -352,6 +356,75 @@ export function parseDriveOrMediaUrl(urlStr, label = '', forceType = null) {
   };
 }
 
+/**
+ * Chuẩn hoá attachments của bài viết: ảnh do người dùng tải lên R2 giữ nguyên
+ * descriptor (đã whitelist host/prefix), các URL khác đi qua bộ phân tích
+ * Drive/YouTube/Link như trước.
+ */
+function parsePostAttachments(attachments) {
+  const parsed = attachments.map((item) => {
+    if (MediaUploadService.isImageAttachment(item)) {
+      return MediaUploadService.sanitizeImageAttachment(item)
+        || MediaUploadService.sanitizeLegacyImageAttachment(item);
+    }
+    if (typeof item === 'string') return parseDriveOrMediaUrl(item);
+    if (item && typeof item === 'object' && item.url) {
+      return parseDriveOrMediaUrl(item.url, item.title, item.type);
+    }
+    return null;
+  });
+  if (parsed.some((item) => !item)) {
+    throw httpError('Liên kết hoặc ảnh đính kèm không hợp lệ. Vui lòng tải ảnh lên lại.');
+  }
+  const imageCount = parsed.filter(MediaUploadService.isImageAttachment).length;
+  if (imageCount > MediaUploadService.MAX_POST_IMAGES) {
+    throw httpError(`Mỗi bài viết chỉ được đính kèm tối đa ${MediaUploadService.MAX_POST_IMAGES} ảnh.`);
+  }
+  return parsed;
+}
+
+/**
+ * Bình luận chỉ nhận ảnh/GIF tải lên R2 (không nhận link ngoài).
+ */
+function parseCommentAttachments(attachments) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  if (list.length > MediaUploadService.MAX_COMMENT_IMAGES) {
+    throw httpError(`Mỗi bình luận chỉ được đính kèm tối đa ${MediaUploadService.MAX_COMMENT_IMAGES} ảnh.`);
+  }
+  return list.map((item) => {
+    if (!MediaUploadService.isImageAttachment(item)) {
+      throw httpError('Bình luận chỉ hỗ trợ đính kèm ảnh hoặc GIF.');
+    }
+    const clean = MediaUploadService.sanitizeImageAttachment(item);
+    if (!clean) throw httpError('Ảnh đính kèm không hợp lệ. Vui lòng tải ảnh lên lại.');
+    return clean;
+  });
+}
+
+function imageKeysOf(attachments) {
+  return new Set(
+    (Array.isArray(attachments) ? attachments : [])
+      .filter(MediaUploadService.isImageAttachment)
+      .map((item) => item?.key)
+      .filter(Boolean)
+  );
+}
+
+/**
+ * Xoá best-effort các object R2 không còn được tham chiếu sau khi sửa bài
+ * viết/bình luận. Chỉ đụng tới key đúng prefix của luồng (posts/, comments/).
+ */
+async function deleteRemovedImageObjects(previousAttachments, nextAttachments, prefix) {
+  const previousKeys = imageKeysOf(previousAttachments);
+  if (previousKeys.size === 0) return;
+  const nextKeys = imageKeysOf(nextAttachments);
+  for (const key of previousKeys) {
+    if (nextKeys.has(key)) continue;
+    if (prefix && !String(key).startsWith(prefix)) continue;
+    await MediaStorageService.deleteObject(key);
+  }
+}
+
 export const CommunityService = {
   /**
    * Tạo bài viết mới
@@ -381,7 +454,9 @@ export const CommunityService = {
     if (!cleanMssv) throw httpError('MSSV của tác giả là bắt buộc.');
     if (!POST_SCOPES.has(cleanScope)) throw httpError('Phạm vi bài viết không hợp lệ.');
     if (cleanScope === 'clan' && !cleanScopeId) throw httpError('Bài viết CLB phải xác định CLB nhận bài.');
-    if (!cleanTitle || !cleanContent) throw httpError('Tiêu đề và nội dung bài viết không được để trống.');
+    const hasImageAttachment = Array.isArray(attachments) && attachments.some(MediaUploadService.isImageAttachment);
+    if (!cleanTitle) throw httpError('Tiêu đề bài viết không được để trống.');
+    if (!cleanContent && !hasImageAttachment) throw httpError('Nội dung bài viết không được để trống.');
     if (cleanTitle.length > MAX_TITLE_LENGTH) throw httpError(`Tiêu đề không được vượt quá ${MAX_TITLE_LENGTH} ký tự.`);
     if (cleanContent.length > MAX_CONTENT_LENGTH) throw httpError(`Nội dung không được vượt quá ${MAX_CONTENT_LENGTH} ký tự.`);
     if (!Array.isArray(attachments)) throw httpError('Danh sách tệp đính kèm không hợp lệ.');
@@ -415,17 +490,8 @@ export const CommunityService = {
       };
     }
 
-    // Chuẩn hóa danh sách đính kèm (Drive File, Folder, Video...)
-    const parsedAttachments = attachments.map((item) => {
-      if (typeof item === 'string') return parseDriveOrMediaUrl(item);
-      if (item && typeof item === 'object' && item.url) {
-        return parseDriveOrMediaUrl(item.url, item.title, item.type);
-      }
-      return null;
-    });
-    if (parsedAttachments.some((item) => !item)) {
-      throw httpError('Liên kết đính kèm không hợp lệ. Chỉ chấp nhận URL http hoặc https.');
-    }
+    // Chuẩn hóa danh sách đính kèm: ảnh R2 + Drive File/Folder/Video...
+    const parsedAttachments = parsePostAttachments(attachments);
 
     const createdPost = await transaction(async (client) => {
       // Đảm bảo tác giả tồn tại trong bảng students
@@ -831,7 +897,7 @@ export const CommunityService = {
 
     return transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id, author_mssv, scope, scope_id, category, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, author_mssv, scope, scope_id, category, deleted_at, attachments FROM community_posts WHERE id = $1 FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
@@ -863,6 +929,10 @@ export const CommunityService = {
           SET deleted_at = NOW(), deleted_by_mssv = $2, delete_reason = $3, updated_at = NOW()
           WHERE id = $1;
         `, [cleanPostId, cleanRequester, 'user_request']);
+
+        // Ảnh của bài bị xoá được giữ lại 7 ngày (cấu hình
+        // MEDIA_POST_DELETE_RETENTION_DAYS) rồi MediaCleanupService dọn khỏi R2.
+        await MediaCleanupService.enqueuePostMedia(client, cleanPostId, postRow.attachments);
       }
       return {
         deleted: true,
@@ -889,8 +959,16 @@ export const CommunityService = {
     const cleanContent = content === undefined ? null : String(content || '').trim();
     if (cleanTitle !== null && !cleanTitle) throw httpError('Tiêu đề bài viết không được để trống.');
     if (cleanTitle !== null && cleanTitle.length > MAX_TITLE_LENGTH) throw httpError(`Tiêu đề không được vượt quá ${MAX_TITLE_LENGTH} ký tự.`);
-    if (cleanContent !== null && !cleanContent) throw httpError('Nội dung bài viết không được để trống.');
     if (cleanContent !== null && cleanContent.length > MAX_CONTENT_LENGTH) throw httpError(`Nội dung không được vượt quá ${MAX_CONTENT_LENGTH} ký tự.`);
+    if (cleanContent !== null && !cleanContent) {
+      // Cho phép bài chỉ có ảnh: kiểm tra attachments mới (nếu client gửi)
+      // hoặc attachments hiện tại của bài trước khi báo lỗi.
+      const hasImages = Array.isArray(attachments)
+        ? attachments.some(MediaUploadService.isImageAttachment)
+        : Boolean((await query('SELECT attachments FROM community_posts WHERE id = $1', [cleanPostId]))
+          .rows[0]?.attachments?.some(MediaUploadService.isImageAttachment));
+      if (!hasImages) throw httpError('Nội dung bài viết không được để trống.');
+    }
     if (attachments !== undefined && !Array.isArray(attachments)) throw httpError('Danh sách tệp đính kèm không hợp lệ.');
     if (Array.isArray(attachments) && attachments.length > MAX_ATTACHMENTS) {
       throw httpError(`Mỗi bài viết chỉ được đính kèm tối đa ${MAX_ATTACHMENTS} liên kết.`);
@@ -898,26 +976,19 @@ export const CommunityService = {
 
     let parsedAttachments = null;
     if (Array.isArray(attachments)) {
-      parsedAttachments = attachments.map((item) => {
-        if (typeof item === 'string') return parseDriveOrMediaUrl(item);
-        if (item && typeof item === 'object' && item.url) {
-          return parseDriveOrMediaUrl(item.url, item.title, item.type);
-        }
-        return null;
-      });
-      if (parsedAttachments.some((item) => !item)) {
-        throw httpError('Liên kết đính kèm không hợp lệ. Chỉ chấp nhận URL http hoặc https.');
-      }
+      parsedAttachments = parsePostAttachments(attachments);
     }
 
+    let previousAttachments = null;
     const updatedRow = await transaction(async (client) => {
       const postResult = await client.query(
-        'SELECT id, author_mssv, scope, scope_id, deleted_at FROM community_posts WHERE id = $1 FOR UPDATE',
+        'SELECT id, author_mssv, scope, scope_id, deleted_at, attachments FROM community_posts WHERE id = $1 FOR UPDATE',
         [cleanPostId]
       );
       if (!postResult.rowCount) throw httpError('Không tìm thấy bài viết.', 404);
       const postRow = postResult.rows[0];
       if (postRow.deleted_at) throw httpError('Bài viết đã bị xoá và không thể chỉnh sửa.', 410);
+      previousAttachments = postRow.attachments;
 
       const isAuthor = postRow.author_mssv === cleanRequester;
       const canEdit = isAuthor || (await PermissionService.can(cleanRequester, 'community:post_update_any'));
@@ -943,6 +1014,10 @@ export const CommunityService = {
 
       return updated.rows[0];
     });
+
+    if (parsedAttachments) {
+      await deleteRemovedImageObjects(previousAttachments, parsedAttachments, 'posts/');
+    }
 
     // Đọc lại sau khi commit để bản ghi hiển thị đúng nội dung vừa lưu.
     const post = await this.getPostById(cleanPostId, cleanRequester);
@@ -1251,16 +1326,17 @@ export const CommunityService = {
    * Thêm bình luận vào bài viết với tối đa hai cấp hiển thị.
    * Trả lời một reply vẫn được gắn vào bình luận gốc của thread.
    */
-  async addComment({ postId, authorMssv, content, parentId = null, isAnonymous = false }) {
+  async addComment({ postId, authorMssv, content, parentId = null, isAnonymous = false, attachments = [] }) {
     if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
     const cleanPostId = normalizePostId(postId);
     const cleanParentId = parentId ? normalizePostId(parentId) : null;
     const cleanMssv = normalizeMssv(authorMssv);
     const cleanContent = String(content || '').trim();
+    const cleanAttachments = parseCommentAttachments(attachments);
 
     if (!cleanPostId || !cleanMssv) throw httpError('Post ID và tác giả là bắt buộc.');
     if (parentId && !cleanParentId) throw httpError('Bình luận cha không hợp lệ.');
-    if (!cleanContent) throw httpError('Nội dung bình luận không được để trống.');
+    if (!cleanContent && cleanAttachments.length === 0) throw httpError('Nội dung bình luận hoặc ảnh không được để trống.');
     if (cleanContent.length > MAX_COMMENT_LENGTH) throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
 
     const createdComment = await transaction(async (client) => {
@@ -1308,8 +1384,8 @@ export const CommunityService = {
       `, [cleanMssv]);
 
       const insertSql = `
-        INSERT INTO community_post_comments (post_id, author_mssv, parent_id, content, is_anonymous)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO community_post_comments (post_id, author_mssv, parent_id, content, is_anonymous, attachments)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
         RETURNING *;
       `;
       const result = await client.query(insertSql, [
@@ -1317,7 +1393,8 @@ export const CommunityService = {
         cleanMssv,
         resolvedParentId,
         cleanContent,
-        normalizeBoolean(isAnonymous)
+        normalizeBoolean(isAnonymous),
+        JSON.stringify(cleanAttachments)
       ]);
 
       await client.query(
@@ -1335,15 +1412,21 @@ export const CommunityService = {
     };
   },
 
-  async editComment({ postId, commentId, requesterMssv, content }) {
+  async editComment({ postId, commentId, requesterMssv, content, attachments }) {
     if (!isDatabaseConfigured()) throw new Error('Database chưa được cấu hình.');
     const cleanPostId = normalizePostId(postId);
     const cleanCommentId = normalizePostId(commentId);
     const cleanRequester = normalizeMssv(requesterMssv);
-    const cleanContent = String(content || '').trim();
+    const cleanContent = content === undefined ? null : String(content || '').trim();
+    const parsedAttachments = attachments === undefined ? null : parseCommentAttachments(attachments);
     if (!cleanPostId || !cleanCommentId || !cleanRequester) throw httpError('Thông tin bình luận không hợp lệ.');
-    if (!cleanContent) throw httpError('Nội dung bình luận không được để trống.');
-    if (cleanContent.length > MAX_COMMENT_LENGTH) throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
+    if (cleanContent === null && parsedAttachments === null) throw httpError('Không có nội dung cập nhật.');
+    if (cleanContent !== null && !cleanContent && !parsedAttachments?.length) {
+      throw httpError('Nội dung bình luận không được để trống.');
+    }
+    if (cleanContent !== null && cleanContent.length > MAX_COMMENT_LENGTH) {
+      throw httpError(`Bình luận không được vượt quá ${MAX_COMMENT_LENGTH} ký tự.`);
+    }
 
     const post = await query(
       'SELECT scope, scope_id FROM community_posts WHERE id = $1 AND deleted_at IS NULL',
@@ -1354,13 +1437,29 @@ export const CommunityService = {
       throw httpError('Bạn không có quyền sửa bình luận trong bài viết này.', 403);
     }
 
+    const previous = await query(
+      'SELECT attachments FROM community_post_comments WHERE id = $1 AND post_id = $2 AND author_mssv = $3 AND deleted_at IS NULL',
+      [cleanCommentId, cleanPostId, cleanRequester]
+    );
+
     const result = await query(`
       UPDATE community_post_comments
-      SET content = $3, edited_at = NOW(), updated_at = NOW()
+      SET content = COALESCE($3, content),
+          attachments = COALESCE($5::jsonb, attachments),
+          edited_at = NOW(), updated_at = NOW()
       WHERE id = $1 AND post_id = $2 AND author_mssv = $4 AND deleted_at IS NULL
       RETURNING id;
-    `, [cleanCommentId, cleanPostId, cleanContent, cleanRequester]);
+    `, [
+      cleanCommentId,
+      cleanPostId,
+      cleanContent,
+      cleanRequester,
+      parsedAttachments ? JSON.stringify(parsedAttachments) : null
+    ]);
     if (!result.rowCount) throw httpError('Không tìm thấy bình luận hoặc bạn không có quyền sửa.', 403);
+    if (parsedAttachments) {
+      await deleteRemovedImageObjects(previous.rows[0]?.attachments, parsedAttachments, 'comments/');
+    }
     return this.getCommentById(cleanCommentId, cleanRequester);
   },
 
@@ -1436,7 +1535,7 @@ export const CommunityService = {
     const cleanCommentId = normalizePostId(commentId);
     if (!cleanCommentId || !isDatabaseConfigured()) return null;
     const result = await query(`
-      SELECT c.id, c.post_id, c.parent_id, c.content, c.is_anonymous,
+      SELECT c.id, c.post_id, c.parent_id, c.content, c.attachments, c.is_anonymous,
              c.created_at, c.updated_at, c.deleted_at, c.edited_at,
              c.author_mssv AS raw_author_mssv, s.full_name AS raw_author_name,
              p.scope, p.scope_id, p.author_mssv AS post_author_mssv
@@ -1476,6 +1575,7 @@ export const CommunityService = {
         c.post_id,
         c.parent_id,
         c.content,
+        c.attachments,
         c.is_anonymous,
         c.created_at,
         c.updated_at,

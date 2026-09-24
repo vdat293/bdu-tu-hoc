@@ -53,7 +53,8 @@ vi.mock('../../client/src/api/community.js', () => ({
   getCommunityPostComments: vi.fn(() => Promise.resolve(commentFixtures)),
   getCommunityPosts: vi.fn(() => Promise.resolve({ posts: [post] })),
   toggleCommunityPostLike: vi.fn(),
-  updateCommunityPost: (...args) => updateCommunityPost(...args)
+  updateCommunityPost: (...args) => updateCommunityPost(...args),
+  uploadCommunityMedia: vi.fn()
 }));
 
 vi.mock('../../client/src/api/identity.js', () => ({
@@ -153,7 +154,7 @@ describe('Confession kiểu Facebook', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gửi bình luận' }));
 
     await waitFor(() => expect(addCommunityPostComment).toHaveBeenCalledTimes(1));
-    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Cảm ơn bạn', parentId: 1, isAnonymous: false });
+    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Cảm ơn bạn', parentId: 1, isAnonymous: false, attachments: [] });
   });
 
   it('gửi bình luận gốc thì không kèm parentId', async () => {
@@ -166,7 +167,7 @@ describe('Confession kiểu Facebook', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gửi bình luận' }));
 
     await waitFor(() => expect(addCommunityPostComment).toHaveBeenCalledTimes(1));
-    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Bình luận mới', isAnonymous: false });
+    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Bình luận mới', isAnonymous: false, attachments: [] });
   });
 
 
@@ -245,7 +246,7 @@ describe('Confession kiểu Facebook', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gửi bình luận' }));
 
     await waitFor(() => expect(addCommunityPostComment).toHaveBeenCalledTimes(1));
-    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Góp ý kín đáo', isAnonymous: true });
+    expect(addCommunityPostComment).toHaveBeenCalledWith('test-token', 10, { content: 'Góp ý kín đáo', isAnonymous: true, attachments: [] });
   });
 
   it('sự kiện realtime làm mới feed và thread đúng phạm vi', async () => {
@@ -342,7 +343,8 @@ describe('Confession kiểu Facebook', () => {
     expect(updateCommunityPost).toHaveBeenCalledWith('test-token', 10, {
       title: 'BDU Confession',
       content: 'Nội dung đã được quản trị viên chỉnh sửa',
-      isAnonymous: false
+      isAnonymous: false,
+      attachments: post.attachments
     });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa bài viết' })).not.toBeInTheDocument());
   });

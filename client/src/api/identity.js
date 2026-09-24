@@ -23,3 +23,22 @@ export async function updateMyEquippedFrame(token, frameId) {
   });
   return unwrap(data, data);
 }
+
+/**
+ * Ảnh đại diện do chính người dùng tải lên (lưu trên Cloudflare R2).
+ */
+export async function uploadMyAvatar(token, file) {
+  const body = new FormData();
+  body.append('avatar', file);
+  const data = await request('/api/me/avatar', {
+    method: 'POST', token, body, defaultMessage: 'Không thể cập nhật ảnh đại diện.'
+  });
+  return unwrap(data, data);
+}
+
+export async function deleteMyAvatar(token) {
+  const data = await request('/api/me/avatar', {
+    method: 'DELETE', token, defaultMessage: 'Không thể gỡ ảnh đại diện.'
+  });
+  return unwrap(data, data);
+}

@@ -37,8 +37,20 @@ services:
       - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-10}
       - SYSTEM_OWNER_MSSV=${SYSTEM_OWNER_MSSV:-}
       - ADMIN_DASHBOARD_KEY=${ADMIN_DASHBOARD_KEY:-}
-      - AVATAR_STORAGE_DIR=/app/data/avatars
       - AVATAR_MAX_SIZE_MB=${AVATAR_MAX_SIZE_MB:-3}
+      # Cloudflare R2: ảnh người dùng không lưu trên VPS.
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET=${R2_BUCKET:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_PUBLIC_BASE_URL=${R2_PUBLIC_BASE_URL:-}
+      - R2_MEDIA_PROXY_PATH=${R2_MEDIA_PROXY_PATH:-/media/r2}
+      - MEDIA_IMAGE_MAX_MB=${MEDIA_IMAGE_MAX_MB:-8}
+      - MEDIA_GIF_MAX_MB=${MEDIA_GIF_MAX_MB:-8}
+      - MEDIA_UPLOAD_RATE_LIMIT_PER_HOUR=${MEDIA_UPLOAD_RATE_LIMIT_PER_HOUR:-60}
+      - MEDIA_POST_DELETE_RETENTION_DAYS=${MEDIA_POST_DELETE_RETENTION_DAYS:-7}
+      - MEDIA_CLEANUP_INTERVAL_MINUTES=${MEDIA_CLEANUP_INTERVAL_MINUTES:-60}
       - WS_ALLOWED_ORIGINS=${WS_ALLOWED_ORIGINS:-}
       - WS_TRUST_PROXY=${WS_TRUST_PROXY:-true}
       - WS_AUTH_TIMEOUT_MS=${WS_AUTH_TIMEOUT_MS:-30000}
@@ -91,7 +103,6 @@ services:
     command: ["sh", "-c", "npm run db:migrate && npm start"]
     volumes:
       - ./temp:/app/temp
-      - ./data/avatars:/app/data/avatars
       - ./data/fb-profile:/app/data/fb-profile
       - ./data/fb-import:/app/data/fb-import
       - ./data/client-assets:/app/data/client-assets

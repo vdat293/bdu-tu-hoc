@@ -20,6 +20,22 @@ for (const name of ['localStorage', 'sessionStorage']) {
   }
 }
 
+// jsdom chưa hỗ trợ object URL cho ảnh xem trước (avatar, media composer).
+if (typeof window.URL.createObjectURL !== 'function') {
+  Object.defineProperty(window.URL, 'createObjectURL', {
+    configurable: true,
+    writable: true,
+    value: (blob) => `blob:mock/${Math.random().toString(36).slice(2)}-${blob?.size ?? 0}`
+  });
+}
+if (typeof window.URL.revokeObjectURL !== 'function') {
+  Object.defineProperty(window.URL, 'revokeObjectURL', {
+    configurable: true,
+    writable: true,
+    value: () => {}
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();

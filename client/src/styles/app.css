@@ -3889,3 +3889,434 @@ body.theme-dark .survey-settings-note {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+
+/* ---------------------------------------------------------------------------
+   Media tự upload (Cloudflare R2): chọn ảnh trong composer, ảnh/GIF bình luận.
+--------------------------------------------------------------------------- */
+
+/* Avatar ở hero trang GPA (ảnh do người dùng tự upload). */
+.hero-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+#hero-avatar {
+  position: relative;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+#hero-avatar:disabled {
+  cursor: progress;
+}
+
+#hero-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* Nhãn "Thay ảnh" chỉ hiện khi rê chuột / focus bàn phím. */
+#hero-avatar .hero-avatar-edit-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 0 4px;
+  background: rgba(15, 23, 42, .78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: center;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+#hero-avatar:hover .hero-avatar-edit-badge,
+#hero-avatar:focus-visible .hero-avatar-edit-badge {
+  opacity: 1;
+}
+
+#hero-avatar:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.avatar-manager-dialog {
+  width: min(380px, 100%);
+  padding: 0;
+  overflow: hidden;
+}
+
+.avatar-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.avatar-manager-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.avatar-manager-close {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.avatar-manager-close:hover {
+  background: #f3f4f6;
+}
+
+.avatar-manager-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 20px;
+}
+
+.avatar-manager-preview {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 900;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, .18);
+}
+
+.avatar-manager-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-manager-source {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.avatar-manager-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.avatar-manager-actions .btn {
+  width: 100%;
+}
+
+.avatar-manager-hint {
+  margin: 2px 0 0;
+  color: #9ca3af;
+  font-size: 11.5px;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.media-file-input {
+  display: none;
+}
+
+.media-draft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.media-draft-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f0f2f5;
+  border: 1px solid rgba(15, 23, 42, .08);
+}
+
+.media-draft-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-draft-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, .72);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.media-draft-remove:hover {
+  background: rgba(220, 38, 38, .9);
+}
+
+.fb-media-draft-block {
+  margin-top: 12px;
+}
+
+.fb-media-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fb-media-hint {
+  color: #65676b;
+  font-size: 12px;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-photo {
+  position: relative;
+}
+
+/* Nút công cụ trong ô bình luận (ảnh/GIF). */
+:is(#tab-confession, #fbc-post-modal) .fbc-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #65676b;
+  cursor: pointer;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-tool-btn:hover:not(:disabled) {
+  background: #e7f3ff;
+  color: #1877f2;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-tool-btn:disabled {
+  color: #bcc0c4;
+  cursor: not-allowed;
+}
+
+/* Ảnh/GIF đính kèm trong bubble bình luận. */
+:is(#tab-confession, #fbc-post-modal) .fbc-comment-media {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 320px;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-comment-media.is-count-2,
+:is(#tab-confession, #fbc-post-modal) .fbc-comment-media.is-count-3 {
+  grid-template-columns: 1fr 1fr;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-comment-photo {
+  position: relative;
+  display: block;
+  line-height: 0;
+  background: #f0f2f5;
+}
+
+:is(#tab-confession, #fbc-post-modal) .fbc-comment-photo img {
+  width: 100%;
+  height: auto;
+  max-height: 380px;
+  object-fit: cover;
+}
+
+.fbc-gif-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, .78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+/* Nút đổi/gỡ ảnh đại diện + khối danh hiệu ở widget thông tin sinh viên. */
+.widget-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#tab-confession .widget-user-titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 12px;
+}
+
+#tab-confession .widget-user-preview {
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#tab-confession .widget-user-titles .identity-title-widget {
+  margin-top: 0;
+}
+
+#tab-confession .widget-avatar-actions {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+
+#tab-confession .widget-avatar-actions .btn-widget-action {
+  padding: 6px 8px;
+  font-size: 11.5px;
+  border-radius: 8px;
+}
+
+/* Popup căn chỉnh/cắt ảnh đại diện kiểu Zalo. */
+.avatar-crop-dialog {
+  width: min(420px, 100%);
+  padding: 0;
+  overflow: hidden;
+}
+
+.avatar-crop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.avatar-crop-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.avatar-crop-close {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.avatar-crop-close:hover {
+  background: #f3f4f6;
+}
+
+.avatar-crop-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 8px;
+}
+
+.avatar-crop-stage {
+  position: relative;
+  width: min(300px, 74vw);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: repeating-conic-gradient(#eef2f7 0% 25%, #ffffff 0% 50%) 50% / 20px 20px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.avatar-crop-stage:active {
+  cursor: grabbing;
+}
+
+.avatar-crop-image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.avatar-crop-guide {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85), inset 0 0 0 3px rgba(15, 23, 42, .18);
+  pointer-events: none;
+}
+
+.avatar-crop-hint {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  text-align: center;
+}
+
+.avatar-crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.avatar-crop-zoom input {
+  flex: 1;
+}
+
+.avatar-crop-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12.5px;
+}
+
+.avatar-crop-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}

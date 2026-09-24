@@ -3,8 +3,6 @@
   const savedUser = localStorage.getItem('bdu_user') || sessionStorage.getItem('bdu_user');
   let currentMssv = null;
   let items = [];
-  let selectedAvatarFile = null;
-  let selectedAvatarObjectUrl = null;
 
   const $ = (selector) => document.querySelector(selector);
   const alertBox = $('#admin-alert');
@@ -202,11 +200,11 @@
     $('#item-editor-card')?.classList.add('is-hidden');
   };
 
-  const renderAvatarPreview = (record, previewUrl = null) => {
+  const renderAvatarPreview = (record) => {
     const preview = $('#avatar-preview');
     const circlePreview = $('#status-avatar-circle');
     const source = $('#avatar-preview-source');
-    const resolvedUrl = previewUrl || record?.resolved_url || '';
+    const resolvedUrl = record?.resolved_url || '';
     const name = record?.name || record?.mssv || currentMssv || 'Sinh viên';
 
     const avatarHtml = resolvedUrl
@@ -219,17 +217,15 @@
     if ($('#avatar-preview-name')) $('#avatar-preview-name').textContent = name;
     if ($('#status-student-name')) $('#status-student-name').textContent = name;
 
-    const sourceVal = previewUrl ? 'preview' : (record?.source || 'initials');
+    const sourceVal = record?.source || 'initials';
     let sourceText = 'Chưa có ảnh (Initials)';
     let badgeClass = '';
     if (sourceVal === 'override') {
-      sourceText = 'Ảnh VPS';
+      sourceText = 'Ảnh R2 (tự upload)';
       badgeClass = 'is-override';
     } else if (sourceVal === 'bdu') {
       sourceText = 'Ảnh API BDU';
       badgeClass = 'is-bdu';
-    } else if (sourceVal === 'preview') {
-      sourceText = 'Ảnh chờ tải lên';
     }
 
     if (source) {
@@ -241,12 +237,12 @@
     }
 
     if ($('#avatar-preview-url')) {
-      $('#avatar-preview-url').textContent = previewUrl
-        ? selectedAvatarFile?.name || 'Ảnh vừa chọn từ máy'
-        : (record?.override_url || record?.bdu_url || 'Chưa cài đặt URL ảnh; đang hiển thị chữ cái đầu tên.');
+      $('#avatar-preview-url').textContent = record?.override_url
+        || record?.bdu_url
+        || 'Chưa cài đặt URL ảnh; đang hiển thị chữ cái đầu tên.';
     }
 
-    const hasOverride = !previewUrl && record?.source === 'override';
+    const hasOverride = record?.source === 'override';
     $('#avatar-override-actions')?.classList.toggle('is-hidden', !hasOverride);
     const removeBtn = $('#avatar-remove');
     if (removeBtn) removeBtn.disabled = !hasOverride;
@@ -366,7 +362,7 @@
           </div>
           <button type="button" data-avatar-select="${escapeHtml(row.mssv)}">Xem trạng thái</button>
         </div>
-      `).join('') : '<p class="admin-empty">Chưa có ảnh override trên VPS.</p>';
+      `).join('') : '<p class="admin-empty">Chưa có ảnh đại diện tự upload.</p>';
 
       list.querySelectorAll('[data-avatar-select]').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -536,91 +532,24 @@
     }
   });
 
-  // 4. File input & Dropzone cho Avatar
-  const avatarFileInput = $('#avatar-file');
-  const avatarStatusBox = $('#avatar-file-selected-status');
-  const avatarFileName = $('#avatar-file-name');
-
-  const onAvatarFileSelected = (file) => {
-    if (!file) return;
-    selectedAvatarFile = file;
-    if (selectedAvatarObjectUrl) URL.revokeObjectURL(selectedAvatarObjectUrl);
-    selectedAvatarObjectUrl = URL.createObjectURL(file);
-    renderAvatarPreview(null, selectedAvatarObjectUrl);
-
-    if (avatarStatusBox && avatarFileName) {
-      avatarFileName.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
-      avatarStatusBox.classList.remove('is-hidden');
-    }
-  };
-
-  avatarFileInput?.addEventListener('change', () => {
-    onAvatarFileSelected(avatarFileInput.files?.[0]);
-  });
-
-  const dropzone = $('.avatar-dropzone');
-  ['dragenter', 'dragover'].forEach((type) => dropzone?.addEventListener(type, (event) => {
-    event.preventDefault();
-    dropzone.classList.add('is-dragging');
-  }));
-  ['dragleave', 'drop'].forEach((type) => dropzone?.addEventListener(type, (event) => {
-    event.preventDefault();
-    dropzone.classList.remove('is-dragging');
-  }));
-  dropzone?.addEventListener('drop', (event) => {
-    const file = event.dataTransfer?.files?.[0];
-    if (file) onAvatarFileSelected(file);
-  });
-
-  // 5. Submit Form Cập nhật Avatar
-  $('#avatar-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!currentMssv) {
-      showAlert('Vui lòng tra cứu MSSV sinh viên trước khi cập nhật ảnh.', true);
-      return;
-    }
-    if (!selectedAvatarFile) {
-      showAlert('Vui lòng chọn file ảnh JPG, PNG hoặc WebP cần tải lên.', true);
-      return;
-    }
-
-    const button = $('#avatar-upload');
-    button.disabled = true;
-    showAlert(`Đang tải ảnh đại diện cho sinh viên ${currentMssv}…`);
-
-    try {
-      const record = await BduApi.uploadAdminAvatar(sessionToken, currentMssv, selectedAvatarFile);
-      renderAvatarPreview(record);
-      showAlert(`Đã cập nhật ảnh đại diện thành công cho sinh viên ${currentMssv}.`);
-      selectedAvatarFile = null;
-      avatarFileInput.value = '';
-      avatarStatusBox?.classList.add('is-hidden');
-      if (selectedAvatarObjectUrl) URL.revokeObjectURL(selectedAvatarObjectUrl);
-      selectedAvatarObjectUrl = null;
-      await Promise.all([loadAvatarList(), loadAudit()]);
-    } catch (error) {
-      showAlert(error.message || 'Không thể cập nhật ảnh đại diện.', true);
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  // 6. Gỡ ảnh VPS (Dùng lại ảnh BDU)
+  // 4. Gỡ ảnh đại diện (Dùng lại ảnh BDU)
+  // Sinh viên tự tải ảnh đại diện ở trang Confession; admin-tool chỉ kiểm
+  // duyệt và gỡ ảnh không phù hợp.
   $('#avatar-remove')?.addEventListener('click', async () => {
     if (!currentMssv) return;
-    if (!window.confirm(`Gỡ ảnh VPS của sinh viên ${currentMssv} và dùng lại ảnh từ cổng BDU?`)) return;
+    if (!window.confirm(`Gỡ ảnh đại diện của sinh viên ${currentMssv} và dùng lại ảnh từ cổng BDU?`)) return;
 
     try {
       const record = await BduApi.deleteAdminAvatar(sessionToken, currentMssv);
       renderAvatarPreview(record);
-      showAlert(`Đã gỡ ảnh VPS của sinh viên ${currentMssv} và chuyển về ảnh BDU.`);
+      showAlert(`Đã gỡ ảnh đại diện của sinh viên ${currentMssv} và chuyển về ảnh BDU.`);
       await Promise.all([loadAvatarList(), loadAudit()]);
     } catch (error) {
       showAlert(error.message || 'Không thể gỡ ảnh đại diện.', true);
     }
   });
 
-  // 7. Đăng nhập Admin form
+  // 5. Đăng nhập Admin form
   $('#admin-login-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = $('#admin-login-submit');

@@ -86,10 +86,14 @@ Quy tắc:
   frontend hoặc migration dữ liệu nghiệp vụ.
 - `students.equipped_frame_id`: khung đang trang bị phía server; `displayed_title_ids`
   tiếp tục giới hạn tối đa 3 name tag.
-- `student_avatar_overrides`: ảnh avatar do admin tải lên VPS. Resolver luôn ưu
-  tiên override, sau đó mới dùng `students.avatar_url` từ API BDU.
-- Ảnh được chuẩn hóa WebP 512x512, lưu trong volume `data/avatars` và phục vụ
-  qua `/media/avatars`; không ghi file runtime vào `src` hoặc Docker image.
+- `student_avatar_overrides`: ảnh avatar do chính sinh viên tải lên Cloudflare
+  R2 (admin-tool chỉ kiểm duyệt/gỡ). Resolver luôn ưu tiên override, sau đó mới
+  dùng `students.avatar_url` từ API BDU.
+- Ảnh được chuẩn hóa WebP 512x512, lưu trên bucket R2 (`avatars/<mssv>/...`);
+  database giữ object key + URL. Không ghi file runtime vào `src`, Docker image
+  hay volume VPS.
+- Ảnh bài viết và ảnh/GIF bình luận Confession cũng nằm trên R2, gắn vào
+  `community_posts.attachments` / `community_post_comments.attachments` (JSONB).
 
 ### 4.4. Guild/CLB
 
@@ -255,8 +259,16 @@ không chỉnh schema production thủ công qua dashboard.
   lưu khung đang trang bị.
 - [x] Backfill quyền hiện tại, gồm `24050126` với `#TTCDS` và capability preview
   toàn bộ khung.
-- [x] Admin upload/gỡ avatar override; Confession, comment, profile và Learning
-  Hub dùng cùng resolver, đồng bộ qua WebSocket.
+- [x] Người dùng tự upload/gỡ avatar trên Confession hoặc hero trang GPA (cùng
+  API, đồng bộ hai chiều); ảnh lưu Cloudflare R2, admin-tool chỉ kiểm duyệt.
+  Confession, comment, profile, GPA và Learning Hub dùng cùng resolver, đồng bộ
+  qua WebSocket.
+- [x] Bài viết Confession có ảnh và bình luận có ảnh/GIF tải lên R2 (giới hạn
+  số ảnh, whitelist host, dọn object khi gỡ ảnh). Ảnh của bài bị xoá được giữ
+  thêm 7 ngày rồi MediaCleanupService dọn khỏi R2, có kiểm tra ảnh còn được
+  nội dung khác tham chiếu trước khi xoá.
+- [x] Popup căn chỉnh/cắt ảnh đại diện (kéo + zoom) dùng chung cho Confession
+  và trang GPA.
 - [ ] Redis/PostgreSQL pub-sub adapter khi chạy nhiều app instance.
 - [ ] Report queue và moderation dashboard đầy đủ.
 
@@ -264,8 +276,10 @@ không chỉnh schema production thủ công qua dashboard.
 
 MVP gồm local account/session, bài viết text + link, bình luận/reply, realtime
 community, bookmark, report, entitlement khung/name tag, guild cơ bản và
-leaderboard opt-in. Chưa làm chat hai chiều, upload file, thuật toán gợi ý AI,
-cấp độ guild phức tạp hoặc app mobile cho đến khi có dữ liệu sử dụng.
+leaderboard opt-in. Ảnh avatar và ảnh/GIF Confession (bài viết + bình luận) đi
+qua Cloudflare R2; chưa làm chat hai chiều, upload tài liệu/file tổng quát,
+thuật toán gợi ý AI, cấp độ guild phức tạp hoặc app mobile cho đến khi có dữ
+liệu sử dụng.
 
 ### Vận hành entitlement
 

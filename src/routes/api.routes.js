@@ -42,6 +42,20 @@ const avatarUpload = multer({
   }
 });
 
+const mediaMaxMb = Math.max(
+  Number(process.env.MEDIA_IMAGE_MAX_MB) || 8,
+  Number(process.env.MEDIA_GIF_MAX_MB) || 8
+);
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  // Nới thêm 1MB để service kịp báo lỗi 413 kèm thông báo rõ ràng theo loại file.
+  limits: { fileSize: Math.trunc((mediaMaxMb + 1) * 1024 * 1024) },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) return cb(null, true);
+    cb(new Error('Chỉ chấp nhận ảnh JPG, PNG, WebP hoặc GIF.'));
+  }
+});
+
 // 1. Auth & Portal
 router.post('/login', ApiController.login);
 router.post('/grades', ApiController.getGrades);
@@ -132,8 +146,11 @@ router.get('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController
 router.post('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController.sendAdminBroadcast);
 router.get('/admin/avatars', ApiController.getAdminAvatars);
 router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
-router.post('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, avatarUpload.single('avatar'), ApiController.uploadAdminAvatar);
 router.delete('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, ApiController.deleteAdminAvatar);
+
+// Avatar tự upload cho chính người dùng (ảnh lưu trên Cloudflare R2).
+router.post('/me/avatar', avatarUpload.single('avatar'), ApiController.uploadMyAvatar);
+router.delete('/me/avatar', ApiController.deleteMyAvatar);
 
 // Admin Traffic & Logs Dashboard
 router.post('/admin/dashboard/login', AdminDashboardController.login);
@@ -151,6 +168,7 @@ router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
 router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 
 // 6. Góc Tự Học Số (Community Study Hub & Clans)
+router.post('/community/media', mediaUpload.single('file'), ApiController.uploadCommunityMedia);
 router.get('/community/posts', ApiController.getCommunityPosts);
 router.post('/community/posts', ApiController.createCommunityPost);
 router.get('/community/posts/:id', ApiController.getCommunityPost);

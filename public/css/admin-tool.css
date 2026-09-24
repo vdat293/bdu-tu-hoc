@@ -792,7 +792,7 @@ button, input, select { font: inherit; }
 .audit-action-revoke { background: var(--admin-danger-soft); color: var(--admin-danger); }
 .audit-action-upload { background: var(--admin-blue-soft); color: var(--admin-blue); }
 
-/* VPS Avatar List */
+/* R2 Avatar List */
 .avatar-list-toolbar-actions {
   display: flex;
   align-items: center;

@@ -114,6 +114,8 @@ export function syncRealtimeCache(client, event) {
     work.push(invalidateQueryPrefix(client, ['identity-presentation']));
   } else if (type === 'identity.presentation.changed') {
     work.push(invalidateQueryPrefix(client, ['confession']));
+    // Ảnh upload từ trang GPA/Confession hoặc máy khác phải đồng bộ tức thì.
+    work.push(invalidateQueryPrefix(client, ['identity-presentation']));
   }
   return Promise.all(work);
 }

@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { getGrades, getMyAcademicRanking } from '../../api/academics.js';
+import { getGrades, getMyAcademicRanking, getProfile } from '../../api/academics.js';
+import { getMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth } from '../../app/providers.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import { AvatarContent, getIdentityPhoto } from '../../components/identity/Identity.jsx';
+import { useAvatarUpload } from '../../components/identity/useAvatarUpload.js';
+import AvatarCropDialog from '../../components/identity/AvatarCropDialog.jsx';
+import AvatarManagerDialog from '../../components/identity/AvatarManagerDialog.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import GpaTrendChart from './GpaTrendChart.jsx';
 import GradeDistChart from './GradeDistChart.jsx';
@@ -52,9 +57,22 @@ function getGradeLetterClass(letter) {
   return '';
 }
 
-function getInitials(name) {
-  const parts = String(name || 'SV').trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+function profilePhotoFrom(response) {
+  const raw = response?.data || response || {};
+  const profile = Array.isArray(raw)
+    ? raw[0]
+    : raw?.ds_thong_tin_sinh_vien?.[0]
+    || raw?.thong_tin_sinh_vien?.[0]
+    || raw?.student
+    || raw;
+  return response?.student_image
+    || raw?.student_image
+    || profile?.student_image
+    || profile?.hinh_anh
+    || profile?.url_hinh_anh
+    || profile?.image
+    || profile?.anh_the
+    || '';
 }
 
 function validHighlightedRank(rank) {
@@ -246,6 +264,43 @@ export default function GpaPage() {
     retry: false
   });
 
+  // Ảnh đại diện hiển thị ở hero (đồng bộ với trang Confession).
+  const presentationQuery = useQuery({
+    queryKey: ['identity-presentation', auth.user?.mssv],
+    queryFn: ({ signal }) => getMyIdentityPresentation(auth.token, { signal }),
+    enabled: Boolean(auth.token),
+    staleTime: 5 * 60 * 1000
+  });
+  const presentation = presentationQuery.data;
+  const profileQuery = useQuery({
+    queryKey: ['profile', auth.user?.mssv],
+    queryFn: ({ signal }) => getProfile(auth.token, { idsv: auth.user?.idsv, mssv: auth.user?.mssv, signal }),
+    enabled: Boolean(auth.token),
+    staleTime: 5 * 60 * 1000
+  });
+  const {
+    upload: avatarUpload,
+    remove: avatarRemove,
+    startCrop: startAvatarCrop,
+    cancelCrop: cancelAvatarCrop,
+    confirmCrop: confirmAvatarCrop,
+    cropFile: avatarCropFile
+  } = useAvatarUpload();
+  const avatarInputRef = useRef(null);
+
+  const handleAvatarFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    startAvatarCrop(file);
+  };
+
+  const [avatarManagerOpen, setAvatarManagerOpen] = useState(false);
+
+  const pickAvatarFromDevice = () => {
+    setAvatarManagerOpen(false);
+    avatarInputRef.current?.click();
+  };
+
   const semesters = useMemo(() => getSemesters(grades.data), [grades.data]);
   const summary = useMemo(() => latestSummary(semesters), [semesters]);
 
@@ -259,6 +314,14 @@ export default function GpaPage() {
   const displayName = auth.user?.name || 'Sinh viên BDU';
   const userMssv = auth.user?.mssv || '--';
   const userEmail = auth.user?.email || `${userMssv}@student.bdu.edu.vn`;
+  // Ảnh ưu tiên: override tự upload → ảnh BDU trả trong presentation →
+  // ảnh lý lịch (profile) như trang Confession.
+  const avatarUser = {
+    ...auth.user,
+    name: displayName,
+    photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data)
+  };
+
   const rankingData = academicRanking.data;
   const gpaRank = validHighlightedRank(rankingData?.xep_hang_noi_bat?.gpa_tich_luy);
   const creditRank = validHighlightedRank(rankingData?.xep_hang_noi_bat?.tin_chi_tich_luy);
@@ -451,8 +514,30 @@ export default function GpaPage() {
             alt=""
             aria-hidden="true"
           />
-          <div id="hero-avatar" className="hero-avatar">
-            {getInitials(displayName)}
+          <div className="hero-avatar-wrap">
+            <button
+              type="button"
+              id="hero-avatar"
+              className={`hero-avatar ${presentation?.avatar_source === 'override' ? 'has-custom-avatar' : ''}`.trim()}
+              onClick={() => setAvatarManagerOpen(true)}
+              disabled={avatarUpload.isPending}
+              title="Ảnh đại diện"
+              aria-label="Ảnh đại diện"
+              aria-haspopup="dialog"
+              aria-expanded={avatarManagerOpen}
+            >
+              <AvatarContent user={avatarUser} presentation={presentation} alt={`Ảnh của ${displayName}`} />
+              <span className="hero-avatar-edit-badge" aria-hidden="true">
+                {avatarUpload.isPending ? 'Đang tải…' : 'Thay ảnh'}
+              </span>
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              onChange={handleAvatarFile}
+            />
           </div>
           <div className="hero-info">
             <div className="hero-tags">
@@ -1131,6 +1216,27 @@ export default function GpaPage() {
             </div>
         </ViewportModal>
       )}
+
+      <AvatarManagerDialog
+        open={avatarManagerOpen}
+        user={avatarUser}
+        presentation={presentation}
+        pending={avatarUpload.isPending}
+        removePending={avatarRemove.isPending}
+        onClose={() => setAvatarManagerOpen(false)}
+        onPickFile={pickAvatarFromDevice}
+        onRemove={() => {
+          setAvatarManagerOpen(false);
+          avatarRemove.mutate();
+        }}
+      />
+
+      <AvatarCropDialog
+        file={avatarCropFile}
+        pending={avatarUpload.isPending}
+        onCancel={cancelAvatarCrop}
+        onConfirm={confirmAvatarCrop}
+      />
     </section>
   );
 }

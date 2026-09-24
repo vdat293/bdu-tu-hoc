@@ -15,10 +15,11 @@ assert.match(adminHtml, /student-status-panel/, 'Phải có khu vực hiển th�
 assert.match(adminHtml, /current-titles-list/, 'Phải có danh sách danh hiệu đang sở hữu');
 assert.match(adminHtml, /current-frames-list/, 'Phải có danh sách khung đang sở hữu');
 assert.match(adminHtml, /avatar-preview/, 'Phải có preview trạng thái avatar');
-assert.match(adminHtml, /student-actions-panel/, 'Phải có khu vực thao tác cấp quyền & thay ảnh');
+assert.match(adminHtml, /student-actions-panel/, 'Phải có khu vực thao tác cấp quyền & kiểm duyệt ảnh');
 assert.match(adminHtml, /grant-title-form/, 'Phải có form cấp danh hiệu');
 assert.match(adminHtml, /grant-frame-form/, 'Phải có form cấp khung');
-assert.match(adminHtml, /avatar-form/, 'Phải có form thay ảnh đại diện');
+assert.doesNotMatch(adminHtml, /avatar-form|avatar-upload|avatar-file/, 'Không còn form upload ảnh (người dùng tự upload)');
+assert.match(adminHtml, /avatar-remove/, 'Phải có nút gỡ ảnh đại diện để kiểm duyệt');
 
 // 2. Kiểm tra JS của Admin Tool
 assert.match(adminJs, /logout/, 'Phải có hàm logout xóa session');
@@ -30,7 +31,8 @@ assert.match(adminJs, /getAdminIdentityGrants/, 'Phải nạp grants của MSSV'
 assert.match(adminJs, /getAdminAvatar/, 'Phải nạp thông tin avatar của MSSV');
 assert.match(adminJs, /grant-title-form/, 'Phải xử lý submit cấp danh hiệu');
 assert.match(adminJs, /grant-frame-form/, 'Phải xử lý submit cấp khung');
-assert.match(adminJs, /avatar-upload/, 'Phải xử lý cập nhật avatar');
+assert.match(adminJs, /deleteAdminAvatar/, 'Phải xử lý gỡ ảnh đại diện');
+assert.doesNotMatch(adminJs, /uploadAdminAvatar/, 'Không còn upload ảnh thay người dùng');
 
 // 3. Kiểm tra fallback getByMssv trong Avatar Override Service
 assert.match(avatarService, /source:\s*'initials'/, 'Phải trả về fallback avatar khi MSSV chưa có trong database');
