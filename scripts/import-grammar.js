@@ -17,6 +17,7 @@ import {
   optionLetterFor,
   optionsFromRow
 } from '../src/utils/grammar-data.js';
+import { canArrangeInto, parseArrangeWords } from '../src/utils/grammar-answers.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const crawlRoot = process.env.GRAMMAR_CRAWL_ROOT
@@ -82,7 +83,18 @@ async function importPath(slug, data, stats) {
   const exerciseRows = [];
   const readingRows = [];
   const readingQuestionRows = [];
+  const arrangeIssues = [];
   let questionTotal = 0;
+
+  // Câu sắp xếp từ phải có ít nhất một thứ tự chip ghép được thành đáp án;
+  // nếu không, người học xếp đúng cũng bị chấm sai → cảnh báo khi import.
+  const checkArrange = (row) => {
+    if (row.type !== 'arrange_words') return;
+    const chips = parseArrangeWords(row.question, row.options[0]);
+    if (!canArrangeInto(row.answer, chips)) {
+      arrangeIssues.push({ id: row.id, question: row.question, answer: row.answer });
+    }
+  };
 
   for (const lesson of data.lessons || []) {
     const exercises = lesson.exercises || [];
@@ -103,6 +115,7 @@ async function importPath(slug, data, stats) {
       const type = clean(ex.type, 24) || 'multiple_choice';
       const options = optionsFromRow(ex);
       const answer = resolveCorrectAnswer(type, ex.correctAnswer, options);
+      checkArrange({ id: ex.id, type, question: ex.question, options, answer });
       exerciseRows.push([
         ex.id, lesson.id, type, sanitizeGrammarHtml(ex.question),
         options[0], options[1], options[2], options[3],
@@ -117,6 +130,7 @@ async function importPath(slug, data, stats) {
         const type = clean(q.type, 24) || 'multiple_choice';
         const options = optionsFromRow(q);
         const answer = resolveCorrectAnswer(type, q.correctAnswer, options);
+        checkArrange({ id: q.id, type, question: q.question, options, answer });
         readingQuestionRows.push([
           q.id, reading.id, type, sanitizeGrammarHtml(q.question),
           options[0], options[1], options[2], options[3],
@@ -180,7 +194,15 @@ async function importPath(slug, data, stats) {
   stats.exercises += exerciseRows.length + readingQuestionRows.length;
   stats.readings += readingRows.length;
   stats.questions += questionTotal;
+  stats.arrangeIssues += arrangeIssues.length;
   console.log(`✓ ${slug}: ${lessonRows.length} bài, ${ruleRows.length} lý thuyết, ${exerciseRows.length} câu + ${readingQuestionRows.length} câu đọc hiểu`);
+  if (arrangeIssues.length) {
+    console.warn(`(!) ${slug}: ${arrangeIssues.length} câu arrange_words không xếp được thành đáp án (cần sửa dữ liệu crawl):`);
+    for (const issue of arrangeIssues.slice(0, 10)) {
+      console.warn(`    - ${issue.id}: "${clean(issue.question, 160)}" → "${clean(issue.answer, 120)}"`);
+    }
+    if (arrangeIssues.length > 10) console.warn(`    ... và ${arrangeIssues.length - 10} câu khác`);
+  }
 }
 
 async function main() {
@@ -193,7 +215,7 @@ async function main() {
     return;
   }
 
-  const stats = { paths: 0, lessons: 0, rules: 0, exercises: 0, readings: 0, questions: 0 };
+  const stats = { paths: 0, lessons: 0, rules: 0, exercises: 0, readings: 0, questions: 0, arrangeIssues: 0 };
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     const slug = entry.name;
@@ -211,6 +233,9 @@ async function main() {
   }
 
   console.log(`\n✓ Đã import ${stats.paths} lộ trình, ${stats.lessons} bài, ${stats.rules} lý thuyết, ${stats.readings} bài đọc hiểu, ${stats.exercises} câu hỏi.`);
+  if (stats.arrangeIssues) {
+    console.warn(`(!) Tổng ${stats.arrangeIssues} câu arrange_words cần kiểm tra lại (xem cảnh báo phía trên).`);
+  }
 }
 
 try {

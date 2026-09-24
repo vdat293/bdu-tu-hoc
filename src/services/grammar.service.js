@@ -1,4 +1,5 @@
 import { isDatabaseConfigured, query } from '../db/database.js';
+import { isAnswerCorrect } from '../utils/grammar-answers.js';
 
 function httpError(message, status = 400) {
   const error = new Error(message);
@@ -53,6 +54,36 @@ const EXERCISE_COLUMNS = `id, type, question, option_a, option_b, option_c, opti
 
 const READING_QUESTION_COLUMNS = `id, type, question, option_a, option_b, option_c, option_d,
   correct_answer, correct_option, explanation, order_idx`;
+
+function normalizeResponse(value) {
+  if (Array.isArray(value)) {
+    const words = value.slice(0, 40).map((word) => String(word ?? '').slice(0, 200));
+    return words.length ? words : null;
+  }
+  const text = String(value ?? '').slice(0, 500);
+  return text.trim() ? text : null;
+}
+
+// Chấm lại câu trả lời ở server, không tin số correct do client khai.
+// rows: [{ id, type, correct_answer }]; responses: [{ id, response }].
+// Bỏ qua id lạ/trùng để tránh thổi phồng điểm.
+export function gradeGrammarResponses(rows, responses) {
+  const byId = new Map((rows || []).map((row) => [String(row.id), row]));
+  const seen = new Set();
+  let answered = 0;
+  let correct = 0;
+  for (const entry of Array.isArray(responses) ? responses : []) {
+    const id = String(entry?.id ?? '').trim();
+    if (!id || seen.has(id)) continue;
+    const row = byId.get(id);
+    if (!row) continue;
+    seen.add(id);
+    answered += 1;
+    const response = normalizeResponse(entry.response);
+    if (response != null && isAnswerCorrect(row.type, response, row.correct_answer)) correct += 1;
+  }
+  return { answered, correct };
+}
 
 export const GrammarService = {
   hasDatabase() {
@@ -286,10 +317,35 @@ export const GrammarService = {
     if (!lesson) throw httpError('Bài học không tồn tại.', 404);
 
     const total = num(lesson.question_count);
-    const completed = Boolean(payload.completed);
-    const totalCount = completed ? total : Math.min(total, Math.max(0, num(payload.total, total)));
-    const answered = completed ? total : Math.min(totalCount, Math.max(0, num(payload.answered)));
-    const correct = Math.min(answered, Math.max(0, num(payload.correct)));
+    const hasResponses = Array.isArray(payload.responses);
+
+    let totalCount;
+    let answered;
+    let correct;
+    let completed;
+    if (hasResponses) {
+      // Client mới gửi kèm câu trả lời → server tự chấm lại.
+      const answerRows = await query(
+        `SELECT id, type, correct_answer FROM grammar_exercises WHERE lesson_id = $1
+         UNION ALL
+         SELECT q.id, q.type, q.correct_answer
+           FROM grammar_reading_questions q
+           JOIN grammar_reading_exercises r ON r.id = q.reading_id
+          WHERE r.lesson_id = $1`,
+        [cleanLesson]
+      );
+      const graded = gradeGrammarResponses(answerRows.rows, payload.responses);
+      answered = Math.min(total, graded.answered);
+      correct = Math.min(answered, graded.correct);
+      completed = Boolean(payload.completed) && answered >= total;
+      totalCount = completed ? total : Math.min(total, Math.max(0, num(payload.total, total)));
+    } else {
+      // Client cũ không gửi câu trả lời → giữ hành vi cũ (kẹp theo question_count).
+      completed = Boolean(payload.completed);
+      totalCount = completed ? total : Math.min(total, Math.max(0, num(payload.total, total)));
+      answered = completed ? total : Math.min(totalCount, Math.max(0, num(payload.answered)));
+      correct = Math.min(answered, Math.max(0, num(payload.correct)));
+    }
 
     const existingResult = await query(
       `SELECT answered, correct_count, total_count, best_correct, best_total, attempts

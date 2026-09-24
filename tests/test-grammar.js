@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { GrammarService } from '../src/services/grammar.service.js';
+import { GrammarService, gradeGrammarResponses } from '../src/services/grammar.service.js';
 import {
   sanitizeGrammarHtml,
   resolveCorrectAnswer,
   optionLetterFor,
   optionsFromRow
 } from '../src/utils/grammar-data.js';
+import { canArrangeInto, isAnswerCorrect, parseArrangeWords } from '../src/utils/grammar-answers.js';
 
 console.log('🧪 Kiểm tra grammar service...');
 
@@ -71,5 +72,54 @@ assert.equal(lessons, 246, 'Tổng số bài học phải là 246');
 assert.equal(rules, 1377, 'Tổng số lý thuyết phải là 1377');
 assert.equal(exercises, 10252, 'Tổng số câu bài tập phải là 10.252');
 assert.equal(readings, 46, 'Tổng số bài đọc hiểu phải là 46');
+
+// 6. Chấm đáp án dùng chung: chip dấu câu, dấu phẩy giữa câu, chú thích dịch
+assert.equal(isAnswerCorrect('arrange_words', ['Can', 'you', 'help', 'me', '?'], 'Can you help me?'), true);
+assert.equal(isAnswerCorrect('arrange_words', ['Having', 'finished', 'the', 'training', 'she', 'received', 'a', 'certificate'], 'Having finished the training, she received a certificate.'), true);
+assert.equal(isAnswerCorrect('arrange_words', ['I', 'like', 'and', 'bread', 'milk'], 'I like bread and milk|I like milk and bread'), false);
+assert.equal(isAnswerCorrect('fill_blank', 'When did you get married Diana', 'When did you get married, Diana'), false);
+
+// 7. canArrangeInto phát hiện câu sắp xếp bất khả thi (chip dính chú thích)
+assert.equal(canArrangeInto('I am a student', ['a', 'I', 'am', 'student']), true);
+assert.equal(canArrangeInto('We are not going to move.', ['not', 'going', 'are', 'we', 'to', 'move', '. (Chúng tôi sẽ không chuyển nhà.)']), false);
+assert.equal(canArrangeInto('gorgeous little African', ['African', 'gorgeous', 'little']), true);
+
+// 8. Server chấm lại câu trả lời: bỏ qua id lạ/trùng, không tin số client khai
+const gradeRows = [
+  { id: 'a', type: 'multiple_choice', correct_answer: 'am' },
+  { id: 'b', type: 'fill_blank', correct_answer: 'do|finish' },
+  { id: 'c', type: 'arrange_words', correct_answer: 'I am a student' }
+];
+assert.deepEqual(
+  gradeGrammarResponses(gradeRows, [
+    { id: 'a', response: 'am' },
+    { id: 'b', response: 'finish' },
+    { id: 'c', response: ['I', 'am', 'a', 'student'] },
+    { id: 'x', response: 'hack' },
+    { id: 'a', response: 'is' }
+  ]),
+  { answered: 3, correct: 3 }
+);
+assert.deepEqual(
+  gradeGrammarResponses(gradeRows, [{ id: 'a', response: null }, { id: 'b', response: 'doing' }]),
+  { answered: 2, correct: 0 }
+);
+
+// 9. Toàn bộ câu arrange_words trong dữ liệu crawl phải xếp được thành đáp án
+let arrangeTotal = 0;
+let arrangeBroken = 0;
+for (const dir of dirs) {
+  const data = JSON.parse(fs.readFileSync(path.join(outputRoot, dir.name, `${dir.name}_full.json`), 'utf8'));
+  for (const lesson of data.lessons) {
+    for (const ex of lesson.exercises || []) {
+      if (ex.type !== 'arrange_words') continue;
+      arrangeTotal += 1;
+      const chips = parseArrangeWords(ex.question, ex.optionA);
+      if (!canArrangeInto(ex.correctAnswer, chips)) arrangeBroken += 1;
+    }
+  }
+}
+assert.equal(arrangeTotal, 731, 'Phải có 731 câu arrange_words');
+assert.equal(arrangeBroken, 0, `Có ${arrangeBroken} câu arrange_words không xếp được thành đáp án`);
 
 console.log('✅ Grammar service + sanitizer + dữ liệu crawl OK (8 lộ trình, 246 bài, 46 bài đọc hiểu)');

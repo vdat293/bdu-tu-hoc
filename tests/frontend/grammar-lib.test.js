@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptedAnswers,
+  arrangePromptText,
+  decodeHtmlEntities,
   formatCorrectAnswer,
   isAnswerCorrect,
   normalizeAnswer,
-  parseArrangeWords
+  parseArrangeWords,
+  plainText
 } from '../../client/src/features/grammar/grammar-lib.js';
 
 describe('grammar answer checking', () => {
@@ -86,6 +89,24 @@ describe('grammar answer checking', () => {
     expect(normalizeAnswer('Can you help me ?')).toBe('can you help me');
   });
 
+  it('giải mã entity HTML khi hiển thị text thuần', () => {
+    expect(decodeHtmlEntities('Điền: 5 -&gt; 6')).toBe('Điền: 5 -> 6');
+    expect(decodeHtmlEntities('A &amp; B')).toBe('A & B');
+    expect(plainText('<p>5 -&gt; 6</p>')).toBe('5 -> 6');
+  });
+
+  it('arrangePromptText ẩn danh sách từ lộ thứ tự đáp án, giữ chú thích dịch', () => {
+    expect(arrangePromptText('Sắp xếp: staff / must / become / familiar')).toBe('Sắp xếp:');
+    expect(arrangePromptText('Sắp xếp các từ thành câu hoàn chỉnh:<br>going / to / I / am / study / . (Tôi sẽ học ở thư viện.)'))
+      .toBe('Sắp xếp các từ thành câu hoàn chỉnh: (Tôi sẽ học ở thư viện.)');
+    expect(arrangePromptText('Sắp xếp các từ thành câu đúng: at / I / get up / 6:30 / .')).toBe('Sắp xếp các từ thành câu đúng:');
+  });
+
+  it('parseArrangeWords tách đúng khi trong từ có dấu hai chấm (6:30)', () => {
+    expect(parseArrangeWords('Sắp xếp các từ thành câu đúng: at / I / get up / 6:30 / .', ''))
+      .toEqual(['at', 'I', 'get up', '6:30', '.']);
+  });
+
   it('không chấm đúng khi bỏ trống câu trả lời', () => {
     expect(isAnswerCorrect('fill_blank', '', '')).toBe(false);
     expect(isAnswerCorrect('fill_blank', '   ', 'do|finish')).toBe(false);
@@ -97,5 +118,10 @@ describe('grammar answer checking', () => {
     expect(formatCorrectAnswer('do|finish|complete')).toBe('do / finish / complete');
     expect(formatCorrectAnswer('is')).toBe('is');
     expect(normalizeAnswer('  DON\'T  ')).toBe("don't");
+  });
+
+  it('formatCorrectAnswer gộp biến thể trùng nhau sau chuẩn hoá', () => {
+    expect(formatCorrectAnswer('Have you got an umbrella? | Have you got an umbrella'))
+      .toBe('Have you got an umbrella?');
   });
 });

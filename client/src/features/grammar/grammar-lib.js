@@ -1,80 +1,31 @@
+import {
+  acceptedAnswers,
+  arrangePromptText,
+  decodeHtmlEntities,
+  formatCorrectAnswer,
+  isAnswerCorrect,
+  normalizeAnswer,
+  parseArrangeWords,
+  plainText
+} from '../../../../src/utils/grammar-answers.js';
+
+// Logic chấm đáp án nằm ở src/utils/grammar-answers.js để server và script
+// import dùng chung; file này re-export cho client.
+export {
+  acceptedAnswers,
+  arrangePromptText,
+  decodeHtmlEntities,
+  formatCorrectAnswer,
+  isAnswerCorrect,
+  normalizeAnswer,
+  parseArrangeWords,
+  plainText
+};
+
 export const GRAMMAR_TIMER_SECONDS = 60;
-
-export function normalizeAnswer(value) {
-  return String(value ?? '')
-    .replace(/[‘’`´]/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    // Bỏ dấu cuối câu kèm khoảng trắng trước nó: "help me ?" → "help me"
-    // (nếu trim trước rồi mới bỏ dấu sẽ để lại space cuối và không bao giờ khớp).
-    .replace(/\s*[.!?]+$/, '')
-    .trim();
-}
-
-// Chip sắp xếp câu lấy từ dữ liệu crawl có thể thiếu dấu câu (dấu phẩy giữa
-// câu, dấu hỏi dính giữa từ) hoặc tách dấu câu thành chip riêng (".", "?").
-// Khi so khớp arrange_words chỉ so chuỗi từ, bỏ qua dấu câu ở rìa từng từ.
-function normalizeArrangeAnswer(value) {
-  return normalizeAnswer(value)
-    .split(' ')
-    .map((token) => token
-      .replace(/^[.,!?;:"“”…()[\]]+/, '')
-      .replace(/[.,!?;:"“”…()[\]]+$/, ''))
-    .filter(Boolean)
-    .join(' ');
-}
-
-export function parseArrangeWords(question, optionA) {
-  const fromOption = String(optionA || '')
-    .split('/')
-    .map((word) => word.trim())
-    .filter(Boolean);
-  if (fromOption.length >= 2) return fromOption;
-  const tail = plainText(question).split(':').pop() || '';
-  // Một số câu lưu chú thích dịch trong ngoặc ngay sau từ cuối (vd
-  // "move / . (Chúng tôi sẽ không chuyển nhà.)") → bỏ ngoặc để không dính
-  // chú thích vào chip.
-  return tail
-    .replace(/\([^)]*\)/g, ' ')
-    .split('/')
-    .map((word) => word.trim())
-    .filter(Boolean);
-}
-
-export function plainText(value) {
-  return String(value ?? '')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 export function hasHtml(value) {
   return /<[a-z][^>]*>/i.test(String(value ?? ''));
-}
-
-// Đáp án nhiều lựa chọn chấp nhận được lưu dạng 'do|finish|complete'.
-export function acceptedAnswers(correctAnswer) {
-  const values = Array.isArray(correctAnswer)
-    ? correctAnswer
-    : String(correctAnswer ?? '').split('|');
-  return values.map((value) => String(value ?? '').trim()).filter(Boolean);
-}
-
-export function isAnswerCorrect(type, response, correctAnswer) {
-  const isArrange = type === 'arrange_words';
-  const joined = isArrange && Array.isArray(response)
-    ? response.join(' ')
-    : String(response ?? '');
-  const normalize = isArrange ? normalizeArrangeAnswer : normalizeAnswer;
-  const normalized = normalize(joined);
-  if (!normalized) return false;
-  return acceptedAnswers(correctAnswer).some((answer) => normalize(answer) === normalized);
-}
-
-export function formatCorrectAnswer(correctAnswer) {
-  return acceptedAnswers(correctAnswer).join(' / ') || String(correctAnswer ?? '');
 }
 
 export function buildItems(payload) {

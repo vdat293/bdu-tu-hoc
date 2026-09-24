@@ -50,6 +50,9 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     // Câu 2 phải sạch trạng thái hết giờ của câu 1 và trả lời được.
     expect(screen.queryByText('⏰ Hết giờ!')).toBeNull();
     expect(screen.getByText('Câu 2/2')).toBeTruthy();
+    // Đề sắp xếp chỉ hiện hướng dẫn, không in danh sách từ đúng thứ tự.
+    expect(screen.getByText('Sắp xếp:')).toBeTruthy();
+    expect(screen.queryByText(/a \/ I \/ am \/ student/)).toBeNull();
     for (const word of ['I', 'am', 'a', 'student']) {
       fireEvent.click(screen.getByRole('button', { name: word }));
     }
@@ -57,7 +60,15 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hoàn thành' }));
-    expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({ correct: 1, total: 2, completed: true }));
+    expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({
+      correct: 1,
+      total: 2,
+      completed: true,
+      responses: [
+        { id: 'm1', response: null },
+        { id: 'a1', response: ['I', 'am', 'a', 'student'] }
+      ]
+    }));
   });
 
   it('"Làm lại" sau khi hết giờ reset đồng hồ về đủ thời gian', async () => {
@@ -116,6 +127,12 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Thoát/ }));
 
-    expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({ answered: 1, correct: 1, total: 1, completed: true }));
+    expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({
+      answered: 1,
+      correct: 1,
+      total: 1,
+      completed: true,
+      responses: [{ id: 'm1', response: 'am' }]
+    }));
   });
 });

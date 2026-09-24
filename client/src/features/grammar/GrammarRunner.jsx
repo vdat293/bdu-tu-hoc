@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GRAMMAR_TIMER_SECONDS, formatCorrectAnswer, hasHtml, isAnswerCorrect, optionColumns, parseArrangeWords, plainText } from './grammar-lib.js';
+import {
+  GRAMMAR_TIMER_SECONDS,
+  arrangePromptText,
+  decodeHtmlEntities,
+  formatCorrectAnswer,
+  hasHtml,
+  isAnswerCorrect,
+  optionColumns,
+  parseArrangeWords,
+  plainText
+} from './grammar-lib.js';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -8,7 +18,7 @@ function RichText({ value, className }) {
   if (hasHtml(html)) {
     return <p className={className} dangerouslySetInnerHTML={{ __html: html }} />;
   }
-  return <p className={className}>{html}</p>;
+  return <p className={className}>{decodeHtmlEntities(html)}</p>;
 }
 
 function shuffle(list) {
@@ -93,6 +103,11 @@ export default function GrammarRunner({
   const correctCount = baseCorrect + answers.filter((entry) => entry?.correct).length;
   const answeredCount = index + (reveal ? 1 : 0);
 
+  // Gửi kèm câu trả lời để server chấm lại (không tin số correct do client khai).
+  const buildResponses = useCallback(() => answers
+    .map((entry, i) => (entry ? { id: items[i]?.key ?? null, response: entry.response ?? null } : null))
+    .filter((entry) => entry?.id), [answers, items]);
+
   const resetRoundState = useCallback(() => {
     revealRef.current = null;
     setReveal(null);
@@ -103,8 +118,8 @@ export default function GrammarRunner({
 
   const finish = useCallback(async (correct) => {
     setFinished(true);
-    await onQuizSave?.({ answered: total, correct, total, completed: true });
-  }, [onQuizSave, total]);
+    await onQuizSave?.({ answered: total, correct, total, completed: true, responses: buildResponses() });
+  }, [onQuizSave, total, buildResponses]);
 
   const goNext = useCallback(() => {
     if (advancingRef.current) return;
@@ -191,7 +206,7 @@ export default function GrammarRunner({
     // Chưa làm câu nào thì không ghi đè tiến độ cũ (tránh mất chỗ "Tiếp tục").
     if (answeredCount > 0) {
       const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total });
+      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total, responses: buildResponses() });
     }
     onExitToPath?.();
   };
@@ -199,7 +214,7 @@ export default function GrammarRunner({
   const backToTheory = async () => {
     if (answeredCount > 0) {
       const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total });
+      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total, responses: buildResponses() });
     }
     onBackToTheory?.();
   };
@@ -298,7 +313,7 @@ export default function GrammarRunner({
           </section>
         ) : null}
 
-        <RichText value={item.question} className="gr-question" />
+        <RichText value={showArrange ? arrangePromptText(item.question) : item.question} className="gr-question" />
 
         {showOptions ? (
           <div className="gr-options">
@@ -399,7 +414,7 @@ export default function GrammarRunner({
             <button type="button" className="gr-hint-btn" onClick={() => setHintOpen((v) => !v)}>
               💡 {hintOpen ? 'Ẩn gợi ý' : 'Gợi ý'}
             </button>
-            {hintOpen ? <p className="gr-hint-text">{item.hint}</p> : null}
+            {hintOpen ? <p className="gr-hint-text">{decodeHtmlEntities(item.hint)}</p> : null}
           </div>
         ) : null}
 
