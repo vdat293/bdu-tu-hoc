@@ -14,6 +14,8 @@ const SYNC_LOCK_ID = 2_030_036_021;
 const MIN_CLASS_COHORT = 25;
 const DEFAULT_LATEST_COHORT = 29;
 const SUPPORTED_FACULTIES = new Set(['TH', 'DT']);
+const STALE_RUN_HOURS = 6;
+const DEFAULT_RETENTION_RUNS = 3;
 
 function envBool(name, fallback = false) {
   const value = process.env[name];
@@ -508,8 +510,8 @@ function fetchRows(url, user, password) {
 }
 
 async function collectRankings() {
-  const user = process.env.CDS_USER || process.env.CRAWL_USER;
-  const password = process.env.CDS_PASSWORD || process.env.CRAWL_PASS;
+  const user = process.env.CDS_USER;
+  const password = process.env.CDS_PASSWORD;
   if (!user || !password) throw new Error('Chưa cấu hình CDS_USER và CDS_PASSWORD.');
 
   const urls = Object.fromEntries(
@@ -633,6 +635,10 @@ async function insertStudents(client, runId, students) {
 }
 
 async function runSyncWithClient(client, triggerSource) {
+  const staleMarked = await markStaleRuns(client);
+  if (staleMarked > 0) {
+    console.warn(`[ranking-sync] Đã đánh dấu thất bại ${staleMarked} run bị bỏ dở.`);
+  }
   const runResult = await client.query(
     `INSERT INTO academic_ranking_sync_runs (status, trigger_source)
      VALUES ('running', $1) RETURNING id`,
@@ -666,7 +672,20 @@ async function runSyncWithClient(client, triggerSource) {
       await client.query('ROLLBACK');
       throw error;
     }
-    return { runId, ...report, students: undefined, studentCount: report.students.length };
+    let prunedRuns = 0;
+    try {
+      const pruned = await pruneOldRuns();
+      prunedRuns = pruned.deleted;
+    } catch (error) {
+      console.error('[ranking-sync] Không dọn được snapshot xếp hạng cũ:', error.message);
+    }
+    return {
+      runId,
+      ...report,
+      students: undefined,
+      studentCount: report.students.length,
+      prunedRuns
+    };
   } catch (error) {
     await client.query(`
       UPDATE academic_ranking_sync_runs
@@ -675,6 +694,49 @@ async function runSyncWithClient(client, triggerSource) {
     `, [runId, String(error.message).slice(0, 2000)]).catch(() => {});
     throw error;
   }
+}
+
+/**
+ * Đánh dấu thất bại các run "running" bị bỏ dở (process chết giữa chừng) để
+ * bảng trạng thái không còn run treo vĩnh viễn. Truyền client để chạy chung
+ * transaction với lần sync mới, hoặc bỏ trống để dùng pool (test).
+ */
+async function markStaleRuns(client = null) {
+  const sql = `
+    UPDATE academic_ranking_sync_runs
+    SET status = 'failed',
+        completed_at = NOW(),
+        error_message = COALESCE(NULLIF(error_message, ''), 'Bị bỏ dở: không hoàn tất trong ' || $1 || ' giờ.')
+    WHERE status = 'running'
+      AND started_at < NOW() - make_interval(hours => $1)
+  `;
+  const params = [STALE_RUN_HOURS];
+  const result = client ? await client.query(sql, params) : await query(sql, params);
+  return result.rowCount;
+}
+
+export function retentionKeepCount(value = process.env.RANKING_SNAPSHOT_RETENTION_RUNS) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_RETENTION_RUNS;
+}
+
+/**
+ * Giữ lại N run mới nhất (mặc định 3) và xoá phần còn lại; dữ liệu trong
+ * academic_rankings bị xoá theo nhờ khoá ngoại ON DELETE CASCADE.
+ */
+async function pruneOldRuns(keepCount = null, client = null) {
+  const keep = retentionKeepCount(keepCount ?? undefined);
+  const sql = `
+    DELETE FROM academic_ranking_sync_runs
+    WHERE status <> 'running'
+      AND id NOT IN (
+        SELECT id FROM academic_ranking_sync_runs
+        ORDER BY started_at DESC, id DESC
+        LIMIT $1
+      )
+  `;
+  const result = client ? await client.query(sql, [keep]) : await query(sql, [keep]);
+  return { keep, deleted: result.rowCount };
 }
 
 function numberOrNull(value) {
@@ -688,8 +750,8 @@ export const AcademicRankingService = {
 
   isReady() {
     return isDatabaseConfigured()
-      && Boolean(process.env.CDS_USER || process.env.CRAWL_USER)
-      && Boolean(process.env.CDS_PASSWORD || process.env.CRAWL_PASS);
+      && Boolean(process.env.CDS_USER)
+      && Boolean(process.env.CDS_PASSWORD);
   },
 
   async sync(triggerSource = 'scheduler') {
@@ -834,6 +896,20 @@ export const AcademicRankingService = {
       LIMIT 1
     `);
     return { configured: true, latestRun: result.rows[0] || null };
+  },
+
+  /**
+   * Dọn snapshot cũ, chỉ giữ N run gần nhất (dùng cho test/CLI; sync tự gọi
+   * sau mỗi lần thành công).
+   */
+  async pruneOldRuns(keepCount = null) {
+    if (!isDatabaseConfigured()) throw new Error('Chưa cấu hình DATABASE_URL.');
+    return pruneOldRuns(keepCount);
+  },
+
+  async markStaleRuns() {
+    if (!isDatabaseConfigured()) throw new Error('Chưa cấu hình DATABASE_URL.');
+    return markStaleRuns();
   }
 };
 
@@ -845,5 +921,9 @@ export const AcademicRankingInternals = {
   rollingCohortWindow,
   rankAllStudents,
   chooseHighlightedRanking,
-  buildLeaderboard
+  buildLeaderboard,
+  retentionKeepCount,
+  pruneOldRuns,
+  markStaleRuns,
+  STALE_RUN_HOURS
 };

@@ -6,7 +6,8 @@ try {
   if (result.skipped) {
     console.log('Ranking sync skipped: another instance is already running.');
   } else {
-    console.log(`Ranking sync completed: run ${result.runId}, ${result.studentCount} students.`);
+    const pruned = result.prunedRuns ? `, đã dọn ${result.prunedRuns} snapshot cũ` : '';
+    console.log(`Ranking sync completed: run ${result.runId}, ${result.studentCount} students${pruned}.`);
   }
 } catch (error) {
   console.error(`Ranking sync failed: ${error.message}`);

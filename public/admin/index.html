@@ -478,6 +478,39 @@
             </div>
           </div>
 
+          <div class="panel-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Đồng Bộ Xếp Hạng Học Tập</h2>
+                <p class="card-subtitle">Chỉ cần bật quanh đợt công bố điểm/kết thúc kỳ; hệ thống chạy lúc 03:00</p>
+              </div>
+              <label class="switch" title="Bật/tắt đồng bộ xếp hạng">
+                <input type="checkbox" id="ranking-sync-toggle" aria-label="Bật tắt đồng bộ xếp hạng" />
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="system-metrics-row">
+              <div class="sys-card">
+                <span class="sys-label">Trạng Thái</span>
+                <span class="sys-val" id="ranking-sync-state">--</span>
+                <span class="sys-sub" id="ranking-sync-state-sub">--</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">Đồng Bộ Gần Nhất</span>
+                <span class="sys-val" id="ranking-sync-last">--</span>
+                <span class="sys-sub" id="ranking-sync-last-sub">--</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">Lần Chạy Kế Tiếp</span>
+                <span class="sys-val" id="ranking-sync-next">--</span>
+                <span class="sys-sub" id="ranking-sync-next-sub">03:00 Asia/Ho_Chi_Minh</span>
+              </div>
+            </div>
+            <p class="maintenance-info-content" id="ranking-sync-note" style="margin-top: 14px;">
+              Bật/tắt chỉ ảnh hưởng lần chạy 03:00 kế tiếp (không chạy ngay). Khi tắt, sinh viên vẫn xem được snapshot gần nhất.
+            </p>
+          </div>
+
           <div class="panel-card">
             <div class="card-header">
               <div>

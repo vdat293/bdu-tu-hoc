@@ -7,6 +7,7 @@ import { WordFmtService } from '../services/wordfmt.service.js';
 import { SurveyService } from '../services/survey.service.js';
 import { EnglishExerciseService } from '../services/english-exercise.service.js';
 import { AcademicRankingService } from '../services/academic-ranking.service.js';
+import { RankingSchedulerService } from '../services/ranking-scheduler.service.js';
 import { BduIdentityService } from '../services/bdu-identity.service.js';
 import { StudentService } from '../services/student.service.js';
 import { CommunityService } from '../services/community.service.js';
@@ -239,11 +240,17 @@ export const ApiController = {
       await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const status = await AcademicRankingService.getStatus();
       const latest = status.latestRun;
+      let syncEnabled = process.env.RANKING_SYNC_ENABLED !== 'false';
+      try {
+        syncEnabled = await RankingSchedulerService.isEnabled();
+      } catch {
+        // Giữ giá trị từ env nếu không đọc được cấu hình runtime.
+      }
       return res.json({
         result: true,
         data: {
           configured: status.configured,
-          sync_enabled: process.env.RANKING_SYNC_ENABLED !== 'false',
+          sync_enabled: syncEnabled,
           sync_hour: Number.parseInt(process.env.RANKING_SYNC_HOUR || '3', 10),
           latest_run: latest ? {
             status: latest.status,

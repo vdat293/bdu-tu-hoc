@@ -32,7 +32,10 @@ const state = {
     detailed: null
   },
   refreshTimer: null,
-  isPurging: false
+  isPurging: false,
+  rankingToggleBusy: false,
+  rankingSync: null,
+  rankingSyncMutationAt: 0
 };
 
 // DOM References
@@ -147,7 +150,16 @@ const dom = {
   sysWs: document.getElementById('sys-ws'),
   sysRooms: document.getElementById('sys-rooms'),
   sysDbLogs: document.getElementById('sys-db-logs'),
-  sysBuffer: document.getElementById('sys-buffer')
+  sysBuffer: document.getElementById('sys-buffer'),
+
+  // Ranking sync toggle
+  rankingSyncToggle: document.getElementById('ranking-sync-toggle'),
+  rankingSyncState: document.getElementById('ranking-sync-state'),
+  rankingSyncStateSub: document.getElementById('ranking-sync-state-sub'),
+  rankingSyncLast: document.getElementById('ranking-sync-last'),
+  rankingSyncLastSub: document.getElementById('ranking-sync-last-sub'),
+  rankingSyncNext: document.getElementById('ranking-sync-next'),
+  rankingSyncNextSub: document.getElementById('ranking-sync-next-sub')
 };
 
 let currentSelectedLog = null;
@@ -389,14 +401,16 @@ dom.btnThemeToggle.addEventListener('click', () => {
 // Data Fetching & Rendering
 async function fetchAllData(isBackground = false) {
   try {
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system] = await Promise.all([
+    const rankingSyncRequestedAt = Date.now();
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
       api(`/api/admin/dashboard/devices?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/logs?timeRange=${state.timeRange}&page=${state.logFilters.page}&limit=${state.logFilters.limit}&status=${state.logFilters.status}&method=${state.logFilters.method}&route=${encodeURIComponent(state.logFilters.route)}&search=${encodeURIComponent(state.logFilters.search)}&mssv=${encodeURIComponent(state.logFilters.mssv)}`),
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
-      api(`/api/admin/dashboard/system`)
+      api(`/api/admin/dashboard/system`),
+      api(`/api/admin/dashboard/ranking-sync`).catch(() => null)
     ]);
 
     renderOverview(overview);
@@ -406,6 +420,7 @@ async function fetchAllData(isBackground = false) {
     renderLogs(logsData);
     renderVisitedStudents(visitedData);
     renderSystem(system);
+    renderRankingSync(rankingSync, rankingSyncRequestedAt);
   } catch (err) {
     if (!isBackground) {
       console.error('[Admin] Lỗi nạp dữ liệu:', err.message);
@@ -1223,6 +1238,76 @@ function renderSystem(system = {}) {
 
   dom.sysDbLogs.textContent = `${(db.totalLogs || 0).toLocaleString()} logs`;
   dom.sysBuffer.textContent = `Bộ đệm RAM: ${system.bufferQueueSize || 0} items`;
+}
+
+// Ranking sync toggle (tab System)
+function renderRankingSync(data, requestedAt = Date.now()) {
+  if (!dom.rankingSyncToggle || !data || state.rankingToggleBusy) return;
+  // Bỏ qua payload cũ nếu admin vừa bấm công tắc sau khi request được gửi.
+  if (requestedAt < state.rankingSyncMutationAt) return;
+  state.rankingSync = data;
+
+  const envEnabled = data.env_enabled !== false;
+  const enabled = Boolean(data.effective_enabled) && envEnabled;
+  const hour = String(data.sync_hour ?? 3).padStart(2, '0');
+
+  dom.rankingSyncToggle.checked = enabled;
+  dom.rankingSyncToggle.disabled = !envEnabled;
+  if (dom.rankingSyncNextSub) dom.rankingSyncNextSub.textContent = `${hour}:00 Asia/Ho_Chi_Minh`;
+
+  dom.rankingSyncState.textContent = enabled ? '● Đang bật' : '● Đang tắt';
+  dom.rankingSyncState.className = enabled ? 'sys-val text-green' : 'sys-val';
+  dom.rankingSyncStateSub.textContent = envEnabled
+    ? (data.enabled ? 'Theo cấu hình /admin' : 'Đã tắt từ /admin')
+    : 'Bị khoá bởi RANKING_SYNC_ENABLED trên server';
+
+  const latest = data.latest_run;
+  if (latest && latest.completed_at) {
+    dom.rankingSyncLast.textContent = formatDateTime(latest.completed_at);
+    dom.rankingSyncLastSub.textContent = latest.status === 'succeeded'
+      ? `${(latest.student_count || 0).toLocaleString()} sinh viên`
+      : `Lần cuối: ${latest.status}`;
+  } else {
+    dom.rankingSyncLast.textContent = '--';
+    dom.rankingSyncLastSub.textContent = 'Chưa có lần đồng bộ nào';
+  }
+
+  if (enabled && data.next_run_at) {
+    dom.rankingSyncNext.textContent = formatDateTime(data.next_run_at);
+  } else {
+    dom.rankingSyncNext.textContent = 'Tạm dừng';
+  }
+}
+
+if (dom.rankingSyncToggle) {
+  dom.rankingSyncToggle.addEventListener('change', async () => {
+    const enabled = dom.rankingSyncToggle.checked;
+    const hour = String(state.rankingSync?.sync_hour ?? 3).padStart(2, '0');
+    state.rankingToggleBusy = true;
+    dom.rankingSyncToggle.disabled = true;
+    try {
+      const data = await api('/api/admin/dashboard/ranking-sync', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      state.rankingSyncMutationAt = Date.now();
+      state.rankingToggleBusy = false;
+      renderRankingSync(data, state.rankingSyncMutationAt);
+      showToast(
+        enabled
+          ? `Đã bật: đồng bộ sẽ chạy vào ${hour}:00 kế tiếp.`
+          : `Đã tắt: các lần chạy ${hour}:00 sẽ bị bỏ qua.`,
+        'success'
+      );
+    } catch (err) {
+      state.rankingToggleBusy = false;
+      dom.rankingSyncToggle.checked = !enabled;
+      showToast(err.message || 'Không lưu được cấu hình đồng bộ.', 'error');
+    } finally {
+      dom.rankingSyncToggle.disabled = state.rankingSync?.env_enabled === false;
+    }
+  });
 }
 
 // Purge Logs Modal

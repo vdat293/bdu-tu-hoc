@@ -361,6 +361,15 @@ docker compose exec bdu-hub npm run rankings:sync
 Các lần sau scheduler tự chạy theo `RANKING_SYNC_HOUR` (mặc định 03:00,
 Asia/Ho_Chi_Minh).
 
+Công tắc đồng bộ nằm trong `/admin` → tab **System** → "Đồng Bộ Xếp Hạng Học
+Tập". Thực tế chỉ cần bật quanh đợt công bố điểm/kết thúc kỳ nên có thể tắt
+trong các tháng còn lại: bật/tắt **không kích hoạt chạy ngay**, chỉ ảnh hưởng
+lần chạy 03:00 kế tiếp; khi tắt, sinh viên vẫn xem được snapshot gần nhất.
+`RANKING_SYNC_ENABLED=false` trong `.env` là khoá cứng cấp deploy, luôn thắng
+công tắc trong `/admin`. Mỗi lần đồng bộ thành công chỉ giữ lại
+`RANKING_SNAPSHOT_RETENTION_RUNS` (mặc định 3) snapshot gần nhất để database
+không phình; các run bỏ dở quá 6 giờ được tự đánh dấu thất bại.
+
 Import dữ liệu ngữ pháp lên VPS (giống luyện từ vựng: local export SQL upsert
 rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên VPS):
 

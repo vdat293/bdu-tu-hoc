@@ -3,6 +3,10 @@ import { TrafficService } from '../services/traffic.service.js';
 import { BduIdentityService } from '../services/bdu-identity.service.js';
 import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { BduService } from '../services/bdu.service.js';
+import { AcademicRankingService } from '../services/academic-ranking.service.js';
+import { RankingSchedulerService } from '../services/ranking-scheduler.service.js';
+import { SystemSettingsService } from '../services/system-settings.service.js';
+import { isDatabaseConfigured } from '../db/database.js';
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();
@@ -66,6 +70,47 @@ function recordLoginFailure(req) {
 
 function clearLoginFailures(req) {
   loginFailures.delete(clientIp(req));
+}
+
+const RANKING_SETTING_KEY = 'ranking_sync';
+
+/**
+ * Trạng thái công tắc đồng bộ xếp hạng cho /admin.
+ * - enabled: công tắc admin lưu trong system_settings (mặc định bật)
+ * - env_enabled: công tắc cứng cấp deploy RANKING_SYNC_ENABLED
+ * - effective_enabled: chỉ chạy khi cả hai cùng bật
+ */
+async function buildRankingSyncStatus() {
+  const envEnabled = process.env.RANKING_SYNC_ENABLED !== 'false';
+  const record = await SystemSettingsService.getRecord(RANKING_SETTING_KEY).catch(() => null);
+  const adminEnabled = record && typeof record.value?.enabled === 'boolean'
+    ? record.value.enabled
+    : true;
+  const status = await AcademicRankingService.getStatus().catch(() => ({
+    configured: false,
+    latestRun: null
+  }));
+  const latest = status.latestRun;
+  return {
+    enabled: adminEnabled,
+    env_enabled: envEnabled,
+    effective_enabled: envEnabled && adminEnabled,
+    configured: status.configured,
+    scheduler_started: RankingSchedulerService.isStarted(),
+    sync_hour: Number.parseInt(process.env.RANKING_SYNC_HOUR || '3', 10),
+    next_run_at: RankingSchedulerService.getNextRunAt(),
+    setting_updated_at: record?.updated_at || null,
+    setting_updated_by: record?.updated_by || null,
+    latest_run: latest ? {
+      status: latest.status,
+      trigger_source: latest.trigger_source,
+      started_at: latest.started_at,
+      completed_at: latest.completed_at,
+      target_nkhk: latest.target_nkhk,
+      student_count: latest.student_count,
+      has_warnings: Array.isArray(latest.metadata?.warnings) && latest.metadata.warnings.length > 0
+    } : null
+  };
 }
 
 export const AdminDashboardController = {
@@ -335,6 +380,57 @@ export const AdminDashboardController = {
     } catch (err) {
       console.error('[AdminDashboard] Lỗi purgeLogs:', err.message);
       return res.status(500).json({ result: false, message: 'Không thể thực hiện dọn dẹp log.' });
+    }
+  },
+
+  /**
+   * Công tắc đồng bộ xếp hạng: bật/tắt chỉ ảnh hưởng lần chạy 03:00 kế tiếp,
+   * không kích hoạt đồng bộ ngay. Dữ liệu snapshot cũ vẫn được phục vụ.
+   */
+  async getRankingSync(req, res) {
+    try {
+      const data = await buildRankingSyncStatus();
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getRankingSync:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể đọc trạng thái đồng bộ xếp hạng.' });
+    }
+  },
+
+  async updateRankingSync(req, res) {
+    try {
+      const { enabled } = req.body || {};
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({
+          result: false,
+          message: 'Trường enabled phải là true hoặc false.'
+        });
+      }
+      if (!isDatabaseConfigured()) {
+        return res.status(503).json({
+          result: false,
+          message: 'Chưa cấu hình database nên không lưu được cấu hình.'
+        });
+      }
+      await SystemSettingsService.set(
+        RANKING_SETTING_KEY,
+        { enabled },
+        req.identityAdminMssv || null
+      );
+      console.log(
+        `[AdminDashboard] ranking_sync.enabled=${enabled} bởi ${req.identityAdminMssv || 'unknown'}`
+      );
+      const data = await buildRankingSyncStatus();
+      return res.json({
+        result: true,
+        message: enabled
+          ? 'Đã bật đồng bộ xếp hạng: sẽ chạy vào 03:00 kế tiếp.'
+          : 'Đã tắt đồng bộ xếp hạng: các lần chạy 03:00 sẽ bị bỏ qua.',
+        data
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi updateRankingSync:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lưu cấu hình đồng bộ xếp hạng.' });
     }
   }
 };

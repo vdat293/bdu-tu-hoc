@@ -165,6 +165,8 @@ router.get('/admin/dashboard/logs', AdminDashboardController.getLogs);
 router.get('/admin/dashboard/routes', AdminDashboardController.getRoutes);
 router.get('/admin/dashboard/users/:mssv/activity', AdminDashboardController.getUserActivity);
 router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
+router.get('/admin/dashboard/ranking-sync', AdminDashboardController.getRankingSync);
+router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRankingSync);
 router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 
 // 6. Góc Tự Học Số (Community Study Hub & Clans)
