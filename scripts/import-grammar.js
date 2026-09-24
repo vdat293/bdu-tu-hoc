@@ -10,7 +10,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { query, closeDatabase } from '../src/db/database.js';
+import { query, closeDatabase, transaction } from '../src/db/database.js';
 import {
   sanitizeGrammarHtml,
   resolveCorrectAnswer,
@@ -23,6 +23,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const crawlRoot = process.env.GRAMMAR_CRAWL_ROOT
   ? path.resolve(process.env.GRAMMAR_CRAWL_ROOT)
   : path.resolve(currentDir, '..', '..', 'tool-crawl', 'crawl-nguphap', 'output');
+const extraRoot = path.resolve(currentDir, '..', 'data', 'grammar-practice-extra');
 
 // Độ khó + nhãn hiển thị theo từng lộ trình (khớp trang luyennguphap).
 const PATH_META = {
@@ -45,7 +46,10 @@ function int(v) {
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
-async function upsertRows(table, columns, rows, conflict, update, chunk = 200) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EXTRA_TYPES = new Set(['multiple_choice', 'fill_blank', 'arrange_words']);
+
+async function upsertRows(table, columns, rows, conflict, update, chunk = 200, client = null) {
   for (let i = 0; i < rows.length; i += chunk) {
     const params = [];
     const tuples = rows.slice(i, i + chunk).map((row) =>
@@ -58,7 +62,8 @@ async function upsertRows(table, columns, rows, conflict, update, chunk = 200) {
       VALUES ${tuples.join(', ')}
       ON CONFLICT (${conflict.join(', ')}) DO UPDATE SET
       ${update.map((col) => `${col} = EXCLUDED.${col}`).join(', ')}`;
-    await query(sql, params);
+    if (client) await client.query(sql, params);
+    else await query(sql, params);
   }
 }
 
@@ -160,6 +165,90 @@ async function importPath(slug, data, stats) {
     ['id'],
     ['path_id', 'name', 'description', 'order_idx', 'question_count', 'updated_at']
   );
+
+  // Bộ luyện thêm được lưu riêng để không nhập chung vào bài tập gốc hay tiến độ gốc.
+  const extraDir = path.join(extraRoot, slug);
+  let extraFiles = [];
+  try {
+    extraFiles = (await fs.readdir(extraDir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {}
+  const knownLessonIds = new Set((data.lessons || []).map((lesson) => String(lesson.id)));
+  const extraRows = [];
+  const extraBanks = [];
+  const extraIds = new Set();
+  const extraLessonIds = new Set();
+  for (const entry of extraFiles) {
+    const filePath = path.join(extraDir, entry.name);
+    const bank = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+    const unitMatch = /^unit-(\d+)\.json$/i.exec(entry.name);
+    const lessonId = String(
+      (Array.isArray(bank) ? '' : bank.lessonId)
+      || (unitMatch && data.lessons.find((lesson) => int(lesson.order) === Number(unitMatch[1]))?.id)
+      || ''
+    );
+    if (!knownLessonIds.has(lessonId)) {
+      throw new Error(`${filePath}: lessonId không thuộc lộ trình ${slug}.`);
+    }
+    // Hai file cùng một bài sẽ làm 2 lệnh DELETE xoá lẫn nhau ở bước dọn câu
+    // thừa bên dưới — chỉ cho phép một file cho mỗi bài.
+    if (extraLessonIds.has(lessonId)) {
+      throw new Error(`${filePath}: bài ${lessonId} đã có file ngân hàng khác, hãy gộp vào một file.`);
+    }
+    extraLessonIds.add(lessonId);
+    const questions = Array.isArray(bank) ? bank : bank.questions;
+    if (!Array.isArray(questions)) throw new Error(`${filePath}: cần mảng câu hỏi JSON hoặc thuộc tính questions.`);
+    // File rỗng mà vẫn chạy tiếp thì bước DELETE bên dưới sẽ xoá sạch ngân
+    // hàng luyện thêm của bài; dừng ngay để tránh mất dữ liệu.
+    if (!questions.length) throw new Error(`${filePath}: ngân hàng luyện thêm rỗng, dừng import để tránh xoá dữ liệu.`);
+    const bankIds = [];
+    for (const ex of questions) {
+      const id = String(ex.id || '');
+      if (!id || extraIds.has(id)) throw new Error(`${filePath}: thiếu id hoặc id bị trùng (${id || 'trống'}).`);
+      if (!UUID_RE.test(id)) throw new Error(`${filePath}: id câu "${id}" không đúng định dạng UUID.`);
+      extraIds.add(id);
+      bankIds.push(id);
+      const type = clean(ex.type, 24) || 'multiple_choice';
+      const options = optionsFromRow(ex);
+      const answer = resolveCorrectAnswer(type, ex.correctAnswer, options);
+      // Ngân hàng luyện thêm phải qua cùng bộ kiểm tra như
+      // scripts/import-grammar-extra.js: dạng bài lạ hoặc thiếu đáp án sẽ làm
+      // người học không thể trả lời câu đó.
+      if (!EXTRA_TYPES.has(type)) throw new Error(`${filePath}: câu ${id} dạng "${type}" không hỗ trợ.`);
+      if (!clean(ex.question) || !clean(ex.explanation)) throw new Error(`${filePath}: câu ${id} thiếu câu hỏi hoặc giải thích.`);
+      if (!answer) throw new Error(`${filePath}: câu ${id} thiếu đáp án.`);
+      checkArrange({ id, type, question: ex.question, options, answer });
+      extraRows.push([
+        id, lessonId, type, sanitizeGrammarHtml(ex.question),
+        options[0], options[1], options[2], options[3],
+        answer, optionLetterFor(answer, options),
+        sanitizeGrammarHtml(ex.explanation), clean(ex.hint, 1000), int(ex.order)
+      ]);
+    }
+    extraBanks.push({ lessonId, ids: bankIds });
+  }
+
+  // Upsert + dọn câu thừa nằm chung một transaction để lỗi giữa chừng không
+  // để lại ngân hàng luyện thêm bị xoá dở.
+  await transaction(async (client) => {
+    await upsertRows(
+      'grammar_extra_exercises',
+      ['id', 'lesson_id', 'type', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'correct_option', 'explanation', 'hint', 'order_idx'],
+      extraRows,
+      ['id'],
+      ['lesson_id', 'type', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'correct_option', 'explanation', 'hint', 'order_idx'],
+      200,
+      client
+    );
+    for (const bank of extraBanks) {
+      await client.query(
+        `DELETE FROM grammar_extra_exercises
+         WHERE lesson_id = $1 AND NOT (id = ANY($2::uuid[]))`,
+        [bank.lessonId, bank.ids]
+      );
+    }
+  });
   await upsertRows(
     'grammar_rules',
     ['id', 'lesson_id', 'title', 'content', 'order_idx'],
@@ -192,6 +281,7 @@ async function importPath(slug, data, stats) {
   stats.lessons += lessonRows.length;
   stats.rules += ruleRows.length;
   stats.exercises += exerciseRows.length + readingQuestionRows.length;
+  stats.extraExercises += extraRows.length;
   stats.readings += readingRows.length;
   stats.questions += questionTotal;
   stats.arrangeIssues += arrangeIssues.length;
@@ -215,7 +305,7 @@ async function main() {
     return;
   }
 
-  const stats = { paths: 0, lessons: 0, rules: 0, exercises: 0, readings: 0, questions: 0, arrangeIssues: 0 };
+  const stats = { paths: 0, lessons: 0, rules: 0, exercises: 0, extraExercises: 0, readings: 0, questions: 0, arrangeIssues: 0 };
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     const slug = entry.name;
@@ -232,7 +322,7 @@ async function main() {
     stats.paths += 1;
   }
 
-  console.log(`\n✓ Đã import ${stats.paths} lộ trình, ${stats.lessons} bài, ${stats.rules} lý thuyết, ${stats.readings} bài đọc hiểu, ${stats.exercises} câu hỏi.`);
+  console.log(`\n✓ Đã import ${stats.paths} lộ trình, ${stats.lessons} bài, ${stats.rules} lý thuyết, ${stats.readings} bài đọc hiểu, ${stats.exercises} câu hỏi gốc và ${stats.extraExercises} câu luyện thêm.`);
   if (stats.arrangeIssues) {
     console.warn(`(!) Tổng ${stats.arrangeIssues} câu arrange_words cần kiểm tra lại (xem cảnh báo phía trên).`);
   }

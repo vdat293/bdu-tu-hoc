@@ -29,8 +29,35 @@ const HINT_CHOICE_ITEM = {
   key: 'm2', id: 'm2', hint: 'I luôn đi với am.'
 };
 
-function tick(seconds) {
-  act(() => {
+const ALL_ITEMS = [
+  CHOICE_ITEM,
+  ARRANGE_ITEM,
+  FILL_ITEM,
+  HINT_CHOICE_ITEM,
+  { ...FILL_ITEM, key: 'f2', id: 'f2', correct_answer: 'are' },
+  { ...HINT_CHOICE_ITEM, key: 'm3', id: 'm3' }
+];
+
+// Server thật chấm đáp án qua API (payload bài học không còn đáp án), nên
+// test mô phỏng đúng luồng đó.
+function makeCheckAnswer() {
+  return vi.fn(async (questionId, response) => {
+    const item = ALL_ITEMS.find((entry) => entry.key === questionId || entry.id === questionId);
+    const expected = String(item?.correct_answer || '');
+    const actual = Array.isArray(response) ? response.join(' ') : String(response ?? '');
+    const correct = expected.split('|').some((part) => part.trim().toLowerCase() === actual.trim().toLowerCase());
+    return { correct, correct_answer: expected, explanation: item?.explanation || '' };
+  });
+}
+
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+async function tick(seconds) {
+  await act(async () => {
     vi.advanceTimersByTime(seconds * 1000);
   });
 }
@@ -48,13 +75,14 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
       <GrammarRunner
         items={[CHOICE_ITEM, ARRANGE_ITEM]}
         timerSeconds={2}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={onQuizSave}
         onExitToPath={() => {}}
       />
     );
 
-    tick(1);
-    tick(1);
+    await tick(1);
+    await tick(1);
     expect(screen.getByText('⏰ Hết giờ!')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Câu tiếp/ }));
@@ -69,9 +97,11 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
       fireEvent.click(screen.getByRole('button', { name: word }));
     }
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+    await flush();
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hoàn thành' }));
+    await flush();
     expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({
       correct: 1,
       total: 2,
@@ -90,17 +120,18 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
       <GrammarRunner
         items={[ARRANGE_ITEM]}
         timerSeconds={2}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={onQuizSave}
         onExitToPath={() => {}}
       />
     );
 
-    tick(1);
-    tick(1);
+    await tick(1);
+    await tick(1);
     expect(screen.getByText('⏰ Hết giờ!')).toBeTruthy();
 
     // Hết giờ tự chuyển sang màn hình kết quả sau 4s.
-    tick(4);
+    await tick(4);
     fireEvent.click(screen.getByRole('button', { name: /Làm lại/ }));
 
     expect(screen.getByText('Câu 1/1')).toBeTruthy();
@@ -114,12 +145,14 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     render(
       <GrammarRunner
         items={[CHOICE_ITEM, ARRANGE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={onQuizSave}
         onExitToPath={onExitToPath}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Thoát/ }));
+    await flush();
     expect(onExitToPath).toHaveBeenCalled();
     expect(onQuizSave).not.toHaveBeenCalled();
   });
@@ -130,14 +163,17 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     render(
       <GrammarRunner
         items={[CHOICE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={onQuizSave}
         onExitToPath={onExitToPath}
       />
     );
 
     fireEvent.click(screen.getByText('am'));
+    await flush();
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Thoát/ }));
+    await flush();
 
     expect(onQuizSave).toHaveBeenCalledWith(expect.objectContaining({
       answered: 1,
@@ -155,6 +191,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[FILL_ITEM, { ...FILL_ITEM, key: 'f2', id: 'f2', correct_answer: 'are' }]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={onQuizSave}
         onExitToPath={() => {}}
       />
@@ -165,6 +202,7 @@ describe('GrammarRunner - UX bàn phím', () => {
 
     fireEvent.change(input, { target: { value: 'is' } });
     fireEvent.submit(input.form);
+    await flush();
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
     // Kết quả được focus để screen reader đọc, Enter vẫn đi tiếp.
     expect(document.activeElement).toBe(document.querySelector('.gr-feedback'));
@@ -178,6 +216,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[ARRANGE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={vi.fn().mockResolvedValue(undefined)}
         onExitToPath={() => {}}
       />
@@ -192,6 +231,7 @@ describe('GrammarRunner - UX bàn phím', () => {
       fireEvent.click(screen.getByRole('button', { name: word }));
     }
     fireEvent.keyDown(document.body, { key: 'Enter' });
+    await flush();
     expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
   });
 
@@ -199,6 +239,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[ARRANGE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={vi.fn().mockResolvedValue(undefined)}
         onExitToPath={() => {}}
       />
@@ -214,12 +255,14 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[HINT_CHOICE_ITEM, { ...HINT_CHOICE_ITEM, key: 'm3', id: 'm3' }]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={vi.fn().mockResolvedValue(undefined)}
         onExitToPath={() => {}}
       />
     );
 
     fireEvent.click(screen.getByText('am'));
+    await flush();
     const hintBtn = screen.getByRole('button', { name: /Gợi ý/ });
     hintBtn.focus();
     fireEvent.keyDown(hintBtn, { key: 'Enter' });
@@ -231,6 +274,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[HINT_CHOICE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={vi.fn().mockResolvedValue(undefined)}
         onExitToPath={() => {}}
       />
@@ -244,6 +288,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     expect(screen.getByText('I luôn đi với am.')).toBeTruthy();
 
     fireEvent.click(screen.getByText('am'));
+    await flush();
     const feedback = document.querySelector('.gr-feedback');
     expect(feedback.getAttribute('role')).toBe('status');
     expect(feedback.getAttribute('aria-live')).toBe('polite');
@@ -253,6 +298,7 @@ describe('GrammarRunner - UX bàn phím', () => {
     render(
       <GrammarRunner
         items={[ARRANGE_ITEM]}
+        onCheckAnswer={makeCheckAnswer()}
         onQuizSave={vi.fn().mockResolvedValue(undefined)}
         onExitToPath={() => {}}
       />

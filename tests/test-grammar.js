@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { GrammarService, gradeGrammarResponses } from '../src/services/grammar.service.js';
+import { GrammarService, gradeGrammarResponses, gradeResponseEntries } from '../src/services/grammar.service.js';
 import {
   sanitizeGrammarHtml,
   resolveCorrectAnswer,
@@ -105,7 +105,77 @@ assert.deepEqual(
   { answered: 2, correct: 0 }
 );
 
-// 9. Toàn bộ câu arrange_words trong dữ liệu crawl phải xếp được thành đáp án
+// 9. Không cho client tự khai hoàn thành khi thiếu câu trả lời (chống gian lận
+// điểm) và chặn id sai trước khi chạm DB.
+const testLesson = 'bb0544b5-5988-494f-aaaa-2ccf96f893a0';
+await assert.rejects(
+  () => GrammarService.saveProgress('24050001', testLesson, { completed: true }),
+  /Thiếu câu trả lời/
+);
+await assert.rejects(
+  () => GrammarService.saveProgress('24050001', testLesson, { answered: 3, correct: 3 }),
+  /Thiếu câu trả lời/
+);
+await assert.rejects(
+  () => GrammarService.saveExtraProgress('24050001', testLesson, {}),
+  /Thiếu câu trả lời/
+);
+await assert.rejects(() => GrammarService.checkAnswer('x', 'y'), /đúng định dạng/);
+
+// 9b. gradeResponseEntries trả cờ đúng/sai để lưu lại, KHÔNG lưu đáp án
+// (tránh biến tiến độ thành kênh rút đáp án của cả bài).
+const gradedEntries = gradeResponseEntries(gradeRows, [
+  { id: 'a', response: 'am' },
+  { id: 'b', response: 'doing' },
+  { id: 'zz', response: 'hack' },
+  { id: 'a', response: 'is' }
+]);
+assert.deepEqual(gradedEntries, [
+  { id: 'a', response: 'am', correct: true },
+  { id: 'b', response: 'doing', correct: false }
+]);
+
+// 9c. Migration 055 lưu câu trả lời bài chính để server chấm lại
+const migration055 = fs.readFileSync('migrations/055_grammar_progress_responses.sql', 'utf8');
+assert.match(migration055, /ALTER TABLE grammar_progress/);
+assert.match(migration055, /responses JSONB/);
+
+// 9d. Controller phải chuyển tiếp đủ field xuống service (từng bị nuốt mất
+// answered_before/correct_before nên resume bài cũ bị mất tiến độ).
+const { ApiController } = await import('../src/controllers/api.controller.js');
+const { BduIdentityService } = await import('../src/services/bdu-identity.service.js');
+const originalResolve = BduIdentityService.resolveVerifiedMssv;
+const originalSaveProgress = GrammarService.saveProgress;
+const originalSaveExtraProgress = GrammarService.saveExtraProgress;
+const forwarded = [];
+BduIdentityService.resolveVerifiedMssv = async () => '24050001';
+GrammarService.saveProgress = async (mssv, lessonId, payload) => { forwarded.push(payload); return { ok: true }; };
+GrammarService.saveExtraProgress = async (mssv, lessonId, payload) => { forwarded.push(payload); return { ok: true }; };
+try {
+  const fakeRes = () => ({
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  });
+  await ApiController.saveGrammarProgress(
+    { headers: { authorization: 'Bearer test' }, body: { lesson_id: testLesson, completed: true, responses: [], answered_before: 5, correct_before: 3 } },
+    fakeRes()
+  );
+  await ApiController.saveGrammarExtraProgress(
+    { headers: { authorization: 'Bearer test' }, body: { lesson_id: testLesson, completed: false, responses: [], answered_before: 2, correct_before: 1 } },
+    fakeRes()
+  );
+} finally {
+  BduIdentityService.resolveVerifiedMssv = originalResolve;
+  GrammarService.saveProgress = originalSaveProgress;
+  GrammarService.saveExtraProgress = originalSaveExtraProgress;
+}
+assert.equal(forwarded[0]?.answered_before, 5, 'Controller phải forward answered_before');
+assert.equal(forwarded[0]?.correct_before, 3, 'Controller phải forward correct_before');
+assert.equal(forwarded[1]?.answered_before, 2, 'Controller phải forward answered_before cho luyện thêm');
+
+// 9d. Toàn bộ câu arrange_words trong dữ liệu crawl phải xếp được thành đáp án
 let arrangeTotal = 0;
 let arrangeBroken = 0;
 for (const dir of dirs) {

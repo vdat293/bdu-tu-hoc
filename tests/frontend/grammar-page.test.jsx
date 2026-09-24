@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   getGrammarGroups: vi.fn(),
   getGrammarPath: vi.fn(),
   getGrammarLesson: vi.fn(),
-  saveGrammarProgress: vi.fn()
+  saveGrammarProgress: vi.fn(),
+  saveGrammarExtraProgress: vi.fn(),
+  checkGrammarAnswer: vi.fn()
 }));
 
 vi.mock('../../client/src/api/grammar.js', () => mocks);
@@ -53,6 +55,46 @@ const LESSON_PAYLOAD = {
   progress: null
 };
 
+const EXTRA_EXERCISES = [
+  {
+    id: 'x1', type: 'multiple_choice', question: 'Chọn đáp án: They __ students.',
+    option_a: 'am', option_b: 'is', option_c: 'are', option_d: 'be',
+    correct_answer: 'are', correct_option: 'C', explanation: 'They đi với are.', hint: '', order: 1
+  },
+  {
+    id: 'x2', type: 'multiple_choice', question: 'Chọn đáp án: He __ a teacher.',
+    option_a: 'am', option_b: 'is', option_c: 'are', option_d: 'be',
+    correct_answer: 'is', correct_option: 'B', explanation: 'He đi với is.', hint: '', order: 2
+  }
+];
+
+const EXTRA_PROGRESS = {
+  answered: 1, correct_count: 1, total_count: 2, best_correct: null, best_total: null,
+  attempts: 1, completed_at: null,
+  responses: [{ id: 'x1', response: 'are', correct: true }]
+};
+
+// Server thật không trả đáp án trong payload bài học; client hỏi từng câu qua
+// checkGrammarAnswer. Helper này mô phỏng đúng luồng đó cho test.
+function mockLesson(payload) {
+  mocks.getGrammarLesson.mockResolvedValue(payload);
+  const byId = new Map();
+  const collect = (list) => {
+    for (const item of list || []) byId.set(item.id, item);
+  };
+  collect(payload.exercises);
+  collect(payload.extra_exercises);
+  for (const reading of payload.readings || []) collect(reading.questions);
+  mocks.checkGrammarAnswer.mockImplementation(async (_token, _lessonId, questionId, response) => {
+    const item = byId.get(questionId);
+    if (!item) throw new Error('Câu hỏi không tồn tại trong bài học.');
+    const expected = String(item.correct_answer || '');
+    const actual = Array.isArray(response) ? response.join(' ') : String(response ?? '');
+    const correct = expected.split('|').some((part) => part.trim().toLowerCase() === actual.trim().toLowerCase());
+    return { correct, correct_answer: expected, explanation: item.explanation || '' };
+  });
+}
+
 function renderWith(routes, entry) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -76,10 +118,12 @@ function allRoutes() {
 
 beforeEach(() => {
   mocks.saveGrammarProgress.mockResolvedValue({ ok: true });
+  mocks.saveGrammarExtraProgress.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   Object.values(mocks).forEach((mock) => mock.mockReset());
 });
 
@@ -140,7 +184,7 @@ describe('grammar path page', () => {
 
 describe('grammar lesson page', () => {
   it('luong ly thuyet -> lam bai -> ket qua', async () => {
-    mocks.getGrammarLesson.mockResolvedValue(LESSON_PAYLOAD);
+    mockLesson(LESSON_PAYLOAD);
     renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
 
     expect(await screen.findByText('Bài 01 - Động từ to be: Lý thuyết')).toBeTruthy();
@@ -167,7 +211,7 @@ describe('grammar lesson page', () => {
   });
 
   it('tra loi sai hien dap an dung va giai thich', async () => {
-    mocks.getGrammarLesson.mockResolvedValue(LESSON_PAYLOAD);
+    mockLesson(LESSON_PAYLOAD);
     renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
     fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
     fireEvent.click(await screen.findByText('are'));
@@ -179,7 +223,7 @@ describe('grammar lesson page', () => {
   });
 
   it('dien tu: chap nhan moi dap an trong nhom do|finish|complete', async () => {
-    mocks.getGrammarLesson.mockResolvedValue({
+    mockLesson({
       lesson: { ...LESSON_PAYLOAD.lesson, question_count: 1, exercise_count: 1 },
       rules: [],
       exercises: [{
@@ -199,7 +243,7 @@ describe('grammar lesson page', () => {
   });
 
   it('dien tu sai thi hien day du cac dap an duoc chap nhan', async () => {
-    mocks.getGrammarLesson.mockResolvedValue({
+    mockLesson({
       lesson: { ...LESSON_PAYLOAD.lesson, question_count: 1, exercise_count: 1 },
       rules: [],
       exercises: [{
@@ -219,8 +263,202 @@ describe('grammar lesson page', () => {
     expect(screen.getByText('do / finish / complete')).toBeTruthy();
   });
 
+  it('gop nut luyen them vao cung hang voi bai chinh va hien badge', async () => {
+    mockLesson({ ...LESSON_PAYLOAD, extra_exercises: EXTRA_EXERCISES, extra_progress: null });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    expect(await screen.findByRole('button', { name: /Bắt đầu luyện thêm/ })).toBeTruthy();
+    const actions = document.querySelector('.gr-theory-actions');
+    expect(actions.querySelectorAll('.gr-start-btn').length).toBe(2);
+    expect(actions.querySelector('.gr-start-btn.is-extra')).toBeTruthy();
+    expect(document.querySelector('.gr-extra-practice')).toBeNull();
+    expect(screen.getByText('🧩 Luyện thêm 2 câu')).toBeTruthy();
+  });
+
+  it('luyen them co tien do: popup hoi lam tiep hay lam lai va khoi phuc cau tra loi', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      extra_exercises: EXTRA_EXERCISES,
+      extra_progress: EXTRA_PROGRESS
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    expect(await screen.findByText('⏳ Đang luyện 1/2 câu')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục luyện thêm từ câu 2\/2/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Bạn đã làm 1/2 câu');
+    fireEvent.click(screen.getByRole('button', { name: /Làm tiếp từ câu 2\/2/ }));
+
+    expect(await screen.findByText('Câu 2/2')).toBeTruthy();
+    expect(screen.getByText('Đúng 1/1 · 100%')).toBeTruthy();
+  });
+
+  it('popup "Huy" khong lam mat tien do va o lai trang ly thuyet', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      extra_exercises: EXTRA_EXERCISES,
+      extra_progress: EXTRA_PROGRESS
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục luyện thêm từ câu 2\/2/ }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('Bài 01 - Động từ to be: Lý thuyết')).toBeTruthy();
+    expect(mocks.saveGrammarExtraProgress).not.toHaveBeenCalled();
+  });
+
+  it('bai chinh co tien do: popup va chon lam lai tu dau', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      progress: {
+        answered: 1, correct_count: 1, total_count: 2, best_correct: null, best_total: null,
+        attempts: 1, completed_at: null
+      }
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục từ câu 2\/2/ }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Làm lại từ đầu/ }));
+
+    expect(await screen.findByText('Câu 1/2')).toBeTruthy();
+  });
+
+  it('loi luu ket qua: hien loi va khong bao hoan thanh', async () => {
+    mockLesson(LESSON_PAYLOAD);
+    mocks.saveGrammarProgress.mockRejectedValueOnce(new Error('Không thể lưu tiến độ ngữ pháp.'));
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
+    fireEvent.click(await screen.findByText('am'));
+    expect(await screen.findByText('✓ Chính xác!')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Câu tiếp/ }));
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'is' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn thành' }));
+
+    expect(await screen.findByText('Không thể lưu tiến độ ngữ pháp.')).toBeTruthy();
+    expect(screen.queryByText('Hoàn thành bài học!')).toBeNull();
+
+    // Bấm lại "Hoàn thành" phải thử lưu lại và hiện được màn hình kết quả.
+    fireEvent.click(screen.getByRole('button', { name: 'Hoàn thành' }));
+    expect(await screen.findByText('Hoàn thành bài học!')).toBeTruthy();
+  });
+
+  it('bai chinh resume: khoi phuc cau tra loi cu va cong don tien do', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      progress: {
+        answered: 1, correct_count: 1, total_count: 1, best_correct: null, best_total: null,
+        attempts: 0, completed_at: null,
+        responses: [{ id: 'e1', response: 'am', correct: true }]
+      }
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục từ câu 2\/2/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Làm tiếp từ câu 2\/2/ }));
+
+    expect(await screen.findByText('Câu 2/2')).toBeTruthy();
+    expect(screen.getByText('Đúng 1/1 · 100%')).toBeTruthy();
+
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'is' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn thành' }));
+    expect(await screen.findByText('Hoàn thành bài học!')).toBeTruthy();
+
+    expect(mocks.saveGrammarProgress).toHaveBeenCalledWith('test-token', LESSON_ID, expect.objectContaining({
+      completed: true,
+      answered: 2,
+      answeredBefore: 0,
+      responses: [{ id: 'e1', response: 'am' }, { id: 'e2', response: 'is' }]
+    }));
+  });
+
+  it('resume du lieu cu (chua luu responses) van cong don duoc tien do', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      progress: {
+        answered: 1, correct_count: 1, total_count: 1, best_correct: null, best_total: null,
+        attempts: 0, completed_at: null, responses: []
+      }
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục từ câu 2\/2/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Làm tiếp từ câu 2\/2/ }));
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'is' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn thành' }));
+    expect(await screen.findByText('Hoàn thành bài học!')).toBeTruthy();
+
+    expect(mocks.saveGrammarProgress).toHaveBeenCalledWith('test-token', LESSON_ID, expect.objectContaining({
+      completed: true,
+      answeredBefore: 1,
+      correctBefore: 1
+    }));
+  });
+
+  it('autosave chi gui mot request cho mot cau tra loi (khong lap vo han)', async () => {
+    mockLesson(LESSON_PAYLOAD);
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+    fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText('am'));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    await vi.waitFor(() => expect(mocks.saveGrammarProgress).toHaveBeenCalledTimes(1));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(mocks.saveGrammarProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('cau sai tu phien truoc duoc hien lai dap an o man ket qua', async () => {
+    mockLesson({
+      ...LESSON_PAYLOAD,
+      progress: {
+        answered: 1, correct_count: 0, total_count: 1, attempts: 0, completed_at: null,
+        responses: [{ id: 'e1', response: 'is', correct: false }]
+      }
+    });
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục từ câu 2\/2/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Làm tiếp từ câu 2\/2/ }));
+    const input = await screen.findByLabelText('Đáp án');
+    fireEvent.change(input, { target: { value: 'is' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Trả lời' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn thành' }));
+
+    expect(await screen.findByText('Hoàn thành bài học!')).toBeTruthy();
+    expect(await screen.findByText('am')).toBeTruthy();
+    expect(await screen.findByText(/I luôn đi với am\./)).toBeTruthy();
+  });
+
+  it('loi kiem tra dap an: hien nut thu lai va cham lai duoc', async () => {
+    mockLesson(LESSON_PAYLOAD);
+    renderWith(allRoutes(), `/grammar/lesson/${LESSON_ID}`);
+    mocks.checkGrammarAnswer.mockRejectedValueOnce(new Error('Không thể kiểm tra đáp án.'));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Làm bài tập/ }));
+    fireEvent.click(await screen.findByText('am'));
+
+    expect(await screen.findByText('Không thể kiểm tra đáp án.')).toBeTruthy();
+    mocks.checkGrammarAnswer.mockResolvedValueOnce({ correct: true, correct_answer: 'am', explanation: 'I luôn đi với am.' });
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByText('✓ Chính xác!')).toBeTruthy();
+  });
+
   it('sap xep tu: bam chip theo thu tu va kiem tra', async () => {
-    mocks.getGrammarLesson.mockResolvedValue({
+    mockLesson({
       lesson: { ...LESSON_PAYLOAD.lesson, question_count: 1, exercise_count: 1 },
       rules: [],
       exercises: [{

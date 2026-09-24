@@ -12,7 +12,8 @@ export default [
         window: 'readonly', document: 'readonly', navigator: 'readonly', localStorage: 'readonly', sessionStorage: 'readonly',
         FormData: 'readonly', Blob: 'readonly', URL: 'readonly', fetch: 'readonly', Headers: 'readonly', EventSource: 'readonly',
         WebSocket: 'readonly', atob: 'readonly', CustomEvent: 'readonly', URLSearchParams: 'readonly', console: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
-        setInterval: 'readonly', clearInterval: 'readonly', performance: 'readonly', process: 'readonly', __BUILD_ID__: 'readonly'
+        setInterval: 'readonly', clearInterval: 'readonly', performance: 'readonly', process: 'readonly', __BUILD_ID__: 'readonly',
+        HTMLElement: 'readonly'
       }
     },
     plugins: { 'react-hooks': reactHooks },

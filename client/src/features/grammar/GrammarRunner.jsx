@@ -4,6 +4,7 @@ import {
   arrangePromptText,
   decodeHtmlEntities,
   formatCorrectAnswer,
+  friendlyErrorMessage,
   hasHtml,
   isAnswerCorrect,
   optionColumns,
@@ -68,24 +69,62 @@ function accuracyOf(correct, total) {
   return total > 0 ? Math.round((correct / total) * 100) : 0;
 }
 
+function answersFromSavedResponses(items, responses) {
+  const byId = new Map((Array.isArray(responses) ? responses : []).map((entry) => [String(entry?.id ?? ''), entry]));
+  return items.map((savedItem) => {
+    const entry = byId.get(String(savedItem?.key ?? ''));
+    if (!entry) return undefined;
+    const response = entry.response ?? null;
+    return {
+      correct: entry.correct === true,
+      response,
+      timedOut: response == null
+    };
+  });
+}
+
 export default function GrammarRunner({
   items,
   initialIndex = 0,
   initialCorrect = 0,
+  initialResponses = [],
+  answeredBefore = 0,
+  correctBefore = 0,
   timerSeconds = GRAMMAR_TIMER_SECONDS,
   onQuizSave,
+  onCheckAnswer,
   onBackToTheory,
-  onExitToPath
+  onExitToPath,
+  isExtra = false
 }) {
   const [index, setIndex] = useState(Math.max(0, Math.min(initialIndex, Math.max(items.length - 1, 0))));
-  const [answers, setAnswers] = useState([]);
+  const restoredAnswers = useMemo(() => answersFromSavedResponses(items, initialResponses), [items, initialResponses]);
+  const restoredCorrectCount = restoredAnswers.filter((entry) => entry?.correct).length;
+  const [answers, setAnswers] = useState(() => restoredAnswers);
   const [reveal, setReveal] = useState(null);
   const [hintOpen, setHintOpen] = useState(false);
   const [finished, setFinished] = useState(false);
   const [arranged, setArranged] = useState([]);
   const [fillValue, setFillValue] = useState('');
-  const [baseCorrect, setBaseCorrect] = useState(Math.max(0, initialCorrect));
+  // Điểm đúng của các câu đã làm trước đó: tổng cũ trừ phần đã khôi phục được
+  // (responses cũ có thể thiếu câu trả lời nên không khôi phục hết).
+  const [baseCorrect, setBaseCorrect] = useState(Math.max(0, Math.max(0, initialCorrect) - restoredCorrectCount));
   const [round, setRound] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [reviewAnswers, setReviewAnswers] = useState({});
+  const checkingRef = useRef(false);
+  const lastResponseRef = useRef(null);
+  // Giữ callback mới nhất trong ref: callback từ trang cha đổi identity mỗi
+  // lần render (mutation đổi trạng thái), nếu để trong deps sẽ làm effect
+  // autosave hẹn lại liên tục và gửi request lặp vô hạn.
+  const onQuizSaveRef = useRef(onQuizSave);
+  onQuizSaveRef.current = onQuizSave;
+  const lastAutosaveRef = useRef('');
+  // Focus màn hình kết quả để screen reader đọc.
+  const resultRef = useRef(null);
 
   // Chặn 2 lần "Câu tiếp"/Enter trong cùng một frame làm nhảy 2 câu; reset khi
   // đã sang câu mới (index đổi) hoặc khi làm lại.
@@ -120,10 +159,37 @@ export default function GrammarRunner({
     setFillValue('');
   }, []);
 
+  // Lưu tiến độ: chỉ báo hoàn thành/thoát khi server đã nhận, tránh hiện
+  // "Hoàn thành" oan khi mạng lỗi.
+  const persist = useCallback(async (payload) => {
+    setSaving(true);
+    try {
+      await onQuizSaveRef.current?.(payload);
+      setSaveError(null);
+      return true;
+    } catch (error) {
+      setSaveError(friendlyErrorMessage(error, 'Không thể lưu tiến độ. Kiểm tra kết nối rồi thử lại.'));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   const finish = useCallback(async (correct) => {
-    setFinished(true);
-    await onQuizSave?.({ answered: total, correct, total, completed: true, responses: buildResponses() });
-  }, [onQuizSave, total, buildResponses]);
+    const ok = await persist({
+      answered: total,
+      correct,
+      total,
+      completed: true,
+      responses: buildResponses(),
+      answeredBefore,
+      correctBefore
+    });
+    if (ok) setFinished(true);
+    // Lưu lỗi thì mở lại nút "Hoàn thành" để bấm thử lại (advancingRef đang
+    // bị giữ true vì index không đổi ở câu cuối).
+    else advancingRef.current = false;
+  }, [persist, total, buildResponses, answeredBefore, correctBefore]);
 
   const goNext = useCallback(() => {
     if (advancingRef.current) return;
@@ -153,22 +219,53 @@ export default function GrammarRunner({
     if (reveal) feedbackRef.current?.focus({ preventScroll: true });
   }, [reveal]);
 
-  const recordAnswer = useCallback((correct, response, timedOut = false) => {
+  // Màn hình kết quả được focus để screen reader đọc ngay.
+  useEffect(() => {
+    if (finished) resultRef.current?.focus({ preventScroll: true });
+  }, [finished]);
+
+  // Câu trả lời cũ chỉ khôi phục được cờ đúng/sai (server không lưu đáp án
+  // trong tiến độ) — hỏi server đáp án cho các câu làm sai để màn hình kết
+  // quả vẫn hiện đáp án đúng + giải thích.
+  useEffect(() => {
+    if (!finished || !onCheckAnswer) return undefined;
+    const missing = answers
+      .map((entry, i) => ({ entry, question: items[i] }))
+      .filter(({ entry, question }) => entry && !entry.correct && !entry.correctAnswer && entry.response != null && question?.key);
+    if (!missing.length) return undefined;
+    let cancelled = false;
+    Promise.all(missing.map(({ entry, question }) => onCheckAnswer(question.key, entry.response)
+      .then((result) => ({ key: question.key, result }))
+      .catch(() => null))).then((rows) => {
+      if (cancelled) return;
+      const next = {};
+      for (const row of rows) {
+        if (row?.result?.correct_answer) next[row.key] = row.result;
+      }
+      if (Object.keys(next).length) setReviewAnswers((prev) => ({ ...prev, ...next }));
+    });
+    return () => { cancelled = true; };
+  }, [finished, answers, items, onCheckAnswer]);
+
+  const recordAnswer = useCallback((correct, response, timedOut = false, correctAnswer = '', explanation = '') => {
     if (revealRef.current) return;
-    revealRef.current = { correct, response, timedOut };
-    setReveal({ correct, response, timedOut });
+    revealRef.current = { correct, response, timedOut, correctAnswer, explanation };
+    setReveal({ correct, response, timedOut, correctAnswer, explanation });
+    setCheckError(null);
     setAnswers((prev) => {
       const next = [...prev];
-      next[index] = { correct, response, timedOut };
+      next[index] = { correct, response, timedOut, correctAnswer, explanation };
       return next;
     });
   }, [index]);
 
+  // Hết giờ: không hỏi server đáp án (tránh biến API chấm thành chỗ tra đáp án
+  // khi chưa trả lời), chỉ ghi nhận câu bị bỏ trống.
   const handleTimeout = useCallback(() => {
     recordAnswer(false, null, true);
   }, [recordAnswer]);
 
-  const left = useCountdown(timerSeconds, `${round}:${index}`, Boolean(item) && !reveal && !finished, handleTimeout);
+  const left = useCountdown(timerSeconds, `${round}:${index}`, Boolean(item) && !reveal && !finished && !checking, handleTimeout);
   const timerPct = Math.max(0, Math.min(100, (left / timerSeconds) * 100));
 
   // Hết giờ: hiện đáp án rồi tự chuyển câu sau 4s để kịp đọc giải thích.
@@ -178,10 +275,62 @@ export default function GrammarRunner({
     return () => clearTimeout(id);
   }, [reveal, finished, goNext]);
 
+  // Tự lưu tiến độ dở dang sau mỗi câu (debounce) để refresh/đóng tab không
+  // mất các câu đã làm. Câu cuối do finish()/exitQuiz() lưu để không cộng
+  // nhầm số lượt làm bài. Chỉ lưu khi nội dung thực sự đổi (so signature
+  // trong timeout) để không gửi lặp khi trang cha refetch sau mỗi lần lưu.
+  useEffect(() => {
+    if (finished) return undefined;
+    const answeredNow = index + (reveal ? 1 : 0);
+    if (answeredNow <= 0 || answeredNow >= total) return undefined;
+    const responses = buildResponses();
+    const signature = `${answeredNow}|${responses.map((entry) => `${entry.id}:${Array.isArray(entry.response) ? entry.response.join(' ') : entry.response ?? ''}`).join(',')}`;
+    const timer = setTimeout(() => {
+      if (signature === lastAutosaveRef.current) return;
+      lastAutosaveRef.current = signature;
+      const correctNow = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      onQuizSaveRef.current?.({
+        answered: answeredNow,
+        correct: correctNow,
+        total,
+        completed: false,
+        responses,
+        answeredBefore,
+        correctBefore,
+        silent: true
+      })?.catch?.(() => {});
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [index, reveal, finished, total, baseCorrect, answers, buildResponses, answeredBefore, correctBefore]);
+
   const submit = useCallback((response) => {
-    if (!item || reveal) return;
-    recordAnswer(isAnswerCorrect(item.type, response, item.correct_answer), response);
-  }, [item, reveal, recordAnswer]);
+    if (!item || reveal || checkingRef.current) return;
+    lastResponseRef.current = response;
+    setCheckError(null);
+    if (!onCheckAnswer) {
+      setCheckError('Không thể kiểm tra đáp án lúc này. Vui lòng thử lại.');
+      return;
+    }
+    checkingRef.current = true;
+    setChecking(true);
+    onCheckAnswer(item.key, response)
+      .then((result) => {
+        recordAnswer(
+          Boolean(result?.correct),
+          response,
+          false,
+          String(result?.correct_answer ?? ''),
+          String(result?.explanation ?? '')
+        );
+      })
+      .catch((error) => {
+        setCheckError(friendlyErrorMessage(error, 'Không thể kiểm tra đáp án. Kiểm tra kết nối rồi thử lại.'));
+      })
+      .finally(() => {
+        checkingRef.current = false;
+        setChecking(false);
+      });
+  }, [item, reveal, onCheckAnswer, recordAnswer]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -233,13 +382,24 @@ export default function GrammarRunner({
     setRound((r) => r + 1);
     advancingRef.current = false;
     resetRoundState();
+    setCheckError(null);
+    setSaveError(null);
   };
 
   const exitQuiz = async () => {
     // Chưa làm câu nào thì không ghi đè tiến độ cũ (tránh mất chỗ "Tiếp tục").
     if (answeredCount > 0) {
       const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total, responses: buildResponses() });
+      const ok = await persist({
+        answered: answeredCount,
+        correct,
+        total,
+        completed: answeredCount >= total,
+        responses: buildResponses(),
+        answeredBefore,
+        correctBefore
+      });
+      if (!ok) return;
     }
     onExitToPath?.();
   };
@@ -247,7 +407,16 @@ export default function GrammarRunner({
   const backToTheory = async () => {
     if (answeredCount > 0) {
       const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total, responses: buildResponses() });
+      const ok = await persist({
+        answered: answeredCount,
+        correct,
+        total,
+        completed: answeredCount >= total,
+        responses: buildResponses(),
+        answeredBefore,
+        correctBefore
+      });
+      if (!ok) return;
     }
     onBackToTheory?.();
   };
@@ -269,9 +438,9 @@ export default function GrammarRunner({
     const accuracy = accuracyOf(correctCount, total);
     return (
       <div className="gr-wrap">
-        <div className="gr-card glass-panel gr-result">
+        <div className="gr-card glass-panel gr-result" role="status" tabIndex={-1} ref={resultRef}>
           <span className="gr-result-emoji" aria-hidden="true">{accuracy >= 80 ? '🎉' : accuracy >= 50 ? '💪' : '📚'}</span>
-          <h3>Hoàn thành bài học!</h3>
+          <h3>{isExtra ? 'Hoàn thành luyện thêm!' : 'Hoàn thành bài học!'}</h3>
           <p className="gr-result-score">{correctCount}/{total} câu đúng · {accuracy}%</p>
           <div className="gr-result-bar" aria-hidden="true"><i style={{ width: `${accuracy}%` }} /></div>
           <div className="gr-result-actions">
@@ -287,20 +456,24 @@ export default function GrammarRunner({
           <div className="gr-card glass-panel">
             <h3 className="gr-review-title">Câu làm sai ({wrong.length})</h3>
             <ol className="gr-review-list">
-              {wrong.map(({ entry, item: question }) => (
-                <li key={question.key}>
-                  <p className="gr-review-q">
-                    {question.kind === 'reading' ? `${question.reading_title} · ` : ''}{plainText(question.question)}
-                  </p>
-                  <p className="gr-review-a">
-                    Đáp án đúng: <strong>{formatCorrectAnswer(question.correct_answer)}</strong>
-                    {entry.response
-                      ? <> · Bạn chọn: <em>{Array.isArray(entry.response) ? entry.response.join(' ') : entry.response}</em></>
-                      : ' · Hết giờ'}
-                  </p>
-                  {question.explanation ? <p className="gr-review-explain">{plainText(question.explanation)}</p> : null}
-                </li>
-              ))}
+              {wrong.map(({ entry, item: question }) => {
+                const answerText = entry.correctAnswer || reviewAnswers[question.key]?.correct_answer || '';
+                const explainText = entry.explanation || reviewAnswers[question.key]?.explanation || '';
+                return (
+                  <li key={question.key}>
+                    <p className="gr-review-q">
+                      {question.kind === 'reading' ? `${question.reading_title} · ` : ''}{plainText(question.question)}
+                    </p>
+                    <p className="gr-review-a">
+                      Đáp án đúng: <strong>{answerText ? formatCorrectAnswer(answerText) : '—'}</strong>
+                      {entry.response
+                        ? <> · Bạn chọn: <em>{Array.isArray(entry.response) ? entry.response.join(' ') : entry.response}</em></>
+                        : ' · Hết giờ'}
+                    </p>
+                    {explainText ? <p className="gr-review-explain">{plainText(explainText)}</p> : null}
+                  </li>
+                );
+              })}
             </ol>
           </div>
         ) : null}
@@ -321,9 +494,9 @@ export default function GrammarRunner({
           <span className="gr-counter">Câu {index + 1}/{total}</span>
           <div className="gr-topbar-actions">
             {onBackToTheory ? (
-              <button className="gr-action" type="button" onClick={backToTheory}>Lý thuyết</button>
+              <button className="gr-action" type="button" onClick={backToTheory} disabled={saving}>Lý thuyết</button>
             ) : null}
-            <button className="gr-action is-exit" type="button" onClick={exitQuiz}>← Thoát</button>
+            <button className="gr-action is-exit" type="button" onClick={exitQuiz} disabled={saving}>← Thoát</button>
           </div>
         </div>
         <div className="gr-progress" role="progressbar" aria-label={`Tiến độ ${answeredCount}/${total} câu`} aria-valuenow={answeredCount} aria-valuemin={0} aria-valuemax={total}>
@@ -338,6 +511,20 @@ export default function GrammarRunner({
         </div>
       </header>
 
+      {saveError ? (
+        <div className="gr-save-error" role="alert">
+          <span>{saveError}</span>
+          <span className="gr-save-error-hint">Bấm lại nút vừa rồi để thử lưu tiếp.</span>
+        </div>
+      ) : null}
+
+      {checkError ? (
+        <div className="gr-check-error" role="alert">
+          <span>{checkError}</span>
+          <button className="btn-ghost" type="button" onClick={() => submit(lastResponseRef.current)} disabled={checking}>Thử lại</button>
+        </div>
+      ) : null}
+
       <div className="gr-card glass-panel">
         {isReading && item.passage ? (
           <section className="gr-passage" aria-label="Đoạn văn">
@@ -351,7 +538,7 @@ export default function GrammarRunner({
         {showOptions ? (
           <div className="gr-options">
             {options.map((option, i) => {
-              const isCorrect = isAnswerCorrect(item.type, option, item.correct_answer);
+              const isCorrect = reveal ? isAnswerCorrect(item.type, option, reveal.correctAnswer || '') : false;
               const isChosen = reveal?.response === option;
               const classes = ['gr-option'];
               let statusLabel = '';
@@ -365,7 +552,7 @@ export default function GrammarRunner({
                   key={`${item.key}-${OPTION_LETTERS[i]}`}
                   type="button"
                   className={classes.join(' ')}
-                  disabled={Boolean(reveal)}
+                  disabled={Boolean(reveal) || checking}
                   onClick={() => submit(option)}
                   aria-label={reveal ? `${OPTION_LETTERS[i]}. ${option}${statusLabel}` : undefined}
                 >
@@ -389,7 +576,7 @@ export default function GrammarRunner({
               ref={fillRef}
               type="text"
               value={fillValue}
-              disabled={Boolean(reveal)}
+              disabled={Boolean(reveal) || checking}
               onChange={(event) => setFillValue(event.target.value)}
               placeholder="Nhập đáp án..."
               aria-label="Đáp án"
@@ -398,7 +585,7 @@ export default function GrammarRunner({
               autoCorrect="off"
               enterKeyHint="done"
             />
-            <button className="btn btn-primary" type="submit" disabled={Boolean(reveal) || !fillValue.trim()}>Trả lời</button>
+            <button className="btn btn-primary" type="submit" disabled={Boolean(reveal) || checking || !fillValue.trim()}>Trả lời</button>
           </form>
         ) : null}
 
@@ -414,7 +601,7 @@ export default function GrammarRunner({
                   key={`picked-${wordIndex}`}
                   type="button"
                   className="gr-chip is-picked"
-                  disabled={Boolean(reveal)}
+                  disabled={Boolean(reveal) || checking}
                   onClick={() => setArranged((prev) => prev.filter((idx) => idx !== wordIndex))}
                   aria-label={`Bỏ từ ${words[wordIndex]}`}
                 >
@@ -428,7 +615,7 @@ export default function GrammarRunner({
                   key={`word-${wordIndex}-${word}`}
                   type="button"
                   className={`gr-chip ${arrangedSet.has(wordIndex) ? 'is-used' : ''}`}
-                  disabled={Boolean(reveal) || arrangedSet.has(wordIndex)}
+                  disabled={Boolean(reveal) || checking || arrangedSet.has(wordIndex)}
                   onClick={() => setArranged((prev) => [...prev, wordIndex])}
                 >
                   {word}
@@ -451,7 +638,7 @@ export default function GrammarRunner({
                 <button
                   className="btn btn-primary"
                   type="button"
-                  disabled={!arranged.length || arranged.length < words.length}
+                  disabled={!arranged.length || arranged.length < words.length || checking}
                   onClick={() => submit(arranged.map((wordIndex) => words[wordIndex]))}
                 >
                   Kiểm tra
@@ -476,6 +663,10 @@ export default function GrammarRunner({
           </div>
         ) : null}
 
+        {checking ? (
+          <p className="gr-checking" role="status">Đang kiểm tra đáp án…</p>
+        ) : null}
+
         {reveal ? (
           <div
             className={`gr-feedback ${reveal.correct ? 'is-ok' : 'is-bad'}`}
@@ -487,11 +678,11 @@ export default function GrammarRunner({
             <strong>
               {reveal.correct ? '✓ Chính xác!' : reveal.timedOut ? '⏰ Hết giờ!' : '✗ Chưa đúng'}
             </strong>
-            {!reveal.correct ? <span> Đáp án đúng: <b>{formatCorrectAnswer(item.correct_answer)}</b></span> : null}
-            {item.explanation ? <RichText value={item.explanation} className="gr-feedback-explain" /> : null}
+            {!reveal.correct && reveal.correctAnswer ? <span> Đáp án đúng: <b>{formatCorrectAnswer(reveal.correctAnswer)}</b></span> : null}
+            {reveal.explanation ? <RichText value={reveal.explanation} className="gr-feedback-explain" /> : null}
             <div className="gr-feedback-actions">
-              <button className="btn btn-primary" type="button" onClick={goNext}>
-                {index + 1 >= total ? 'Hoàn thành' : 'Câu tiếp →'}
+              <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>
+                {saving ? 'Đang lưu…' : (index + 1 >= total ? 'Hoàn thành' : 'Câu tiếp →')}
               </button>
               <span className="gr-kbd-hint">Enter</span>
             </div>

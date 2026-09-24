@@ -374,7 +374,10 @@ Import dữ liệu ngữ pháp lên VPS (giống luyện từ vựng: local expo
 rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên VPS):
 
 ```bash
-# Trên máy local, sau khi đã crawl + npm run grammar:import vào DB local
+# Trên máy local, sau khi đã crawl. grammar:import nạp cả dữ liệu crawl và
+# các bộ luyện thêm trong data/grammar-practice-extra/ vào bảng riêng.
+npm run db:migrate
+npm run grammar:import
 npm run grammar:export
 scp data/grammar-export.sql ubuntu@<vps>:~/bdu-tu-hoc/data/
 

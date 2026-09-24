@@ -21,6 +21,7 @@
     "rankings:sync": "node scripts/sync-rankings.js",
     "vocab:import": "node scripts/import-vocab.js",
     "grammar:import": "node scripts/import-grammar.js",
+    "grammar:extra:import": "node scripts/import-grammar-extra.js",
     "grammar:export": "node scripts/export-grammar.js",
     "vocab:fix-pos": "node scripts/fix-vocab-pos.js",
     "vocab:fix-pos:apply": "node scripts/fix-vocab-pos.js --apply",

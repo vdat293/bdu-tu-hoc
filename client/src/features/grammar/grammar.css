@@ -67,17 +67,25 @@
 
 /* ==================== Trang bài học: lý thuyết ==================== */
 .gr-crumb { margin: 0 0 10px; font-size: 13px; color: #64748b; }
-.gr-crumb-link { border: none; background: none; padding: 0; color: #4f46e5; font-weight: 700; cursor: pointer; font-size: 13px; }
-.gr-crumb-link:hover { text-decoration: underline; }
 .gr-theory { border-radius: 20px; padding: 22px; }
 .gr-theory-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .gr-theory-title { margin: 0; font-size: 22px; line-height: 1.35; }
 .gr-theory-sub { margin: 6px 0 0; color: #64748b; font-size: 14px; }
 .gr-theory-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.gr-theory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
-.gr-start-btn { flex: 1; min-width: 220px; border: none; border-radius: 14px; background: #22c55e; color: #fff; font-size: 16px; font-weight: 800; padding: 14px 22px; cursor: pointer; transition: background .15s ease, transform .12s ease; }
-.gr-start-btn:hover { background: #16a34a; transform: translateY(-1px); }
+.gr-theory-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; margin-top: 16px; }
+.gr-start-btn { flex: 1; min-width: 220px; border: none; border-radius: 14px; background: #15803d; color: #fff; font-size: 16px; font-weight: 800; padding: 14px 22px; cursor: pointer; transition: background .15s ease, transform .12s ease; }
+.gr-start-btn:hover { background: #166534; transform: translateY(-1px); }
+.gr-start-btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+.gr-start-btn.is-extra { background: #2563eb; }
+.gr-start-btn.is-extra:hover { background: #1d4ed8; }
 .gr-theory-empty { color: #64748b; }
+.gr-resume-modal { width: min(440px, 100%); max-width: 440px; padding: 22px; display: grid; gap: 14px; }
+.gr-resume-title { margin: 0; font-size: 18px; color: var(--text-main); }
+.gr-resume-text { margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+.gr-resume-actions { display: grid; gap: 10px; }
+.gr-resume-actions > .btn, .gr-resume-actions > .btn-ghost { width: 100%; min-height: 44px; }
+body.theme-light .gr-resume-actions > .btn-secondary { background: #fff; border: 1.5px solid #cbd5e1; color: #334155; }
+body.theme-light .gr-resume-actions > .btn-secondary:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
 .gr-rules { display: grid; gap: 16px; margin-top: 18px; }
 .gr-rule { border: 1.5px solid #e9eef5; border-radius: 18px; padding: 18px 20px; background: #fff; }
 .gr-rule-title { margin: 0 0 10px; font-size: 17px; color: #0f172a; }
@@ -111,6 +119,11 @@
 .gr-timer-bar i { display: block; height: 100%; border-radius: 999px; background: #22c55e; transition: width 1s linear; }
 .gr-timer.is-danger .gr-timer-bar i { background: #ef4444; }
 .gr-accuracy { font-size: 13px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.gr-checking { margin: 12px 0 0; color: #475569; font-size: 14px; font-weight: 700; }
+.gr-check-error, .gr-save-error { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 14px; border-radius: 14px; font-size: 14px; font-weight: 600; }
+.gr-check-error { border: 1.5px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+.gr-save-error { border: 1.5px solid #fcd34d; background: #fffbeb; color: #92400e; }
+.gr-save-error-hint { font-weight: 500; opacity: .85; }
 
 .gr-card { border-radius: 26px; padding: 26px 24px; margin-top: 18px; border: 1.5px solid #e9eef5; }
 .gr-passage { border: 1.5px solid #dbeafe; background: #f8fbff; border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
@@ -188,19 +201,45 @@
   .gr-lesson-btn { align-items: flex-start; }
   .gr-fill { flex-direction: column; }
   .gr-chip { min-height: 44px; }
-  .gr-action, .gr-hint-btn { min-height: 40px; }
+  .gr-action, .gr-hint-btn { min-height: 44px; }
   .gr-arrange-tools { width: 100%; margin-right: 0; }
   .gr-arrange-tools > .btn-ghost { flex: 1; }
   .gr-arrange-actions > .btn { flex: 1; min-height: 44px; }
 }
 
 @media print {
-  .sidebar, .topbar, .gr-crumb, .gr-theory-actions, .gr-theory-head button, .sidebar-scrim, .bg-glow { display: none !important; }
+  .sidebar, .topbar, .gr-crumb, .gr-theory-actions, .gr-theory-head button, .sidebar-scrim, .bg-glow, .modal-backdrop { display: none !important; }
   .main-content-wrapper { margin: 0 !important; }
   .gr-theory, .gr-rule { border: none; box-shadow: none; padding: 0 0 12px; }
   .gr-rule { break-inside: avoid; }
+  /* Dark theme in ra giấy trắng: ép chữ về màu tối để đọc được. */
+  .gr-theory, .gr-theory-title, .gr-theory-sub, .gr-question, .gr-rule-title, .gr-rule-content { color: #111827 !important; }
 }
 
+/* Dark theme: các class chữ màu tối cứng sẽ chìm trên nền tối (riêng
+   .gr-rule-title nằm trên thẻ trắng cứng nên giữ nguyên màu tối). */
+body.theme-dark .gr-theory-title,
+body.theme-dark .gr-question,
+body.theme-dark .gr-review-q,
+body.theme-dark .gr-review-title,
+body.theme-dark .gr-counter,
+body.theme-dark .gr-section-head h3,
+body.theme-dark .gr-panel-head h3,
+body.theme-dark .gr-lesson-name,
+body.theme-dark .gr-path-name,
+body.theme-dark .gr-hero-title { color: var(--text-main); }
+body.theme-dark .gr-theory-sub,
+body.theme-dark .gr-checking,
+body.theme-dark .gr-review-a,
+body.theme-dark .gr-review-explain,
+body.theme-dark .gr-accuracy,
+body.theme-dark .gr-hint-text,
+body.theme-dark .gr-arrange-empty,
+body.theme-dark .gr-hero-group,
+body.theme-dark .gr-path-meta,
+body.theme-dark .gr-list-count,
+body.theme-dark .gr-crumb { color: var(--text-muted); }
+
 @media (prefers-reduced-motion: reduce) {
-  .gr-path-card, .gr-option, .gr-start-btn, .gr-progress i, .gr-timer-bar i, .gr-chip, .gr-lesson { transition: none; }
+  .gr-path-card, .gr-option, .gr-start-btn, .gr-progress i, .gr-timer-bar i, .gr-chip, .gr-lesson, .modal-dialog { transition: none; animation: none; }
 }

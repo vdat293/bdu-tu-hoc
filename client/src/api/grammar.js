@@ -24,9 +24,38 @@ export async function saveGrammarProgress(token, lessonId, payload = {}) {
       answered: payload.answered,
       correct: payload.correct,
       total: payload.total,
-      completed: Boolean(payload.completed)
+      completed: Boolean(payload.completed),
+      responses: Array.isArray(payload.responses) ? payload.responses : undefined,
+      answered_before: payload.answeredBefore,
+      correct_before: payload.correctBefore
     },
     defaultMessage: 'Không thể lưu tiến độ ngữ pháp.'
+  });
+  return unwrap(data, data);
+}
+
+export async function checkGrammarAnswer(token, lessonId, questionId, response) {
+  const data = await request('/api/grammar/answer', {
+    method: 'POST',
+    token,
+    body: { lesson_id: lessonId, question_id: questionId, response: response ?? null },
+    defaultMessage: 'Không thể kiểm tra đáp án.'
+  });
+  return unwrap(data, null);
+}
+
+export async function saveGrammarExtraProgress(token, lessonId, payload = {}) {
+  const data = await request('/api/grammar/extra-progress', {
+    method: 'POST',
+    token,
+    body: {
+      lesson_id: lessonId,
+      completed: Boolean(payload.completed),
+      responses: Array.isArray(payload.responses) ? payload.responses : [],
+      answered_before: payload.answeredBefore,
+      correct_before: payload.correctBefore
+    },
+    defaultMessage: 'Không thể lưu tiến độ luyện thêm.'
   });
   return unwrap(data, data);
 }

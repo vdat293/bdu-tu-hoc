@@ -24,6 +24,16 @@ export {
 
 export const GRAMMAR_TIMER_SECONDS = 60;
 
+// Lỗi mạng của fetch thường có message tiếng Anh — đổi sang câu tiếng Việt.
+export function friendlyErrorMessage(error, fallback) {
+  const message = String(error?.message || '').trim();
+  if (!message) return fallback;
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return 'Không thể kết nối máy chủ. Kiểm tra mạng rồi thử lại.';
+  }
+  return message;
+}
+
 export function hasHtml(value) {
   return /<[a-z][^>]*>/i.test(String(value ?? ''));
 }

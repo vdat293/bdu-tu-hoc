@@ -230,6 +230,8 @@ router.get('/grammar/groups', ApiController.listGrammarGroups);
 router.get('/grammar/paths/:pathId', ApiController.getGrammarPath);
 router.get('/grammar/lessons/:lessonId', ApiController.getGrammarLesson);
 router.post('/grammar/progress', ApiController.saveGrammarProgress);
+router.post('/grammar/extra-progress', ApiController.saveGrammarExtraProgress);
+router.post('/grammar/answer', ApiController.checkGrammarAnswer);
 
 // 9. Giải trí: online game rooms, challenges and move history
 router.get('/entertainment/games', ApiController.getEntertainmentGames);
