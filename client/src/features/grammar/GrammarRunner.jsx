@@ -22,22 +22,34 @@ function shuffle(list) {
 
 function useCountdown(seconds, resetKey, active, onExpire) {
   const [left, setLeft] = useState(seconds);
+  const key = `${seconds}|${resetKey}`;
+  const [lastKey, setLastKey] = useState(key);
   const expireRef = useRef(onExpire);
   expireRef.current = onExpire;
+  const expiredKeyRef = useRef(null);
 
-  useEffect(() => {
+  // Reset đồng bộ ngay trong render khi đổi câu/lượt. Nếu chỉ reset trong
+  // useEffect, commit chuyển câu vẫn còn left = 0 của câu trước và effect
+  // expire sẽ chấm "Hết giờ" oan cho câu mới.
+  if (lastKey !== key) {
+    setLastKey(key);
     setLeft(seconds);
-  }, [seconds, resetKey]);
+    expiredKeyRef.current = null;
+  }
 
   useEffect(() => {
     if (!active) return undefined;
     if (left <= 0) {
-      expireRef.current?.();
+      // Chỉ expire một lần cho mỗi câu/lượt.
+      if (expiredKeyRef.current !== resetKey) {
+        expiredKeyRef.current = resetKey;
+        expireRef.current?.();
+      }
       return undefined;
     }
     const id = setTimeout(() => setLeft((v) => Math.max(0, v - 1)), 1000);
     return () => clearTimeout(id);
-  }, [left, active]);
+  }, [left, active, resetKey]);
 
   return left;
 }
@@ -63,6 +75,13 @@ export default function GrammarRunner({
   const [arranged, setArranged] = useState([]);
   const [fillValue, setFillValue] = useState('');
   const [baseCorrect, setBaseCorrect] = useState(Math.max(0, initialCorrect));
+  const [round, setRound] = useState(0);
+
+  // Chặn 2 lần "Câu tiếp"/Enter trong cùng một frame làm nhảy 2 câu; reset khi
+  // đã sang câu mới (index đổi) hoặc khi làm lại.
+  const advancingRef = useRef(false);
+  // Chặn timeout/click ghi đè lẫn nhau sau khi câu đã được trả lời.
+  const revealRef = useRef(null);
 
   const total = items.length;
   const item = items[index] || null;
@@ -75,6 +94,7 @@ export default function GrammarRunner({
   const answeredCount = index + (reveal ? 1 : 0);
 
   const resetRoundState = useCallback(() => {
+    revealRef.current = null;
     setReveal(null);
     setHintOpen(false);
     setArranged([]);
@@ -87,6 +107,8 @@ export default function GrammarRunner({
   }, [onQuizSave, total]);
 
   const goNext = useCallback(() => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
     if (index + 1 >= total) {
       const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
       finish(correct);
@@ -96,7 +118,13 @@ export default function GrammarRunner({
     resetRoundState();
   }, [index, total, baseCorrect, answers, finish, resetRoundState]);
 
+  useEffect(() => {
+    advancingRef.current = false;
+  }, [index]);
+
   const recordAnswer = useCallback((correct, response, timedOut = false) => {
+    if (revealRef.current) return;
+    revealRef.current = { correct, response, timedOut };
     setReveal({ correct, response, timedOut });
     setAnswers((prev) => {
       const next = [...prev];
@@ -109,7 +137,7 @@ export default function GrammarRunner({
     recordAnswer(false, null, true);
   }, [recordAnswer]);
 
-  const left = useCountdown(timerSeconds, index, Boolean(item) && !reveal && !finished, handleTimeout);
+  const left = useCountdown(timerSeconds, `${round}:${index}`, Boolean(item) && !reveal && !finished, handleTimeout);
   const timerPct = Math.max(0, Math.min(100, (left / timerSeconds) * 100));
 
   // Hết giờ: hiện đáp án rồi tự chuyển câu sau 2.5s (giống trang gốc).
@@ -154,18 +182,25 @@ export default function GrammarRunner({
     setBaseCorrect(0);
     setIndex(0);
     setFinished(false);
+    setRound((r) => r + 1);
+    advancingRef.current = false;
     resetRoundState();
   };
 
   const exitQuiz = async () => {
-    const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-    await onQuizSave?.({ answered: answeredCount, correct, total, completed: false });
+    // Chưa làm câu nào thì không ghi đè tiến độ cũ (tránh mất chỗ "Tiếp tục").
+    if (answeredCount > 0) {
+      const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total });
+    }
     onExitToPath?.();
   };
 
   const backToTheory = async () => {
-    const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
-    await onQuizSave?.({ answered: answeredCount, correct, total, completed: false });
+    if (answeredCount > 0) {
+      const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      await onQuizSave?.({ answered: answeredCount, correct, total, completed: answeredCount >= total });
+    }
     onBackToTheory?.();
   };
 

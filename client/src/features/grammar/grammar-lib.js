@@ -6,7 +6,23 @@ export function normalizeAnswer(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
-    .replace(/[.!?]+$/, '');
+    // Bỏ dấu cuối câu kèm khoảng trắng trước nó: "help me ?" → "help me"
+    // (nếu trim trước rồi mới bỏ dấu sẽ để lại space cuối và không bao giờ khớp).
+    .replace(/\s*[.!?]+$/, '')
+    .trim();
+}
+
+// Chip sắp xếp câu lấy từ dữ liệu crawl có thể thiếu dấu câu (dấu phẩy giữa
+// câu, dấu hỏi dính giữa từ) hoặc tách dấu câu thành chip riêng (".", "?").
+// Khi so khớp arrange_words chỉ so chuỗi từ, bỏ qua dấu câu ở rìa từng từ.
+function normalizeArrangeAnswer(value) {
+  return normalizeAnswer(value)
+    .split(' ')
+    .map((token) => token
+      .replace(/^[.,!?;:"“”…()[\]]+/, '')
+      .replace(/[.,!?;:"“”…()[\]]+$/, ''))
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function parseArrangeWords(question, optionA) {
@@ -16,7 +32,11 @@ export function parseArrangeWords(question, optionA) {
     .filter(Boolean);
   if (fromOption.length >= 2) return fromOption;
   const tail = plainText(question).split(':').pop() || '';
+  // Một số câu lưu chú thích dịch trong ngoặc ngay sau từ cuối (vd
+  // "move / . (Chúng tôi sẽ không chuyển nhà.)") → bỏ ngoặc để không dính
+  // chú thích vào chip.
   return tail
+    .replace(/\([^)]*\)/g, ' ')
     .split('/')
     .map((word) => word.trim())
     .filter(Boolean);
@@ -43,12 +63,14 @@ export function acceptedAnswers(correctAnswer) {
 }
 
 export function isAnswerCorrect(type, response, correctAnswer) {
-  const joined = type === 'arrange_words' && Array.isArray(response)
+  const isArrange = type === 'arrange_words';
+  const joined = isArrange && Array.isArray(response)
     ? response.join(' ')
     : String(response ?? '');
-  const normalized = normalizeAnswer(joined);
+  const normalize = isArrange ? normalizeArrangeAnswer : normalizeAnswer;
+  const normalized = normalize(joined);
   if (!normalized) return false;
-  return acceptedAnswers(correctAnswer).some((answer) => normalizeAnswer(answer) === normalized);
+  return acceptedAnswers(correctAnswer).some((answer) => normalize(answer) === normalized);
 }
 
 export function formatCorrectAnswer(correctAnswer) {

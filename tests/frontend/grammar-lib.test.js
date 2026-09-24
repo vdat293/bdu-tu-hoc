@@ -4,7 +4,8 @@ import {
   acceptedAnswers,
   formatCorrectAnswer,
   isAnswerCorrect,
-  normalizeAnswer
+  normalizeAnswer,
+  parseArrangeWords
 } from '../../client/src/features/grammar/grammar-lib.js';
 
 describe('grammar answer checking', () => {
@@ -44,6 +45,45 @@ describe('grammar answer checking', () => {
     expect(isAnswerCorrect('arrange_words', ['I', 'like', 'bread', 'and', 'milk'], correct)).toBe(true);
     expect(isAnswerCorrect('arrange_words', ['I', 'like', 'milk', 'and', 'bread'], correct)).toBe(true);
     expect(isAnswerCorrect('arrange_words', ['I', 'like', 'and', 'bread', 'milk'], correct)).toBe(false);
+  });
+
+  it('arrange_words: chip dấu câu tách rời vẫn khớp đáp án', () => {
+    expect(isAnswerCorrect('arrange_words', ['Can', 'you', 'help', 'me', '?'], 'Can you help me?')).toBe(true);
+    expect(isAnswerCorrect('arrange_words', ['I', 'get', 'up', 'at', '6:30', '.'], 'I get up at 6:30.')).toBe(true);
+    expect(isAnswerCorrect('arrange_words', ['Can', 'help', 'you', 'me', '?'], 'Can you help me?')).toBe(false);
+  });
+
+  it('arrange_words: bỏ qua dấu câu giữa câu trong đáp án', () => {
+    expect(isAnswerCorrect(
+      'arrange_words',
+      ['Having', 'finished', 'the', 'training', 'she', 'received', 'a', 'certificate'],
+      'Having finished the training, she received a certificate.'
+    )).toBe(true);
+    expect(isAnswerCorrect(
+      'arrange_words',
+      ['Having', 'finished', 'the', 'certificate', 'she', 'received', 'a', 'training'],
+      'Having finished the training, she received a certificate.'
+    )).toBe(false);
+    expect(isAnswerCorrect(
+      'arrange_words',
+      ['Did', 'you', 'buy', 'that jacket?', 'in England'],
+      'Did you buy that jacket in England?'
+    )).toBe(true);
+  });
+
+  it('fill_blank vẫn giữ nguyên dấu câu giữa câu', () => {
+    expect(isAnswerCorrect('fill_blank', 'When did you get married Diana', 'When did you get married, Diana')).toBe(false);
+    expect(isAnswerCorrect('fill_blank', 'When did you get married, Diana', 'When did you get married, Diana')).toBe(true);
+  });
+
+  it('parseArrangeWords bỏ chú thích dịch trong ngoặc ở cuối câu hỏi', () => {
+    const question = 'Sắp xếp các từ thành câu hoàn chỉnh: not / going / are / we / to / move / . (Chúng tôi sẽ không chuyển nhà.)';
+    expect(parseArrangeWords(question, '')).toEqual(['not', 'going', 'are', 'we', 'to', 'move', '.']);
+    expect(parseArrangeWords('Sắp xếp: a / I / am / student', 'a / I / am / student')).toEqual(['a', 'I', 'am', 'student']);
+  });
+
+  it('normalizeAnswer bỏ dấu cuối câu kèm khoảng trắng đứng trước', () => {
+    expect(normalizeAnswer('Can you help me ?')).toBe('can you help me');
   });
 
   it('không chấm đúng khi bỏ trống câu trả lời', () => {
