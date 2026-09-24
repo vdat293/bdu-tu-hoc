@@ -124,7 +124,7 @@ export default function GrammarLessonPage() {
             <h2 className="gr-theory-title">{lesson.name}: Lý thuyết</h2>
             <p className="gr-theory-sub">{lesson.description || `${rules.length} phần lý thuyết · ${items.length} câu hỏi`}</p>
           </div>
-          <button className="vg-btn-ghost" type="button" onClick={() => window.print()}>🖨 In / PDF</button>
+          <button className="btn-ghost" type="button" onClick={() => window.print()}>🖨 In / PDF</button>
         </div>
 
         <div className="gr-theory-stats">
@@ -143,7 +143,7 @@ export default function GrammarLessonPage() {
               {canResume ? `▶ Tiếp tục từ câu ${progress.answered + 1}/${items.length}` : '▶ Làm bài tập'}
             </button>
             {canResume ? (
-              <button className="vg-btn-ghost" type="button" onClick={() => startQuiz(false)}>↻ Làm lại từ đầu</button>
+              <button className="btn-ghost" type="button" onClick={() => startQuiz(false)}>↻ Làm lại từ đầu</button>
             ) : null}
           </div>
         ) : (

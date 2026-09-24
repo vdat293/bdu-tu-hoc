@@ -17,6 +17,18 @@ const ARRANGE_ITEM = {
   correct_answer: 'I am a student', explanation: '', hint: ''
 };
 
+const FILL_ITEM = {
+  key: 'f1', kind: 'exercise', id: 'f1', type: 'fill_blank',
+  question: 'Điền is hoặc are: She __ happy.',
+  option_a: '', option_b: '', option_c: '', option_d: '',
+  correct_answer: 'is', explanation: '', hint: ''
+};
+
+const HINT_CHOICE_ITEM = {
+  ...CHOICE_ITEM,
+  key: 'm2', id: 'm2', hint: 'I luôn đi với am.'
+};
+
 function tick(seconds) {
   act(() => {
     vi.advanceTimersByTime(seconds * 1000);
@@ -87,8 +99,8 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
     tick(1);
     expect(screen.getByText('⏰ Hết giờ!')).toBeTruthy();
 
-    // Hết giờ tự chuyển sang màn hình kết quả sau 2.5s.
-    tick(3);
+    // Hết giờ tự chuyển sang màn hình kết quả sau 4s.
+    tick(4);
     fireEvent.click(screen.getByRole('button', { name: /Làm lại/ }));
 
     expect(screen.getByText('Câu 1/1')).toBeTruthy();
@@ -134,5 +146,121 @@ describe('GrammarRunner - đồng hồ đếm ngược', () => {
       completed: true,
       responses: [{ id: 'm1', response: 'am' }]
     }));
+  });
+});
+
+describe('GrammarRunner - UX bàn phím', () => {
+  it('fill_blank tự focus ô nhập khi vào câu và sau khi Enter sang câu tiếp', async () => {
+    const onQuizSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <GrammarRunner
+        items={[FILL_ITEM, { ...FILL_ITEM, key: 'f2', id: 'f2', correct_answer: 'are' }]}
+        onQuizSave={onQuizSave}
+        onExitToPath={() => {}}
+      />
+    );
+
+    const input = screen.getByLabelText('Đáp án');
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.change(input, { target: { value: 'is' } });
+    fireEvent.submit(input.form);
+    expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
+    // Kết quả được focus để screen reader đọc, Enter vẫn đi tiếp.
+    expect(document.activeElement).toBe(document.querySelector('.gr-feedback'));
+
+    fireEvent.keyDown(document.activeElement, { key: 'Enter' });
+    expect(screen.getByText('Câu 2/2')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText('Đáp án'));
+  });
+
+  it('arrange_words: Enter kiểm tra khi đủ từ, Backspace bỏ từ cuối', async () => {
+    render(
+      <GrammarRunner
+        items={[ARRANGE_ITEM]}
+        onQuizSave={vi.fn().mockResolvedValue(undefined)}
+        onExitToPath={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'I' }));
+    fireEvent.click(screen.getByRole('button', { name: 'am' }));
+    fireEvent.keyDown(document.body, { key: 'Backspace' });
+    expect([...document.querySelectorAll('.gr-arrange-answer .gr-chip')].map((b) => b.textContent)).toEqual(['I']);
+
+    for (const word of ['am', 'a', 'student']) {
+      fireEvent.click(screen.getByRole('button', { name: word }));
+    }
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
+  });
+
+  it('nút "Hoàn tác" bỏ đúng từ vừa chọn', async () => {
+    render(
+      <GrammarRunner
+        items={[ARRANGE_ITEM]}
+        onQuizSave={vi.fn().mockResolvedValue(undefined)}
+        onExitToPath={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'I' }));
+    fireEvent.click(screen.getByRole('button', { name: 'am' }));
+    fireEvent.click(screen.getByRole('button', { name: '↶ Hoàn tác' }));
+    expect([...document.querySelectorAll('.gr-arrange-answer .gr-chip')].map((b) => b.textContent)).toEqual(['I']);
+  });
+
+  it('Enter khi đang focus nút Gợi ý không bị cướp để nhảy câu', async () => {
+    render(
+      <GrammarRunner
+        items={[HINT_CHOICE_ITEM, { ...HINT_CHOICE_ITEM, key: 'm3', id: 'm3' }]}
+        onQuizSave={vi.fn().mockResolvedValue(undefined)}
+        onExitToPath={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText('am'));
+    const hintBtn = screen.getByRole('button', { name: /Gợi ý/ });
+    hintBtn.focus();
+    fireEvent.keyDown(hintBtn, { key: 'Enter' });
+    expect(screen.getByText('Câu 1/2')).toBeTruthy();
+    expect(screen.queryByText('Câu 2/2')).toBeNull();
+  });
+
+  it('a11y: nhãn vùng, aria-live kết quả và nút gợi ý mở rộng', async () => {
+    render(
+      <GrammarRunner
+        items={[HINT_CHOICE_ITEM]}
+        onQuizSave={vi.fn().mockResolvedValue(undefined)}
+        onExitToPath={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('progressbar', { name: /Tiến độ/ })).toBeTruthy();
+    const hintBtn = screen.getByRole('button', { name: /Gợi ý/ });
+    expect(hintBtn.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(hintBtn);
+    expect(hintBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('I luôn đi với am.')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('am'));
+    const feedback = document.querySelector('.gr-feedback');
+    expect(feedback.getAttribute('role')).toBe('status');
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('a11y: vùng sắp xếp có nhãn và chip đã chọn có nhãn bỏ từ', async () => {
+    render(
+      <GrammarRunner
+        items={[ARRANGE_ITEM]}
+        onQuizSave={vi.fn().mockResolvedValue(undefined)}
+        onExitToPath={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('group', { name: 'Câu trả lời đã xếp' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Các từ cho sẵn' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'I' }));
+    expect(screen.getByRole('button', { name: 'Bỏ từ I' })).toBeTruthy();
   });
 });

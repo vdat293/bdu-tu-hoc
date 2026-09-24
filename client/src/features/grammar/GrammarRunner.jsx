@@ -92,6 +92,10 @@ export default function GrammarRunner({
   const advancingRef = useRef(false);
   // Chặn timeout/click ghi đè lẫn nhau sau khi câu đã được trả lời.
   const revealRef = useRef(null);
+  // Ô nhập fill_blank tự focus khi vào câu để gõ tiếp không cần chuột.
+  const fillRef = useRef(null);
+  // Vùng phản hồi đúng/sai được focus để screen reader đọc kết quả.
+  const feedbackRef = useRef(null);
 
   const total = items.length;
   const item = items[index] || null;
@@ -137,6 +141,18 @@ export default function GrammarRunner({
     advancingRef.current = false;
   }, [index]);
 
+  // Vào câu điền từ (mới/làm lại) thì đặt con trỏ sẵn vào ô nhập.
+  useEffect(() => {
+    if (item?.type === 'fill_blank' && !reveal) {
+      fillRef.current?.focus({ preventScroll: true });
+    }
+  }, [item?.key, item?.type, round, reveal]);
+
+  // Hiện kết quả thì đưa focus vào vùng phản hồi (Enter vẫn đi tiếp được).
+  useEffect(() => {
+    if (reveal) feedbackRef.current?.focus({ preventScroll: true });
+  }, [reveal]);
+
   const recordAnswer = useCallback((correct, response, timedOut = false) => {
     if (revealRef.current) return;
     revealRef.current = { correct, response, timedOut };
@@ -155,10 +171,10 @@ export default function GrammarRunner({
   const left = useCountdown(timerSeconds, `${round}:${index}`, Boolean(item) && !reveal && !finished, handleTimeout);
   const timerPct = Math.max(0, Math.min(100, (left / timerSeconds) * 100));
 
-  // Hết giờ: hiện đáp án rồi tự chuyển câu sau 2.5s (giống trang gốc).
+  // Hết giờ: hiện đáp án rồi tự chuyển câu sau 4s để kịp đọc giải thích.
   useEffect(() => {
     if (!reveal?.timedOut || finished) return undefined;
-    const id = setTimeout(() => goNext(), 2500);
+    const id = setTimeout(() => goNext(), 4000);
     return () => clearTimeout(id);
   }, [reveal, finished, goNext]);
 
@@ -175,10 +191,27 @@ export default function GrammarRunner({
         setHintOpen((v) => !v);
         return;
       }
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      // Đang gõ trong ô nhập thì để form/input tự xử lý Enter, không cướp phím.
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
       if (reveal && event.key === 'Enter') {
+        // Nút/link đang focus tự xử lý Enter (vd nút Gợi ý, Thoát) — không nhảy câu.
+        if (target?.closest('button, a, [role="button"]')) return;
         event.preventDefault();
         goNext();
         return;
+      }
+      if (!reveal && item.type === 'arrange_words') {
+        if (event.key === 'Enter' && arranged.length === words.length && arranged.length > 0) {
+          event.preventDefault();
+          submit(arranged.map((wordIndex) => words[wordIndex]));
+          return;
+        }
+        if (event.key === 'Backspace' && arranged.length) {
+          event.preventDefault();
+          setArranged((prev) => prev.slice(0, -1));
+          return;
+        }
       }
       if (!reveal && item.type === 'multiple_choice' && ['1', '2', '3', '4'].includes(event.key)) {
         const option = options[Number(event.key) - 1];
@@ -190,7 +223,7 @@ export default function GrammarRunner({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [finished, item, reveal, options, goNext, submit]);
+  }, [finished, item, reveal, options, goNext, submit, arranged, words]);
 
   const retry = () => {
     setAnswers([]);
@@ -244,9 +277,9 @@ export default function GrammarRunner({
           <div className="gr-result-actions">
             <button className="btn btn-primary" type="button" onClick={retry}>↻ Làm lại</button>
             {onBackToTheory ? (
-              <button className="vg-btn-ghost" type="button" onClick={onBackToTheory}>Xem lý thuyết</button>
+              <button className="btn-ghost" type="button" onClick={onBackToTheory}>Xem lý thuyết</button>
             ) : null}
-            <button className="vg-btn-ghost" type="button" onClick={onExitToPath}>← Về lộ trình</button>
+            <button className="btn-ghost" type="button" onClick={onExitToPath}>← Về lộ trình</button>
           </div>
         </div>
 
@@ -293,11 +326,11 @@ export default function GrammarRunner({
             <button className="gr-action is-exit" type="button" onClick={exitQuiz}>← Thoát</button>
           </div>
         </div>
-        <div className="gr-progress" role="progressbar" aria-valuenow={answeredCount} aria-valuemin={0} aria-valuemax={total}>
+        <div className="gr-progress" role="progressbar" aria-label={`Tiến độ ${answeredCount}/${total} câu`} aria-valuenow={answeredCount} aria-valuemin={0} aria-valuemax={total}>
           <i style={{ width: `${(answeredCount / total) * 100}%` }} />
         </div>
         <div className="gr-status-row">
-          <span className={`gr-timer ${left <= 10 ? 'is-danger' : ''}`}>
+          <span className={`gr-timer ${left <= 10 ? 'is-danger' : ''}`} role="timer" aria-label={`Còn ${left} giây`}>
             <span className="gr-timer-num">{left}s</span>
             <span className="gr-timer-bar" aria-hidden="true"><i style={{ width: `${timerPct}%` }} /></span>
           </span>
@@ -321,9 +354,10 @@ export default function GrammarRunner({
               const isCorrect = isAnswerCorrect(item.type, option, item.correct_answer);
               const isChosen = reveal?.response === option;
               const classes = ['gr-option'];
+              let statusLabel = '';
               if (reveal) {
-                if (isCorrect) classes.push('is-correct');
-                else if (isChosen) classes.push('is-wrong');
+                if (isCorrect) { classes.push('is-correct'); statusLabel = ' — đáp án đúng'; }
+                else if (isChosen) { classes.push('is-wrong'); statusLabel = ' — bạn chọn, chưa đúng'; }
                 else classes.push('is-dim');
               }
               return (
@@ -333,6 +367,7 @@ export default function GrammarRunner({
                   className={classes.join(' ')}
                   disabled={Boolean(reveal)}
                   onClick={() => submit(option)}
+                  aria-label={reveal ? `${OPTION_LETTERS[i]}. ${option}${statusLabel}` : undefined}
                 >
                   <span className="gr-option-letter">{OPTION_LETTERS[i]}</span>
                   <span>{option}</span>
@@ -351,6 +386,7 @@ export default function GrammarRunner({
             }}
           >
             <input
+              ref={fillRef}
               type="text"
               value={fillValue}
               disabled={Boolean(reveal)}
@@ -360,6 +396,7 @@ export default function GrammarRunner({
               autoComplete="off"
               autoCapitalize="off"
               autoCorrect="off"
+              enterKeyHint="done"
             />
             <button className="btn btn-primary" type="submit" disabled={Boolean(reveal) || !fillValue.trim()}>Trả lời</button>
           </form>
@@ -367,7 +404,11 @@ export default function GrammarRunner({
 
         {showArrange ? (
           <div className="gr-arrange">
-            <div className={`gr-arrange-answer ${reveal ? (reveal.correct ? 'is-correct' : 'is-wrong') : ''}`}>
+            <div
+              className={`gr-arrange-answer ${reveal ? (reveal.correct ? 'is-correct' : 'is-wrong') : ''}`}
+              role="group"
+              aria-label="Câu trả lời đã xếp"
+            >
               {arranged.length ? arranged.map((wordIndex) => (
                 <button
                   key={`picked-${wordIndex}`}
@@ -375,12 +416,13 @@ export default function GrammarRunner({
                   className="gr-chip is-picked"
                   disabled={Boolean(reveal)}
                   onClick={() => setArranged((prev) => prev.filter((idx) => idx !== wordIndex))}
+                  aria-label={`Bỏ từ ${words[wordIndex]}`}
                 >
                   {words[wordIndex]}
                 </button>
               )) : <span className="gr-arrange-empty">Bấm các từ bên dưới để xếp câu…</span>}
             </div>
-            <div className="gr-words">
+            <div className="gr-words" role="group" aria-label="Các từ cho sẵn">
               {words.map((word, wordIndex) => (
                 <button
                   key={`word-${wordIndex}-${word}`}
@@ -395,7 +437,17 @@ export default function GrammarRunner({
             </div>
             {!reveal ? (
               <div className="gr-arrange-actions">
-                <button className="vg-btn-ghost" type="button" disabled={!arranged.length} onClick={() => setArranged([])}>Xóa hết</button>
+                <div className="gr-arrange-tools">
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    disabled={!arranged.length}
+                    onClick={() => setArranged((prev) => prev.slice(0, -1))}
+                  >
+                    ↶ Hoàn tác
+                  </button>
+                  <button className="btn-ghost" type="button" disabled={!arranged.length} onClick={() => setArranged([])}>Xóa hết</button>
+                </div>
                 <button
                   className="btn btn-primary"
                   type="button"
@@ -411,15 +463,27 @@ export default function GrammarRunner({
 
         {item.hint ? (
           <div className="gr-hint-row">
-            <button type="button" className="gr-hint-btn" onClick={() => setHintOpen((v) => !v)}>
+            <button
+              type="button"
+              className="gr-hint-btn"
+              onClick={() => setHintOpen((v) => !v)}
+              aria-expanded={hintOpen}
+              aria-controls="gr-hint-text"
+            >
               💡 {hintOpen ? 'Ẩn gợi ý' : 'Gợi ý'}
             </button>
-            {hintOpen ? <p className="gr-hint-text">{decodeHtmlEntities(item.hint)}</p> : null}
+            {hintOpen ? <p className="gr-hint-text" id="gr-hint-text">{decodeHtmlEntities(item.hint)}</p> : null}
           </div>
         ) : null}
 
         {reveal ? (
-          <div className={`gr-feedback ${reveal.correct ? 'is-ok' : 'is-bad'}`}>
+          <div
+            className={`gr-feedback ${reveal.correct ? 'is-ok' : 'is-bad'}`}
+            ref={feedbackRef}
+            tabIndex={-1}
+            role="status"
+            aria-live="polite"
+          >
             <strong>
               {reveal.correct ? '✓ Chính xác!' : reveal.timedOut ? '⏰ Hết giờ!' : '✗ Chưa đúng'}
             </strong>
@@ -436,7 +500,11 @@ export default function GrammarRunner({
 
         {!reveal ? (
           <p className="gr-kbd-hint gr-kbd-foot">
-            {showOptions ? 'Phím tắt: 1–4 chọn đáp án · Ctrl + Space gợi ý' : 'Phím tắt: Ctrl + Space gợi ý'}
+            {showOptions
+              ? 'Phím tắt: 1–4 chọn đáp án · Ctrl + Space gợi ý'
+              : showArrange
+                ? 'Phím tắt: Enter kiểm tra khi đủ từ · Backspace bỏ từ cuối · Ctrl + Space gợi ý'
+                : 'Phím tắt: nhập đáp án rồi nhấn Enter · Ctrl + Space gợi ý'}
           </p>
         ) : null}
       </div>

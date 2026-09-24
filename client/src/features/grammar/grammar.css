@@ -130,21 +130,27 @@
 .gr-option.is-dim { opacity: .55; }
 
 .gr-fill { display: flex; gap: 10px; flex-wrap: wrap; }
-.gr-fill input { flex: 1; min-width: 220px; border: 2px solid #93c5fd; border-radius: 14px; padding: 13px 18px; font-size: 16px; outline: none; background: #fff; }
+.gr-fill input { flex: 1; min-width: 220px; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 13px 18px; font-size: 16px; outline: none; background: #fff; transition: border-color .12s ease, box-shadow .12s ease; }
 .gr-fill input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, .15); }
 .gr-fill input:disabled { background: #f8fafc; color: #64748b; }
 
+/* Nút primary bị khoá phải nhìn ra được là đang khoá. */
+.gr-card .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; transform: none; }
+
 .gr-arrange { display: grid; gap: 14px; }
-.gr-arrange-answer { min-height: 62px; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; background: #fff; }
+.gr-arrange-answer { min-height: 62px; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-content: center; background: #fff; }
 .gr-arrange-answer.is-correct { border-style: solid; border-color: #22c55e; background: #f0fdf4; }
 .gr-arrange-answer.is-wrong { border-style: solid; border-color: #ef4444; background: #fef2f2; }
-.gr-arrange-empty { color: #94a3b8; font-size: 14px; align-self: center; }
+.gr-arrange-empty { width: 100%; text-align: center; color: #94a3b8; font-size: 14px; }
 .gr-words { display: flex; flex-wrap: wrap; gap: 8px; }
 .gr-chip { border: 1.5px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 600; color: #0f172a; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
 .gr-chip:hover:not(:disabled) { border-color: #60a5fa; background: #f0f7ff; }
 .gr-chip.is-picked { background: #eef2ff; border-color: #818cf8; color: #4338ca; }
-.gr-chip.is-used { opacity: .35; cursor: default; }
-.gr-arrange-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.gr-chip.is-picked::after { content: '×'; margin-left: 8px; font-weight: 800; opacity: .55; }
+.gr-chip.is-picked:hover:not(:disabled) { background: #e0e7ff; border-color: #6366f1; }
+.gr-chip.is-used { background: #f1f5f9; border-style: dashed; border-color: #e2e8f0; color: #94a3b8; cursor: default; }
+.gr-arrange-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: flex-end; }
+.gr-arrange-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-right: auto; }
 
 .gr-hint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .gr-hint-btn { border: 1.5px solid #fcd34d; background: #fffbeb; color: #b45309; border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 700; cursor: pointer; }
@@ -152,6 +158,8 @@
 .gr-hint-text { margin: 0; color: #92400e; font-size: 14px; }
 
 .gr-feedback { margin-top: 18px; border-radius: 16px; padding: 14px 16px; font-size: 15px; display: grid; gap: 6px; }
+.gr-feedback:focus { outline: none; }
+.gr-feedback:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .gr-feedback.is-ok { background: #f0fdf4; border: 1.5px solid #bbf7d0; color: #15803d; }
 .gr-feedback.is-bad { background: #fef2f2; border: 1.5px solid #fecaca; color: #b91c1c; }
 .gr-feedback-explain { margin: 4px 0 0; color: #475569; font-size: 14px; }
@@ -179,6 +187,11 @@
   .gr-hero-badges { margin-left: 0; }
   .gr-lesson-btn { align-items: flex-start; }
   .gr-fill { flex-direction: column; }
+  .gr-chip { min-height: 44px; }
+  .gr-action, .gr-hint-btn { min-height: 40px; }
+  .gr-arrange-tools { width: 100%; margin-right: 0; }
+  .gr-arrange-tools > .btn-ghost { flex: 1; }
+  .gr-arrange-actions > .btn { flex: 1; min-height: 44px; }
 }
 
 @media print {
@@ -189,5 +202,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gr-path-card, .gr-option, .gr-start-btn, .gr-progress i, .gr-timer-bar i { transition: none; }
+  .gr-path-card, .gr-option, .gr-start-btn, .gr-progress i, .gr-timer-bar i, .gr-chip, .gr-lesson { transition: none; }
 }
