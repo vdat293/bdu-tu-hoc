@@ -14,6 +14,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY client ./client
+# src/utils/grammar-answers.js được client import để dùng chung logic chấm đáp án.
+COPY src ./src
 COPY vite.config.js ./
 # BUILD_ID (tuỳ chọn) ghi vào dist/client/build.json + meta `bdu-build` và
 # được /api/version trả về để tab đang mở biết có bản mới. Để trống dùng timestamp.
