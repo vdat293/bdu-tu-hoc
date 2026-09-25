@@ -1,0 +1,144 @@
+name: Deploy VPS
+
+# =============================================================================
+# Deploy production lên VPS.
+#
+# VÌ SAO DEPLOY LÀ DOWNTIME VÀI GIÂY (không phải zero-downtime):
+#   App chỉ chạy ĐÚNG 1 replica vì WebSocket + broadcast nằm trong cùng một
+#   process Node. Muốn zero-downtime phải tách WebSocket ra service riêng và
+#   thêm shared pub/sub adapter (Redis) — việc này chưa làm. `docker compose
+#   up -d --build` dừng container cũ rồi mới bật container mới, nên có một khoảng
+#   vài giây không phục vụ. Client sẽ tự reconnect WebSocket sau đó.
+#
+# Ghi chú kiến trúc liên quan:
+#   - Migration KHÔNG chạy trong `command` của container nữa. Nó chạy đúng
+#     1 lần trong deploy/deploy.sh, sau khi backup DB đã thành công. Nhờ vậy
+#     restart container không vô tình chạy migration.
+#   - File .env production KHÔNG nằm trong secrets của repo: nó nằm trên VPS
+#     và chỉ được đọc ở máy đó. Secrets ở đây chỉ là thông tin SSH.
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+  # Deploy thủ công: chọn nhánh main trên UI rồi (tuỳ chọn) điền commit cụ thể
+  # vào input `ref` nếu muốn redeploy một bản cũ đã nằm trong main.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit SHA hoặc ref cần deploy (phải nằm trong nhánh main)'
+        required: false
+        default: 'main'
+
+# KHÔNG dùng `needs: [CI]` để tránh vòng phụ thuộc: workflow này tự build lại
+# image nên lỗi build vẫn bị chặn trước khi đụng VPS. Nếu muốn deploy chỉ khi
+# CI xanh, thêm `workflow_run` (chạy sau khi CI kết thúc) thay vì `needs`.
+#
+# cancel-in-progress: false là CỐ Ý: huỷ giữa chừng một deploy có thể rơi vào
+# trạng thái "DB đã migrate nhưng app chưa lên". Phải để run hiện tại chạy nốt
+# rồi run mới mới bắt đầu.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build image (chặn lỗi Dockerfile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Mục đích KHÔNG phải đẩy image lên registry, mà là bắt lỗi Dockerfile /
+      # lỗi build client trước khi SSH vào VPS. `push: false` + `load: false`
+      # nên runner không cần lưu image nặng vài GB. VPS tự build lại lúc deploy
+      # (cache layer của Docker trên VPS vẫn được tái dùng).
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (không push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          build-args: BUILD_ID=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy lên VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build
+    # Chỉ deploy khi ref là main. Với workflow_dispatch, `github.ref` là nhánh
+    # được chọn trên UI -> cũng phải là main.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 để có đủ history để kiểm tra commit có nằm trong main hay không.
+          fetch-depth: 0
+
+      - name: Chốt commit sẽ deploy (phải thuộc main)
+        id: resolve
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin main
+
+          if [ -z "${INPUT_REF}" ] || [ "${INPUT_REF}" = "main" ]; then
+            TARGET_REF="origin/main"
+          else
+            TARGET_REF="${INPUT_REF}"
+          fi
+
+          git rev-parse --verify --quiet "${TARGET_REF}^{commit}" >/dev/null \
+            || { echo "::error::Không tìm thấy commit/ref '${TARGET_REF}'."; exit 1; }
+
+          # Chặn deploy nhánh khác lọt vào main qua workflow_dispatch.
+          if ! git merge-base --is-ancestor "${TARGET_REF}" origin/main; then
+            echo "::error::Ref '${TARGET_REF}' không nằm trong lịch sử của main. Chỉ deploy được commit đã có trên main."
+            exit 1
+          fi
+
+          SHA="$(git rev-parse "${TARGET_REF}^{commit}")"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Deploy commit ${SHA} (${TARGET_REF})"
+
+      - name: Chạy deploy/deploy.sh trên VPS
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || '22' }}
+          # VPS có sẵn bash; script dùng `set -euo pipefail` + trap nên phải chạy
+          # bằng bash, không phải sh.
+          shell: bash
+          # Gửi nguyên file deploy/deploy.sh từ repo lên VPS rồi chạy.
+          script_path: deploy/deploy.sh
+          # Script tự đọc .env trên VPS; ở đây chỉ truyền commit cần deploy.
+          envs: 'DEPLOY_SHA,VPS_APP_DIR'
+          # Build image trên VPS có thể mất vài phút.
+          command_timeout: 40m
+
+      - name: Gợi ý khi deploy fail
+        if: failure()
+        run: |
+          echo "::error::Deploy thất bại. Xem log ở trên để biết bước nào fail, sau đó làm theo docs/deployment-runbook.md (mục Rollback) trên VPS."
+
+# Secrets cần thiết (Settings → Secrets and variables → Actions):
+#   VPS_HOST               địa chỉ IP/domain VPS
+#   VPS_USER               user SSH (nên là user riêng, không phải root)
+#   VPS_SSH_PRIVATE_KEY    private key (deploy key), đã thêm vào
+#                          ~/.ssh/authorized_keys trên VPS
+#   VPS_APP_DIR            thư mục app trên VPS, ví dụ /opt/bdu-tu-hoc
+#   VPS_SSH_PORT           tuỳ chọn, mặc định 22
+#
+# .env production KHÔNG đưa vào secrets: file này nằm trên VPS và chỉ được
+# đọc bởi deploy/deploy.sh + docker compose tại chỗ. Nhờ vậy secret không bị
+# in ra log của Actions.

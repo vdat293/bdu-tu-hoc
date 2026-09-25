@@ -145,7 +145,9 @@ child.on('close', (code) => {
   }
 
   try {
-    const fileDescriptor = fs.openSync(tempFile, 'r');
+    // Phải mở bằng 'r+' chứ không phải 'r': fsync trên descriptor chỉ đọc bị
+    // EPERM trên Windows, khiến toàn bộ backup fail dù file đã ghi xong.
+    const fileDescriptor = fs.openSync(tempFile, 'r+');
     try { fs.fsyncSync(fileDescriptor); } finally { fs.closeSync(fileDescriptor); }
     fs.chmodSync(tempFile, 0o600);
     const digest = crypto.createHash('sha256').update(fs.readFileSync(tempFile)).digest('hex');
@@ -158,7 +160,7 @@ child.on('close', (code) => {
       sha256: digest
     };
     fs.writeFileSync(tempManifestFile, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
-    const manifestDescriptor = fs.openSync(tempManifestFile, 'r');
+    const manifestDescriptor = fs.openSync(tempManifestFile, 'r+');
     try { fs.fsyncSync(manifestDescriptor); } finally { fs.closeSync(manifestDescriptor); }
     fs.renameSync(tempFile, targetFile);
     fs.renameSync(tempManifestFile, manifestFile);

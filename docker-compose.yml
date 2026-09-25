@@ -98,10 +98,39 @@ services:
       # Giữ chunk cũ của các bản build trước để HTML còn cache không 404.
       - CLIENT_ASSET_HISTORY_DIR=/app/data/client-assets
       - CLIENT_ASSET_HISTORY_DAYS=${CLIENT_ASSET_HISTORY_DAYS:-30}
+      # Maintenance DB (backup/restore) chạy bằng `docker compose run --rm bdu-hub
+      # npm run db:backup|db:restore`; các biến này phải nằm trong env của
+      # service thì container mới thấy. Xem .env.example phần "Sao lưu DB".
+      - BACKUP_DATABASE_URL=${BACKUP_DATABASE_URL:-}
+      - BACKUP_ENABLED=${BACKUP_ENABLED:-}
+      - BACKUP_CRON=${BACKUP_CRON:-}
+      - BACKUP_RETENTION_DAILY=${BACKUP_RETENTION_DAILY:-}
+      - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-}
+      - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-}
+      - BACKUP_R2_BUCKET=${BACKUP_R2_BUCKET:-}
+      # Cờ chống ghi/xoá nhầm production; chỉ bật trên VPS, không bật ở dev/test.
+      - BDU_MAINTENANCE_ALLOW_PRODUCTION=${BDU_MAINTENANCE_ALLOW_PRODUCTION:-}
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-c", "npm run db:migrate && npm start"]
+    # KHÔNG chạy migration ở đây. `command` kiểu "migrate && start" khiến MỖI LẦN
+    # restart container (kể cả do sự cố, do reboot, do restart của người vận
+    # hành) đều chạy migration. Migration giờ chỉ chạy đúng 1 lần trong
+    # deploy/deploy.sh, sau khi backup DB đã thành công.
+    command: ["npm", "start"]
+    # Cần thời gian để Node đóng server, ngắt WebSocket và drain các job đang
+    # chạy. Docker mặc định chỉ cho 10s rồi SIGKILL -> client thấy socket đứt
+    # cắt và phải reconnect.
+    stop_grace_period: 40s
+    # Image là Node + .NET, không có curl/wget -> dùng node -e để gọi
+    # /api/health. start_period rộng vì app còn phải chạy scheduler (đồng bộ
+    # xếp hạng, FB import) và mở WebSocket trước khi coi là healthy.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     volumes:
       - ./temp:/app/temp
       - ./data/fb-profile:/app/data/fb-profile
@@ -128,6 +157,40 @@ services:
       postgres:
         condition: service_healthy
     command: ["node", "scripts/discord-bot.js"]
+
+  # Backup DB định kỳ lên Cloudflare R2. Tách service riêng vì:
+  # - chạy `pg_dump` nặng, không nên chiếm CPU của app;
+  # - app restart không được làm mất lịch backup;
+  # - bật/tắt độc lập (đặt BACKUP_ENABLED=1 trong .env mới chạy).
+  # Restore drill (npm run db:backup:verify) chạy thủ công, cần DRILL_DATABASE_URL.
+  bdu-db-backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bdu-tu-hoc-db-backup
+    restart: unless-stopped
+    environment:
+      # Chỉ role backup chỉ đọc. KHÔNG dùng DATABASE_URL của app.
+      - BACKUP_DATABASE_URL=${BACKUP_DATABASE_URL:-}
+      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - BDU_MAINTENANCE_ALLOW_PRODUCTION=${BDU_MAINTENANCE_ALLOW_PRODUCTION:-}
+      - BACKUP_ENABLED=${BACKUP_ENABLED:-}
+      - BACKUP_CRON=${BACKUP_CRON:-}
+      - BACKUP_RETENTION_DAILY=${BACKUP_RETENTION_DAILY:-}
+      - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-}
+      - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-}
+      - BACKUP_R2_BUCKET=${BACKUP_R2_BUCKET:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+    volumes:
+      # Bản local tồn tại cho tới khi R2 verify xong; cần volume để restart
+      # không làm mất bản đang dump dở.
+      - ./data/backups:/app/data/backups
+    # Scheduler tự tính giờ tới lần chạy kế tiếp rồi setTimeout; tự thoát nếu
+    # BACKUP_ENABLED không bật để không treo một container vô dụng.
+    command: ["node", "scripts/db-backup-scheduler.js"]
 
 volumes:
   bdu-postgres-data:

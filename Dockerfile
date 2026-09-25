@@ -37,6 +37,12 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install Node dependencies
 COPY package*.json ./
+# postgresql-client cung cap pg_dump/pg_restore/createdb/dropdb cho he thong
+# backup DB (scripts/db-backup*.js). Image .NET runtime khong co san cac binary
+# nay nen phai cai them; thieu no thi `db:backup` fail ngay tren VPS.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client \
+  && rm -rf /var/lib/apt/lists/*
 RUN npm ci --omit=dev \
   && npx playwright install --with-deps chromium
 
@@ -46,7 +52,8 @@ COPY --from=frontend-build /app/dist/client ./dist/client
 
 # Fail during image build if either runtime is unavailable. The runtime image
 # intentionally has no SDK, so use --list-runtimes instead of --version.
-RUN node --version && dotnet --list-runtimes
+# pg_dump is checked here so a backup can never silently be missing its tool.
+RUN node --version && dotnet --list-runtimes && pg_dump --version && pg_restore --version
 
 # Expose Web Port
 EXPOSE 3000

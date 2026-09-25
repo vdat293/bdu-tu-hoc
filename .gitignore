@@ -11,6 +11,9 @@ outside-src/
 data/*.sql
 data/*.manifest.json
 data/*.dump
+# Backup DB: dump + manifest + nhật ký cảnh báo của scheduler. Không được commit.
+data/backups/
+data/backup-alerts.log
 data/avatars/
 data/fb-profile/
 data/fb-import/
