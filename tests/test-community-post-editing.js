@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const routes = fs.readFileSync(new URL('../src/routes/api.routes.js', import.meta.url), 'utf8');
-const controller = fs.readFileSync(new URL('../src/controllers/api.controller.js', import.meta.url), 'utf8');
+// Controller community đã tách sang module riêng (src/modules/community/).
+const controller = fs.readFileSync(new URL('../src/modules/community/community.controller.js', import.meta.url), 'utf8');
 const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
 const permissionService = fs.readFileSync(new URL('../src/services/permission.service.js', import.meta.url), 'utf8');
 const realtime = fs.readFileSync(new URL('../src/services/community-realtime.service.js', import.meta.url), 'utf8');

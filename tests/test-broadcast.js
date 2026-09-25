@@ -32,7 +32,8 @@ assert.match(service, /notify_discord = TRUE AND p\.unsubscribed_at IS NULL/, 'T
 const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
 assert.match(routes, /router\.get\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route GET /admin/broadcast có kiểm quyền');
 assert.match(routes, /router\.post\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route POST /admin/broadcast có kiểm quyền');
-const controller = fs.readFileSync('src/controllers/api.controller.js', 'utf8');
+// Controller broadcast đã tách sang module riêng (src/modules/broadcast/).
+const controller = fs.readFileSync('src/modules/broadcast/broadcast.controller.js', 'utf8');
 assert.match(controller, /async getAdminBroadcast\(/, 'Thiếu controller getAdminBroadcast');
 assert.match(controller, /async sendAdminBroadcast\(/, 'Thiếu controller sendAdminBroadcast');
 

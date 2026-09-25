@@ -270,14 +270,18 @@ const migration = fs.readFileSync(new URL('../migrations/029_facebook_import.sql
 const routes = fs.readFileSync(new URL('../src/routes/api.routes.js', import.meta.url), 'utf8');
 const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
-const controller = fs.readFileSync(new URL('../src/controllers/api.controller.js', import.meta.url), 'utf8');
+// `requireCommunityModerator` đã tách sang module identity.
+const controller = fs.readFileSync(new URL('../src/modules/identity/identity.controller.js', import.meta.url), 'utf8');
 const service = fs.readFileSync(new URL('../src/services/facebook-import.service.js', import.meta.url), 'utf8');
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS facebook_import_posts/);
 assert.match(migration, /facebook_import_posts_fb_post_id_unique/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS source/);
 assert.match(routes, /admin\/facebook-import\/run.*requireCommunityModerator/);
-assert.match(controller, /community:mod_access/);
+// Siết assertion: trước đây chỉ tìm chuỗi `community:mod_access` nên khớp cả
+// `getClanMembers` ở domain clubs. Giờ ràng buộc đúng guard moderator.
+assert.match(controller, /async requireCommunityModerator\(/);
+assert.match(controller, /PermissionService\.require\(actor, 'community:mod_access'/);
 assert.match(serverJs, /FacebookImportService\.start\(\)/);
 assert.match(serverJs, /FacebookImportService\.stop\(\)/);
 assert.match(serverJs, /'\/media\/fb-import'/);

@@ -7,7 +7,13 @@ import fs from 'node:fs';
 
 const communityService = fs.readFileSync('src/services/community.service.js', 'utf8');
 const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
-const controller = fs.readFileSync('src/controllers/api.controller.js', 'utf8');
+// Upload media community và upload avatar đã tách sang 2 module domain riêng.
+// Gộp cả hai lại để assertion âm "không còn uploadAdminAvatar" vẫn quét được
+// toàn bộ controller liên quan thay vì chỉ một file.
+const controller = [
+  fs.readFileSync('src/modules/community/community.controller.js', 'utf8'),
+  fs.readFileSync('src/modules/media/media.controller.js', 'utf8')
+].join('\n');
 const migration = fs.readFileSync('migrations/051_community_comment_media.sql', 'utf8');
 const confession = fs.readFileSync('client/src/features/confession/ConfessionPage.jsx', 'utf8');
 const composer = fs.readFileSync('client/src/features/confession/ImageComposer.jsx', 'utf8');
