@@ -431,6 +431,100 @@ docker run -d -p 3000:3000 --name bdu-app bdu-tu-hoc:latest
 
 ---
 
+## 🚦 CI (GitHub Actions)
+
+Hai workflow nằm trong `.github/workflows/`:
+
+| Workflow | Khi nào chạy | Việc làm |
+| :--- | :--- | :--- |
+| `ci.yml` | push hoặc PR lên `main` | Job `verify`: `npm run lint:frontend` → `npm run test:frontend` → `npm run test:node` → `npm run build:client`, rồi upload `dist/client` làm artifact (giữ 3 ngày). Job `docker`: build Docker image (`push: false`, `load: false`, cache GHA) để bắt lỗi Dockerfile trước khi đụng VPS. |
+| `deploy.yml` | push lên `main`, hoặc `workflow_dispatch` với input `ref` | Build image (không push) để chặn lỗi build, rồi SSH vào VPS chạy `deploy/deploy.sh` với `DEPLOY_SHA` tương ứng. Chỉ deploy khi ref thuộc lịch sử `main`. |
+
+Chạy lại đúng chuỗi CI ở máy local:
+
+```bash
+npm run ci   # = lint:frontend && test:frontend && test:node && build:client
+```
+
+Lưu ý: `scripts/run-command.mjs` cố ý **fail-closed trên Windows** (chỉ hỗ trợ POSIX process-group cleanup), nên CI chạy trên `ubuntu-latest`. Nếu muốn chạy `scripts/verify-controller-split.mjs` hoặc `scripts/verify-route-order.mjs` thì hai script này chạy được ở mọi OS.
+
+Secrets cho deploy: `VPS_HOST`, `VPS_USER`, `VPS_SSH_PRIVATE_KEY`, `VPS_APP_DIR`, `VPS_SSH_PORT` (tuỳ chọn). **File `.env` production không nằm trong secrets** — nó nằm trên VPS và chỉ được đọc bởi `deploy/deploy.sh` + `docker compose` tại chỗ.
+
+---
+
+## 🚀 Deploy lên VPS
+
+Quy trình chuẩn là chạy `deploy/deploy.sh` trên VPS, không tự tay `docker compose up` (bước backup trước migrate là bắt buộc):
+
+```bash
+cd /opt/bdu-tu-hoc && DEPLOY_SHA=$(git rev-parse HEAD) bash deploy/deploy.sh
+```
+
+6 bước, dừng ngay khi một bước fail:
+
+1. **preflight** — `docker compose` có, `.env` tồn tại, PostgreSQL phản hồi, git sạch.
+2. **backup DB** (bắt buộc) — `npm run db:backup -- --pre-deploy`. Fail ⇒ **dừng, không migrate**.
+3. **migrate** — đúng 1 lần. Fail ⇒ dừng, app cũ vẫn chạy, chưa restart.
+4. `docker compose up -d --build` với `BUILD_ID` = short sha.
+5. **healthcheck** — poll `/api/health` tối đa 90s; fail thì in hướng dẫn rollback cụ thể.
+6. In hướng dẫn rollback.
+
+Migration **không** nằm trong `command` của container nữa, nên restart do sự cố hay reboot không vô tình chạy migration.
+
+Chi tiết đầy đủ (biến môi trường của `deploy.sh`, rollback, đọc log): [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
+
+---
+
+## 💾 Sao lưu & khôi phục Database
+
+Production có **hai lớp** backup, cùng dựa trên `pg_dump --format=custom` rồi đẩy lên Cloudflare R2:
+
+| Lớp | Chạy ở đâu | Khi nào |
+| :--- | :--- | :--- |
+| **Trước mỗi deploy** | `deploy/deploy.sh` bước 2 | Tự động; backup fail thì deploy dừng |
+| **Định kỳ** | Service Docker `bdu-db-backup` (`scripts/db-backup-scheduler.js`) | Hằng ngày theo `BACKUP_CRON` (mặc định `03:17` giờ máy) |
+
+```bash
+# Bật service backup định kỳ
+docker compose up -d bdu-db-backup
+docker compose logs -f bdu-db-backup
+
+# Chạy thử một chu kỳ ngay
+docker compose run --rm bdu-db-backup node scripts/db-backup-scheduler.js --once
+
+# Backup thủ công
+docker compose run --rm bdu-hub npm run db:backup -- --reason manual
+
+# Xem trước retention 3 tầng (daily/weekly/monthly) rồi mới xoá
+docker compose run --rm bdu-db-backup node scripts/db-backup-rotate.js --dry-run
+
+# Restore drill: tải bản mới nhất từ R2 → restore vào database tạm → đếm bản ghi → xoá
+docker compose run --rm \
+  -e DRILL_DATABASE_URL='postgresql://bdu_admin:secret@postgres:5432/postgres' \
+  bdu-hub npm run db:backup:verify
+```
+
+Biến cấu hình: `BACKUP_DATABASE_URL` (role chỉ đọc), `BACKUP_R2_BUCKET` (phải **khác** `R2_BUCKET`), `BACKUP_ENABLED=1`, `BACKUP_CRON`, `BACKUP_RETENTION_DAILY/WEEKLY/MONTHLY`, `DRILL_DATABASE_URL` (role có `CREATEDB`). Chi tiết ở `.env.example` phần "Sao lưu PostgreSQL".
+
+⚠️ **Restore drill quan trọng hơn việc "có file backup"**: một file `.dump` tồn tại trên R2 không chứng minh được bạn sẽ khôi phục được. Drill tải bản backup thật về, kiểm SHA-256, `createdb` → `pg_restore --exit-on-error` → `SELECT count(*)` trên 3 bảng cốt lõi → `dropdb`. Script **chặn cứng** không bao giờ restore vào production: tên database drill bắt buộc kết thúc bằng `_drill`, host phải nằm trong allowlist local (trừ khi có `ALLOW_REMOTE_DRILL=1`), và tên drill không được trùng `DATABASE_URL` của app lẫn `manifest.database`.
+
+Image production đã có sẵn `postgresql-client` (cài trong `Dockerfile`) nên `pg_dump`/`pg_restore`/`createdb`/`dropdb` chạy được trong container.
+
+Runbook đầy đủ: [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md).
+
+---
+
+## 🗺️ Bản đồ kiến trúc
+
+Tài liệu mô tả cấu trúc thật của repo và **quy tắc bất di bất dịch** khi sửa `src/`:
+
+| Tài liệu | Nội dung |
+| :--- | :--- |
+| [`READFORME.md`](READFORME.md) | Bản đồ kiến trúc tổng thể: tầng, cấu trúc thư mục FE/BE, luồng dữ liệu. |
+| [`docs/architecture.md`](docs/architecture.md) | Luồng `client → src/app.js → routes → controllers → services → db`, bảng 16 domain, 5 quy tắc bất di bất dịch, nợ kỹ thuật còn lại. |
+
+---
+
 ## 🔒 Bảo Mật & Lưu Ý
 * Hệ thống **không lưu trữ mật khẩu** sinh viên trên máy chủ.
 * Phiên đăng nhập sử dụng **Bearer Token ngắn hạn** trao đổi trực tiếp với hệ thống máy chủ `sv.bdu.edu.vn`.

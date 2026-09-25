@@ -1,14 +1,16 @@
 # 🧭 BẢN ĐỒ KIẾN TRÚC DỰ ÁN (PROJECT ARCHITECTURE & CODEBASE GUIDE)
 
 > **Tài liệu phân định ranh giới Front-End (FE) và Back-End (BE)**, giải thích chi tiết cấu trúc thư mục, luồng dữ liệu và cách các thành phần trong hệ thống phối hợp với nhau.
+>
+> Bản đồ này mô tả **đúng cấu trúc hiện tại của repo**. Nếu cần hiểu vì sao cấu trúc phải giữ nguyên khi sửa, xem thêm [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
 ## 📌 1. TỔNG QUAN HỆ THỐNG
 
 Toàn bộ workspace hiện tại bao gồm 3 phân hệ chính:
-1. **`bdu-tu-hoc/` (Dự án chính)**: Web App Full-stack (Node.js/Express + Vanilla JS/HTML/CSS + PostgreSQL). Đây là nơi chứa toàn bộ ứng dụng web đang vận hành cho sinh viên.
-2. **`dinh dang word/` (Engine C# .NET)**: Mã nguồn C# xử lý sâu vào file `.docx` (OpenXML) theo đúng chuẩn tiểu luận & đồ án tốt nghiệp BDU. Engine này được biên dịch thành binary CLI đặt tại `bdu-tu-hoc/bin/wordfmt/` để Backend gọi khi người dùng upload file word.
+1. **`bdu-tu-hoc/` (Dự án chính)**: Web App Full-stack (**Node.js 22 + Express 4** ở backend, **React 19 + Vite** ở frontend sinh viên, **Vanilla JS/HTML/CSS** ở các site legacy, **PostgreSQL 16** làm kho dữ liệu). Đây là nơi chứa toàn bộ ứng dụng web đang vận hành cho sinh viên.
+2. **`dinh dang word/` (Engine C# .NET)**: Mã nguồn C# xử lý sâu vào file `.docx` (OpenXML) theo đúng chuẩn tiểu luận & đồ án tốt nghiệp BDU. Engine này được biên dịch thành binary CLI đặt tại `bdu-tu-hoc/bin/wordfmt/` (gồm `wordfmt.exe` cho Windows và `wordfmt.dll` cho runtime .NET) để Backend gọi bằng `execFile('dotnet', ...)` khi người dùng upload file word. Dockerfile đóng gói `mcr.microsoft.com/dotnet/runtime:10.0` làm base image runtime.
 3. **`auto-khao-sat/` (Tool Python)**: Phiên bản desktop GUI chạy bằng Python hỗ trợ auto đánh giá khảo sát giảng viên (bản tiền thân / độc lập).
 
 ---
@@ -17,228 +19,239 @@ Toàn bộ workspace hiện tại bao gồm 3 phân hệ chính:
 
 ```mermaid
 flowchart TB
-    subgraph CLIENT["🖥️ FRONT-END (FE) - Chạy trên Trình Duyệt"]
-        UI["Giao diện HTML (public/index.html)"]
-        CSS["Giao diện & Hiệu ứng (public/css/)"]
-        APP_JS["Bộ điều phối Client (public/js/app.js)"]
-        API_JS["Client API Consumer (public/js/api.js)"]
-        FEAT["Module chức năng: automation, community, learning"]
+    subgraph CLIENT["🖥️ FRONT-END (FE)"]
+        REACT["React 19 + Vite (client/src → dist/client)"]
+        LEGACY["Vanilla SPA (public/index.html)"]
+        GAMES["Game Hub (public/games) — site độc lập"]
+        ADMIN["Admin Dashboard (public/admin) — site độc lập"]
+        ADMINTOOL["Admin Tool (public/admin-tool.html)"]
     end
 
-    subgraph SERVER["⚙️ BACK-END (BE) - Chạy trên Node.js Server"]
-        HTTP["Express Web Server (src/server/app.js, server.js)"]
-        ROUTER["Định tuyến REST (src/routes/api.routes.js)"]
-        CTRL["Bộ điều khiển (src/controllers/api.controller.js)"]
-        WS["WebSocket Server (Live log tiến trình)"]
-        
-        subgraph MODULES["Phân hệ nghiệp vụ (src/server/modules/)"]
-            AUTH["identity (Xác thực)"]
-            ACAD["academics (Bảng điểm, TKB)"]
-            RANK["rankings (Xếp hạng, GPA)"]
-            COMM["community & learning (Kho tự học)"]
-            TOOL["tools (Điều phối tool tự động)"]
-        end
+    subgraph SERVER["⚙️ BACK-END (BE) - Node.js 22 / Express 4"]
+        BOOT["server.js — bootstrap: http server, WS, listen, shutdown"]
+        APP["src/app.js — createApp(): middleware, static, /api, fallback"]
+        JOBS["src/jobs/index.js — 7 scheduler nền + 1 đồng bộ catalog"]
+        ROUTER["src/routes/ — assembler + 16 file route domain (19 hàm register)"]
+        CTRL["src/controllers/api.controller.js (barrel) → src/modules/<domain>/"]
+        SVC["src/services/ — 42 service + src/services/games/ (11 file)"]
+        DB["src/db/database.js — pool, transaction, advisory lock"]
+        WS["WebSocket /ws/community (CommunityRealtime)"]
     end
 
     subgraph INTEGRATIONS["🌐 TÍCH HỢP NGOÀI & DỊCH VỤ"]
-        BDU_PORTAL["Cổng thông tin BDU (sv.bdu.edu.vn)"]
+        BDU["Cổng thông tin BDU (sv.bdu.edu.vn/public/api)"]
         MOODLE["Cổng học tập Moodle (bdu.vn247.org)"]
-        WORDFMT_BIN["C# .NET Engine (bin/wordfmt)"]
-        DB[(PostgreSQL Database)]
+        WORDFMT["C# .NET Engine (bin/wordfmt)"]
+        R2["Cloudflare R2 (media + backup)"]
+        FB["Facebook group (BDU Confessions)"]
+        PGSQL[(PostgreSQL 16)]
     end
 
-    UI --> APP_JS
-    APP_JS --> FEAT
-    FEAT --> API_JS
-    API_JS -- "HTTP REST Requests" --> ROUTER
-    APP_JS -- "WebSockets (Live Log)" <--> WS
-    
+    REACT --> APP
+    LEGACY --> APP
+    GAMES --> APP
+    ADMIN --> APP
+    ADMINTOOL --> APP
+    APP --> ROUTER
     ROUTER --> CTRL
-    CTRL --> MODULES
-    
-    MODULES --> BDU_PORTAL
-    MODULES --> MOODLE
-    TOOL --> WORDFMT_BIN
-    RANK --> DB
-    COMM --> DB
+    CTRL --> SVC
+    SVC --> DB
+    DB --> PGSQL
+    BOOT -.-> WS
+    BOOT --> APP
+    BOOT --> JOBS
+
+    SVC --> BDU
+    SVC --> MOODLE
+    SVC --> WORDFMT
+    SVC --> R2
+    SVC --> FB
 ```
 
 ---
 
 ## 🎨 3. PHẦN FRONT-END (FE) — CLIENT-SIDE
 
-> **Vị trí**: Toàn bộ thư mục `bdu-tu-hoc/public/`
+Có **hai lớp giao diện cùng tồn tại** trong giai đoạn chuyển đổi: frontend React mới là lớp chính, `public/` là lớp legacy được giữ làm fallback.
 
-Front-End được xây dựng theo phong cách **Vanilla JavaScript hiện đại, Single Page Application (SPA)**, không dùng framework nặng (không React/Vue), giúp tải trang tức thì, hiệu năng mượt mà và tối ưu tài nguyên tối đa.
+### 3.1. Lớp chính: React 19 + Vite (`client/`)
 
-### 📁 Chi tiết các tệp và thư mục Front-End:
+> **Vị trí**: `client/src/` → build ra `dist/client/`, được `src/app.js` phục vụ ở `/app-assets`.
 
 | Đường dẫn | Vai trò | Chức năng cụ thể |
 | :--- | :--- | :--- |
-| **`public/index.html`** | Khung giao diện chính | Chứa toàn bộ cấu trúc các view: Đăng nhập, Dashboard cá nhân, Bảng điểm chi tiết, Lịch học theo tuần, Bảng xếp hạng GPA, Kho tài liệu tự học, Modal công cụ tự động hóa. |
-| **`public/admin-tool.html`** | Giao diện quản trị | Bảng điều khiển riêng cho admin để test, đồng bộ và kiểm tra trạng thái dữ liệu. |
-| **`public/css/style.css`** | CSS Design System | Toàn bộ giao diện người dùng (Dark Theme hiện đại, thẻ card, bảng điểm responsive, thanh cuộn, modal, button). |
-| **`public/css/login.css`** | CSS trang Đăng nhập | Hiệu ứng khung đăng nhập, hoạt ảnh character tương tác. |
-| **`public/css/showcase.css`** | CSS hiệu ứng nâng cao | Parallax, pointer spotlight, container queries, animated counter, layout responsive. |
-| **`public/js/app.js`** | Nhạc trưởng FE (Controller) | Lắng nghe sự kiện click/input, quản lý trạng thái (state) sinh viên, chuyển đổi qua lại giữa các tab, render dữ liệu bảng điểm/lịch học lên HTML. |
-| **`public/js/api.js`** | Cầu nối gọi Backend | Đóng gói tất cả các hàm `fetch()` gửi request lên Server (`/api/login`, `/api/scores`, `/api/schedule`, `/api/rankings`,...). |
-| **`public/js/features/`** | Các module nghiệp vụ (Lazy-load) | Tách nhỏ code để tăng tốc độ tải trang ban đầu: |
-| ↳ `automation.js` | Tính năng Tự động hóa | Xử lý giao diện kéo thả file Word, kết nối WebSocket nghe log tiến trình Auto khảo sát & Auto Moodle. |
-| ↳ `community.js` | Tính năng Cộng đồng | Xử lý bài đăng, bình luận, hỏi đáp và chia sẻ link tài liệu học tập theo mã môn. |
-| ↳ `learning.js` | Tính năng Kho môn học | Danh sách môn học đã học / đang học, bộ lọc và tìm kiếm theo môn. |
-| **`public/js/core/`** | Hạ tầng tải tài nguyên FE | `resource-loader.js`, `style-loader.js`, `view-lifecycle.js`: Quản lý nạp CSS/JS động và vòng đời các màn hình. |
-| **`public/js/interactions.js`** | Vi tương tác UX | Phím tắt (`Ctrl/Cmd + K` mở thanh tìm kiếm nhanh), âm thanh, vi chuyển động. |
-| **`public/assets/`** | Tài nguyên media | Logo trường BDU, icons, ảnh minh họa, âm thanh giao diện. |
+| **`client/src/main.jsx`** | Entrypoint React | Mount `App`, nạp CSS global, kích hoạt React Query. |
+| **`client/src/app/`** | Khung ứng dụng | `App.jsx` (root layout), `routes.jsx` (URL canonical), `AppErrorBoundary.jsx`, `UpdateBanner.jsx`, `useBuildUpdate.js` (phát hiện bản mới qua `/api/version`), `providers.jsx`, `navigation.js`, `chunk-recovery.js` (tự reload 1 lần khi chunk cũ 404). |
+| **`client/src/features/`** | 15 màn hình nghiệp vụ | Mỗi thư mục là một route: `auth`, `gpa`, `info`, `schedule`, `leaderboard`, `enrollment`, `learning`, `wordfmt`, `survey`, `english`, `vocab`, `grammar`, `clubs`, `confession`. |
+| **`client/src/components/`** | Component tái sử dụng | Khung dùng chung: card, modal, skeleton, table điểm, terminal log. |
+| **`client/src/layouts/`** | Bố cục | Sidebar học tập, khối TIỆN ÍCH, header. |
+| **`client/src/api/`** | Lớp gọi API | Wrapper `fetch` cho toàn bộ endpoint `/api/*` của React. |
+| **`client/src/services/`** | Tiện ích phía client | WebSocket client, định dạng ngày/điểm, quản lý state cục bộ. |
+| **`client/src/styles/`** | Design system | CSS tokens, theme sáng/tối (dùng chung key `bdu_theme` với Game Hub). |
+
+> ⚠️ **Ngoại lệ đã biết**: `client/src/features/grammar/grammar-lib.js` import ngược vào `src/utils/grammar-answers.js` để dùng chung logic chấm đáp án với server. Vì vậy `Dockerfile` phải `COPY src` trước khi `npm run build:client`. `src/utils/` **không được di chuyển**.
+
+### 3.2. Lớp legacy: Vanilla SPA (`public/`)
+
+> **Vị trí**: `public/`. Chỉ được phục vụ làm **fallback** khi `dist/client/index.html` chưa tồn tại, và làm nguồn tài nguyên dùng chung.
+
+| Đường dẫn | Vai trò | Chức năng cụ thể |
+| :--- | :--- | :--- |
+| **`public/index.html`** | Khung giao diện legacy (fallback) | Toàn bộ view: Đăng nhập, Dashboard, Bảng điểm, TKB, Xếp hạng, Kho tài liệu, Modal công cụ. `src/app.js` chỉ gửi file này khi **không có** bản build React. |
+| **`public/admin-tool.html`** | Giao diện quản trị (độc lập) | Bảng điều khiển riêng cho admin: đồng bộ dữ liệu, kiểm tra trạng thái, tra cứu/gỡ ảnh vi phạm. Mount ở `/admin-tool`. |
+| **`public/admin/`** | Admin Dashboard (site độc lập) | Site static riêng (`index.html`, `admin.css`, `admin.js`, `chart.min.js`) cho traffic & audit log. Mount ở `/admin`, header `no-store`. |
+| **`public/games/`** | Game Hub (site độc lập) | Site static riêng cho game online: `index.html`, `styles/`, `js/` (`api.js`, `identity.js`, `main.js`, `realtime.js`, `session.js`, `sound.js`, `ui.js`, `components/header.js`, `games/` 7 game, `views/game-page.js`, `views/home.js`, `views/room.js`). Mount ở `/games`, mọi deep link fallback về `index.html`. |
+| **`public/css/style.css`** | CSS Design System | Giao diện người dùng: dark theme, card, bảng điểm responsive, modal, button. |
+| **`public/css/showcase.css`** | CSS hiệu ứng nâng cao | Parallax, pointer spotlight, container queries, animated counter. Tách riêng để không trộn hiệu ứng với nghiệp vụ. |
+| **`public/css/admin-tool.css`** | CSS trang quản trị | Bảng tra cứu, form upload, log viewer. |
+| **`public/js/app.js`** | Nhạc trưởng FE (legacy) | Lắng nghe sự kiện, quản lý trạng thái sinh viên, chuyển tab, render bảng điểm/TKB. |
+| **`public/js/api.js`** | Cầu nối gọi Backend | Đóng gói các hàm `fetch()`: `/api/login`, `/api/scores`, `/api/schedule`, ... |
+| **`public/js/interactions.js`** | Vi tương tác UX | `Ctrl/Cmd + K` mở thanh tìm kiếm, âm thanh, hiệu ứng chuyển động. |
+| **`public/js/admin-tool.js`** | Logic trang quản trị | Gọi API quản trị, render bảng dữ liệu. |
+| **`public/assets/`** | Tài nguyên media | `frames/`, `images/`, `title-tags/`: khung avatar, danh hiệu, logo trường. |
+
+> Lưu ý: các thư mục `public/js/features/` và `public/js/core/` **không còn tồn tại** — chúng đã được thay bằng `client/src/features/`.
 
 ---
 
 ## ⚙️ 4. PHẦN BACK-END (BE) — SERVER-SIDE
 
-> **Vị trí**: Các thư mục `bdu-tu-hoc/src/`, `server.js`, `scripts/`, `migrations/`, `bin/`
+> **Vị trí**: `server.js`, `src/`, `scripts/`, `migrations/`, `bin/`
 
-Back-End chạy trên nền tảng **Node.js (Express.js)**, đóng vai trò làm trung gian bảo mật (Proxy / Gateway) giữa trình duyệt sinh viên với Cổng thông tin BDU, hệ thống Moodle, Database PostgreSQL và Engine xử lý Word.
+Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò làm trung gian bảo mật (Proxy / Gateway) giữa trình duyệt sinh viên với Cổng thông tin BDU, hệ thống Moodle, Database PostgreSQL, Cloudflare R2 và Engine xử lý Word.
 
-### 📁 Chi tiết các tệp và thư mục Back-End:
+### 4.1. Tầng bootstrap
 
 | Đường dẫn | Vai trò | Chức năng cụ thể |
 | :--- | :--- | :--- |
-| **`server.js`** | Điểm khởi chạy (Entry) | File chạy đầu tiên khi gõ `npm start` hoặc `node server.js`. |
-| **`src/server/app.js`** | Cấu hình Express App | Khai báo middlewares (CORS, body parser, cookie parser, serve thư mục tĩnh `public/`), bảo vệ chống tràn tải và đăng ký các routes. |
-| **`src/server/bootstrap.js`** | Khởi động dịch vụ | Kết nối DB PostgreSQL, khởi tạo WebSocket Server cho Live Terminal Log, lên lịch chạy định kỳ (cron job lúc 03:00 sáng đồng bộ xếp hạng). |
-| **`src/routes/api.routes.js`** | Danh bạ Endpoint API | Định nghĩa tất cả URL API: `/api/login`, `/api/logout`, `/api/scores`, `/api/schedule`, `/api/tools/...`. |
-| **`src/controllers/api.controller.js`** | Bộ xử lý nghiệp vụ chính | Nhận request từ routes, kiểm tra dữ liệu đầu vào, gọi các module nghiệp vụ và trả kết quả JSON về cho FE. |
-| **`src/server/modules/`** | Các khối xử lý logic nghiệp vụ | Tách biệt theo Domain-Driven Design: |
-| ↳ `identity/` | Quản lý phiên | Xác thực tài khoản sinh viên BDU, duy trì token / cookie phiên an toàn. |
-| ↳ `academics/` | Học tập & Điểm số | Xử lý dữ liệu bảng điểm môn học, tính điểm tích lũy, phân loại học lực, định dạng thời khóa biểu. |
-| ↳ `rankings/` | Xếp hạng & Vinh danh | Tính toán thứ hạng GPA theo lớp, khoa, viện và toàn trường. |
-| ↳ `community/` & `learning/` | Chia sẻ tài nguyên số | CRUD bài viết chia sẻ tài liệu học tập, lưu vết link Drive/YouTube gắn với từng mã môn. |
-| ↳ `tools/` | Điều phối công cụ | Nhận file Word từ FE chuyển sang `bin/wordfmt` xử lý; kích hoạt worker chạy Auto đánh giá giảng viên & Auto giải Moodle. |
-| **`src/integrations/`** | Cầu nối ra bên ngoài | Giao tiếp với các hệ thống trường học: |
-| ↳ `bdu/` | Tích hợp Cổng BDU | Đóng giả trình duyệt (crawler/proxy) gửi request đến `sv.bdu.edu.vn`, giải mã session cookie, parse HTML/JSON trả về từ trường. |
-| ↳ `moodle/` | Tích hợp Moodle | Đăng nhập `bdu.vn247.org`, duyệt danh sách câu hỏi trắc nghiệm, đối chiếu ngân hàng đáp án cục bộ. |
-| **`src/db/` & `migrations/`** | Cơ sở dữ liệu | Cấu hình PostgreSQL Pool, lưu trữ dữ liệu snapshot điểm để xếp hạng và nội dung bài đăng chia sẻ. |
-| **`bin/wordfmt/`** | Binary thực thi C# | File thực thi được gọi trực tiếp bằng `child_process` trong Node.js để format Word siêu tốc. |
-| **`scripts/`** | Tiện ích bảo trì hệ thống | Migration DB (`migrate.js`), sao lưu/phục hồi DB (`db-dump.js`, `db-restore.js`), nén và minify CSS/JS trước khi deploy (`compress-public-assets.mjs`). |
+| **`server.js`** | Điểm khởi chạy (Entry) | `npm start` chạy file này. Gọi `createApp()`, dựng `http.Server`, gắn `CommunityRealtime.attach(server)`, start `EntertainmentGameService`, `server.listen(PORT)`, gọi `startJobs()`. Xử lý `SIGTERM`/`SIGINT`: `stopJobs()` → dừng FB import → đóng realtime → `TrafficService.flush()` → `closeDatabase()` → exit 0. |
+| **`src/app.js`** | Cấu hình Express App | `createApp()` khai báo middleware (json/urlencoded 10MB, `attachRequestContext`, `TrafficService.middleware()`), các static mount chuyên biệt (`/media/r2/*` stream từ R2, `/media/fb-import`, `/app-assets` + asset history, `/games`, `/admin`, `/admin-tool`), static `public/` chung, `app.use('/api', apiRoutes)`, fallback SPA (ưu tiên `dist/client/index.html`, không có thì `public/index.html`), timer dọn file tạm mỗi 15 phút, và global error handler (413 cho `LIMIT_FILE_SIZE`). |
+
+### 4.2. Tầng định tuyến & điều khiển
+
+| Đường dẫn | Vai trò | Chức năng cụ thể |
+| :--- | :--- | :--- |
+| **`src/routes/api.routes.js`** | Assembler | **Không chứa định nghĩa route.** Tạo 1 `express.Router()` rồi gọi lần lượt 19 hàm `register*Routes(router)` theo đúng thứ tự dòng của file gốc. Thứ tự này **là hành vi routing**. |
+| **`src/routes/<domain>.routes.js`** | 16 file route theo domain | Mỗi file export hàm `register*Routes(router, deps = {})`. `identity.routes.js` có 4 hàm, `notifications.routes.js` có 2 hàm — vì các domain bị xen kẽ trong file gốc. |
+| **`src/routes/_shared/http-deps.js`** | Dependency HTTP dùng chung | Export `ApiController` (barrel), `AdminDashboardController`, `WordFmtService`, `BduIdentityService`, 3 config `multer` (`upload`, `avatarUpload`, `mediaUpload`) và middleware `requireVerifiedMssv`. Tách riêng để mọi file route dùng **chung một instance** của multer và một instance `requireVerifiedMssv`. |
+| **`src/controllers/api.controller.js`** | Barrel gom controller | **Chỉ re-export, không chứa logic.** Export 16 `XxxController` từ `src/modules/<domain>/` và gom vào object `ApiController` để route layer gọi `ApiController.<method>`. Tổng cộng **130 method** trong 16 file controller domain (kiểm bằng `node scripts/verify-controller-split.mjs`). |
+| **`src/modules/<domain>/`** | 16 controller domain | `auth`, `academics`, `identity`, `media`, `meta`, `learning`, `games`, `wordfmt`, `survey`, `english`, `community`, `notifications`, `broadcast`, `clubs`, `vocab`, `grammar` — cộng thêm `src/modules/admin/admin-dashboard.controller.js` tách riêng ở bước đầu tiên (không nằm trong `ApiController`). |
+| **`src/modules/_shared/`** | Helper thuần | `bearer-token.js` (gộp 4 bản sao trùng lặp, có `.trim()`), `safe-api-error.js` (lọc message lỗi trước khi trả client). Cả hai **không import gì** nên không tạo phụ thuộc vòng. |
+
+### 4.3. Tầng nghiệp vụ & dữ liệu
+
+| Đường dẫn | Vai trò | Chức năng cụ thể |
+| :--- | :--- | :--- |
+| **`src/jobs/index.js`** | Vòng đời job nền | `startJobs()` bật 7 scheduler (`RankingSchedulerService`, `ReminderSchedulerService`, `OutboxMailerService`, `TrafficService`, `FacebookImportService`, `AssetHistoryService`, `MediaCleanupService`) + `IdentityAdminService.syncCatalogFromJson()`. `stopJobs()` dừng chúng và thêm `EntertainmentGameService.stop()`. |
+| **`src/services/`** | Lớp service | **53 file**: 42 `*.service.js` ở gốc + thư mục `games/` (11 file: `index.js`, `shared.js` và 9 bộ luật `backgammon`, `battleship`, `caro`, `checkers`, `chess`, `connect4`, `go`, `tic-tac-toe`, `xiangqi`; site `public/games` hiện chỉ bật 7 game cốt lõi). ⚠️ Service **chưa** di chuyển vào `src/modules/<domain>/`; xem mục "Nợ kỹ thuật còn lại" ở [`docs/architecture.md`](docs/architecture.md). |
+| **`src/db/database.js`** | Truy cập PostgreSQL | `getPool()`, `query()`, `transaction()`, `withAdvisoryLock()`, `getMigrationPool()`, `closeDatabase()`. Test mode bắt buộc `NODE_ENV=test` + `BDU_TEST_MODE=1` + `BDU_TEST_CONFIRM_DESTRUCTIVE=1`, database tên `bdu_test_*`, host trong allowlist. |
+| **`src/config/load-env.js`** | Env loader + hàng rào test | Nạp `.env` khi **không** ở test mode (fail-closed: tuyệt đối không fallback sang `.env` production khi `NODE_ENV=test`). Chặn chạy trực tiếp `node tests/test-*.js` (mã lỗi `UNMANAGED_TEST_EXECUTION`). |
+| **`src/utils/`** | Hàm dùng chung | `docx-*` (graduation/layout/postprocessor/proposal-preservation/structure), `grammar-answers.js`, `grammar-data.js`, `vocab-pos.js`, `async-queue.js`, `request-context.js`, `request-rate-limit.js`. ⚠️ Thư mục này **không được di chuyển** vì client import ngược. |
+| **`src/config/game-titles.js`** | Danh hiệu game | Khai báo danh hiệu Game Hub; đọc song song ở `public/games/js/identity.js`. |
+
+### 4.4. Cơ sở dữ liệu & migration
+
+| Đường dẫn | Vai trò | Chức năng cụ thể |
+| :--- | :--- | :--- |
+| **`migrations/`** | 54 file `.sql` | Đánh số `001_`…`055_` (thiếu `046`). Tên file phải khớp `^\d{3}_[a-z0-9][a-z0-9_-]*\.sql$`. |
+| **`scripts/migration-ledger.mjs`** | Ledger + khoá | Bảng `public.schema_migrations` lưu `version`, `filename`, `checksum_sha256`, `applied_at`, `execution_ms`, `applied_by`. Advisory lock `MIGRATION_LOCK_ID = 782341`, `lock_timeout = 30s`, `statement_timeout = 5min`. Từ chối checksum lệch, từ chối thiếu version giữa chừng, và **từ chối replay** nếu DB đã có schema (`students`/`academic_rankings`) mà chưa có ledger — phải baseline thủ công. |
+
+### 4.5. Tích hợp hệ thống bên ngoài (KHÔNG có `src/integrations/`)
+
+| Hệ thống | Nơi xử lý | Chi tiết |
+| :--- | :--- | :--- |
+| **Cổng thông tin BDU** | `src/services/bdu.service.js`, `bdu-identity.service.js` | `BDU_BASE_URL = https://sv.bdu.edu.vn/public/api`. Crawler/proxy đóng giả trình duyệt, quản lý session cookie, parse JSON/HTML: bảng điểm, TKB theo tuần (`/public/api/sch/w-locdstkbtuanusertheohocky`), lý lịch, khảo sát giảng viên. Tài khoản dịch vụ chỉ đọc qua `CDS_USER`/`CDS_PASSWORD`. |
+| **Moodle** | `src/services/moodle.service.js`, `english-exercise.service.js` | `MOODLE_URL = https://bdu.vn247.org`. Đăng nhập, quét quiz theo Course ID, đối chiếu ngân hàng đáp án cục bộ. Mật khẩu Moodle chỉ nằm trong bộ nhớ phiên; câu hỏi **không** gửi sang dịch vụ AI bên ngoài. |
+| **WordFmt (.NET)** | `src/services/wordfmt.service.js` | `ROOT_DIR` = `path.resolve(__dirname, '../../')`; gọi `execFile('dotnet', [bin/wordfmt/wordfmt.dll, ...], { cwd: ROOT_DIR })`. |
+| **Cloudflare R2** | `media-storage.service.js`, `media-upload.service.js`, `avatar-override.service.js` | Ảnh/avatar lưu trên R2, **không ghi file runtime xuống VPS**. `/media/r2/*` stream object khi chưa có custom domain. |
+| **Facebook** | `src/services/facebook-import.service.js` | Facebook đã khai tử Groups API nên dùng Playwright đọc feed nhóm `bdu.confessions`. |
+| **Discord** | `discord-oauth.service.js`, `discord-link.service.js`, `scripts/discord-bot.js` | OAuth2 liên kết tài khoản + bot nhắc lịch/tag (service riêng `bdu-notifier-bot`). |
+
+### 4.6. Tiện ích bảo trì
+
+| Đường dẫn | Vai trò | Chức năng cụ thể |
+| :--- | :--- | :--- |
+| **`scripts/migrate.js`** | Chạy migration | `npm run db:migrate` — dùng ledger + advisory lock. |
+| **`scripts/db-dump.js` / `db-restore.js`** | Dump / restore SQL | Tạo cặp `<file>` + `<file>.manifest.json` (SHA-256); restore từ chối file thiếu manifest hoặc checksum lệch. |
+| **`scripts/db-backup*.js`** | Hệ thống backup R2 | `db-backup.js`, `db-backup-scheduler.js`, `db-backup-rotate.js`, `db-backup-verify.js`, `db-backup-shared.js`. Xem [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md). |
+| **`scripts/discord-bot.js`, `discord-broadcast.js`** | Bot Discord | Service riêng `bdu-notifier-bot` để crash không kéo sập web. |
+| **`scripts/run-safe-tests.mjs`, `run-explicit-suite.mjs`, `sweep-safe-node-tests.mjs`, `test-manifest.mjs`, `test-environment.mjs`** | Test runner | `npm test` chỉ chạy suite an toàn (không DB/network). Runner chặn direct execution. |
+| **`scripts/verify-controller-split.mjs`, `verify-route-order.mjs`** | Script kiểm chứng tách | `verify-controller-split.mjs` đối chiếu tập method; `verify-route-order.mjs` so router stack với bản gốc trong git HEAD. |
+| **`scripts/postgres-utils.js`** | Hàng rào an toàn DB | Allowlist host local, chặn URL có query lạ, yêu cầu `BDU_MAINTENANCE_ALLOW_PRODUCTION=1` cho remote. |
+| **`scripts/`** | Import / export dữ liệu | `import-vocab.js`, `import-grammar*.js`, `export-*.js`, `fix-vocab-pos.js`, `migrate-avatars-to-r2.js`, `sync-rankings.js`, `fb-import-*.js`. |
+| **`deploy/deploy.sh`** | Deploy VPS | 6 bước: preflight → **backup DB (fail thì dừng)** → migrate 1 lần → `up -d --build` → healthcheck 90s → in hướng dẫn rollback. Kèm `deploy/caddy/Caddyfile.example` và `deploy/nginx/bdu-hub.conf.example`. |
 
 ---
 
 ## 🔄 5. LUỒNG HOẠT ĐỘNG THỰC TẾ (DATA FLOW WORKFLOW)
 
 ### Trường hợp 1: Sinh viên Đăng nhập & Xem Bảng điểm
-1. **[FE]**: Sinh viên nhập MSSV và Mật khẩu tại màn hình `public/index.html`.
-2. **[FE]**: `public/js/api.js` gửi `POST /api/login` lên Back-End.
-3. **[BE]**: `src/controllers/api.controller.js` chuyển qua `src/integrations/bdu/` để gửi request xác thực tới cổng trường `sv.bdu.edu.vn`.
-4. **[BE]**: Nhận kết quả thành công, Backend lưu session cookie và trả về thông tin sinh viên cho FE.
-5. **[FE]**: `public/js/app.js` chuyển sang Dashboard và gọi tiếp `GET /api/scores`.
-6. **[BE]**: Lấy điểm từ BDU, tính toán GPA và đối chiếu bảng xếp hạng trong DB PostgreSQL rồi trả JSON về.
-7. **[FE]**: `public/js/app.js` render giao diện bảng điểm và hiển thị huy hiệu xếp hạng.
+1. **[FE]**: Sinh viên nhập MSSV và Mật khẩu tại màn hình đăng nhập (`client/src/features/auth`, hoặc `public/index.html` nếu fallback).
+2. **[FE]**: `client/src/api/` (hoặc `public/js/api.js` ở lớp legacy) gửi `POST /api/login` lên Back-End.
+3. **[BE]**: `src/app.js` → `src/routes/auth.routes.js` (`registerAuthRoutes`) → `ApiController.login` trong `src/modules/auth/auth.controller.js`.
+4. **[BE]**: Controller gọi `BduIdentityService`/`BduService` để xác thực với cổng trường `sv.bdu.edu.vn`, hoặc xác minh token opaque đã cache (`BDU_RESTORED_TOKEN_TTL_MS`, mặc định 5 phút).
+5. **[BE]**: `AcademicSnapshotService` nạp snapshot điểm gần nhất; nếu chưa có thì gọi `BDU_BASE_URL` để đồng bộ rồi tính GPA/tích luỹ.
+6. **[BE]**: `AcademicRankingService` trả bảng xếp hạng theo lớp/khoa/viện/toàn trường. Trả JSON về FE.
+7. **[FE]**: `client/src/features/gpa` render bảng điểm, biểu đồ và huy hiệu xếp hạng.
 
 ### Trường hợp 2: Chuẩn hóa Word BDU (WordFmt)
-1. **[FE]**: Sinh viên kéo thả file `.docx` vào mục WordFmt (`public/js/features/automation.js`).
-2. **[FE]**: Gửi file kèm các tùy chọn bìa qua `POST /api/tools/format-word`.
-3. **[BE]**: `multer` nhận file lưu vào thư mục `temp/`.
-4. **[BE]**: `src/server/modules/tools/` gọi binary CLI `bin/wordfmt/wordfmt.exe` với các tham số tương ứng.
-5. **[C# Engine]**: Đọc OpenXML, chỉnh lề trên 2 cm, trái 3 cm, dưới 2 cm, phải 2 cm, đổi Times New Roman 13, chuẩn hóa Heading H1-H4, tạo mục lục tự động, xuất ra file kết quả.
-6. **[BE]**: Trả file đã format về trình duyệt cho sinh viên tải xuống tự động.
+1. **[FE]**: Sinh viên kéo thả file `.docx` vào mục WordFmt (`client/src/features/wordfmt`).
+2. **[FE]**: Gửi file kèm các tùy chọn bìa qua `POST /api/wordfmt/format` (multer `upload`, giới hạn 30MB, chỉ nhận `.docx`).
+3. **[BE]**: `src/routes/wordfmt.routes.js` → `ApiController.formatDocx` trong `src/modules/wordfmt/wordfmt.controller.js`.
+4. **[BE]**: `WordFmtService` gọi binary CLI `bin/wordfmt/wordfmt.dll` bằng `execFile('dotnet', args, { cwd: ROOT_DIR })` với các tham số tương ứng.
+5. **[C# Engine]**: Đọc OpenXML, chỉnh lề trên 2 cm, trái 3 cm, dưới 2 cm, phải 2 cm, đổi Times New Roman 13, chuẩn hóa Heading H1–H4, tạo mục lục/danh mục tự động, áp dụng profile `tieu_luan.json` hoặc bản đóng quyển, xuất file kết quả.
+6. **[BE]**: `AssetHistoryService` giữ chunk bản build cũ; `WordFmtService.cleanOldTempFiles()` chạy mỗi 15 phút dọn file tạm. Trả file đã format về trình duyệt để sinh viên tải xuống.
+
+### Trường hợp 3: Realtime Confession & Game Hub
+1. **[FE]**: Client mở WebSocket `/ws/community` rồi gửi `{"type":"auth","token":"..."}`.
+2. **[BE]**: `CommunityRealtime.attach(server)` (gọi từ `server.js`) xác thực qua `BduIdentityService`, giới hạn buffer (`WS_MAX_BUFFERED_BYTES`) và timeout auth (`WS_AUTH_TIMEOUT_MS`).
+3. **[BE]**: Client vào room `confession` (broadcast bài mới, mention) hoặc `game:<room_code>` (nước đi game).
+4. **[BE]**: `EntertainmentGameService` kiểm tra nước đi bằng transaction + row lock + `clientMoveId` idempotency; state gửi về đã che theo ghế.
+5. **[BE]**: Client mất kết kết nối → `GAME_DISCONNECT_GRACE_MS` (mặc định 30s) trước khi kết thúc ván.
 
 ---
 
 ## 🛠️ 6. BẠN NÊN CHỈNH SỬA Ở ĐÂU? (DEVELOPMENT GUIDE)
 
-- **Nếu muốn sửa giao diện (màu sắc, nút bấm, font chữ, bố cục hiển thị)**:
-  👉 Sửa trong `public/index.html` và `public/css/style.css` (hoặc `public/css/login.css` cho màn login).
-- **Nếu muốn sửa logic hiển thị trên web (click nút này thì hiện bảng kia, lọc điểm, popup...)**:
-  👉 Sửa trong `public/js/app.js` hoặc các file tính năng tương ứng trong `public/js/features/`.
-- **Nếu muốn sửa API, thêm endpoint mới hoặc thay đổi cách lưu dữ liệu**:
-  👉 Sửa trong `src/routes/api.routes.js` và `src/controllers/api.controller.js`.
-- **Nếu muốn sửa thuật toán cào dữ liệu điểm, lịch học BDU hoặc sửa Moodle**:
-  👉 Sửa trong `src/integrations/bdu/` hoặc `src/integrations/moodle/`.
-- **Nếu muốn sửa quy chuẩn canh lề, font chữ, format bìa Word**:
-  👉 Sửa trong project C# `dinh dang word/src/WordFmt.Core/` rồi build đè binary vào `bdu-tu-hoc/bin/wordfmt/`.
+- **Sửa giao diện React (màu sắc, nút bấm, bố cục)**:
+  👉 Sửa trong `client/src/features/<domain>/` và `client/src/styles/`.
+- **Sửa logic hiển thị của một màn hình (lọc điểm, popup, bảng)**:
+  👉 Sửa component trong `client/src/features/<domain>/` hoặc `client/src/components/`.
+- **Sửa giao diện legacy / trang quản trị / Game Hub**:
+  👉 `public/index.html` + `public/css/style.css` + `public/js/app.js`; `public/admin-tool.html`; `public/admin/`; `public/games/`.
+- **Thêm hoặc đổi một API endpoint**:
+  👉 Sửa `src/routes/<domain>.routes.js` (URL) **và** `src/modules/<domain>/<domain>.controller.js` (xử lý). Nếu nghiệp vụ phức tạp, đặt SQL vào `src/services/<domain>-*.service.js`.
+- **Đổi thuật toán dữ liệu điểm, TKB BDU, Moodle, R2, Facebook, Discord**:
+  👉 Sửa trong `src/services/` (`bdu.service.js`, `bdu-identity.service.js`, `moodle.service.js`, `english-exercise.service.js`, `media-*.service.js`, `facebook-import.service.js`, `discord-*.service.js`).
+- **Đổi quy chuẩn canh lề, font chữ, format bìa Word**:
+  👉 Sửa project C# `dinh dang word/src/WordFmt.Core/` rồi build đè binary vào `bdu-tu-hoc/bin/wordfmt/`. Profile mặc định nằm ở `bin/wordfmt/profiles/*.json` và `profiles/`.
+- **Thêm một job nền**:
+  👉 Thêm service scheduler vào `src/services/`, rồi start/stop trong `src/jobs/index.js`.
+- **Đổi schema database**:
+  👉 Thêm file `migrations/0NN_<ten>.sql` (version chưa tồn tại, không được sửa file đã apply vì ledger kiểm checksum).
+- **Đổi quy trình deploy / backup**:
+  👉 `deploy/deploy.sh` và `scripts/db-backup*.js`; xem [`docs/deployment-runbook.md`](docs/deployment-runbook.md) và [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md).
 
 ---
 
-## ⚖️ 7. ĐÁNH GIÁ KIẾN TRÚC: NÊN GIỮ NGUYÊN HAY TÁCH RA JSX / COMPONENT ROUTING (`/gpa`, `/info`, `/schedule`...)?
+## 7. GHI CHÚ VỀ FEATURE JSX (ĐÃ CHỐT)
 
-### 1. Phân tích bối cảnh hiện tại
-* **Thực trạng**: Toàn bộ UI hiện nằm trong **1 file `index.html` duy nhất (~130 KB)** và file logic **`app.js` (~119 KB)**. Các tab như Bảng điểm, Lịch học, Thông tin cá nhân, Công cụ... được chuyển đổi qua lại bằng cách ẩn/hiện DOM trong cùng 1 trang (Single Monolithic DOM).
-* **Câu hỏi đặt ra**: *Việc để cấu trúc như này ổn định hơn, hay tách ra thành các file JSX riêng biệt với routing sạch (`/gpa`, `/info`, `/schedule`...) sẽ tốt hơn?*
+Bản tài liệu cũ từng so sánh "giữ nguyên Vanilla monolith" với "tách sang JSX/React". **Quyết định đã được thực hiện**: frontend chính thức chuyển sang **React 19 + Vite** trong `client/`, còn `public/` giữ làm fallback và cho các site độc lập (`/games`, `/admin`, `/admin-tool`).
 
----
-
-### 📊 2. Bảng so sánh chi tiết: Cấu trúc hiện tại vs Tách thành JSX / Component Routing
-
-| Tiêu chí | Cấu trúc Hiện tại (Monolithic Vanilla HTML/JS) | Cấu trúc Tách JSX (React/Vite/Next.js Routing) |
-| :--- | :--- | :--- |
-| **Độ ổn định khi vận hành nhỏ lẻ** | 🟢 **Rất cao**: Không lo lỗi build pipeline, không phụ thuộc Vite/Webpack, không sợ hydration mismatch. | 🟡 **Khá**: Đòi hỏi quy trình build CI/CD hoặc chạy Vite build trước khi đưa lên production. |
-| **Độ phức tạp khi bảo trì (Maintainability)** | 🔴 **Kém khi dự án phình to**: Muốn sửa 1 nút bảng điểm phải cuộn tìm trong `index.html` (hơn 3000 dòng). Rất dễ sửa nhầm DOM của section khác. | 🟢 **Rất cao**: Mỗi trang là 1 file độc lập (`GpaPage.jsx`, `SchedulePage.jsx`). Sửa GPA chỉ sửa đúng file GPA, tách biệt hoàn toàn. |
-| **Khả năng làm việc nhóm (Teamwork)** | 🔴 **Rất dễ xung đột (Merge conflict)**: 2 người cùng code giao diện chắc chắn sẽ conflict nặng nề trong `index.html` hoặc `app.js`. | 🟢 **Xuất sắc**: Mỗi người phụ trách 1 Component/Route trong các folder riêng biệt. |
-| **Trải nghiệm URL (Deep Linking & SEO)** | 🔴 **Hạn chế**: Không thể gõ thẳng `domain.com/gpa` để vào ngay bảng điểm; F5 reload lại trang thường bị đưa về trạng thái mặc định. | 🟢 **Chuẩn mực Web**: Người dùng có thể bookmark link `domain.com/gpa` hoặc gửi link lịch học `/schedule` cho bạn bè. |
-| **Tốc độ tải trang ban đầu (Initial Load)** | 🟡 **Trung bình**: Phải tải toàn bộ 130KB HTML + 380KB CSS + 120KB JS ngay lần đầu truy cập dù chỉ muốn xem thời khóa biểu. | 🟢 **Rất nhanh (Code-splitting)**: Chỉ tải đúng bundle JS/CSS của trang đang xem (ví dụ chỉ tải 30KB cho `/schedule`). |
-| **Độ linh hoạt & Tái sử dụng (Reusability)** | 🔴 **Thấp**: Bảng điểm, card sinh viên, modal... bị gắn cứng trong DOM, khó mang sang dự án khác hoặc tái sử dụng. | 🟢 **Rất cao**: Tạo các component dùng chung như `<StudentCard />`, `<GradeBadge />`, `<TerminalLog />` dùng ở bất kỳ đâu. |
-| **Chi phí chuyển đổi (Migration Cost)** | 🟢 **0 đồng**: Đang chạy sẵn, không tốn công sức làm lại. | 🔴 **Tốn thời gian ban đầu**: Cần viết lại logic DOM manipulation trong `app.js` thành React State/Hooks (`useState`, `useEffect`). |
+Hợp đồng hành vi, danh sách route canonical và ranh giới legacy/React được chốt ở [`docs/frontend-migration-baseline.md`](docs/frontend-migration-baseline.md); kế hoạch thực hiện ở [`docs/jsx-routing-migration-plan.md`](docs/jsx-routing-migration-plan.md).
 
 ---
 
-### 🏛️ 3. Mô hình cấu trúc thư mục nếu tách sang JSX (Khuyến nghị chuẩn)
+## 8. TÀI LIỆU LIÊN QUAN
 
-Nếu chuyển đổi sang mô hình JSX (dùng **Vite + React** hoặc **Next.js**), cấu trúc FE sẽ trở nên chuyên nghiệp và dễ quản lý vượt trội:
-
-```text
-frontend/ (hoặc client/)
-├── src/
-│   ├── main.jsx                   # Entrypoint React
-│   ├── App.jsx                    # Root Layout & Router Config
-│   ├── routes.jsx                 # Khai báo URL: /, /gpa, /info, /schedule, /tools...
-│   ├── api/                       # API Services (gọi BE Node.js)
-│   │   ├── auth.api.js
-│   │   ├── grades.api.js
-│   │   └── schedule.api.js
-│   ├── components/                # Component tái sử dụng
-│   │   ├── common/                # Button, Modal, LoadingSkeleton, Navbar, Sidebar
-│   │   └── terminal/              # LiveTerminalLog (cho Auto Khảo sát & Moodle)
-│   ├── pages/                     # Tách riêng biệt từng màn hình (JSX)
-│   │   ├── login/
-│   │   │   ├── LoginPage.jsx
-│   │   │   └── login.module.css
-│   │   ├── gpa/
-│   │   │   ├── GpaPage.jsx        # Giao diện xem điểm & xếp hạng (/gpa)
-│   │   │   ├── GradeTable.jsx
-│   │   │   └── GpaRankChart.jsx
-│   │   ├── info/
-│   │   │   └── ProfilePage.jsx    # Thông tin lý lịch sinh viên (/info)
-│   │   ├── schedule/
-│   │   │   ├── SchedulePage.jsx   # Thời khóa biểu tuần (/schedule)
-│   │   │   └── CalendarGrid.jsx
-│   │   ├── tools/
-│   │   │   ├── WordFmtTool.jsx    # Chuẩn hóa Word BDU (/tools/wordfmt)
-│   │   │   ├── SurveyAutoTool.jsx # Auto khảo sát (/tools/survey)
-│   │   │   └── MoodleAutoTool.jsx # Auto bài tập Moodle (/tools/moodle)
-│   │   └── community/
-│   │       ├── CourseHubPage.jsx  # Kho tài liệu theo môn (/community)
-│   │       └── PostCard.jsx
-│   └── styles/                    # Global CSS, variables, themes
-```
+| Tài liệu | Nội dung |
+| :--- | :--- |
+| [`docs/architecture.md`](docs/architecture.md) | Sơ đồ tầng, bảng 16 domain, **quy tắc bất di bất dịch** khi sửa `src/`, nợ kỹ thuật còn lại. |
+| [`docs/deployment-runbook.md`](docs/deployment-runbook.md) | Runbook deploy & rollback trên VPS. |
+| [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md) | Runbook backup DB lên R2, retention, restore drill. |
+| [`docs/frontend-migration-baseline.md`](docs/frontend-migration-baseline.md) | Baseline hành vi frontend React. |
+| [`docs/local-test-services.md`](docs/local-test-services.md) | Dựng dịch vụ test local (PostgreSQL, R2 giả lập). |
+| [`docs/wordfmt-*.md`](docs/) | Chuẩn tài liệu WordFmt (tiểu luận, đồ án, cấu trúc). |
 
 ---
-
-### 🎯 4. KẾT LUẬN & LỜI KHUYÊN TỪ CHUYÊN GIA
-
-1. **Nếu dự án hiện tại là đồ án cá nhân / đã sắp xong / chỉ cần chạy ngay**:
-   * 👉 **Nên GIỮ NGUYÊN cấu trúc hiện tại**: Vì dự án đã được tối ưu hóa nén Brotli (`.br`), phân tách module `features/` và đang hoạt động ổn định. Chuyển đổi ngay lúc này sẽ mất nhiều ngày refactor và dễ phát sinh lỗi hiệu ứng giao diện (parallax, CSS showcase, âm thanh).
-
-2. **Nếu dự án dự định phát triển lâu dài, mở rộng thêm nhiều tính năng hoặc có nhóm cùng làm**:
-   * 👉 **RẤT NÊN TÁCH THÀNH JSX VỚI ROUTING RIÊNG (`/gpa`, `/info`, `/schedule`)**:
-     * Đây là **chuẩn mực kiến trúc công nghiệp**.
-     * Giúp sinh viên có thể chia sẻ link trực tiếp: ví dụ gửi link `bdu.edu.vn/schedule` để bạn bè xem TKB tuần, hoặc bookmark trang điểm.
-     * Codebase sạch sẽ, không còn "nỗi sợ" khi mở file `index.html` 130KB hay `app.js` hơn 100KB để tìm 1 đoạn code cần sửa.
-
-3. **Lộ trình chuyển đổi mượt mà (Nếu quyết định tách)**:
-   * **Bước 1**: Giữ nguyên toàn bộ Back-End (`src/`, `server.js`, `integrations/`). Back-End không cần sửa gì vì vốn dĩ đã là REST API chuẩn (`/api/...`).
-   * **Bước 2**: Khởi tạo thư mục `client/` với Vite (`npm create vite@latest client -- --template react`).
-   * **Bước 3**: Cắt từng block giao diện từ `index.html` sang các Component JSX tương ứng (`GpaPage.jsx`, `SchedulePage.jsx`).
-   * **Bước 4**: Sử dụng `react-router-dom` để định tuyến các đường dẫn `/gpa`, `/schedule`, `/tools`.
-   * **Bước 5**: Cấu hình Express Backend để fallback mọi route không thuộc `/api/` về `client/dist/index.html`.
-
----
-*Tài liệu được cập nhật tự động theo phiên bản cấu trúc hiện tại của dự án BDU Tự Học.*
+*Tài liệu được đối chiếu với cấu trúc thật của repo tại commit hiện tại.*

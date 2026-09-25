@@ -7,10 +7,51 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ORIGINAL = path.join(root, 'src', 'controllers', 'api.controller.js');
+
+// Sau khi tach, src/controllers/api.controller.js chi con la barrel re-export
+// nen khong con method literal de so sanh. Phai doc ban GOC tu git: commit
+// ngay truoc buoc tach chua doi file nay. Commit dau tien cua repo thi khong
+// co ban goc -> bo qua kiem tra thay vi bao "thieu toan bo" gia.
+function readOriginalSource() {
+  try {
+    return execFileSync('git', ['log', '--format=%H', '--', 'src/controllers/api.controller.js'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024
+    }).trim().split(/\r?\n/).filter(Boolean).reverse();
+  } catch {
+    return [];
+  }
+}
+
+// Ban goc la phien ban co NHIEU method nhat trong lich su: sau khi tach, file
+// goc thanh barrel (0 method literal) va phien ban cuoi cung la ban tach
+// (chi con ~9 method). Chon theo max la cach tu sua chinh va khong phu thuoc
+// hard-code commit hash.
+function loadOriginalMethods() {
+  let best = null;
+  for (const commit of readOriginalSource()) {
+    let source;
+    try {
+      source = execFileSync('git', ['show', `${commit}:src/controllers/api.controller.js`], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 4 * 1024 * 1024
+      });
+    } catch {
+      continue;
+    }
+    const names = new Set();
+    for (const match of source.matchAll(METHOD_RE)) names.add(match[1]);
+    if (!best || names.size > best.names.size) best = { names, commit: commit.slice(0, 8) };
+  }
+  return best;
+}
+
 const MODULES_DIR = path.join(root, 'src', 'modules');
 
 // Method dang `  name(req, res) {` hoac `  async name(req, res) {` o indent 2
@@ -20,13 +61,6 @@ const METHOD_RE = /^ {2}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(\s*req\s*,\s*res\s*(
 // KHONG dung co `g`: regex co `g` la stateful qua lastIndex, `.test()` se
 // cho ket qua sai o cac file sau.
 const EXPORT_RE = /^export const \w+ = \{/m;
-
-function collectOriginalMethods(file) {
-  const source = fs.readFileSync(file, 'utf8');
-  const names = new Set();
-  for (const match of source.matchAll(METHOD_RE)) names.add(match[1]);
-  return names;
-}
 
 function collectModuleMethods(dir) {
   const names = new Set();
@@ -56,15 +90,20 @@ function collectModuleMethods(dir) {
   return { names, count: files.length };
 }
 
-const original = collectOriginalMethods(ORIGINAL);
+const baseline = loadOriginalMethods();
+if (!baseline) {
+  console.log('Khong tim thay ban goc lich su cua api.controller.js - bo qua kiem tra.');
+  process.exit(0);
+}
+const { names: original, commit } = baseline;
 const { names: split, count: fileCount } = collectModuleMethods(MODULES_DIR);
 
 const missing = [...original].filter((name) => !split.has(name)).sort();
 const extra = [...split].filter((name) => !original.has(name)).sort();
 
-console.log(`File goc      : ${original.size} method`);
-console.log(`File domain   : ${split.size} method trong ${fileCount} file controller`);
-console.log(`Thieu         : ${missing.length}${missing.length ? ` -> ${missing.join(', ')}` : ''}`);
+console.log(`File goc (${commit}) : ${original.size} method`);
+console.log(`File domain         : ${split.size} method trong ${fileCount} file controller`);
+console.log(`Thieu               : ${missing.length}${missing.length ? ` -> ${missing.join(', ')}` : ''}`);
 console.log(`Thua         : ${extra.length}${extra.length ? ` -> ${extra.join(', ')}` : ''}`);
 
 if (missing.length > 0 || extra.length > 0) {
