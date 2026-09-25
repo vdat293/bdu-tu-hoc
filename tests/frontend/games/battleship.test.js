@@ -2,6 +2,7 @@
 // pha bắn với state đã được server che theo ghế, click khi interactive bật/tắt.
 import { describe, expect, it, vi } from 'vitest';
 import battleship from '../../../public/games/js/games/battleship.js';
+import { canInteractWithGameBoard } from '../../../public/games/js/views/room.js';
 
 const SIZE = 10;
 const SHIP_LENGTHS = [5, 4, 3, 3, 2];
@@ -94,6 +95,24 @@ const cellAt = (root, board, row, column) => root.querySelector(
 const markedCells = (root, board, className) => gridCells(root, board).filter((cell) => cell.classList.contains(className));
 
 describe('battleship UI module', () => {
+  it('cho phép cả hai ghế chuẩn bị song song nhưng vẫn giữ lượt bắn', () => {
+    const placing = {
+      role: 'player',
+      roomStatus: 'active',
+      gameType: 'battleship',
+      phase: 'placing',
+      mySeat: 2,
+      ready: { 1: false, 2: false },
+      currentSeat: 1,
+      result: null
+    };
+    expect(canInteractWithGameBoard(placing)).toBe(true);
+    expect(canInteractWithGameBoard({ ...placing, ready: { 1: true, 2: false } })).toBe(true);
+    expect(canInteractWithGameBoard({ ...placing, ready: { 1: false, 2: true } })).toBe(false);
+    expect(canInteractWithGameBoard({ ...placing, phase: 'playing', currentSeat: 1 })).toBe(false);
+    expect(canInteractWithGameBoard({ ...placing, phase: 'playing', currentSeat: 2 })).toBe(true);
+  });
+
   it('export meta đúng và preview 10×10', () => {
     expect(battleship.meta.id).toBe('battleship');
     expect(battleship.meta.label).toBeTruthy();
@@ -261,6 +280,13 @@ describe('battleship UI module', () => {
     board.update(view(hiddenState, { interactive: true }));
     expect(markedCells(root, 'attack', 'is-ship')).toHaveLength(0);
     expect(markedCells(root, 'attack', 'is-sunk')).toHaveLength(0);
+
+    // Defense-in-depth: tàu địch chưa chìm không được vẽ ngay cả nếu payload
+    // không có thuộc tính sunk/cells đúng chuẩn.
+    const malformedHiddenState = clone(playerOneState());
+    malformedHiddenState.fleets[2][0] = { length: 5, hits: 0, sunk: false, cells: [[0, 0], [0, 1]] };
+    board.update(view(malformedHiddenState, { interactive: true }));
+    expect(markedCells(root, 'attack', 'is-ship')).toHaveLength(2);
   });
 
   it('bắn trúng phát âm capture từ chênh lệch shots trong state', () => {
@@ -284,5 +310,66 @@ describe('battleship UI module', () => {
     const { root: homeRoot } = setup(state, { interactive: false, lastMove: { row: 2, column: 0 } });
     expect(cellAt(homeRoot, 'home', 2, 0).classList.contains('is-last')).toBe(true);
     expect(markedCells(homeRoot, 'attack', 'is-last')).toHaveLength(0);
+  });
+
+  it('render trục A–J / 1–10 và trạng thái chuẩn bị hai bên', () => {
+    const state = placingState();
+    const { root } = setup(state, { interactive: true });
+    expect(root.querySelector('[data-board="placing"]').querySelectorAll('.bs-axis-label')).toHaveLength(SIZE * 2);
+    expect(root.querySelector('[data-prep]').hidden).toBe(false);
+    expect(root.querySelector('[data-prep-count]').textContent).toContain('0/2');
+    expect(root.querySelectorAll('.bs-readiness-item')).toHaveLength(2);
+    expect(root.querySelector('[data-prep-copy]').textContent).toContain('Không cần chờ lượt');
+
+    const readyState = placingState({ ready: { 1: true, 2: false } });
+    // setup/update is intentionally exercised through the public board contract.
+    const nextRoot = document.createElement('div');
+    document.body.appendChild(nextRoot);
+    const api = { onMove: vi.fn(), showToast: vi.fn(), sound: vi.fn() };
+    const nextBoard = battleship.mount(nextRoot, api);
+    nextBoard.update(view(readyState, { interactive: false }));
+    expect(nextRoot.querySelector('[data-prep-count]').textContent).toContain('1/2');
+    expect(nextRoot.querySelector('[data-prep-copy]').textContent).toContain('đã sẵn sàng');
+    nextBoard.destroy();
+  });
+
+  it('báo trúng/trượt bằng live region và tô ô vừa bắn', () => {
+    const start = playerOneState();
+    const { root, board } = setup(start, { interactive: true });
+    const feedback = root.querySelector('[data-feedback]');
+    expect(feedback.hidden).toBe(true);
+
+    const hit = clone(start);
+    hit.shots[1] = [...hit.shots[1], [3, 3, 'hit']];
+    hit.move_number += 1;
+    board.update(view(hit, { interactive: true }));
+    expect(feedback.hidden).toBe(false);
+    expect(feedback.textContent).toContain('Bắn trúng');
+    expect(cellAt(root, 'attack', 3, 3).classList.contains('is-last')).toBe(true);
+
+    const miss = clone(hit);
+    miss.shots[1] = [...miss.shots[1], [3, 4, 'miss']];
+    miss.move_number += 1;
+    board.update(view(miss, { interactive: true }));
+    expect(feedback.textContent).toContain('Bắn trượt');
+  });
+
+  it('phát hiện chuyển tàu sang sunk và không lộ tàu chưa chìm', () => {
+    const before = playerOneState();
+    before.fleets[2][4] = { length: 2, hits: 1, sunk: false, cells: [] };
+    before.shots[1] = [[8, 5, 'hit']];
+    const { root, board } = setup(before, { interactive: true });
+    expect(markedCells(root, 'attack', 'is-just-sunk')).toHaveLength(0);
+
+    const after = clone(before);
+    after.fleets[2][4] = { length: 2, hits: 2, sunk: true, cells: [[8, 5], [8, 6]] };
+    after.shots[1] = [[8, 5, 'hit'], [8, 6, 'hit']];
+    after.move_number += 1;
+    board.update(view(after, { interactive: true }));
+
+    const feedback = root.querySelector('[data-feedback]');
+    expect(feedback.textContent).toContain('Bắn chìm');
+    expect(markedCells(root, 'attack', 'is-just-sunk')).toHaveLength(2);
+    expect(markedCells(root, 'attack', 'is-sunk')).toHaveLength(2);
   });
 });

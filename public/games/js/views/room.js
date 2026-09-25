@@ -11,6 +11,23 @@ import { bindNav } from './home.js';
 const REMATCH_WINDOW_SECONDS = 180;
 const EMOJIS = ['👍', '😂', '😮', '😭', '🔥', '🎉', '🤝', '😅'];
 
+// Tách quyềc tương tác khỏi render để test được: Battleship cho phép cả hai
+// ghế chuẩn bị độc lập, còn các game lượt mới dùng current_seat.
+export function canInteractWithGameBoard({
+  role,
+  roomStatus,
+  gameType,
+  phase,
+  mySeat,
+  ready,
+  currentSeat,
+  result
+} = {}) {
+  if (role !== 'player' || roomStatus !== 'active' || !mySeat || result) return false;
+  if (gameType === 'battleship' && phase === 'placing') return ready?.[mySeat] === false;
+  return Number(currentSeat) === Number(mySeat);
+}
+
 export function createRoomView({ root, state, code, navigate }) {
   const cleanCode = String(code || '').trim().toUpperCase();
   let room = null;
@@ -44,6 +61,23 @@ export function createRoomView({ root, state, code, navigate }) {
   const opponentSeat = () => (Number(mySeat) === 1 ? 2 : 1);
   const isPlayer = () => role === 'player';
   const isMyTurn = () => isPlayer() && room?.status === 'active' && !stateOf().result && Number(stateOf().current_seat) === Number(mySeat);
+  const isPlacingPhase = () => room?.game_type === 'battleship' && stateOf().phase === 'placing';
+  const isSeatReady = (seat) => Boolean(stateOf().ready?.[seat]);
+  const isInteractive = () => canInteractWithGameBoard({
+    role: isPlayer() ? 'player' : 'spectator',
+    roomStatus: room?.status,
+    gameType: room?.game_type,
+    phase: stateOf().phase,
+    mySeat,
+    ready: stateOf().ready,
+    currentSeat: stateOf().current_seat,
+    result: stateOf().result
+  });
+  const canSubmitMove = (move) => {
+    // Đầu hàng là ngoại lệ, không phụ thuộc lượt hoặc trạng thái tương tác.
+    if (move?.resign === true) return isPlayer() && room?.status === 'active' && !stateOf().result;
+    return isInteractive();
+  };
   const shareUrl = () => `${window.location.origin}/games/room/${encodeURIComponent(ref(cleanCode))}`;
 
   async function start() {
@@ -117,6 +151,13 @@ export function createRoomView({ root, state, code, navigate }) {
       onStatus: (status) => {
         if (status === 'auth-error') {
           toast('Phiên đăng nhập đã hết hạn.', 'error');
+        } else if (status === 'reconnecting') {
+          toast('Mất kết nối realtime, đang đồng bộ lại…', 'warning', 2500);
+          // WS có thể chết trước lúc reconnect; refetch một snapshot để
+          // người chơi không bị kẹt ở state cũ trong lúc mạng chập chờn.
+          scheduleRefresh(1500);
+        } else if (status === 'ready') {
+          scheduleRefresh(0);
         }
         renderStatus();
       },
@@ -515,6 +556,24 @@ export function createRoomView({ root, state, code, navigate }) {
         : `${esc(winnerName(winnerSeat))} thắng${map[room.result] || ''}.`;
       return;
     }
+    if (isPlacingPhase()) {
+      const ready = state_.ready || {};
+      const readyStatus = [1, 2].map((seat) => {
+        const player = playerBySeat(seat);
+        const name = player ? playerLabel(player) : `Người chơi ${seat}`;
+        return `${esc(name)}: ${ready[seat] ? 'đã sẵn sàng' : 'chưa sẵn sàng'}`;
+      }).join(' · ');
+      const bothReady = Boolean(ready[1] && ready[2]);
+      const action = bothReady
+        ? 'Cả hai đã sẵn sàng — bắt đầu ngay!'
+        : !isPlayer()
+          ? 'Hai người chơi có thể đặt tàu cùng lúc.'
+          : isSeatReady(mySeat)
+            ? 'Bạn đã sẵn sàng; đang chờ đối thủ.'
+            : 'Bạn có thể đặt tàu ngay.';
+      host.innerHTML = `<strong>Xếp hạm đội · không tính giờ</strong> · ${readyStatus} · ${action}`;
+      return;
+    }
     const current = playerBySeat(state_.current_seat);
     if (isMyTurn()) host.innerHTML = '<strong>Lượt của bạn</strong>';
     else if (role === 'spectator') host.innerHTML = `Đang xem · lượt của <strong>${esc(playerLabel(current))}</strong>`;
@@ -570,12 +629,12 @@ export function createRoomView({ root, state, code, navigate }) {
       });
     }
     const stage_ = root.querySelector('[data-board-stage]');
-    stage_?.classList.toggle('is-opponent-turn', room.status === 'active' && !isMyTurn() && isPlayer());
+    stage_?.classList.toggle('is-opponent-turn', room.status === 'active' && !isPlacingPhase() && !isMyTurn() && isPlayer());
     board.update?.({
       state: stateOf(),
       mySeat,
       role,
-      interactive: isMyTurn() && !movePending,
+      interactive: isInteractive() && !movePending,
       legalMoves: room.legal_moves || null,
       lastMove: moves.at(-1)?.move || null,
       status: room.status,
@@ -587,8 +646,7 @@ export function createRoomView({ root, state, code, navigate }) {
   }
 
   async function submitMove(move) {
-    if (movePending || !isPlayer()) return;
-    if (room.status !== 'active') return;
+    if (movePending || !canSubmitMove(move)) return;
     movePending = true;
     renderBoard();
     const clientMoveId = window.crypto?.randomUUID?.() || `mv-${Date.now()}-${Math.random().toString(36).slice(2)}`;
