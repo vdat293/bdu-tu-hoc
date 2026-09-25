@@ -100,6 +100,10 @@ describe('grammar answer checking', () => {
     expect(arrangePromptText('Sắp xếp các từ thành câu hoàn chỉnh:<br>going / to / I / am / study / . (Tôi sẽ học ở thư viện.)'))
       .toBe('Sắp xếp các từ thành câu hoàn chỉnh: (Tôi sẽ học ở thư viện.)');
     expect(arrangePromptText('Sắp xếp các từ thành câu đúng: at / I / get up / 6:30 / .')).toBe('Sắp xếp các từ thành câu đúng:');
+    expect(arrangePromptText(
+      'Sắp xếp các tính từ theo đúng thứ tự. Oh, what a/an ... sculpture! (African, gorgeous, little)',
+      'African / gorgeous / little'
+    )).toBe('Sắp xếp các tính từ theo đúng thứ tự. Oh, what a/an ... sculpture!');
   });
 
   it('parseArrangeWords tách đúng khi trong từ có dấu hai chấm (6:30)', () => {

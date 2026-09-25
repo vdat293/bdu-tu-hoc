@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   GRAMMAR_TIMER_SECONDS,
   arrangePromptText,
@@ -76,6 +76,7 @@ function answersFromSavedResponses(items, responses) {
     if (!entry) return undefined;
     const response = entry.response ?? null;
     return {
+      questionKey: String(savedItem?.key ?? ''),
       correct: entry.correct === true,
       response,
       timedOut: response == null
@@ -101,7 +102,7 @@ export default function GrammarRunner({
   const restoredAnswers = useMemo(() => answersFromSavedResponses(items, initialResponses), [items, initialResponses]);
   const restoredCorrectCount = restoredAnswers.filter((entry) => entry?.correct).length;
   const [answers, setAnswers] = useState(() => restoredAnswers);
-  const [reveal, setReveal] = useState(null);
+  const [revealState, setReveal] = useState(null);
   const [hintOpen, setHintOpen] = useState(false);
   const [finished, setFinished] = useState(false);
   const [arranged, setArranged] = useState([]);
@@ -116,6 +117,9 @@ export default function GrammarRunner({
   const [saving, setSaving] = useState(false);
   const [reviewAnswers, setReviewAnswers] = useState({});
   const checkingRef = useRef(false);
+  const checkRequestRef = useRef(0);
+  const activeItemKeyRef = useRef(null);
+  const committedQuestionKeyRef = useRef(null);
   const lastResponseRef = useRef(null);
   // Giữ callback mới nhất trong ref: callback từ trang cha đổi identity mỗi
   // lần render (mutation đổi trạng thái), nếu để trong deps sẽ làm effect
@@ -138,26 +142,66 @@ export default function GrammarRunner({
 
   const total = items.length;
   const item = items[index] || null;
+  const questionKey = item?.key ?? null;
+  // `reveal` là trạng thái đã kiểm tra của câu hiện tại, không phải feedback
+  // còn sót từ một câu trước sau khi state bị render lại.
+  const reveal = revealState?.questionKey === questionKey ? revealState : null;
   const options = useMemo(() => optionColumns(item), [item]);
-  const words = useMemo(
-    () => (item?.type === 'arrange_words' ? shuffle(parseArrangeWords(item.question, item.option_a)) : []),
-    [item]
-  );
-  const correctCount = baseCorrect + answers.filter((entry) => entry?.correct).length;
+  // Không phụ thuộc vào object identity của `item`: autosave làm parent refetch
+  // và tạo object mới, nhưng thứ tự từ đang xếp phải giữ nguyên.
+  const words = useMemo(() => {
+    const questionKey = item?.key;
+    if (item?.type !== 'arrange_words' || questionKey == null) return [];
+    return shuffle(parseArrangeWords(item.question, item.option_a));
+  }, [item?.key, item?.type, item?.question, item?.option_a]);
+  const countCorrect = useCallback((entries) => entries.filter((entry, i) => (
+    entry?.correct && (!entry.questionKey || entry.questionKey === items[i]?.key)
+  )).length, [items]);
+  const correctCount = baseCorrect + countCorrect(answers);
   const answeredCount = index + (reveal ? 1 : 0);
 
-  // Gửi kèm câu trả lời để server chấm lại (không tin số correct do client khai).
+  // Gửi kèm câu trả lời để server chấm lại (không tin số correct do client
+  // khai). Ưu tiên questionKey để refetch đổi thứ tự payload không ghi nhầm
+  // response của câu trước vào ID câu mới.
+  const itemsByKey = useMemo(
+    () => new Map(items.map((entry) => [String(entry?.key ?? ''), entry])),
+    [items]
+  );
   const buildResponses = useCallback(() => answers
-    .map((entry, i) => (entry ? { id: items[i]?.key ?? null, response: entry.response ?? null } : null))
-    .filter((entry) => entry?.id), [answers, items]);
+    .map((entry, i) => {
+      if (!entry) return null;
+      const keyedItem = entry.questionKey ? itemsByKey.get(String(entry.questionKey)) : null;
+      const id = entry.questionKey ? keyedItem?.key ?? null : items[i]?.key ?? null;
+      return { id, response: entry.response ?? null };
+    })
+    .filter((entry) => entry?.id), [answers, items, itemsByKey]);
 
   const resetRoundState = useCallback(() => {
+    // Vô hiệu hóa request đang chờ trước khi chuyển câu/làm lại để kết quả cũ
+    // không thể mở feedback cho câu mới.
+    checkRequestRef.current += 1;
+    checkingRef.current = false;
     revealRef.current = null;
+    lastResponseRef.current = null;
     setReveal(null);
+    setChecking(false);
+    setCheckError(null);
+    setSaveError(null);
     setHintOpen(false);
     setArranged([]);
     setFillValue('');
   }, []);
+
+  // Đồng bộ identity của câu sau khi React commit. Nếu payload đổi câu ở
+  // index hiện tại (refetch, đổi bài...), reset toàn bộ state của câu cũ
+  // trước khi người dùng tương tác với câu mới.
+  useLayoutEffect(() => {
+    const changed = committedQuestionKeyRef.current !== null
+      && committedQuestionKeyRef.current !== questionKey;
+    committedQuestionKeyRef.current = questionKey;
+    activeItemKeyRef.current = questionKey;
+    if (changed) resetRoundState();
+  }, [questionKey, resetRoundState]);
 
   // Lưu tiến độ: chỉ báo hoàn thành/thoát khi server đã nhận, tránh hiện
   // "Hoàn thành" oan khi mạng lỗi.
@@ -195,13 +239,13 @@ export default function GrammarRunner({
     if (advancingRef.current) return;
     advancingRef.current = true;
     if (index + 1 >= total) {
-      const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      const correct = baseCorrect + countCorrect(answers);
       finish(correct);
       return;
     }
     setIndex((i) => i + 1);
     resetRoundState();
-  }, [index, total, baseCorrect, answers, finish, resetRoundState]);
+  }, [index, total, baseCorrect, answers, countCorrect, finish, resetRoundState]);
 
   useEffect(() => {
     advancingRef.current = false;
@@ -230,8 +274,14 @@ export default function GrammarRunner({
   useEffect(() => {
     if (!finished || !onCheckAnswer) return undefined;
     const missing = answers
-      .map((entry, i) => ({ entry, question: items[i] }))
-      .filter(({ entry, question }) => entry && !entry.correct && !entry.correctAnswer && entry.response != null && question?.key);
+      .map((entry, i) => ({
+        entry,
+        question: entry?.questionKey ? itemsByKey.get(String(entry.questionKey)) : items[i]
+      }))
+      .filter(({ entry, question }) => (
+        entry && question?.key && !entry.correct && !entry.correctAnswer
+        && entry.response != null && (!entry.questionKey || entry.questionKey === question.key)
+      ));
     if (!missing.length) return undefined;
     let cancelled = false;
     Promise.all(missing.map(({ entry, question }) => onCheckAnswer(question.key, entry.response)
@@ -245,19 +295,22 @@ export default function GrammarRunner({
       if (Object.keys(next).length) setReviewAnswers((prev) => ({ ...prev, ...next }));
     });
     return () => { cancelled = true; };
-  }, [finished, answers, items, onCheckAnswer]);
+  }, [finished, answers, items, itemsByKey, onCheckAnswer]);
 
-  const recordAnswer = useCallback((correct, response, timedOut = false, correctAnswer = '', explanation = '') => {
-    if (revealRef.current) return;
-    revealRef.current = { correct, response, timedOut, correctAnswer, explanation };
-    setReveal({ correct, response, timedOut, correctAnswer, explanation });
+  const recordAnswer = useCallback((correct, response, timedOut = false, correctAnswer = '', explanation = '', questionKey = item?.key) => {
+    // Request/timeout cũ có thể hoàn tất sau khi đã đổi câu. Bỏ qua nó thay vì
+    // ghi đè trạng thái của câu hiện tại.
+    if (!questionKey || questionKey !== activeItemKeyRef.current || revealRef.current) return;
+    const entry = { correct, response, timedOut, correctAnswer, explanation, questionKey };
+    revealRef.current = entry;
+    setReveal(entry);
     setCheckError(null);
     setAnswers((prev) => {
       const next = [...prev];
-      next[index] = { correct, response, timedOut, correctAnswer, explanation };
+      next[index] = entry;
       return next;
     });
-  }, [index]);
+  }, [index, item?.key]);
 
   // Hết giờ: không hỏi server đáp án (tránh biến API chấm thành chỗ tra đáp án
   // khi chưa trả lời), chỉ ghi nhận câu bị bỏ trống.
@@ -265,7 +318,12 @@ export default function GrammarRunner({
     recordAnswer(false, null, true);
   }, [recordAnswer]);
 
-  const left = useCountdown(timerSeconds, `${round}:${index}`, Boolean(item) && !reveal && !finished && !checking, handleTimeout);
+  const left = useCountdown(
+    timerSeconds,
+    `${round}:${index}:${questionKey ?? ''}`,
+    Boolean(item) && !reveal && !finished && !checking,
+    handleTimeout
+  );
   const timerPct = Math.max(0, Math.min(100, (left / timerSeconds) * 100));
 
   // Hết giờ: hiện đáp án rồi tự chuyển câu sau 4s để kịp đọc giải thích.
@@ -288,7 +346,7 @@ export default function GrammarRunner({
     const timer = setTimeout(() => {
       if (signature === lastAutosaveRef.current) return;
       lastAutosaveRef.current = signature;
-      const correctNow = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      const correctNow = baseCorrect + countCorrect(answers);
       onQuizSaveRef.current?.({
         answered: answeredNow,
         correct: correctNow,
@@ -301,7 +359,7 @@ export default function GrammarRunner({
       })?.catch?.(() => {});
     }, 1500);
     return () => clearTimeout(timer);
-  }, [index, reveal, finished, total, baseCorrect, answers, buildResponses, answeredBefore, correctBefore]);
+  }, [index, reveal, finished, total, baseCorrect, answers, countCorrect, buildResponses, answeredBefore, correctBefore]);
 
   const submit = useCallback((response) => {
     if (!item || reveal || checkingRef.current) return;
@@ -311,22 +369,29 @@ export default function GrammarRunner({
       setCheckError('Không thể kiểm tra đáp án lúc này. Vui lòng thử lại.');
       return;
     }
+    const questionKey = item.key;
+    const requestId = checkRequestRef.current + 1;
+    checkRequestRef.current = requestId;
     checkingRef.current = true;
     setChecking(true);
-    onCheckAnswer(item.key, response)
+    onCheckAnswer(questionKey, response)
       .then((result) => {
+        if (checkRequestRef.current !== requestId || activeItemKeyRef.current !== questionKey) return;
         recordAnswer(
           Boolean(result?.correct),
           response,
           false,
           String(result?.correct_answer ?? ''),
-          String(result?.explanation ?? '')
+          String(result?.explanation ?? ''),
+          questionKey
         );
       })
       .catch((error) => {
+        if (checkRequestRef.current !== requestId || activeItemKeyRef.current !== questionKey) return;
         setCheckError(friendlyErrorMessage(error, 'Không thể kiểm tra đáp án. Kiểm tra kết nối rồi thử lại.'));
       })
       .finally(() => {
+        if (checkRequestRef.current !== requestId) return;
         checkingRef.current = false;
         setChecking(false);
       });
@@ -389,7 +454,7 @@ export default function GrammarRunner({
   const exitQuiz = async () => {
     // Chưa làm câu nào thì không ghi đè tiến độ cũ (tránh mất chỗ "Tiếp tục").
     if (answeredCount > 0) {
-      const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      const correct = baseCorrect + countCorrect(answers);
       const ok = await persist({
         answered: answeredCount,
         correct,
@@ -406,7 +471,7 @@ export default function GrammarRunner({
 
   const backToTheory = async () => {
     if (answeredCount > 0) {
-      const correct = baseCorrect + answers.filter((entry) => entry?.correct).length;
+      const correct = baseCorrect + countCorrect(answers);
       const ok = await persist({
         answered: answeredCount,
         correct,
@@ -434,7 +499,9 @@ export default function GrammarRunner({
   if (finished) {
     const wrong = answers
       .map((entry, i) => ({ entry, item: items[i] }))
-      .filter(({ entry }) => entry && !entry.correct);
+      .filter(({ entry, item: question }) => (
+        entry && question?.key && !entry.correct && (!entry.questionKey || entry.questionKey === question.key)
+      ));
     const accuracy = accuracyOf(correctCount, total);
     return (
       <div className="gr-wrap">
@@ -533,7 +600,7 @@ export default function GrammarRunner({
           </section>
         ) : null}
 
-        <RichText value={showArrange ? arrangePromptText(item.question) : item.question} className="gr-question" />
+        <RichText value={showArrange ? arrangePromptText(item.question, item.option_a) : item.question} className="gr-question" />
 
         {showOptions ? (
           <div className="gr-options">

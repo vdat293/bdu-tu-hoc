@@ -251,6 +251,87 @@ describe('GrammarRunner - UX bàn phím', () => {
     expect([...document.querySelectorAll('.gr-arrange-answer .gr-chip')].map((b) => b.textContent)).toEqual(['I']);
   });
 
+  it('giữ nguyên thứ tự đã xếp khi dữ liệu câu hỏi được refetch', async () => {
+    // Ép shuffle đổi thứ tự nếu effect chạy lại; sau khi sửa, refetch cùng
+    // câu phải giữ nguyên pool từ để các index đã chọn không bị trỏ sai.
+    const randomSpy = vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(0.99);
+    const onCheckAnswer = makeCheckAnswer();
+    const props = {
+      onCheckAnswer,
+      onQuizSave: vi.fn().mockResolvedValue(undefined),
+      onExitToPath: () => {}
+    };
+    try {
+      const { rerender } = render(<GrammarRunner items={[ARRANGE_ITEM]} {...props} />);
+      for (const word of ['I', 'am', 'a', 'student']) {
+        fireEvent.click(screen.getByRole('button', { name: word }));
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+      await flush();
+
+      const pickedWords = () => [...document.querySelectorAll('.gr-arrange-answer .gr-chip')]
+        .map((button) => button.textContent);
+      expect(pickedWords()).toEqual(['I', 'am', 'a', 'student']);
+
+      // Parent thường refetch payload sau autosave, tạo object item mới.
+      rerender(<GrammarRunner items={[{ ...ARRANGE_ITEM }]} {...props} />);
+      expect(pickedWords()).toEqual(['I', 'am', 'a', 'student']);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it('không để kết quả request cũ hiện ở câu hỏi mới', async () => {
+    let resolveCheck;
+    const pendingCheck = new Promise((resolve) => { resolveCheck = resolve; });
+    const onCheckAnswer = vi.fn(() => pendingCheck);
+    const props = {
+      onCheckAnswer,
+      onQuizSave: vi.fn().mockResolvedValue(undefined),
+      onExitToPath: () => {}
+    };
+    const { rerender } = render(<GrammarRunner items={[CHOICE_ITEM, ARRANGE_ITEM]} {...props} />);
+
+    fireEvent.click(screen.getByText('am'));
+    // Giả lập dữ liệu/item đổi trong lúc request cũ chưa trả về.
+    rerender(<GrammarRunner items={[{ ...CHOICE_ITEM, key: 'm-new', id: 'm-new' }, ARRANGE_ITEM]} {...props} />);
+    resolveCheck({ correct: true, correct_answer: 'am', explanation: '' });
+    await flush();
+
+    expect(screen.queryByText('✓ Chính xác!')).toBeNull();
+    expect(screen.getByText('Câu 1/2')).toBeTruthy();
+  });
+
+  it('reset feedback và trạng thái khi item ở index hiện tại đổi', async () => {
+    const onCheckAnswer = vi.fn(async (questionId, response) => ({
+      correct: response === (questionId === 'm-new' ? 'is' : 'am'),
+      correct_answer: questionId === 'm-new' ? 'is' : 'am',
+      explanation: ''
+    }));
+    const props = {
+      onCheckAnswer,
+      onQuizSave: vi.fn().mockResolvedValue(undefined),
+      onExitToPath: () => {}
+    };
+    const { rerender } = render(<GrammarRunner items={[CHOICE_ITEM]} {...props} />);
+
+    fireEvent.click(screen.getByText('am'));
+    await flush();
+    expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
+
+    const nextItem = { ...CHOICE_ITEM, key: 'm-new', id: 'm-new', question: 'Chọn đáp án đúng: She __ happy.' };
+    rerender(<GrammarRunner items={[nextItem]} {...props} />);
+    expect(screen.queryByText('✓ Chính xác!')).toBeNull();
+
+    fireEvent.click(screen.getByText('is'));
+    await flush();
+    expect(screen.getByText('✓ Chính xác!')).toBeTruthy();
+  });
+
   it('Enter khi đang focus nút Gợi ý không bị cướp để nhảy câu', async () => {
     render(
       <GrammarRunner

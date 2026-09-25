@@ -125,11 +125,37 @@ export function parseArrangeWords(question, optionA) {
   return splitArrangeWords(tail.replace(/\([^)]*\)/g, ' '));
 }
 
+// Một số câu crawl lưu danh sách từ trong ngoặc ở cuối đề, thay vì sau
+// dấu hai chấm. So khớp danh sách đó với optionA để không lộ thứ tự đáp án
+// ngay trong phần đề.
+function arrangeOptionTokens(value) {
+  return String(value || '')
+    .split(/[,\/]/)
+    .map((token) => token
+      .replace(/[.,!?;:"“”…()[\]]+$/g, '')
+      .trim())
+    .filter(Boolean);
+}
+
+function sameArrangeOptions(left, right) {
+  const a = arrangeOptionTokens(left).map((token) => token.toLowerCase()).sort();
+  const b = arrangeOptionTokens(right).map((token) => token.toLowerCase()).sort();
+  return a.length >= 2 && a.length === b.length && a.every((token, index) => token === b[index]);
+}
+
+function stripTrailingArrangeOptions(text, optionA) {
+  const trailingList = text.match(/\s*\(([^()]*)\)\s*$/);
+  if (trailingList && sameArrangeOptions(trailingList[1], optionA)) {
+    return text.slice(0, trailingList.index).trim();
+  }
+  return text;
+}
+
 // Đề bài sắp xếp không nên in lại danh sách từ theo đúng thứ tự đáp án
 // (nhiều câu crawl lưu đuôi đề đúng thứ tự) → chỉ giữ phần hướng dẫn và
 // chú thích dịch trong ngoặc; các từ hiển thị dưới dạng chip đã xáo.
-export function arrangePromptText(question) {
-  const text = plainText(question);
+export function arrangePromptText(question, optionA = '') {
+  const text = stripTrailingArrangeOptions(plainText(question), optionA);
   const cut = instructionColonIndex(text);
   if (cut < 0) return text;
   const prefix = text.slice(0, cut + 1);
