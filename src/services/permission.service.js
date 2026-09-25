@@ -14,7 +14,7 @@ function httpError(message, status = 403) {
  * Phân quyền hệ thống (System-level Capabilities)
  */
 export const SYSTEM_ROLE_CAPABILITIES = {
-  owner: ['*'], // Quản trị viên tối cao: toàn quyền
+  owner: ['*', 'moodle:answers:manage'], // Quản trị viên tối cao: toàn quyền
   identity_admin: [
     'identity:view',
     'identity:grant',

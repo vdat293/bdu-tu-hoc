@@ -21,11 +21,17 @@ const BduApi = {
           detail: { message: data.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' }
         }));
       }
-      throw new Error(data.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      const error = new Error(data.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      error.status = response.status || 401;
+      error.code = data?.code || null;
+      throw error;
     }
 
     if (!response.ok || (data && data.result === false)) {
-      throw new Error(data.message || defaultErrorMsg);
+      const error = new Error(data.message || defaultErrorMsg);
+      error.status = response.status;
+      error.code = data?.code || null;
+      throw error;
     }
 
     return data;
@@ -139,9 +145,10 @@ const BduApi = {
   /**
    * Định dạng file DOCX chuẩn BDU
    */
-  async formatDocx(formData) {
+  async formatDocx(token, formData) {
     const response = await fetch('/api/wordfmt/format', {
       method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
       body: formData
     });
 
@@ -149,61 +156,83 @@ const BduApi = {
     return data;
   },
 
-  async loginEnglish(credentials) {
+  async loginEnglish(token, credentials) {
     const response = await fetch('/api/english/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(credentials)
     });
     const data = await this.handleResponse(response, 'Không thể đăng nhập Moodle.');
     return data.data;
   },
 
-  async getEnglishActivities(sessionId, courseId) {
+  async getEnglishActivities(token, sessionId, courseId) {
     const query = new URLSearchParams({ courseId });
-    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/activities?${query}`);
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/activities?${query}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await this.handleResponse(response, 'Không thể quét danh sách bài tập.');
     return data.data;
   },
 
-  async startEnglishExercise(sessionId, options) {
+  async startEnglishExercise(token, sessionId, options) {
     const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(options)
     });
     const data = await this.handleResponse(response, 'Không thể khởi chạy bài tập.');
     return data.data;
   },
 
-  async stopEnglishExercise(sessionId) {
-    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/stop`, { method: 'POST' });
+  async stopEnglishExercise(token, sessionId) {
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}/stop`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     return this.handleResponse(response, 'Không thể dừng tiến trình.');
   },
 
-  async closeEnglishSession(sessionId) {
-    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+  async closeEnglishSession(token, sessionId) {
+    const response = await fetch(`/api/english/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     return this.handleResponse(response, 'Không thể đóng phiên Moodle.');
   },
 
-  async getEnglishAnswers() {
-    const response = await fetch('/api/english/answers');
+  async getEnglishAnswers(token) {
+    const response = await fetch('/api/english/answers', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await this.handleResponse(response, 'Không thể tải ngân hàng đáp án.');
     return data.data;
   },
 
-  async saveEnglishAnswer(question, correctAnswer) {
+  async saveEnglishAnswer(token, question, correctAnswer) {
     const response = await fetch('/api/english/answers', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ question, correctAnswer })
     });
     const data = await this.handleResponse(response, 'Không thể lưu đáp án.');
     return data.data;
   },
 
-  async deleteEnglishAnswer(id) {
-    const response = await fetch(`/api/english/answers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  async deleteEnglishAnswer(token, id) {
+    const response = await fetch(`/api/english/answers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     return this.handleResponse(response, 'Không thể xóa đáp án.');
   },
 
@@ -576,8 +605,10 @@ const BduApi = {
     return data.data;
   },
 
-  async getClanMembers(clanId) {
-    const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/members`);
+  async getClanMembers(token, clanId) {
+    const response = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/members`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     const data = await this.handleResponse(response, 'Không thể tải danh sách thành viên.');
     return data.data || [];
   },

@@ -8,6 +8,7 @@ import path from 'path';
 import { ApiController } from '../controllers/api.controller.js';
 import { AdminDashboardController } from '../controllers/admin-dashboard.controller.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
+import { BduIdentityService } from '../services/bdu-identity.service.js';
 
 const router = express.Router();
 
@@ -56,6 +57,19 @@ const mediaUpload = multer({
   }
 });
 
+async function requireVerifiedMssv(req, res, next) {
+  try {
+    req.verifiedMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+    return next();
+  } catch (error) {
+    return res.status(error.status || 401).json({
+      result: false,
+      code: error.code || 'AUTH_REQUIRED',
+      message: error.message || 'Vui lòng đăng nhập để tiếp tục.'
+    });
+  }
+}
+
 // 1. Auth & Portal
 router.post('/login', ApiController.login);
 router.post('/grades', ApiController.getGrades);
@@ -67,8 +81,8 @@ router.get('/schedule', ApiController.getSchedule);
 router.post('/schedule', ApiController.getSchedule);
 
 // 2. Word Formatting Tool
-router.post('/wordfmt/format', upload.single('document'), ApiController.formatDocx);
-router.get('/wordfmt/download/:filename', ApiController.downloadFormattedDocx);
+router.post('/wordfmt/format', requireVerifiedMssv, upload.single('document'), ApiController.formatDocx);
+router.get('/wordfmt/download/:filename', requireVerifiedMssv, ApiController.downloadFormattedDocx);
 
 // 3. Survey Automation Tool (Server-Sent Events)
 router.get('/survey/forms', ApiController.getSurveyForms);
@@ -149,7 +163,7 @@ router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
 router.delete('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, ApiController.deleteAdminAvatar);
 
 // Avatar tự upload cho chính người dùng (ảnh lưu trên Cloudflare R2).
-router.post('/me/avatar', avatarUpload.single('avatar'), ApiController.uploadMyAvatar);
+router.post('/me/avatar', requireVerifiedMssv, avatarUpload.single('avatar'), ApiController.uploadMyAvatar);
 router.delete('/me/avatar', ApiController.deleteMyAvatar);
 
 // Admin Traffic & Logs Dashboard
@@ -170,7 +184,7 @@ router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRanki
 router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 
 // 6. Góc Tự Học Số (Community Study Hub & Clans)
-router.post('/community/media', mediaUpload.single('file'), ApiController.uploadCommunityMedia);
+router.post('/community/media', requireVerifiedMssv, mediaUpload.single('file'), ApiController.uploadCommunityMedia);
 router.get('/community/posts', ApiController.getCommunityPosts);
 router.post('/community/posts', ApiController.createCommunityPost);
 router.get('/community/posts/:id', ApiController.getCommunityPost);

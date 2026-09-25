@@ -174,6 +174,15 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function cssToken(value) {
+  return String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'unknown';
+}
+
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function formatDateTime(value) {
   if (!value) return '--';
   const date = new Date(value);
@@ -629,23 +638,25 @@ function renderEndpoints(endpoints = []) {
     return;
   }
 
-  const maxCount = Math.max(...endpoints.map((e) => e.count), 1);
+  const maxCount = Math.max(...endpoints.map((e) => safeNumber(e.count)), 1);
   dom.endpointsListPreview.innerHTML = endpoints.slice(0, 7).map((ep) => {
-    const pct = Math.round((ep.count / maxCount) * 100);
-    const methodCls = `method-${ep.method.toLowerCase()}`;
+    const count = safeNumber(ep.count);
+    const pct = Math.min(100, Math.round((count / maxCount) * 100));
+    const method = String(ep.method || '').toUpperCase();
+    const methodCls = `method-${cssToken(method)}`;
     return `
       <div class="endpoint-row">
         <div class="endpoint-head">
-          <span class="method-tag ${methodCls}">${ep.method}</span>
-          <span class="endpoint-path" title="${ep.path}">${ep.path}</span>
-          <span class="endpoint-count">${ep.count.toLocaleString()} req</span>
+          <span class="method-tag ${methodCls}">${escapeHtml(method)}</span>
+          <span class="endpoint-path" title="${escapeHtml(ep.path)}">${escapeHtml(ep.path)}</span>
+          <span class="endpoint-count">${count.toLocaleString()} req</span>
         </div>
         <div class="endpoint-bar">
           <div class="endpoint-progress" style="width: ${pct}%"></div>
         </div>
         <div class="endpoint-foot">
-          <span>⏱ ${ep.avgLatency} ms</span>
-          ${ep.errorCount > 0 ? `<span class="err">⚠ ${ep.errorCount} lỗi</span>` : ''}
+          <span>⏱ ${safeNumber(ep.avgLatency)} ms</span>
+          ${safeNumber(ep.errorCount) > 0 ? `<span class="err">⚠ ${safeNumber(ep.errorCount)} lỗi</span>` : ''}
         </div>
       </div>
     `;
@@ -660,13 +671,14 @@ function renderDevices(data = {}) {
 
   if (dom.devicesSummaryGrid) {
     dom.devicesSummaryGrid.innerHTML = devices.map((d) => {
-      const icon = d.name === 'mobile' ? '📱' : d.name === 'tablet' ? '📟' : d.name === 'bot' ? '🤖' : '💻';
-      const label = d.name === 'mobile' ? 'Mobile' : d.name === 'tablet' ? 'Tablet' : d.name === 'bot' ? 'Bot' : 'Desktop';
+      const name = String(d.name || '');
+      const icon = name === 'mobile' ? '📱' : name === 'tablet' ? '📟' : name === 'bot' ? '🤖' : '💻';
+      const label = name === 'mobile' ? 'Mobile' : name === 'tablet' ? 'Tablet' : name === 'bot' ? 'Bot' : 'Desktop';
       return `
         <div class="device-card">
           <span class="icon">${icon}</span>
           <span class="name">${label}</span>
-          <span class="val">${d.count.toLocaleString()}</span>
+          <span class="val">${safeNumber(d.count).toLocaleString()}</span>
         </div>
       `;
     }).join('');
@@ -677,13 +689,13 @@ function renderDevices(data = {}) {
       <div class="breakdown-group">
         <div class="breakdown-group-title">Hệ Điều Hành</div>
         <div class="pills-wrap">
-          ${os.map((o) => `<div class="breakdown-chip"><span>${o.name}</span><span class="chip-val">${o.count}</span></div>`).join('')}
+          ${os.map((o) => `<div class="breakdown-chip"><span>${escapeHtml(o.name)}</span><span class="chip-val">${safeNumber(o.count)}</span></div>`).join('')}
         </div>
       </div>
       <div class="breakdown-group" style="margin-top: 10px;">
         <div class="breakdown-group-title">Trình Duyệt</div>
         <div class="pills-wrap">
-          ${browsers.map((b) => `<div class="breakdown-chip"><span>${b.name}</span><span class="chip-val">${b.count}</span></div>`).join('')}
+          ${browsers.map((b) => `<div class="breakdown-chip"><span>${escapeHtml(b.name)}</span><span class="chip-val">${safeNumber(b.count)}</span></div>`).join('')}
         </div>
       </div>
     `;
@@ -723,15 +735,18 @@ function renderLogs(logsData = {}) {
     if (log.responseTimeMs >= 150 && log.responseTimeMs < 400) latClass = 'lat-med';
     if (log.responseTimeMs >= 400) latClass = 'lat-slow';
 
-    const jsonStr = JSON.stringify(log).replace(/'/g, '&#39;');
+    const jsonStr = escapeHtml(JSON.stringify(log));
+    const statusCode = safeNumber(log.statusCode);
+    const responseTimeMs = safeNumber(log.responseTimeMs);
+    const methodClass = `method-${cssToken(log.method)}`;
 
     return `
-      <tr class="${hasError ? 'has-error' : ''}" data-log='${jsonStr}'>
+      <tr class="${hasError ? 'has-error' : ''}" data-log="${jsonStr}">
         <td>
-          <span class="log-clock">${clock}</span>
-          <span class="log-date">${dateStr}</span>
+          <span class="log-clock">${escapeHtml(clock)}</span>
+          <span class="log-date">${escapeHtml(dateStr)}</span>
         </td>
-        <td><span class="method-tag method-${escapeHtml(log.method.toLowerCase())}">${escapeHtml(log.method)}</span></td>
+        <td><span class="method-tag ${methodClass}">${escapeHtml(log.method)}</span></td>
         <td>
           <span class="route-code" title="${escapeHtml(log.route || '')}">${escapeHtml(apiLabel)}</span>
         </td>
@@ -741,8 +756,8 @@ function renderLogs(logsData = {}) {
             ${log.errorMessage ? `<span class="path-err" title="${escapeHtml(log.errorMessage)}">⚠ ${escapeHtml(log.errorMessage)}</span>` : ''}
           </div>
         </td>
-        <td><span class="status-badge ${statClass}">${log.statusCode}</span></td>
-        <td><span class="latency-badge ${latClass}">${log.responseTimeMs} ms</span></td>
+        <td><span class="status-badge ${statClass}">${statusCode}</span></td>
+        <td><span class="latency-badge ${latClass}">${responseTimeMs} ms</span></td>
         <td>
           ${log.mssv ? `<span class="mssv-tag" title="${escapeHtml(log.fullName || log.mssv)}">${escapeHtml(log.mssv)}</span>` : '<span style="color: var(--text-muted); font-size: 0.78rem;">Khách</span>'}
         </td>
@@ -779,9 +794,9 @@ function openLogDetailModal(log) {
 
   dom.modalLogBody.innerHTML = `
     <div class="log-detail-grid">
-      <div class="detail-row"><span class="k">Method:</span><span class="method-tag method-${escapeHtml(log.method.toLowerCase())}">${escapeHtml(log.method)}</span></div>
-      <div class="detail-row"><span class="k">Status HTTP:</span><span class="status-badge">${log.statusCode}</span></div>
-      <div class="detail-row"><span class="k">Độ trễ:</span><span>${log.responseTimeMs} ms</span></div>
+      <div class="detail-row"><span class="k">Method:</span><span class="method-tag method-${cssToken(log.method)}">${escapeHtml(log.method)}</span></div>
+      <div class="detail-row"><span class="k">Status HTTP:</span><span class="status-badge">${safeNumber(log.statusCode)}</span></div>
+      <div class="detail-row"><span class="k">Độ trễ:</span><span>${safeNumber(log.responseTimeMs)} ms</span></div>
       <div class="detail-row"><span class="k">Sinh viên:</span><span>${log.mssv ? `${escapeHtml(log.mssv)} (${escapeHtml(log.fullName || 'BDU')})` : 'Chưa đăng nhập'}</span></div>
       <div class="detail-row"><span class="k">IP Client:</span><span>${escapeHtml(log.ipAddress || '127.0.0.1')}</span></div>
       <div class="detail-row"><span class="k">Thiết bị:</span><span>${escapeHtml(log.deviceType)} • ${escapeHtml(log.os)} • ${escapeHtml(log.browser)}</span></div>
@@ -941,16 +956,16 @@ function renderStudentActivity(data = {}) {
   dom.studentActivityRoutes.innerHTML = routes.length ? routes.map((row) => `
     <tr>
       <td><span class="route-code" title="${escapeHtml(row.route)}">${escapeHtml(row.route)}</span></td>
-      <td><span class="method-tag method-${escapeHtml(String(row.method).toLowerCase())}">${escapeHtml(row.method)}</span></td>
-      <td><strong>${Number(row.count || 0).toLocaleString()}</strong></td>
-      <td>${row.errorCount ? `<span class="status-badge stat-4xx">${row.errorCount}</span>` : '0'}</td>
+      <td><span class="method-tag method-${cssToken(row.method)}">${escapeHtml(row.method)}</span></td>
+      <td><strong>${safeNumber(row.count).toLocaleString()}</strong></td>
+      <td>${safeNumber(row.errorCount) > 0 ? `<span class="status-badge stat-4xx">${safeNumber(row.errorCount)}</span>` : '0'}</td>
       <td>${formatDateTime(row.lastCalled)}</td>
-      <td>${row.avgLatency} ms</td>
+      <td>${safeNumber(row.avgLatency)} ms</td>
     </tr>
   `).join('') : '<tr><td colspan="6" class="text-center-muted">Chưa có request nào trong khoảng thời gian này.</td></tr>';
 
-  const deviceChips = devices.map((d) => `<span class="activity-chip">${escapeHtml(d.name)}: <strong>${d.count}</strong></span>`);
-  const ipChips = ips.map((ip) => `<span class="activity-chip">${escapeHtml(ip.ip)}: <strong>${ip.count}</strong></span>`);
+  const deviceChips = devices.map((d) => `<span class="activity-chip">${escapeHtml(d.name)}: <strong>${safeNumber(d.count)}</strong></span>`);
+  const ipChips = ips.map((ip) => `<span class="activity-chip">${escapeHtml(ip.ip)}: <strong>${safeNumber(ip.count)}</strong></span>`);
   const chips = [...deviceChips, ...ipChips];
   dom.studentActivityDevices.innerHTML = chips.length
     ? chips.join('')
@@ -1017,7 +1032,7 @@ async function fetchRoutes() {
     const routes = await api(`/api/admin/dashboard/routes?timeRange=${state.timeRange}`);
     const current = state.logFilters.route;
     dom.selectLogRoute.innerHTML = '<option value="">Tất cả API</option>' + routes.map((row) => (
-      `<option value="${escapeHtml(row.route)}">${escapeHtml(`${row.method} ${row.route}`)} (${row.count})</option>`
+      `<option value="${escapeHtml(row.route)}">${escapeHtml(`${row.method} ${row.route}`)} (${safeNumber(row.count)})</option>`
     )).join('');
     if (current) dom.selectLogRoute.value = current;
   } catch (err) {
@@ -1091,8 +1106,14 @@ function renderVisitedStudents(res = {}) {
         ? new Date(s.last_login_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '<span style="color: var(--text-muted);">Chưa có</span>';
 
-      const classText = s.class_code || (s.faculty_code ? `Khoa ${s.faculty_code}` : '<span style="color: var(--text-muted);">--</span>');
-      const reqCount = (s.total_requests || 0);
+      const classText = s.class_code
+        ? escapeHtml(s.class_code)
+        : (s.faculty_code
+          ? `Khoa ${escapeHtml(s.faculty_code)}`
+          : '<span style="color: var(--text-muted);">--</span>');
+      const safeMssv = escapeHtml(s.mssv);
+      const safeFullName = escapeHtml(s.full_name || 'Sinh viên BDU');
+      const reqCount = safeNumber(s.total_requests);
 
       const statusBadge = s.is_active
         ? '<span class="status-pill status-2xx" style="padding: 2px 8px; font-size: 0.75rem;">🟢 Đã vào web</span>'
@@ -1103,10 +1124,10 @@ function renderVisitedStudents(res = {}) {
           <td><span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">#${stt}</span></td>
           <td>
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="mssv-tag" style="font-weight: 700;">${s.mssv}</span>
+              <span class="mssv-tag" style="font-weight: 700;">${safeMssv}</span>
             </div>
           </td>
-          <td><strong>${s.full_name || 'Sinh viên BDU'}</strong></td>
+          <td><strong>${safeFullName}</strong></td>
           <td><span style="font-size: 0.8rem; font-weight: 500;">${classText}</span></td>
           <td><span style="font-size: 0.78rem; font-family: var(--font-mono);">${firstLogin}</span></td>
           <td><span style="font-size: 0.78rem; font-family: var(--font-mono); font-weight: 600; color: var(--text-main);">${lastLogin}</span></td>
@@ -1117,7 +1138,7 @@ function renderVisitedStudents(res = {}) {
           </td>
           <td style="text-align: center;">${statusBadge}</td>
           <td style="text-align: right;">
-            <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${s.mssv}" title="Xem dấu vết API sinh viên này đã gọi">
+            <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${safeMssv}" title="Xem dấu vết API sinh viên này đã gọi">
               🧭 Dấu vết API
             </button>
           </td>

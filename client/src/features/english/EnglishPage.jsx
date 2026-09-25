@@ -46,7 +46,7 @@ export default function EnglishPage() {
 
   useEffect(() => {
     if (session?.sessionId) {
-      setupEventStream(session.sessionId);
+      setupEventStream(session.sessionId, session.streamToken);
     }
     return () => {
       if (cleanupStreamRef.current) {
@@ -54,11 +54,11 @@ export default function EnglishPage() {
         cleanupStreamRef.current = null;
       }
     };
-  }, [session?.sessionId]);
+  }, [session?.sessionId, session?.streamToken]);
 
-  function setupEventStream(sessionId) {
+  function setupEventStream(sessionId, streamToken) {
     if (cleanupStreamRef.current) cleanupStreamRef.current();
-    const streamUrl = `/api/english/${encodeURIComponent(sessionId)}/stream`;
+    const streamUrl = `/api/english/${encodeURIComponent(sessionId)}/stream?streamToken=${encodeURIComponent(streamToken || '')}`;
     cleanupStreamRef.current = createEventStream(streamUrl, {
       onMessage: (event) => {
         try {
@@ -130,7 +130,9 @@ export default function EnglishPage() {
     ]);
 
     try {
-      const res = await loginEnglish({ username: form.username.trim(), password: form.password });
+      const credentials = { username: form.username.trim(), password: form.password };
+      setForm((current) => ({ ...current, password: '' }));
+      const res = await loginEnglish(auth.token, credentials);
       setSession(res);
 
       const courseList = Array.isArray(res.courses) ? res.courses : [];
@@ -146,7 +148,7 @@ export default function EnglishPage() {
       ]);
       notify(`Đăng nhập thành công! Tìm thấy ${courseList.length} khóa học.`, 'success');
 
-      setupEventStream(res.sessionId);
+      setupEventStream(res.sessionId, res.streamToken);
 
       if (courseList.length > 0) {
         selectCourse(res.sessionId, courseList[0]);
@@ -178,7 +180,7 @@ export default function EnglishPage() {
     ]);
 
     try {
-      const list = await getEnglishActivities(sessionId, course.id);
+      const list = await getEnglishActivities(auth.token, sessionId, course.id);
       const acts = Array.isArray(list) ? list : list?.activities || [];
       setActivities(acts);
       if (acts.length > 0) {
@@ -203,7 +205,7 @@ export default function EnglishPage() {
     if (!session) return;
     setBusy(true);
     try {
-      const refreshed = await getEnglishCourses(session.sessionId);
+      const refreshed = await getEnglishCourses(auth.token, session.sessionId);
       setCourses(refreshed);
       notify('Đã cập nhật danh sách khóa học mới nhất.', 'success');
     } catch (err) {
@@ -228,7 +230,7 @@ export default function EnglishPage() {
     setIsRunning(true);
 
     try {
-      await startEnglishCourseFinish(session.sessionId, {
+      await startEnglishCourseFinish(auth.token, session.sessionId, {
         courseId: all ? null : selectedCourse.id,
         allCourses: all,
         delaySeconds: Number(delay),
@@ -257,7 +259,7 @@ export default function EnglishPage() {
     setBusy(true);
     setIsRunning(true);
     try {
-      await startEnglishExercise(session.sessionId, {
+      await startEnglishExercise(auth.token, session.sessionId, {
         cmid: selectedActivity,
         type: actType,
         delaySeconds: Number(delay),
@@ -286,7 +288,7 @@ export default function EnglishPage() {
   async function handleStopExercise() {
     if (!session) return;
     try {
-      await stopEnglishExercise(session.sessionId);
+      await stopEnglishExercise(auth.token, session.sessionId);
       setIsRunning(false);
       setBusy(false);
       notify('Đã phát lệnh dừng tiến trình.', 'warning');
@@ -298,7 +300,7 @@ export default function EnglishPage() {
   async function handleLogout() {
     if (session) {
       try {
-        await closeEnglishSession(session.sessionId);
+        await closeEnglishSession(auth.token, session.sessionId);
       } catch {
         // Phiên có thể đã hết hạn trên máy chủ; đăng xuất cục bộ vẫn phải chạy.
       }

@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   toolRun: null
 }));
 
-vi.mock('../../client/src/api/tools.js', () => ({ formatDocx: mocks.formatDocx }));
+vi.mock('../../client/src/api/tools.js', () => ({
+  formatDocx: mocks.formatDocx,
+  downloadWordFmt: vi.fn().mockResolvedValue(new Blob(['docx']))
+}));
 vi.mock('../../client/src/app/providers.jsx', () => ({
   useAuth: () => ({ token: 'test-token', user: { name: 'Sinh viên Test', mssv: 'TEST0001' } }),
   useToasts: () => ({ notify: vi.fn() })

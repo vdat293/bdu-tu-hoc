@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatDocx } from '../../api/tools.js';
+import { downloadWordFmt, formatDocx } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
@@ -201,6 +201,7 @@ export default function WordFmtPage() {
   const [skipProposal, setSkipProposal] = useState(false);
 
   const [run, setRun] = useState(() => getToolRun('wordfmt') || { status: 'idle', result: null });
+  const [downloading, setDownloading] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
 
   useEffect(() => {
@@ -323,6 +324,27 @@ export default function WordFmtPage() {
   const activeStage = WORD_FMT_STAGES[stageIndex];
   const downloadUrl = isSuccess ? getSafeDownloadUrl(run.result) : null;
   const completionCards = isSuccess ? buildCompletionCards(run.result, run.summaryChoices) : [];
+
+  const handleDownload = async (event) => {
+    event.preventDefault();
+    if (!downloadUrl || !auth.token || downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await downloadWordFmt(auth.token, downloadUrl);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = 'BDU_ChuanHoa.docx';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (error) {
+      notify(error.message || 'Không thể tải file Word đã chuẩn hóa.', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <section id="tab-wordfmt" className="tab-pane active">
@@ -767,6 +789,8 @@ export default function WordFmtPage() {
                   <a
                     id="btn-download-docx"
                     href={downloadUrl}
+                    onClick={handleDownload}
+                    aria-busy={downloading}
                     className="btn btn-success btn-block btn-lg"
                     download
                   >

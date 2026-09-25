@@ -9,6 +9,7 @@ outside-src/
 !.env.example
 .acc
 data/*.sql
+data/*.manifest.json
 data/*.dump
 data/avatars/
 data/fb-profile/

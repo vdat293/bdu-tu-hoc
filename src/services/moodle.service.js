@@ -4,6 +4,24 @@ import { CookieJar } from 'tough-cookie';
 
 const MOODLE_URL = 'https://bdu.vn247.org';
 
+export function sanitizeMoodleUrl(value) {
+  const raw = String(value || '');
+  try {
+    const parsed = new URL(raw, MOODLE_URL);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return raw.split(/[?#]/, 1)[0] || MOODLE_URL;
+  }
+}
+
+function safeMoodleErrorCode(value) {
+  const candidate = value && typeof value === 'object'
+    ? (value.errorcode || value.code || value.exception)
+    : value;
+  const normalized = String(candidate || '').trim();
+  return /^[a-z0-9_.:-]{1,80}$/i.test(normalized) ? normalized : 'moodle_error';
+}
+
 function extractSesskey($) {
   const inputSesskey = $('input[name="sesskey"]').first().val();
   if (inputSesskey) return String(inputSesskey);
@@ -65,16 +83,19 @@ export class MoodleClient {
       }
       return response;
     } catch (err) {
+      const safeUrl = sanitizeMoodleUrl(url);
       if (err.response) {
         if (err.response.status === 404) {
-          throw new Error(`Tài nguyên không tồn tại trên Moodle (HTTP 404: ${url}).`);
+          throw new Error(`Tài nguyên không tồn tại trên Moodle (HTTP 404: ${safeUrl}).`);
         }
         if (err.response.status === 403) {
-          throw new Error(`Moodle từ chối truy cập (HTTP 403: ${url}).`);
+          throw new Error(`Moodle từ chối truy cập (HTTP 403: ${safeUrl}).`);
         }
-        throw new Error(`Lỗi phản hồi từ Moodle (HTTP ${err.response.status}): ${err.message}`);
+        throw new Error(`Lỗi phản hồi từ Moodle (HTTP ${err.response.status}) tại ${safeUrl}.`);
       }
-      throw err;
+      // Axios/network errors can echo the complete upstream URL, including
+      // sesskey or other Moodle query credentials. Do not propagate them.
+      throw new Error(`Không thể kết nối tới Moodle (${safeUrl}).`);
     }
   }
 
@@ -98,8 +119,8 @@ export class MoodleClient {
     const loginForm = $('form[action*="login/index.php"] input[name="username"]').length > 0;
     const loggedIn = $('.usermenu, .userbutton, a[href*="login/logout.php"]').length > 0;
     if (loginForm && !loggedIn) {
-      const message = $('.alert-danger, #loginerrormessage, .error').first().text().trim();
-      throw new Error(message || 'Đăng nhập Moodle thất bại. Vui lòng kiểm tra tài khoản và mật khẩu.');
+      // Moodle error HTML is untrusted and may echo query/session values.
+      throw new Error('Đăng nhập Moodle thất bại. Vui lòng kiểm tra tài khoản và mật khẩu.');
     }
   }
 
@@ -195,20 +216,20 @@ export class MoodleClient {
       const result = response.data?.[0];
       if (result?.error || result?.exception || !result?.data) {
         const failure = result?.exception || result?.error || result?.data || 'Moodle không trả course state';
-        this.lastCourseContentsFailure = typeof failure === 'string' ? failure : JSON.stringify(failure);
+        this.lastCourseContentsFailure = `Moodle trả lỗi API: ${safeMoodleErrorCode(failure)}`;
         return [];
       }
       if (typeof result.data === 'string') {
         try {
           return JSON.parse(result.data);
         } catch (error) {
-          this.lastCourseContentsFailure = `course state không phải JSON: ${error.message}`;
+          this.lastCourseContentsFailure = `Moodle course state không phải JSON (${safeMoodleErrorCode(error)}).`;
           return [];
         }
       }
       return result.data;
     } catch (error) {
-      this.lastCourseContentsFailure = error?.message || 'lỗi không xác định khi lấy course contents';
+      this.lastCourseContentsFailure = `Moodle không lấy được course contents (${safeMoodleErrorCode(error)}).`;
       return [];
     }
   }
@@ -364,16 +385,16 @@ export class MoodleClient {
       const result = response.data?.[0];
       if (result?.error || result?.exception || result?.data?.error) {
         const failure = result.errorcode || result.exception || result.data.error || 'Moodle trả lỗi API';
-        this.lastManualCompletionFailure = typeof failure === 'string' ? failure : JSON.stringify(failure);
+        this.lastManualCompletionFailure = `Moodle trả lỗi API: ${safeMoodleErrorCode(failure)}`;
         return false;
       }
       if (result?.data?.status !== true) {
-        this.lastManualCompletionFailure = `Moodle trả status=${String(result?.data?.status)}`;
+        this.lastManualCompletionFailure = `Moodle trả status không hợp lệ (${safeMoodleErrorCode(result?.data?.status)}).`;
         return false;
       }
       return true;
     } catch (error) {
-      this.lastManualCompletionFailure = error?.message || 'lỗi không xác định khi gọi API completion';
+      this.lastManualCompletionFailure = `Moodle completion request thất bại (${safeMoodleErrorCode(error)}).`;
       return false;
     }
   }

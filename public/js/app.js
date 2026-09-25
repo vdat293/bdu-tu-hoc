@@ -6,6 +6,7 @@
 const AppState = {
   user: null,
   token: null,
+  authGeneration: 0,
   rawGradeData: null,
   academicRanking: null,
   identityPresentation: null,
@@ -27,6 +28,7 @@ const AppState = {
   distChart: null,
   eventSource: null,
   englishSessionId: null,
+  englishStreamToken: null,
   englishEventSource: null,
   communityRealtime: null,
   communityRealtimeReconnectTimer: null,
@@ -46,6 +48,15 @@ const AppState = {
 // INITIALIZATION
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
+  try {
+    for (const key of ['bdu_logout_notice', 'bdu_login_notice']) {
+      const notice = sessionStorage.getItem(key);
+      if (notice) {
+        sessionStorage.removeItem(key);
+        setTimeout(() => showToast(notice, 'info'), 0);
+      }
+    }
+  } catch (e) {}
   initTheme();
   initAuth();
   initLoginCharacters();
@@ -352,9 +363,12 @@ async function saveTitleCustomizer() {
 async function initIdentityAdmin() {
   const panel = document.getElementById('identity-admin-panel');
   if (!panel || !AppState.token || panel.dataset.initialized === 'true') return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
   const status = document.getElementById('identity-admin-status');
   try {
-    const items = await BduApi.getAdminIdentityItems(AppState.token);
+    const items = await BduApi.getAdminIdentityItems(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     panel.dataset.initialized = 'true';
     panel.classList.remove('hidden');
     if (status) status.textContent = 'Quyền truy cập hợp lệ';
@@ -635,11 +649,17 @@ function initAuth() {
       const password = passInput.value;
       const remember = document.getElementById('remember-me').checked;
       const btn = document.getElementById('btn-login');
+      const generation = AppState.authGeneration;
 
       setButtonLoading(btn, true);
 
       try {
         const res = await BduApi.login(username, password);
+        if (AppState.authGeneration !== generation) return;
+        if (AppState.englishSessionId && AppState.token) {
+          await BduApi.closeEnglishSession(AppState.token, AppState.englishSessionId).catch(() => { });
+        }
+        resetLegacyUserScopedState();
         AppState.user = {
           name: res.name,
           mssv: res.mssv,
@@ -647,6 +667,10 @@ function initAuth() {
           roles: res.roles,
           idsv: res.idsv || ''
         };
+        const wordfmtStudent = document.getElementById('wf-student');
+        const wordfmtStudentId = document.getElementById('wf-student-id');
+        if (wordfmtStudent) wordfmtStudent.value = res.name || '';
+        if (wordfmtStudentId) wordfmtStudentId.value = res.mssv || '';
         AppState.token = res.token;
 
         // Tính thời gian hết hạn của token
@@ -662,11 +686,13 @@ function initAuth() {
           sessionStorage.setItem('bdu_token_expires_at', expiresAt.toString());
         }
 
+        if (reloadLegacyAfterAccountChange('bdu_login_notice', `Xin chào, ${res.name}!`)) return;
         showToast(`Xin chào, ${res.name}!`, 'success');
         switchToDashboard();
         connectCommunityRealtime();
         initIdentityAdmin();
         await loadAllDashboardData();
+        loadEnglishAnswers().catch(() => {});
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
@@ -685,6 +711,7 @@ function initAuth() {
     refreshBtn.addEventListener('click', async () => {
       showToast('Đang làm mới dữ liệu...', 'info');
       await loadAllDashboardData();
+      loadEnglishAnswers().catch(() => {});
       showToast('Đã làm mới dữ liệu thành công!', 'success');
     });
   }
@@ -707,6 +734,10 @@ function initAuth() {
       try {
         AppState.token = savedToken;
         AppState.user = JSON.parse(savedUser);
+        const wordfmtStudent = document.getElementById('wf-student');
+        const wordfmtStudentId = document.getElementById('wf-student-id');
+        if (wordfmtStudent) wordfmtStudent.value = AppState.user.name || '';
+        if (wordfmtStudentId) wordfmtStudentId.value = AppState.user.mssv || '';
         if (!AppState.user.photoUrl) {
           const cachedPhoto = localStorage.getItem('bdu_user_photo');
           if (cachedPhoto) {
@@ -731,13 +762,162 @@ function initAuth() {
   });
 }
 
+function isCurrentLegacyAuth(generation, token) {
+  return AppState.authGeneration === generation && AppState.token === token;
+}
+
+function resetLegacyUserScopedState() {
+  // Invalidate every request started by the previous account before clearing
+  // the visible state. Async loaders check this generation before committing.
+  AppState.authGeneration += 1;
+  AppState.englishEventSource?.close();
+  AppState.eventSource?.close();
+  AppState.selectedFile = null;
+  AppState.englishSessionId = null;
+  AppState.englishStreamToken = null;
+  AppState.englishEventSource = null;
+  AppState.englishActivities = [];
+  AppState.bduSchoolPhoto = null;
+  AppState.identityPresentation = null;
+  AppState.rawGradeData = null;
+  AppState.academicRanking = null;
+  AppState.semesters = [];
+  AppState.selectedSemester = 'ALL';
+  AppState.filterStatus = 'ALL';
+  AppState.searchQuery = '';
+  AppState.gpaChart = null;
+  AppState.distChart = null;
+  AppState.titleSelectionDraft = [];
+  AppState.token = null;
+  AppState.user = null;
+  AppState.leaderboard.loaded = false;
+  AppState.leaderboard.loading = false;
+  AppState.leaderboard.reloadRequested = false;
+  AppState.learning.courses = [];
+  AppState.learning.activeCourse = null;
+  AppState.learning.posts = [];
+  AppState.learning.lastTrigger = null;
+  AppState.learning.lastComposerTrigger = null;
+  if (AppState.clans) {
+    Object.assign(AppState.clans, {
+      list: [],
+      canCreate: false,
+      activeFilter: 'all',
+      currentClan: null,
+      posts: [],
+      feedFilter: 'all',
+      composerMode: 'discussion',
+      documents: [],
+      docFilter: 'all',
+      docSearch: ''
+    });
+  }
+  if (AppState.confession) {
+    clearTimeout(AppState.confession.refreshTimer);
+    Object.assign(AppState.confession, {
+      posts: [],
+      activeScope: 'school',
+      activeCategory: 'all',
+      activeFilter: 'all',
+      requestId: Number(AppState.confession.requestId || 0) + 1,
+      loadingPromise: null,
+      loadingFilter: null,
+      loadedFilter: null,
+      refreshTimer: null,
+      profilePhotoRequest: null,
+      profilePhotoRequestedFor: null,
+      framePreview: null
+    });
+  }
+
+  try {
+    localStorage.removeItem('bdu_user_photo');
+    localStorage.removeItem('bdu_custom_frame_preview');
+  } catch (e) {}
+
+  document.getElementById('form-wordfmt')?.reset();
+  document.getElementById('english-answer-form')?.reset();
+  const fileInput = document.getElementById('docx-file-input');
+  if (fileInput) fileInput.value = '';
+  const fileInfo = document.getElementById('dropzone-file-info');
+  fileInfo?.classList.add('hidden');
+  const fileName = document.getElementById('selected-file-name');
+  if (fileName) fileName.textContent = '';
+  const dropzoneContent = document.querySelector('#docx-dropzone .dropzone-content');
+  dropzoneContent?.classList.remove('hidden');
+  document.getElementById('wordfmt-success-box')?.classList.add('hidden');
+  document.getElementById('wordfmt-progress-box')?.classList.add('hidden');
+  document.getElementById('btn-download-docx')?.removeAttribute('href');
+  const englishUsername = document.getElementById('english-username');
+  if (englishUsername) englishUsername.value = '';
+  const englishPassword = document.getElementById('english-password');
+  if (englishPassword) englishPassword.value = '';
+
+  const answerCount = document.getElementById('english-answer-count');
+  if (answerCount) answerCount.textContent = '0 đáp án';
+  const answerBody = document.getElementById('english-answer-body');
+  if (answerBody) answerBody.textContent = '';
+  const terminal = document.getElementById('english-terminal');
+  if (terminal) terminal.textContent = '';
+  for (const id of [
+    'clans-list-grid', 'clan-posts-feed', 'clan-docs-grid', 'clan-documents-list',
+    'clan-requests-list', 'clan-members-tbody', 'confession-feed-stream',
+    'grades-table-body', 'schedule-table-body', 'profile-student-photo'
+  ]) {
+    const element = document.getElementById(id);
+    if (element) element.innerHTML = '';
+  }
+  document.getElementById('clan-channel-view')?.classList.add('hidden');
+  document.getElementById('clan-main-view')?.classList.remove('hidden');
+  const profilePhoto = document.getElementById('profile-student-photo');
+  if (profilePhoto?.tagName === 'IMG') profilePhoto.removeAttribute('src');
+  for (const [id, value] of [
+    ['p-fullname', 'Sinh viên BDU'], ['p-mssv', '---'], ['p-dob', '--/--/----'],
+    ['p-gender', '---'], ['p-faculty', '---'], ['p-major', '---'], ['p-class', '---'],
+    ['p-education-level', 'Đại học chính quy'], ['p-cohort-years', '---'],
+    ['p-advisor-name', 'Chưa cập nhật'], ['p-advisor-id', '--']
+  ]) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  }
+  for (const id of [
+    'user-avatar', 'hero-avatar', 'cfs-hero-avatar', 'cfs-composer-avatar',
+    'widget-user-avatar', 'clan-quick-composer-avatar', 'clan-modal-author-avatar',
+    'fb-modal-avatar'
+  ]) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = '';
+  }
+  syncAllCurrentUserAvatars();
+}
+
+function reloadLegacyAfterAccountChange(key, notice) {
+  // A full navigation is the account boundary: the browser aborts old fetches
+  // and EventSources, and no response from the previous user can repaint the
+  // next user's dashboard.
+  try { sessionStorage.setItem(key, String(notice || '')); } catch (e) {}
+  if (typeof window === 'undefined' || !window.location || !['http:', 'https:'].includes(window.location.protocol)) {
+    return false;
+  }
+  try {
+    window.location.reload();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function reloadLegacyAfterLogout(notice) {
+  return reloadLegacyAfterAccountChange('bdu_logout_notice', notice || 'Đã đăng xuất tài khoản.');
+}
+
 /**
  * Xử lý đăng xuất / kết thúc phiên làm việc
  */
 function handleLogout(options = {}) {
   const { reason = 'Đã đăng xuất tài khoản.', isExpired = false } = options;
-  if (AppState.englishSessionId) {
-    BduApi.closeEnglishSession(AppState.englishSessionId).catch(() => { });
+  if (AppState.englishSessionId && AppState.token) {
+    BduApi.closeEnglishSession(AppState.token, AppState.englishSessionId).catch(() => { });
   }
   AppState.englishEventSource?.close();
   AppState.eventSource?.close();
@@ -747,6 +927,7 @@ function handleLogout(options = {}) {
   AppState.communityRealtimeReconnectTimer = null;
   AppState.communityRealtimeReconnectAttempt = 0;
   AppState.communityRealtimeEvents.clear();
+  resetLegacyUserScopedState();
   if (AppState.confession) {
     clearTimeout(AppState.confession.refreshTimer);
     AppState.confession.refreshTimer = null;
@@ -775,6 +956,7 @@ function handleLogout(options = {}) {
   try { localStorage.removeItem('bdu_custom_frame_preview'); } catch (e) {}
   AppState.leaderboard.loaded = false;
   AppState.englishSessionId = null;
+  AppState.englishStreamToken = null;
   AppState.englishEventSource = null;
   AppState.englishActivities = [];
   AppState.eventSource = null;
@@ -786,6 +968,8 @@ function handleLogout(options = {}) {
   const loginView = document.getElementById('login-view');
   if (dashView) dashView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
+
+  if (reloadLegacyAfterLogout(reason || 'Đã đăng xuất tài khoản.')) return;
 
   if (isExpired) {
     showToast(reason || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', 'warning');
@@ -1082,10 +1266,13 @@ function initNavigation() {
 // ============================================================================
 async function loadAllDashboardData() {
   if (!AppState.token) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   try {
     // 1. Fetch real grade data from BDU
-    const gradeResponse = await BduApi.getGrades(AppState.token);
+    const gradeResponse = await BduApi.getGrades(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     AppState.rawGradeData = gradeResponse;
     const raw = (gradeResponse && gradeResponse.data) ? gradeResponse.data : gradeResponse;
     AppState.semesters = (raw && raw.ds_diem_hocky) ? raw.ds_diem_hocky : (Array.isArray(raw) ? raw : []);
@@ -1097,14 +1284,16 @@ async function loadAllDashboardData() {
 
     // Ranking failures must not block grades, profile, schedule or other tools.
     await loadAcademicRanking();
+    if (!isCurrentLegacyAuth(generation, token)) return;
 
     // 2. Load Profile & Identity Presentation in parallel directly from API
     const maSV = AppState.user?.mssv || '';
     const idsv = AppState.user?.idsv || AppState.user?.id_sinh_vien || '';
     const [profileSettled, presentationSettled] = await Promise.allSettled([
-      BduApi.getProfile(AppState.token, idsv, maSV),
-      BduApi.getMyIdentityPresentation(AppState.token)
+      BduApi.getProfile(token, idsv, maSV),
+      BduApi.getMyIdentityPresentation(token)
     ]);
+    if (!isCurrentLegacyAuth(generation, token)) return;
 
     if (presentationSettled.status === 'fulfilled' && presentationSettled.value) {
       AppState.identityPresentation = presentationSettled.value;
@@ -1127,25 +1316,34 @@ async function loadAllDashboardData() {
     updateIdentityPresentationUI();
 
     // 3. Load Schedule (Real BDU API)
-    const schedule = await BduApi.getSchedule(AppState.token);
+    const schedule = await BduApi.getSchedule(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     renderSchedule(schedule);
 
     // 4. Load Learning Hub
-    const learning = await BduApi.getLearningResources(AppState.token);
+    const learning = await BduApi.getLearningResources(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     renderLearningHub(learning);
 
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Failed to load dashboard data:', err);
     showToast(err.message, 'error');
   }
 }
 
 async function loadAcademicRanking() {
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
+  if (!token) return;
   try {
-    AppState.academicRanking = await BduApi.getMyAcademicRanking(AppState.token);
+    const ranking = await BduApi.getMyAcademicRanking(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
+    AppState.academicRanking = ranking;
     renderAcademicRanking(AppState.academicRanking);
     updateForumUserWidgets();
   } catch (error) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     AppState.academicRanking = null;
     renderAcademicRanking(null, error.message);
     updateForumUserWidgets();
@@ -2392,7 +2590,7 @@ function initWordFmtTool() {
 
       try {
         const [res] = await Promise.all([
-          BduApi.formatDocx(formData),
+          BduApi.formatDocx(AppState.token, formData),
           progressSession.minimum
         ]);
         await progressSession.complete();
@@ -2445,6 +2643,33 @@ function initWordFmtTool() {
       } finally {
         setButtonLoading(btnStart, false);
       }
+    });
+  }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      if (!AppState.token || !downloadBtn.href) return;
+      const response = await fetch(downloadBtn.href, {
+        headers: { 'Authorization': `Bearer ${AppState.token}` }
+      });
+      if (!response.ok) {
+        let message = 'Không thể tải file Word đã chuẩn hóa.';
+        try {
+          const payload = await response.json();
+          message = payload.message || message;
+        } catch {}
+        showToast(message, 'error');
+        return;
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = 'BDU_ChuanHoa.docx';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     });
   }
 }
@@ -2555,20 +2780,26 @@ function initEnglishExerciseBot() {
       return;
     }
 
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     setButtonLoading(connectBtn, true);
     setEnglishConnectionState('Đang kết nối…', false);
     appendEnglishLog(`Đang đăng nhập Moodle và quét khóa học #${courseId}...`);
     try {
-      if (AppState.englishSessionId) {
-        await BduApi.closeEnglishSession(AppState.englishSessionId).catch(() => { });
+      if (AppState.englishSessionId && token) {
+        await BduApi.closeEnglishSession(token, AppState.englishSessionId).catch(() => { });
       }
+      if (!isCurrentLegacyAuth(generation, token)) return;
       AppState.englishEventSource?.close();
-      const session = await BduApi.loginEnglish({ username, password, courseId });
+      const session = await BduApi.loginEnglish(token, { username, password, courseId });
+      if (!isCurrentLegacyAuth(generation, token)) return;
       AppState.englishSessionId = session.sessionId;
+      AppState.englishStreamToken = session.streamToken;
       if (passwordInput) passwordInput.value = '';
-      connectEnglishLogStream(session.sessionId);
+      connectEnglishLogStream(session.sessionId, session.streamToken);
 
-      const activities = await BduApi.getEnglishActivities(session.sessionId, courseId);
+      const activities = await BduApi.getEnglishActivities(token, session.sessionId, courseId);
+      if (!isCurrentLegacyAuth(generation, token)) return;
       AppState.englishActivities = activities;
       renderEnglishActivities(activities);
       setEnglishConnectionState(`Đã kết nối · ${activities.length} hoạt động`, true);
@@ -2576,20 +2807,26 @@ function initEnglishExerciseBot() {
       document.getElementById('english-run-settings')?.setAttribute('aria-disabled', 'false');
       showToast(`Đã quét ${activities.length} hoạt động Moodle.`, 'success');
     } catch (error) {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       AppState.englishSessionId = null;
+      AppState.englishStreamToken = null;
       renderEnglishActivities([]);
       setEnglishConnectionState('Kết nối thất bại', false);
       appendEnglishLog(error.message, 'error');
       showToast(error.message, 'error');
     } finally {
-      setButtonLoading(connectBtn, false);
-      updateEnglishStartAvailability();
+      if (isCurrentLegacyAuth(generation, token)) {
+        setButtonLoading(connectBtn, false);
+        updateEnglishStartAvailability();
+      }
     }
   });
 
   activitySelect.addEventListener('change', updateEnglishStartAvailability);
 
   startBtn.addEventListener('click', async () => {
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     if (!AppState.englishSessionId) {
       showToast('Vui lòng đăng nhập Moodle trước.', 'error');
       return;
@@ -2612,13 +2849,14 @@ function initEnglishExerciseBot() {
     setEnglishRunning(true);
     appendEnglishLog(`Yêu cầu chạy quiz #${option.value}${autoSubmit ? ' và tự động nộp' : ' ở chế độ kiểm tra'}...`);
     try {
-      await BduApi.startEnglishExercise(AppState.englishSessionId, {
+      await BduApi.startEnglishExercise(token, AppState.englishSessionId, {
         cmid: option.value,
         type: option.dataset.type,
         delaySeconds,
         autoSubmit
       });
     } catch (error) {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       setEnglishRunning(false);
       appendEnglishLog(error.message, 'error');
       showToast(error.message, 'error');
@@ -2626,12 +2864,16 @@ function initEnglishExerciseBot() {
   });
 
   stopBtn.addEventListener('click', async () => {
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     if (!AppState.englishSessionId) return;
     stopBtn.disabled = true;
     try {
-      const result = await BduApi.stopEnglishExercise(AppState.englishSessionId);
+      const result = await BduApi.stopEnglishExercise(token, AppState.englishSessionId);
+      if (!isCurrentLegacyAuth(generation, token)) return;
       appendEnglishLog(result.stopped ? 'Đã gửi lệnh dừng tiến trình.' : 'Không có tiến trình đang chạy.', 'warning');
     } catch (error) {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       appendEnglishLog(error.message, 'error');
       showToast(error.message, 'error');
       stopBtn.disabled = false;
@@ -2640,6 +2882,8 @@ function initEnglishExerciseBot() {
 
   answerForm?.addEventListener('submit', async event => {
     event.preventDefault();
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     const questionInput = document.getElementById('english-answer-question');
     const answerInput = document.getElementById('english-answer-value');
     const question = questionInput?.value.trim();
@@ -2648,25 +2892,31 @@ function initEnglishExerciseBot() {
     const submit = answerForm.querySelector('button[type="submit"]');
     if (submit) submit.disabled = true;
     try {
-      await BduApi.saveEnglishAnswer(question, answer);
+      await BduApi.saveEnglishAnswer(token, question, answer);
+      if (!isCurrentLegacyAuth(generation, token)) return;
       answerForm.reset();
       await loadEnglishAnswers();
       showToast('Đã lưu đáp án.', 'success');
     } catch (error) {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       showToast(error.message, 'error');
     } finally {
-      if (submit) submit.disabled = false;
+      if (submit && isCurrentLegacyAuth(generation, token)) submit.disabled = false;
     }
   });
 
   answerBody?.addEventListener('click', async event => {
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     const button = event.target.closest('[data-delete-english-answer]');
     if (!button || !window.confirm('Xóa đáp án này khỏi ngân hàng cục bộ?')) return;
     button.disabled = true;
     try {
-      await BduApi.deleteEnglishAnswer(button.dataset.deleteEnglishAnswer);
+      await BduApi.deleteEnglishAnswer(token, button.dataset.deleteEnglishAnswer);
+      if (!isCurrentLegacyAuth(generation, token)) return;
       await loadEnglishAnswers();
     } catch (error) {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       showToast(error.message, 'error');
       button.disabled = false;
     }
@@ -2675,9 +2925,9 @@ function initEnglishExerciseBot() {
   loadEnglishAnswers().catch(error => appendEnglishLog(error.message, 'warning'));
 }
 
-function connectEnglishLogStream(sessionId) {
+function connectEnglishLogStream(sessionId, streamToken) {
   AppState.englishEventSource?.close();
-  const source = new EventSource(`/api/english/${encodeURIComponent(sessionId)}/stream`);
+  const source = new EventSource(`/api/english/${encodeURIComponent(sessionId)}/stream?streamToken=${encodeURIComponent(streamToken || '')}`);
   AppState.englishEventSource = source;
   source.onmessage = event => {
     try {
@@ -2773,9 +3023,24 @@ function appendEnglishLog(message, type = 'info', timestamp = null) {
 }
 
 async function loadEnglishAnswers() {
-  const answers = await BduApi.getEnglishAnswers();
+  if (!AppState.token) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
   const count = document.getElementById('english-answer-count');
   const body = document.getElementById('english-answer-body');
+  let answers;
+  try {
+    answers = await BduApi.getEnglishAnswers(token);
+  } catch (error) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
+    if (error.status === 403) {
+      if (count) count.textContent = '0 đáp án';
+      if (body) body.textContent = '';
+      return;
+    }
+    throw error;
+  }
+  if (!isCurrentLegacyAuth(generation, token)) return;
   if (count) count.textContent = `${answers.length} đáp án`;
   if (!body) return;
   body.textContent = '';
@@ -2784,7 +3049,7 @@ async function loadEnglishAnswers() {
     const cell = row.insertCell();
     cell.colSpan = 4;
     cell.className = 'english-empty';
-    cell.textContent = 'Chưa có đáp án. Hãy thêm thủ công để bắt đầu hoặc để bot học từ trang review.';
+    cell.textContent = 'Chưa có đáp án. Hãy thêm thủ công để bắt đầu; hệ thống chỉ đọc đáp án từ trang review và không tự lưu.';
     return;
   }
   answers.slice().reverse().forEach(answer => {
@@ -3876,13 +4141,17 @@ function initClansModule() {
 async function loadClansDirectory() {
   const grid = document.getElementById('clans-list-grid');
   if (!grid) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   try {
-    const clans = await BduApi.getClans(AppState.token);
+    const clans = await BduApi.getClans(token);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     AppState.clans.list = Array.isArray(clans) ? clans : [];
-    AppState.clans.canCreate = clans.can_create_clan ?? checkHasTtcds(AppState.identityPresentation);
+    AppState.clans.canCreate = clans?.can_create_clan ?? checkHasTtcds(AppState.identityPresentation);
     renderClansGrid();
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Lỗi tải danh sách CLB:', err);
     grid.innerHTML = `
       <div class="empty-state-box" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -4261,6 +4530,8 @@ async function loadClanRequests(clanId) {
   const countBadge = document.getElementById('clan-requests-count-badge');
   const subtabBadge = document.getElementById('channel-subtab-req-count');
   if (!container) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   container.innerHTML = `
     <div style="text-align: center; padding: 24px; color: var(--text-muted);">
@@ -4269,7 +4540,8 @@ async function loadClanRequests(clanId) {
   `;
 
   try {
-    const requests = await BduApi.getClanJoinRequests(AppState.token, clanId);
+    const requests = await BduApi.getClanJoinRequests(token, clanId);
+    if (!isCurrentLegacyAuth(generation, token)) return;
     const list = Array.isArray(requests) ? requests : [];
     if (countBadge) countBadge.textContent = `${list.length} yêu cầu chờ duyệt`;
     if (subtabBadge) subtabBadge.textContent = list.length;
@@ -4366,6 +4638,7 @@ async function loadClanRequests(clanId) {
     });
 
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Lỗi tải danh sách yêu cầu gia nhập:', err);
     container.innerHTML = `
       <div class="empty-state-box" style="text-align: center; padding: 24px; color: var(--text-muted);">
@@ -4443,6 +4716,8 @@ async function loadClanPosts(clanId) {
 
   const container = document.getElementById('clan-posts-feed');
   if (!container) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   container.innerHTML = `
     <div class="loading-spinner-box">
@@ -4455,12 +4730,13 @@ async function loadClanPosts(clanId) {
   const filter = AppState.clans.feedFilter || 'all';
 
   try {
-    const res = await BduApi.getCommunityPosts(AppState.token, {
+    const res = await BduApi.getCommunityPosts(token, {
       scope: 'clan',
       scopeId: String(clanId),
       filter: ['mine', 'discussion', 'poll'].includes(filter) ? filter : 'all',
       limit: 50
     });
+    if (!isCurrentLegacyAuth(generation, token)) return;
     const posts = res.posts || [];
     AppState.clans.posts = posts;
 
@@ -4482,6 +4758,7 @@ async function loadClanPosts(clanId) {
     attachClanPostPinEvents(container, currentClan);
     attachClanPollVoteEvents(container);
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Lỗi tải bài viết CLB:', err);
     container.innerHTML = `<div class="empty-state-box"><p style="color: var(--color-rose);">${escapeHtml(err.message || 'Không thể tải bài viết.')}</p></div>`;
   }
@@ -4734,6 +5011,8 @@ async function loadClanDocuments(clanId) {
   const statsEl = document.getElementById('clan-docs-stats');
   const countBadge = document.getElementById('channel-subtab-doc-count');
   if (!grid) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   grid.innerHTML = `
     <div class="loading-spinner-box" style="grid-column: 1 / -1;">
@@ -4743,10 +5022,11 @@ async function loadClanDocuments(clanId) {
   `;
 
   try {
-    const res = await BduApi.getClanDocuments(AppState.token, clanId, {
+    const res = await BduApi.getClanDocuments(token, clanId, {
       type: AppState.clans.docFilter || 'all',
       search: AppState.clans.docSearch || ''
     });
+    if (!isCurrentLegacyAuth(generation, token)) return;
 
     const docs = res.documents || [];
     AppState.clans.documents = docs;
@@ -4800,6 +5080,7 @@ async function loadClanDocuments(clanId) {
     });
 
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Lỗi tải kho tài liệu CLB:', err);
     grid.innerHTML = `
       <div class="empty-state-box" style="grid-column: 1 / -1; text-align: center; padding: 30px;">
@@ -5588,12 +5869,20 @@ async function loadClanMembers(clanId) {
   const tbody = document.getElementById('clan-members-tbody');
   const statsEl = document.getElementById('clan-members-stats');
   if (!tbody) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 25px; color: var(--text-muted);">Đang tải danh sách thành viên...</td></tr>`;
 
   try {
-    const res = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/members`);
+    const res = await fetch(`/api/community/clans/${encodeURIComponent(clanId)}/members`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     const json = await res.json();
+    if (!isCurrentLegacyAuth(generation, token)) return;
+    if (!res.ok || json?.result === false) {
+      throw new Error(json?.message || 'Không thể tải danh sách thành viên.');
+    }
     const members = json.data || [];
 
     const currentClan = AppState.clans.currentClan;
@@ -5640,25 +5929,25 @@ async function loadClanMembers(clanId) {
         } else {
           actionsHtml = `
             <div class="member-action-cell">
-              <select class="member-role-select" data-mssv="${m.mssv}">
+              <select class="member-role-select" data-mssv="${escapeHtml(m.mssv)}">
                 <option value="member" ${m.role === 'member' ? 'selected' : ''}>Thành Viên</option>
                 <option value="vice_leader" ${m.role === 'vice_leader' ? 'selected' : ''}>Phó Bang</option>
                 <option value="leader">Nhượng Bang Chủ</option>
               </select>
-              <button class="btn-kick-member" data-mssv="${m.mssv}" title="Khai trừ khỏi CLB">Khai trừ</button>
+              <button class="btn-kick-member" data-mssv="${escapeHtml(m.mssv)}" title="Khai trừ khỏi CLB">Khai trừ</button>
             </div>
           `;
         }
       } else if (isVice && m.role === 'member') {
         actionsHtml = `
           <div class="member-action-cell">
-            <button class="btn-kick-member" data-mssv="${m.mssv}" title="Mời ra khỏi nhóm">Mời ra</button>
+            <button class="btn-kick-member" data-mssv="${escapeHtml(m.mssv)}" title="Mời ra khỏi nhóm">Mời ra</button>
           </div>
         `;
       }
 
       return `
-        <tr data-mssv="${m.mssv}">
+        <tr data-mssv="${escapeHtml(m.mssv)}">
           <td>
             <div class="member-user-cell">
               <div class="member-avatar-circle">${avatarInitial}</div>
@@ -5729,6 +6018,7 @@ async function loadClanMembers(clanId) {
     });
 
   } catch (err) {
+    if (!isCurrentLegacyAuth(generation, token)) return;
     console.error('Lỗi tải thành viên CLB:', err);
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--color-rose);">${escapeHtml(err.message || 'Không thể tải danh sách thành viên.')}</td></tr>`;
   }
@@ -7334,8 +7624,11 @@ function updateForumUserWidgets() {
       && AppState.confession.profilePhotoRequestedFor !== mssv
       && !AppState.confession.profilePhotoRequest) {
     const idsv = user?.idsv || user?.id_sinh_vien || '';
+    const generation = AppState.authGeneration;
+    const token = AppState.token;
     AppState.confession.profilePhotoRequestedFor = mssv;
-    AppState.confession.profilePhotoRequest = BduApi.getProfile(AppState.token, idsv, mssv).then(profileRes => {
+    AppState.confession.profilePhotoRequest = BduApi.getProfile(token, idsv, mssv).then(profileRes => {
+      if (!isCurrentLegacyAuth(generation, token)) return;
       const pUrl = profileRes?.student_image || profileRes?.data?.[0]?.hinh_anh || profileRes?.data?.hinh_anh || '';
       if (pUrl) {
         let full = pUrl;
@@ -7352,7 +7645,9 @@ function updateForumUserWidgets() {
         updateForumUserWidgets();
       }
     }).catch(() => {}).finally(() => {
-      AppState.confession.profilePhotoRequest = null;
+      if (isCurrentLegacyAuth(generation, token)) {
+        AppState.confession.profilePhotoRequest = null;
+      }
     });
   }
 }
@@ -7370,6 +7665,8 @@ async function loadConfessions() {
   updateForumUserWidgets();
   const container = document.getElementById('confession-feed-stream');
   if (!container) return;
+  const generation = AppState.authGeneration;
+  const token = AppState.token;
 
   const requestedFilter = AppState.confession.activeFilter || 'all';
   if (AppState.confession.loadingPromise && AppState.confession.loadingFilter === requestedFilter) {
@@ -7391,11 +7688,12 @@ async function loadConfessions() {
   const loadingPromise = (async () => {
     // `forum` gồm bài toàn trường + Viện/Khoa, nhưng không trộn bài nội bộ CLB.
     // Lọc ở server để "Bài của tôi" không bị giới hạn trong trang 20 bài mới nhất.
-    const res = await BduApi.getCommunityPosts(AppState.token, {
+    const res = await BduApi.getCommunityPosts(token, {
       scope: 'forum',
       filter: requestedFilter,
       limit: 50
     });
+    if (!isCurrentLegacyAuth(generation, token)) return;
     if (requestId !== AppState.confession.requestId || requestedFilter !== AppState.confession.activeFilter) return;
     const posts = res.posts || [];
     AppState.confession.posts = posts;
@@ -7407,7 +7705,7 @@ async function loadConfessions() {
   try {
     await loadingPromise;
   } catch (err) {
-    if (requestId !== AppState.confession.requestId) return;
+    if (!isCurrentLegacyAuth(generation, token) || requestId !== AppState.confession.requestId) return;
     console.error('Lỗi tải forum confessions:', err);
     container.innerHTML = `
       <div class="empty-state-box" style="text-align: center; padding: 30px;">
@@ -7416,7 +7714,7 @@ async function loadConfessions() {
       </div>
     `;
   } finally {
-    if (AppState.confession.loadingPromise === loadingPromise) {
+    if (isCurrentLegacyAuth(generation, token) && AppState.confession.loadingPromise === loadingPromise) {
       AppState.confession.loadingPromise = null;
       AppState.confession.loadingFilter = null;
     }

@@ -62,6 +62,26 @@ function resolveBuildId() {
   return cachedBuildId;
 }
 
+function resolveWordFmtDownloadPath(filename) {
+  const safeName = String(filename || '');
+  if (!safeName || path.basename(safeName) !== safeName || !/^formatted_[0-9]+_[a-z0-9]{1,12}\.docx$/i.test(safeName)) {
+    return null;
+  }
+  const root = path.resolve('temp');
+  const filePath = path.resolve(root, safeName);
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  try {
+    const realRoot = fs.realpathSync(root);
+    const realFile = fs.realpathSync(filePath);
+    const realRelative = path.relative(realRoot, realFile);
+    if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) return null;
+    return { filePath: realFile, root: realRoot };
+  } catch {
+    return null;
+  }
+}
+
 function publishMentionNotifications(created) {
   if (!Array.isArray(created)) return;
   for (const item of created) {
@@ -91,6 +111,24 @@ function publishMentionNotifications(created) {
       }).catch(() => {});
     } catch {}
   }
+}
+
+async function resolveEnglishOwner(req) {
+  return BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+}
+
+function getBearerToken(req) {
+  const value = req.headers.authorization || '';
+  return value.startsWith('Bearer ') ? value.slice(7).trim() : value.trim();
+}
+
+function safeApiErrorMessage(error, fallback = 'Thao tác không thành công.') {
+  const message = String(error?.message || '').trim();
+  if (!message || message.length > 240) return fallback;
+  if (/https?:\/\/|sesskey|authorization|cookie|password|access[_-]?token|refresh[_-]?token|stack trace/i.test(message)) {
+    return fallback;
+  }
+  return message;
 }
 
 export const ApiController = {
@@ -282,30 +320,44 @@ export const ApiController = {
   async getProfile(req, res) {
     try {
       const authHeader = req.headers.authorization;
-      const token = req.body?.token || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader);
-      const idsv = req.query?.IDSV || req.query?.idsv || req.body?.idsv || '';
-      let maSV = req.query?.MaSV || req.query?.maSV || req.query?.mssv || req.body?.maSV || req.body?.mssv || req.body?.userName || '';
+      const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader;
+      const bodyToken = String(req.body?.token || '').trim();
+      if (headerToken && bodyToken && headerToken !== bodyToken) {
+        return res.status(400).json({
+          result: false,
+          code: 'PROFILE_TOKEN_MISMATCH',
+          message: 'Token xác thực không nhất quán.'
+        });
+      }
+      const token = headerToken || bodyToken;
+      const requestedMssv = req.query?.MaSV || req.query?.maSV || req.query?.mssv || req.body?.maSV || req.body?.mssv || req.body?.userName || '';
 
       if (!token) {
         return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token). Vui lòng đăng nhập lại.' });
       }
 
-      if (!maSV) {
-        try {
-          maSV = await BduIdentityService.resolveVerifiedMssv(token);
-        } catch {}
+      // This endpoint is the authenticated user's own profile. Never allow a
+      // client-supplied MaSV/IDSV to choose the upstream lookup or the local
+      // record that receives profile data.
+      const verifiedMssv = await BduIdentityService.resolveVerifiedMssv(token);
+      const cleanRequestedMssv = String(requestedMssv || '').trim().toUpperCase();
+      if (cleanRequestedMssv && cleanRequestedMssv !== verifiedMssv) {
+        return res.status(403).json({
+          result: false,
+          code: 'PROFILE_OWNER_MISMATCH',
+          message: 'Không thể truy cập hồ sơ của sinh viên khác.'
+        });
       }
 
-      const profileData = await BduService.getProfile(token, idsv, maSV);
+      const profileData = await BduService.getProfile(token, '', verifiedMssv);
       try {
-        const verifiedMssv = maSV || await BduIdentityService.resolveVerifiedMssv(token);
         await IdentityPresentationService.recordProfile(verifiedMssv, profileData);
       } catch (profileSyncError) {
         console.warn('[IdentityPresentation] Không thể lưu ảnh hồ sơ:', profileSyncError.message);
       }
       return res.json(profileData);
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -361,10 +413,12 @@ export const ApiController = {
         skipProposal
       } = req.body;
       const inputPath = req.file.path;
+      const ownerMssv = req.verifiedMssv || await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
 
       const result = await WordFmtService.formatDocx({
         inputPath,
         instructor,
+        ownerMssv,
         student,
         studentId,
         topic,
@@ -385,6 +439,8 @@ export const ApiController = {
         skipProposal: skipProposal === 'true' || skipProposal === true
       });
 
+      const downloadUrl = `/api/wordfmt/download/${encodeURIComponent(result.outputFile)}`;
+
       // Cleanup uploaded temp file
       if (fs.existsSync(inputPath)) {
         fs.unlinkSync(inputPath);
@@ -393,7 +449,7 @@ export const ApiController = {
       return res.json({
         result: true,
         message: 'Định dạng văn bản thành công!',
-        downloadUrl: `/api/wordfmt/download/${result.outputFile}`,
+        downloadUrl,
         fileSize: result.fileSize,
         report: result.report
       });
@@ -410,15 +466,16 @@ export const ApiController = {
   },
 
   // 6. Tools: Download Formatted DOCX
-  downloadFormattedDocx(req, res) {
-    const filename = req.params.filename;
-    const filePath = path.resolve('temp', filename);
-
-    if (!fs.existsSync(filePath)) {
+  async downloadFormattedDocx(req, res) {
+    const ownerMssv = req.verifiedMssv || await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+    const safePath = resolveWordFmtDownloadPath(req.params.filename);
+    if (!safePath || !WordFmtService.canDownload(req.params.filename, ownerMssv)) {
       return res.status(404).json({ result: false, message: 'File không tồn tại hoặc đã hết hạn.' });
     }
 
-    res.download(filePath, `BDU_ChuanHoa_${filename}`, (err) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Vary', 'Authorization');
+    return res.download(safePath.filePath, `BDU_ChuanHoa_${path.basename(req.params.filename)}`, (err) => {
       if (err) {
         console.error('Download error:', err);
       }
@@ -553,61 +610,82 @@ export const ApiController = {
   // 8. Tools: Moodle English exercise automation
   async loginEnglish(req, res) {
     try {
-      return res.json({ result: true, data: await EnglishExerciseService.login(req.body || {}) });
+      const ownerMssv = await resolveEnglishOwner(req);
+      return res.json({ result: true, data: await EnglishExerciseService.login({
+        ...(req.body || {}),
+        ownerMssv
+      }) });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
   async getEnglishCourses(req, res) {
     try {
-      const data = await EnglishExerciseService.courses(req.params.sessionId);
+      const ownerMssv = await resolveEnglishOwner(req);
+      const data = await EnglishExerciseService.courses(req.params.sessionId, ownerMssv);
       return res.json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
   async getEnglishActivities(req, res) {
     try {
-      const data = await EnglishExerciseService.activities(req.params.sessionId, req.query.courseId);
+      const ownerMssv = await resolveEnglishOwner(req);
+      const data = await EnglishExerciseService.activities(req.params.sessionId, req.query.courseId, ownerMssv);
       return res.json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
-  startEnglishExercise(req, res) {
+  async startEnglishExercise(req, res) {
     try {
-      const data = EnglishExerciseService.start(req.params.sessionId, req.body || {});
+      const ownerMssv = await resolveEnglishOwner(req);
+      const data = EnglishExerciseService.start(req.params.sessionId, req.body || {}, ownerMssv);
       return res.status(202).json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
-  startEnglishCourseFinish(req, res) {
+  async startEnglishCourseFinish(req, res) {
     try {
-      const data = EnglishExerciseService.startFinish(req.params.sessionId, req.body || {});
+      const ownerMssv = await resolveEnglishOwner(req);
+      const data = EnglishExerciseService.startFinish(req.params.sessionId, req.body || {}, ownerMssv);
       return res.status(202).json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
-  stopEnglishExercise(req, res) {
+  async stopEnglishExercise(req, res) {
     try {
-      return res.json({ result: true, stopped: EnglishExerciseService.stop(req.params.sessionId) });
+      const ownerMssv = await resolveEnglishOwner(req);
+      return res.json({ result: true, stopped: EnglishExerciseService.stop(req.params.sessionId, ownerMssv) });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
-  closeEnglishSession(req, res) {
-    return res.json({ result: true, closed: EnglishExerciseService.close(req.params.sessionId) });
+  async closeEnglishSession(req, res) {
+    try {
+      const ownerMssv = await resolveEnglishOwner(req);
+      return res.json({ result: true, closed: EnglishExerciseService.close(req.params.sessionId, ownerMssv) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
+    }
   },
 
   streamEnglishExercise(req, res) {
+    const streamToken = req.query.streamToken || req.query.token || '';
+    try {
+      EnglishExerciseService.authorizeStream(req.params.sessionId, streamToken);
+    } catch (err) {
+      return res.status(err.status || 403).json({ result: false, message: safeApiErrorMessage(err, 'Stream token không hợp lệ.') });
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -615,7 +693,7 @@ export const ApiController = {
     res.setHeader('Content-Encoding', 'none');
     res.flushHeaders();
     try {
-      const unsubscribe = EnglishExerciseService.subscribe(req.params.sessionId, res);
+      const unsubscribe = EnglishExerciseService.subscribe(req.params.sessionId, res, streamToken);
       const heartbeat = setInterval(() => {
         try {
           res.write(': heartbeat\n\n');
@@ -627,26 +705,40 @@ export const ApiController = {
         unsubscribe();
       });
     } catch (err) {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: safeApiErrorMessage(err, 'Moodle không thể xử lý yêu cầu.') })}\n\n`);
       res.end();
     }
   },
 
-  getEnglishAnswers(req, res) {
-    return res.json({ result: true, data: EnglishExerciseService.listAnswers() });
-  },
-
-  addEnglishAnswer(req, res) {
+  async getEnglishAnswers(req, res) {
     try {
-      const data = EnglishExerciseService.addAnswer(req.body?.question, req.body?.correctAnswer);
-      return res.status(201).json({ result: true, data });
+      const ownerMssv = await resolveEnglishOwner(req);
+      await PermissionService.require(ownerMssv, 'moodle:answers:manage', 'Bạn không có quyền quản lý ngân hàng đáp án.');
+      return res.json({ result: true, data: EnglishExerciseService.listAnswers() });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
-  deleteEnglishAnswer(req, res) {
-    return res.json({ result: true, deleted: EnglishExerciseService.deleteAnswer(req.params.id) });
+  async addEnglishAnswer(req, res) {
+    try {
+      const ownerMssv = await resolveEnglishOwner(req);
+      await PermissionService.require(ownerMssv, 'moodle:answers:manage', 'Bạn không có quyền quản lý ngân hàng đáp án.');
+      const data = EnglishExerciseService.addAnswer(req.body?.question, req.body?.correctAnswer);
+      return res.status(201).json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
+    }
+  },
+
+  async deleteEnglishAnswer(req, res) {
+    try {
+      const ownerMssv = await resolveEnglishOwner(req);
+      await PermissionService.require(ownerMssv, 'moodle:answers:manage', 'Bạn không có quyền quản lý ngân hàng đáp án.');
+      return res.json({ result: true, deleted: EnglishExerciseService.deleteAnswer(req.params.id) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
+    }
   },
 
   // 9. Learning Hub: Catalog
@@ -1842,7 +1934,7 @@ export const ApiController = {
         } : { consented: false }
       });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1860,7 +1952,7 @@ export const ApiController = {
       }
       return res.json({ result: true, data: { consented: true, consent_at: prefs.consent_at } });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1870,7 +1962,7 @@ export const ApiController = {
       await NotificationPrefsService.revoke(mssv);
       return res.json({ result: true, data: { consented: false } });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1884,7 +1976,7 @@ export const ApiController = {
       const data = await DiscordLinkService.createCode(mssv);
       return res.json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1899,7 +1991,7 @@ export const ApiController = {
       const data = await DiscordOAuthService.createAuthUrl(mssv);
       return res.json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1911,7 +2003,7 @@ export const ApiController = {
       const data = await DiscordOAuthService.complete({ mssv, state, code });
       return res.json({ result: true, data });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1922,7 +2014,7 @@ export const ApiController = {
       await NotificationPrefsService.unlinkDiscord(mssv);
       return res.json({ result: true, data: { linked: false } });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -1948,7 +2040,7 @@ export const ApiController = {
       ]);
       return res.json({ result: true, data: { queued: true } });
     } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: err.message });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err) });
     }
   },
 
@@ -2092,7 +2184,19 @@ export const ApiController = {
 
   async getClanMembers(req, res) {
     try {
+      const viewerMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+      const isMember = await StudentService.isClanMember(req.params.id, viewerMssv);
+      const isModerator = await PermissionService.can(viewerMssv, 'community:mod_access');
+      if (!isMember && !isModerator) {
+        return res.status(403).json({
+          result: false,
+          code: 'CLAN_MEMBERS_FORBIDDEN',
+          message: 'Bạn không có quyền xem danh sách thành viên của CLB này.'
+        });
+      }
       const members = await StudentService.getClanMembers(req.params.id);
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization');
       return res.json({ result: true, data: members });
     } catch (err) {
       console.error('Get clan members error:', err.message);

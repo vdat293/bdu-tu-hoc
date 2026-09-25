@@ -20,6 +20,12 @@ const ROOT_DIR = path.resolve(__dirname, '../../');
 const TEMP_DIR = path.join(ROOT_DIR, 'temp');
 const PROFILES_DIR = path.join(ROOT_DIR, 'profiles');
 const DLL_PATH = path.join(ROOT_DIR, 'bin', 'wordfmt', 'wordfmt.dll');
+const outputOwners = new Map();
+
+function rememberOutputOwner(outputFile, ownerMssv) {
+  const owner = String(ownerMssv || '').trim().toUpperCase();
+  if (owner) outputOwners.set(path.basename(outputFile), owner);
+}
 
 // Concurrency Queue: max 3 concurrent dotnet processes by default (configurable via env)
 const MAX_CONCURRENCY = parseInt(process.env.WORDFMT_CONCURRENCY || '3', 10);
@@ -50,6 +56,7 @@ export const WordFmtService = {
    * @param {string} [params.location] - Location displayed on the cover
    * @param {string} [params.month] - Month displayed on the cover
    * @param {string} [params.year] - Year displayed on the cover
+   * @param {string} [params.ownerMssv] - BDU MSSV đã xác minh, dùng cho ownership của output
    * @param {'digital_document'|'binding_package'} [params.documentMode]
    * @param {string} [params.frontMatter] - Comma separated front matter: cover,comments,thanks
    * @param {string} [params.profile] - Profile name (defaults to tieu_luan.json)
@@ -70,6 +77,7 @@ export const WordFmtService = {
     location = '',
     month = '',
     year = '',
+    ownerMssv = '',
     documentMode = 'digital_document',
     documentType = 'tieu_luan',
     frontMatter = 'cover,comments,thanks',
@@ -135,6 +143,7 @@ export const WordFmtService = {
           documentMode, documentType, frontMatter,
           onlyExistingCaptions, skipProposal
         }, structure);
+        rememberOutputOwner(path.basename(outputPath), ownerMssv);
         return { ...result, outputFile: path.basename(outputPath), stdout: '' };
       });
     }
@@ -241,6 +250,7 @@ export const WordFmtService = {
           }
 
           cleanupWorkingFiles();
+          rememberOutputOwner(path.basename(outputPath), ownerMssv);
 
           resolve({
             success: true,
@@ -284,6 +294,12 @@ export const WordFmtService = {
         });
       });
     });
+  },
+
+  canDownload(outputFile, ownerMssv) {
+    const file = path.basename(String(outputFile || ''));
+    const owner = String(ownerMssv || '').trim().toUpperCase();
+    return Boolean(owner && outputOwners.get(file) === owner);
   },
 
   /**

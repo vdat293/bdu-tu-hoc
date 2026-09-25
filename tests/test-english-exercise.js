@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MoodleClient } from '../src/services/moodle.service.js';
+import { MoodleClient, sanitizeMoodleUrl } from '../src/services/moodle.service.js';
 import {
   EnglishExerciseService,
   EnglishExerciseInternals,
@@ -26,6 +26,26 @@ const attemptHtml = `
     </div>
     <input type="hidden" name="finishattempt" value="1">
   </form>`;
+
+assert.equal(
+  sanitizeMoodleUrl('/lib/ajax/service.php?sesskey=super-secret&info=quiz'),
+  'https://bdu.vn247.org/lib/ajax/service.php'
+);
+assert.equal(
+  sanitizeMoodleUrl('https://bdu.vn247.org/mod/quiz/view.php?id=1#sesskey=secret'),
+  'https://bdu.vn247.org/mod/quiz/view.php'
+);
+
+const secretLoginClient = new MoodleClient();
+secretLoginClient.request = async (_url, options = {}) => ({
+  data: options.method
+    ? '<form action="/login/index.php"><input name="username"><div class="error">https://bdu.vn247.org/login?sesskey=do-not-log</div></form>'
+    : '<input name="logintoken" value="login-token">'
+});
+await assert.rejects(
+  () => secretLoginClient.login('student', 'password'),
+  (error) => !/sesskey|do-not-log/i.test(error.message)
+);
 
 const client = new MoodleClient();
 const parsed = client.parseAttemptPage(attemptHtml);
@@ -145,7 +165,23 @@ completionErrorClient.request = async () => ({
   data: [{ exception: 'moodle_exception', errorcode: 'invalidparameter', message: 'Invalid cmid' }]
 });
 assert.equal(await completionErrorClient.markActivityCompletedManually('25461', undefined, 'page-key'), false);
-assert.equal(completionErrorClient.lastManualCompletionFailure, 'invalidparameter');
+assert.equal(completionErrorClient.lastManualCompletionFailure, 'Moodle trả lỗi API: invalidparameter');
+
+const secretPayloadClient = new MoodleClient();
+secretPayloadClient.getSesskey = async () => 'secret-key';
+secretPayloadClient.request = async () => ({
+  data: [{ error: 'https://bdu.vn247.org/endpoint?sesskey=do-not-log' }]
+});
+assert.equal(await secretPayloadClient.markActivityCompletedManually('25461', undefined, 'secret-key'), false);
+assert.doesNotMatch(secretPayloadClient.lastManualCompletionFailure, /sesskey|do-not-log/i);
+
+const statusPayloadClient = new MoodleClient();
+statusPayloadClient.getSesskey = async () => 'secret-key';
+statusPayloadClient.request = async () => ({
+  data: [{ data: { status: 'https://bdu.vn247.org/status?sesskey=do-not-log' } }]
+});
+assert.equal(await statusPayloadClient.markActivityCompletedManually('25461', undefined, 'secret-key'), false);
+assert.doesNotMatch(statusPayloadClient.lastManualCompletionFailure, /sesskey|do-not-log/i);
 
 const sesskeyFallbackClient = new MoodleClient();
 let fallbackApiUrl = '';
@@ -203,7 +239,10 @@ const learned = learnEnglishAnswersFromReview(`
   </div>`);
 assert.equal(learned[0].correctAnswer, 'reviewed answer');
 assert.equal(learned[0].source, 'moodle-review');
-assert.equal(EnglishExerciseService.deleteAnswer(learned[0].id), true);
+assert.equal(
+  EnglishExerciseService.listAnswers().some(item => item.question === '__codex_review_question__'),
+  false
+);
 
 const firstSeed = EnglishExerciseService.addAnswer('__runner_question_one__', 'goes');
 const secondSeed = EnglishExerciseService.addAnswer('__runner_question_two__', 'am');

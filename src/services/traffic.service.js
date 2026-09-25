@@ -47,7 +47,8 @@ function parseUserAgent(uaString = '') {
 const SENSITIVE_QUERY_KEYS = new Set([
   'password', 'pass', 'matkhau', 'mat_khau', 'token', 'access_token',
   'refresh_token', 'id_token', 'authorization', 'otp', 'admin_key',
-  'api_key', 'secret', 'client_secret', 'code_verifier'
+  'api_key', 'secret', 'client_secret', 'code_verifier', 'code', 'state',
+  'session', 'sessionid', 'session_id', 'sesskey', 'streamtoken', 'stream_token', 'downloadtoken', 'download_token', 'jwt', 'signature', 'x-amz-signature'
 ]);
 const MAX_QUERY_JSON_LENGTH = 2000;
 const MAX_QUERY_VALUE_LENGTH = 200;
@@ -85,6 +86,21 @@ function sanitizeQueryForLog(queryParams) {
   }
   if (!json || json === '{}') return null;
   return json.length > MAX_QUERY_JSON_LENGTH ? json.slice(0, MAX_QUERY_JSON_LENGTH) : json;
+}
+
+function sanitizePathForLog(value) {
+  return String(value || '').split(/[?#]/, 1)[0].slice(0, 500);
+}
+
+function sanitizeReferrerForLog(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.origin}${parsed.pathname}`.slice(0, 500);
+  } catch {
+    return raw.split(/[?#]/, 1)[0].slice(0, 500) || null;
+  }
 }
 
 // Express exposes the matched pattern only after routing, which is exactly when
@@ -286,7 +302,7 @@ export const TrafficService = {
 
           const logItem = {
             method: req.method,
-            path: reqPath.length > 500 ? reqPath.slice(0, 500) : reqPath,
+            path: sanitizePathForLog(reqPath),
             statusCode: res.statusCode,
             responseTimeMs,
             route: resolveRoutePattern(req),
@@ -298,7 +314,7 @@ export const TrafficService = {
             deviceType,
             os,
             browser,
-            referrer: req.headers.referer ? String(req.headers.referer).slice(0, 500) : null,
+            referrer: sanitizeReferrerForLog(req.headers.referer),
             errorMessage: res.locals?.errorMessage || req._trafficError || null,
             createdAt: new Date()
           };
@@ -941,6 +957,8 @@ export const TrafficService = {
 
 export const TrafficServiceInternals = {
   sanitizeQueryForLog,
+  sanitizePathForLog,
+  sanitizeReferrerForLog,
   resolveRoutePattern,
   getTimeRangeInterval,
   parseQueryJson

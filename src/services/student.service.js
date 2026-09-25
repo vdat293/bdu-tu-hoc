@@ -455,6 +455,16 @@ export const StudentService = {
     return result.rows;
   },
 
+  async isClanMember(clanId, mssv) {
+    const cleanMssv = normalizeMssv(mssv);
+    if (!clanId || !cleanMssv || !isDatabaseConfigured()) return false;
+    const result = await query(
+      'SELECT 1 FROM student_clans WHERE clan_id = $1 AND mssv = $2 LIMIT 1',
+      [clanId, cleanMssv]
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
   /**
    * Lấy danh sách tất cả các CLB / Nhóm kèm số lượng thành viên, vai trò của người xem,
    * trạng thái yêu cầu chờ duyệt và số yêu cầu pending (dành cho Leader)
@@ -504,6 +514,12 @@ export const StudentService = {
     `;
     const result = await query(sql, [cleanViewerMssv]);
     const clans = result.rows;
+    for (const clan of clans) {
+      if (!clan.is_joined) {
+        delete clan.leader_mssv;
+        delete clan.pending_request_count;
+      }
+    }
     // Nạp role_labels 1 lần cho tất cả CLB, attach dạng { role_key: { display_name, color } }.
     try {
       const clanIds = clans.map((c) => c.id).filter((v) => v !== null && v !== undefined);

@@ -2,9 +2,18 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import * as cheerio from 'cheerio';
+import { isTestEnvironment } from '../config/load-env.js';
 import { MoodleClient } from './moodle.service.js';
 
-const ANSWERS_FILE = path.resolve('data', 'english-answers.json');
+if (isTestEnvironment() && !process.env.ENGLISH_ANSWERS_PATH) {
+  const error = new Error('English test mode cần ENGLISH_ANSWERS_PATH trong thư mục tạm.');
+  error.code = 'ENGLISH_TEST_ANSWER_PATH_REQUIRED';
+  throw error;
+}
+
+const ANSWERS_FILE = path.resolve(
+  process.env.ENGLISH_ANSWERS_PATH || path.join('data', 'english-answers.json')
+);
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const sessions = new Map();
 
@@ -100,16 +109,47 @@ export function learnEnglishAnswersFromReview(html) {
     if (!answer) {
       answer = block.find('.answer .correct').first().closest('label, div, tr').text().trim();
     }
-    const saved = question && answer ? saveAnswer(question, answer, 'moodle-review') : null;
-    if (saved) learned.push(saved);
+    if (question && answer) {
+      // Review data is untrusted input. Return a candidate for the owner UI,
+      // but never persist it as a side effect of an ordinary student's run.
+      learned.push({
+        id: crypto.randomUUID(),
+        question,
+        correctAnswer: answer,
+        source: 'moodle-review'
+      });
+    }
   });
   return learned;
 }
 
-function getSession(id) {
+function normalizeOwnerMssv(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function getSessionRecord(id) {
   const session = sessions.get(id);
   if (!session) {
     throw Object.assign(new Error('Phiên Moodle không còn tồn tại. Vui lòng đăng nhập Moodle lại.'), { status: 404 });
+  }
+  return session;
+}
+
+function getSession(id, ownerMssv = null) {
+  const session = getSessionRecord(id);
+  if (ownerMssv !== null && normalizeOwnerMssv(ownerMssv) !== session.ownerMssv) {
+    throw Object.assign(new Error('Bạn không có quyền truy cập phiên Moodle này.'), { status: 403 });
+  }
+  session.lastActiveAt = Date.now();
+  return session;
+}
+
+function getStreamSession(id, streamToken) {
+  const session = getSessionRecord(id);
+  const expected = Buffer.from(String(session.streamToken || ''));
+  const provided = Buffer.from(String(streamToken || ''));
+  if (!expected.length || expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
+    throw Object.assign(new Error('Stream token không hợp lệ.'), { status: 403 });
   }
   session.lastActiveAt = Date.now();
   return session;
@@ -244,7 +284,7 @@ async function runQuiz(session, job, config) {
   }
 
   if (answered === 0) {
-    log(session, 'Gợi ý: Moodle chưa có đáp án của bài quiz này trong ngân hàng. Hãy làm thủ công 1 lần hoặc nộp bài để bot tự học đáp án từ trang review!', 'info');
+    log(session, 'Gợi ý: Moodle chưa có đáp án của bài quiz này trong ngân hàng. Hãy làm thủ công 1 lần hoặc nộp bài để hệ thống đọc đáp án từ trang review!', 'info');
     throw new Error('Không có câu nào khớp ngân hàng đáp án nên hệ thống từ chối tự nộp bài trắng.');
   }
   log(session, 'Đang nộp bài theo tùy chọn Tự động nộp đã được xác nhận.');
@@ -256,7 +296,7 @@ async function runQuiz(session, job, config) {
   } catch (error) {
     log(session, `Đã nộp nhưng chưa đọc được trang review: ${error.message}`, 'warning');
   }
-  log(session, `Hoàn thành: điền ${answered}, bỏ qua ${skipped}, học thêm ${learned} đáp án.`, 'success');
+  log(session, `Hoàn thành: điền ${answered}, bỏ qua ${skipped}, đọc ${learned} đáp án từ trang review (chưa tự lưu).`, 'success');
   return { answered, skipped, submitted: true, learned, attemptId: attempt.attemptId };
 }
 
@@ -489,9 +529,13 @@ export class EnglishExerciseQueueManager {
 export const englishExerciseQueue = new EnglishExerciseQueueManager();
 
 export const EnglishExerciseService = {
-  async login({ username, password, courseId }) {
+  async login({ username, password, courseId, ownerMssv }) {
     if (!username || !password) {
       throw Object.assign(new Error('Vui lòng nhập tài khoản và mật khẩu Moodle.'), { status: 400 });
+    }
+    const cleanOwnerMssv = normalizeOwnerMssv(ownerMssv);
+    if (!cleanOwnerMssv) {
+      throw Object.assign(new Error('Thiếu MSSV BDU đã xác minh.'), { status: 401 });
     }
     const client = new MoodleClient();
     await client.login(String(username).trim(), String(password));
@@ -502,8 +546,11 @@ export const EnglishExerciseService = {
       console.error('[Moodle] Lỗi quét danh sách khóa học:', err.message);
     }
     const defaultCourseId = String(courseId || courses[0]?.id || '281');
+    const streamToken = crypto.randomBytes(32).toString('base64url');
     const session = {
       id: crypto.randomUUID(),
+      ownerMssv: cleanOwnerMssv,
+      streamToken,
       client,
       username: String(username).trim(),
       courseId: defaultCourseId,
@@ -516,11 +563,17 @@ export const EnglishExerciseService = {
     };
     sessions.set(session.id, session);
     log(session, `Đăng nhập Moodle thành công: ${session.username}. Tìm thấy ${courses.length} khóa học.`, 'success');
-    return { sessionId: session.id, username: session.username, courseId: session.courseId, courses: session.courses };
+    return {
+      sessionId: session.id,
+      streamToken,
+      username: session.username,
+      courseId: session.courseId,
+      courses: session.courses
+    };
   },
 
-  async courses(id) {
-    const session = getSession(id);
+  async courses(id, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     log(session, 'Đang cập nhật danh sách khóa học...');
     const courses = await session.client.getEnrolledCourses();
     session.courses = courses;
@@ -528,8 +581,8 @@ export const EnglishExerciseService = {
     return courses;
   },
 
-  async activities(id, courseId) {
-    const session = getSession(id);
+  async activities(id, courseId, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     session.courseId = String(courseId || session.courseId || '281');
     log(session, `Đang quét khóa học #${session.courseId}...`);
     const activities = await session.client.getCourseActivities(session.courseId);
@@ -537,8 +590,8 @@ export const EnglishExerciseService = {
     return activities;
   },
 
-  start(id, input) {
-    const session = getSession(id);
+  start(id, input, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     if (session.job) throw Object.assign(new Error('Đang có một bài tập được xử lý hoặc đang chờ trong hàng.'), { status: 409 });
     if (!input.cmid) throw Object.assign(new Error('Vui lòng chọn một bài tập.'), { status: 400 });
     const job = {
@@ -598,8 +651,8 @@ export const EnglishExerciseService = {
     return { jobId: job.id };
   },
 
-  startFinish(id, input) {
-    const session = getSession(id);
+  startFinish(id, input, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     if (session.job) throw Object.assign(new Error('Đang có một tiến trình bài tập đang chạy hoặc đang chờ trong hàng.'), { status: 409 });
     const job = {
       id: crypto.randomUUID(),
@@ -637,17 +690,16 @@ export const EnglishExerciseService = {
     return { jobId: job.id };
   },
 
-  stop(id) {
-    const session = getSession(id);
+  stop(id, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     if (!session.job) return false;
     const ok = englishExerciseQueue.cancel(session.job.id);
     session.job = null;
     return ok;
   },
 
-  close(id) {
-    const session = sessions.get(id);
-    if (!session) return false;
+  close(id, ownerMssv) {
+    const session = getSession(id, ownerMssv);
     if (session.job) {
       englishExerciseQueue.cancel(session.job.id);
       session.job = null;
@@ -657,8 +709,13 @@ export const EnglishExerciseService = {
     return true;
   },
 
-  subscribe(id, response) {
-    const session = getSession(id);
+  authorizeStream(id, streamToken) {
+    getStreamSession(id, streamToken);
+    return true;
+  },
+
+  subscribe(id, response, streamToken) {
+    const session = getStreamSession(id, streamToken);
     session.subscribers.add(response);
     session.logs.forEach(entry => send(response, { type: 'log', ...entry }));
     const position = session.job ? englishExerciseQueue.getQueuePosition(session.job.id) : 0;

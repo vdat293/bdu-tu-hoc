@@ -54,20 +54,21 @@ chuyển đổi.
 npm run dev:server   # Express/API tại http://localhost:3000
 npm run dev:client   # Vite tại http://localhost:5173, proxy API/media/WS
 npm run build:client # production artifact dist/client
+npm test             # safe Node + frontend suite; không đọc .env/DB/R2
+npm run test:node    # chỉ safe Node test
 npm run test:frontend
-npm run test:e2e
 npm run lint:frontend
 ```
 
 Route sinh viên canonical gồm `/gpa`, `/info`, `/schedule`, `/leaderboard`,
-`/wordfmt`, `/survey`, `/english`, `/enrollment`, `/learning`, `/clans` và
-`/confession`, cùng `/learning/:courseCode` và `/clans/:clanId`. Bộ lọc GPA,
-lịch và leaderboard được giữ trong query string để deep link, refresh và
-Back/Forward phục hồi đúng trạng thái. Xem [baseline và hợp đồng hành vi](docs/frontend-migration-baseline.md).
+`/wordfmt`, `/survey`, `/english`, `/enrollment`, `/learning`, `/vocab`,
+`/grammar`, `/clans` và `/confession`, cùng các route động tương ứng. Bộ lọc
+được giữ trong query string để deep link, refresh và Back/Forward phục hồi
+đúng trạng thái. Xem [baseline và hợp đồng hành vi](docs/frontend-migration-baseline.md).
 
 ### Yêu cầu môi trường:
 * **Node.js**: Phiên bản 22.12+ (hoặc 20.19+ nếu môi trường chưa nâng được lên Node 22)
-* **.NET SDK / Runtime 8.0+**: Cho module WordFmt
+* **.NET SDK / Runtime 10.0+**: Cho module WordFmt
 * **PostgreSQL 16+**: Lưu snapshot GPA và xếp hạng học tập
 
 ### Các bước khởi chạy:
@@ -79,7 +80,7 @@ cd bdu-tu-hoc
 
 2. Cài đặt dependencies:
 ```bash
-npm install
+npm ci
 ```
 
 3. Sao chép `.env.example` thành `.env`, cấu hình `DATABASE_URL`, `CDS_USER`,
@@ -89,9 +90,33 @@ npm install
 npm run db:setup:dev # Chỉ dùng khi DATABASE_URL trỏ tới PostgreSQL localhost
 npm run db:migrate
 
-# Xuất / Nhập dữ liệu (Đồng bộ giữa Mac & PC hoặc Sao lưu):
-npm run db:dump     # Xuất dữ liệu ra file data/backup.sql
-npm run db:restore  # Nạp dữ liệu từ file data/backup.sql vào database hiện tại
+# Nếu database test đã có schema nhưng chưa có ledger, chỉ baseline trong
+# maintenance disposable; baseline không chạy SQL migration:
+# NODE_ENV=test BDU_TEST_MODE=1 BDU_TEST_CONFIRM_DESTRUCTIVE=1 \\
+# BDU_TEST_DATABASE_URL=... BDU_MIGRATION_BASELINE_CONFIRM=1 \\
+# BDU_MIGRATION_BASELINE_THROUGH_VERSION=10 \\
+# BDU_MIGRATION_BASELINE_CONFIRM_DATABASE=bdu_test_local \\
+# BDU_MIGRATION_BASELINE_CONFIRM_TARGET=127.0.0.1:55432/bdu_test_local \\
+# Lấy fingerprint read-only trước baseline:
+# MIGRATION_DATABASE_URL=... npm run db:migration:fingerprint
+# BDU_MIGRATION_BASELINE_CONFIRM_FINGERPRINT=<schema-fingerprint-sha256> \\
+# npm run db:migrate:baseline -- --yes
+
+# Xuất backup (ghi atomic, file quyền 0600):
+npm run db:dump -- data/backup.sql
+
+# Restore chỉ mặc định cho database local bdu_test_*; cần xác nhận tường minh:
+NODE_ENV=test \\
+BDU_TEST_MODE=1 \\
+BDU_TEST_DATABASE_URL=postgresql://bdu_test:secret@127.0.0.1:55432/bdu_test_restore \\
+BDU_MAINTENANCE_CONFIRM_DESTRUCTIVE=1 \\
+BDU_MAINTENANCE_CONFIRM_DATABASE=bdu_test_restore \\
+npm run db:restore -- data/backup.sql --yes
+
+# Dump tạo cặp file backup.sql + backup.sql.manifest.json (SHA-256).
+# Restore từ chối file không có manifest hoặc checksum không khớp.
+# Dump/restore không ghi mật khẩu vào argv. Production restore còn cần
+# --allow-production và BDU_MAINTENANCE_ALLOW_PRODUCTION=1, cần thao tác vận hành riêng.
 ```
 
 4. Có thể chạy đồng bộ thủ công lần đầu để giao diện có dữ liệu ngay:
@@ -104,20 +129,30 @@ Các lần sau backend tự đồng bộ lúc **03:00 sáng mỗi ngày theo mú
 Asia/Ho_Chi_Minh**. PostgreSQL advisory lock bảo đảm chỉ một container thực hiện
 job khi hệ thống chạy nhiều instance.
 
-5. Chạy kiểm thử hàng đợi & tải HTTP mô phỏng 30 người dùng:
+5. Chạy test an toàn:
 ```bash
-npm test         # Chạy unit test hàng đợi & phục hồi lỗi
-npm run test:load  # Mô phỏng 30 concurrent users
+npm test
+npm run test:node
+npm run test:frontend
 ```
 
-Kiểm thử tích hợp xếp hạng trên database có tên chứa `dev` hoặc `test`:
+`npm test` chỉ chạy các suite không DB/network. Không chạy trực tiếp
+`node tests/test-*.js`; runner sẽ chặn direct execution để tránh đọc `.env`
+hoặc chạm dữ liệu thật.
+
+Test tích hợp chỉ chạy trên database tạm có tên bắt buộc `bdu_test_*`:
 
 ```bash
-DATABASE_URL=postgresql://.../bdu_hub_dev DATABASE_SSL=false npm run test:ranking-integration
+NODE_ENV=test \
+BDU_TEST_MODE=1 \
+BDU_TEST_CONFIRM_DESTRUCTIVE=1 \
+BDU_TEST_DATABASE_URL=postgresql://tester:secret@127.0.0.1:5432/bdu_test_local \
+npm run test:ranking-integration
 ```
 
-Test này sẽ xóa dữ liệu trong hai bảng xếp hạng của database dev/test rồi seed
-fixture; script tự từ chối chạy nếu tên database không chứa `dev` hoặc `test`.
+Test R2 còn yêu cầu `BDU_TEST_R2_BUCKET` prefix `bdu-test-`, endpoint local/test
+và credential riêng. Tuyệt đối không dùng `DATABASE_URL` production, R2 bucket
+production hoặc `.env` production cho các lệnh này.
 
 6. Khởi chạy Server ở chế độ dev:
 ```bash
@@ -146,8 +181,10 @@ docker compose logs -f bdu-hub
 ```
 
 Compose tự khởi động PostgreSQL, chạy migration trước khi chạy app và lưu dữ
-liệu database trong volume `bdu-postgres-data`. Không cần mở port PostgreSQL ra
-Internet; chỉ expose port ứng dụng `3000`.
+liệu database trong volume `bdu-postgres-data`. **Không deploy bằng lệnh này
+lên production trước khi migration ledger, backup/restore drill và DB role
+separation đã được xác minh.** Không cần mở port PostgreSQL ra Internet; chỉ
+expose port ứng dụng `3000`.
 
 Khi đặt Nginx/Caddy/Cloudflare ở phía trước container, proxy phải chuyển tiếp
 WebSocket Upgrade và host công khai trong `X-Forwarded-Host` (hoặc `Forwarded`).
