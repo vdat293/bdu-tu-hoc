@@ -191,15 +191,32 @@ backup_database() {
   done < <(backup_args)
   [ "${#args[@]}" -eq 0 ] || log "  Cờ backup: ${args[*]}"
 
-  # Nếu lệnh này fail thì KHÔNG được migrate: không có đường quay lui.
-  if ! docker compose run --rm --no-deps bdu-hub npm run db:backup -- "${args[@]}"; then
+  # Script backup tự xoá bản local sau khi R2 verify OK, nên "chạy exit 0"
+  # KHÔNG đồng nghĩa với "còn bản sao lưu". Ta bắt buộc phải xác định được
+  # bản bền trước khi đi tiếp:
+  #   - ưu tiên bản trên R2 (đã được HEAD xác nhận), hoặc
+  #   - bản local trong volume ./data/backups (được mount vào container).
+  # Không có một trong hai thì DỪNG — không migrate production.
+  local summary_file
+  summary_file="$(mktemp)"
+  if ! docker compose run --rm --no-deps bdu-hub npm run db:backup -- "${args[@]}" 2>&1 | tee "$summary_file"; then
+    rm -f "$summary_file"
     die "Backup DB thất bại. DỪNG, không migrate và không restart app. Sửa nguyên nhân backup rồi chạy lại."
   fi
-  # File dump local thường bị xoá sau khi upload R2 verify OK, nên chỉ dò để
-  # điền vào hướng dẫn rollback khi thật sự còn trên đĩa.
-  PREVIOUS_BACKUP_FILE="$(ls -1t data/backups/*.dump backups/*.dump data/*.dump data/*.sql 2>/dev/null | head -n 1 || true)"
-  log "  Backup xong${PREVIOUS_BACKUP_FILE:+ (file local: ${PREVIOUS_BACKUP_FILE})}."
-  log "  Bản backup bền nằm ở R2: bucket BACKUP_R2_BUCKET, object có reason=pre-deploy."
+
+  local uploaded="false"
+  if grep -q '"uploaded"[[:space:]]*:[[:space:]]*true' "$summary_file"; then
+    uploaded="true"
+  fi
+  rm -f "$summary_file"
+
+  PREVIOUS_BACKUP_FILE="$(ls -1t data/backups/*.dump 2>/dev/null | head -n 1 || true)"
+
+  if [ "$uploaded" != "true" ] && [ -z "$PREVIOUS_BACKUP_FILE" ]; then
+    die "Backup KHÔNG còn bản bền nào để quay lui (uploaded=false và không có file trong data/backups/). DỪNG, không migrate. Cần BACKUP_R2_BUCKET hoặc sửa BACKUP_LOCAL_DIR rồi chạy lại."
+  fi
+
+  log "  Backup xong. Bền vững: ${uploaded}R2 object có reason=pre-deploy${PREVIOUS_BACKUP_FILE:+, bản local ${PREVIOUS_BACKUP_FILE}}."
 }
 
 # -----------------------------------------------------------------------------

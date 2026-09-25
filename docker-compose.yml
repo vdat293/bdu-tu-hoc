@@ -108,6 +108,10 @@ services:
       - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-}
       - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-}
       - BACKUP_R2_BUCKET=${BACKUP_R2_BUCKET:-}
+      # Bản dump local phải nằm trong volume được mount. Nếu không nó rơi vào
+      # writable layer của container, và `docker compose run --rm` xoá sạch
+      # container sau khi chạy xong => mất backup đúng lúc deploy cần nó nhất.
+      - BACKUP_LOCAL_DIR=${BACKUP_LOCAL_DIR:-/app/data/backups}
       # Cờ chống ghi/xoá nhầm production; chỉ bật trên VPS, không bật ở dev/test.
       - BDU_MAINTENANCE_ALLOW_PRODUCTION=${BDU_MAINTENANCE_ALLOW_PRODUCTION:-}
     depends_on:
@@ -136,6 +140,10 @@ services:
       - ./data/fb-profile:/app/data/fb-profile
       - ./data/fb-import:/app/data/fb-import
       - ./data/client-assets:/app/data/client-assets
+      # Backup DB chạy qua `docker compose run --rm bdu-hub` (bước 2 của
+      # deploy.sh và db:backup:verify). Volume này là thứ giữ bản dump tồn tại
+      # sau khi container tạm bị xoá. Phải khớp BACKUP_LOCAL_DIR ở trên.
+      - ./data/backups:/app/data/backups
 
   # Bot Discord nhắc lịch/tag (chạy riêng process để crash không kéo sập web).
   # Cần DISCORD_BOT_TOKEN trong .env; để trống thì đừng start service này
@@ -168,7 +176,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: bdu-tu-hoc-db-backup
-    restart: unless-stopped
+    # KHÔNG dùng `unless-stopped`: scheduler `process.exit(0)` khi
+    # BACKUP_ENABLED tắt, mà `unless-stopped` khởi động lại container dù exit
+    # code là 0 => vòng lặp vô hạn. `on-failure:3` vẫn lấy lại container khi
+    # scheduler crash thật, nhưng không hồi sinh container đã tắt chủ đồng.
+    restart: on-failure:3
     environment:
       # Chỉ role backup chỉ đọc. KHÔNG dùng DATABASE_URL của app.
       - BACKUP_DATABASE_URL=${BACKUP_DATABASE_URL:-}
@@ -177,8 +189,9 @@ services:
       - BACKUP_ENABLED=${BACKUP_ENABLED:-}
       - BACKUP_CRON=${BACKUP_CRON:-}
       - BACKUP_ALLOW_PRODUCTION=${BACKUP_ALLOW_PRODUCTION:-}
-      # Bản dump local phải nằm trong volume, nếu không restart container sẽ
-      # mất bản đang ghi dở.
+      # Bản dump local phải nằm trong volume được mount. Nếu không nó rơi vào
+      # writable layer của container, và `docker compose run --rm` xoá sạch
+      # container sau khi chạy xong => mất backup đúng lúc deploy cần nó nhất.
       - BACKUP_LOCAL_DIR=${BACKUP_LOCAL_DIR:-/app/data/backups}
       - BACKUP_ALERT_AFTER=${BACKUP_ALERT_AFTER:-}
       - BACKUP_ALERT_FILE=${BACKUP_ALERT_FILE:-}
@@ -188,6 +201,10 @@ services:
       - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-}
       - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-}
       - BACKUP_R2_BUCKET=${BACKUP_R2_BUCKET:-}
+      # Cần R2_BUCKET để script so BACKUP_R2_BUCKET với bucket media và từ chối
+      # nếu trùng. Thiếu biến này thì phép so sánh bị bỏ qua im lặng và dump
+      # production có thể rơi vào bucket media.
+      - R2_BUCKET=${R2_BUCKET:-}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}

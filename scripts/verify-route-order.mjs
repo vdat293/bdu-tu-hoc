@@ -36,18 +36,53 @@ function describe(router) {
   return layers;
 }
 
-let oldSource;
+// So với HEAD là tautology: sau khi commit tách, HEAD chính là file assembler
+// nên so với working tree luôn ra "OK" và cổng bảo vệ thứ tự route chết
+// âm thầm. Thay vào đó chọn bản gốc ĐỦ NHIỀU route nhất trong lịch sử — tự
+// sửa chính, không phụ thuộc hard-code commit hash.
+function readOriginalSource() {
+  let commits = [];
+  try {
+    commits = execFileSync('git', ['log', '--format=%H', '--', 'src/routes/api.routes.js'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024
+    }).trim().split(/\r?\n/).filter(Boolean);
+  } catch {
+    return null;
+  }
+  let best = null;
+  for (const commit of commits) {
+    let source;
+    try {
+      source = execFileSync('git', ['show', `${commit}:src/routes/api.routes.js`], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 4 * 1024 * 1024
+      });
+    } catch {
+      continue;
+    }
+    // Đếm route bằng số lần gọi router.get/post/... trong file.
+    const count = (source.match(/\brouter\.(get|post|put|patch|delete|use)\s*\(/g) || []).length;
+    if (!best || count > best.count) best = { source, count, commit };
+  }
+  return best;
+}
+
+let original;
 try {
-  oldSource = execFileSync('git', ['show', 'HEAD:src/routes/api.routes.js'], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024
-  });
+  original = readOriginalSource();
 } catch (error) {
-  console.error('Khong doc duoc ban goc tu git HEAD:', error.message);
+  console.error('Khong doc duoc ban goc tu git:', error.message);
   process.exit(2);
 }
-fs.writeFileSync(oldAbsolute, oldSource, 'utf8');
+if (!original) {
+  console.log('Khong tim thay ban goc lich su cua api.routes.js - bo qua kiem tra.');
+  process.exit(0);
+}
+fs.writeFileSync(oldAbsolute, original.source, 'utf8');
+console.log(`Ban goc lay tu commit ${original.commit.slice(0, 8)} (${original.count} lenh dang ky route).`);
 
 try {
   const { ENGLISH_ANSWERS_PATH } = process.env;

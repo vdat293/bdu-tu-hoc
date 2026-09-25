@@ -19,7 +19,12 @@ const SCAN_FILES = ['server.js'];
 const SPECIFIER_PATTERNS = [
   /\bfrom\s*['"]([^'"]+)['"]/g,
   /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  // Import side-effect: `import './load-env.js';` không có `from`/`import(`/
+  // `require(` nên ba pattern trên bỏ sót. Repo có hơn 10 dạng này, trong đó có
+  // `import '../src/config/load-env.js';` ở cả 4 script db-backup — nếu file đó
+  // bị dọn đi mà guard im lặng, mọi script backup sẽ chạy mà KHÔNG nạp env.
+  /\bimport\s+['"]([^'"]+)['"]/g
 ];
 
 function collectFiles(target, files) {
@@ -48,6 +53,16 @@ function resolvesToFile(specifier, fromFile) {
   });
 }
 
+// Phải bỏ comment trước khi quét: nếu không, chính dòng chú thích trong file
+// này (`import './x.js';` nằm trong comment) cũng bị quét và báo động giả.
+// Với `//` chỉ coi là comment khi không đứng sau `:` — nếu không thì URL trong
+// chuỗi (`'https://...'`) sẽ bị cắt và làm hỏng import hợp lệ.
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 const scanned = [];
 for (const entry of [...SCAN_ROOTS, ...SCAN_FILES]) {
   const target = path.join(ROOT, entry);
@@ -60,7 +75,7 @@ assert.ok(scanned.length > 50, `Chỉ quét được ${scanned.length} file — 
 const broken = [];
 let checked = 0;
 for (const file of scanned) {
-  const source = fs.readFileSync(file, 'utf8');
+  const source = stripComments(fs.readFileSync(file, 'utf8'));
   for (const pattern of SPECIFIER_PATTERNS) {
     pattern.lastIndex = 0;
     let match = pattern.exec(source);

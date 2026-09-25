@@ -92,7 +92,7 @@ BACKUP_ALLOW_PRODUCTION=1
 BDU_MAINTENANCE_ALLOW_PRODUCTION=1
 ```
 
-⚠️ **Hạn chế cần biết (sẽ tự sửa ở đợt tiếp theo)**: `docker-compose.yml` **không** khai báo `BACKUP_ALLOW_PRODUCTION` trong `environment` của service `bdu-db-backup`, và cũng không có `BACKUP_LOCAL_DIR`. Nên hai biến này phải truyền kèm lệnh `docker compose run --rm -e ...` khi chạy thủ công, hoặc thêm vào `docker-compose.yml` (cần sửa `docker-compose.yml` — ngoài phạm vi tài liệu này).
+Cả `BACKUP_ALLOW_PRODUCTION` và `BACKUP_LOCAL_DIR` **đã** được khai báo trong `environment` của service `bdu-db-backup` (và `BACKUP_LOCAL_DIR` cho cả `bdu-hub` vì `deploy.sh` gọi backup qua service đó). Không cần truyền `-e` khi chạy thủ công.
 
 ### 2.4. Retention
 

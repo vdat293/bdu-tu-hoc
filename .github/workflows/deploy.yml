@@ -110,6 +110,14 @@ jobs:
           echo "Deploy commit ${SHA} (${TARGET_REF})"
 
       - name: Chạy deploy/deploy.sh trên VPS
+        # BẮT BUỘC có env ở đây. `envs:` chỉ khai báo TÊN biến được forward;
+        # nếu không định nghĩa `DEPLOY_SHA` ở step này thì VPS nhận chuỗi rỗng
+        # và deploy.sh rơi về `git rev-parse HEAD` trên đĩa => deploy nhầm bản
+        # cũ và cổng `git merge-base --is-ancestor` bị vô hiệu hoá.
+        if: steps.resolve.outputs.sha != ''
+        env:
+          DEPLOY_SHA: ${{ steps.resolve.outputs.sha }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.VPS_HOST }}

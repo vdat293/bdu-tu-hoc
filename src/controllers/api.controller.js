@@ -7,9 +7,12 @@
  * barrel này khi cần gom nhiều domain (ví dụ `api.routes.js` mount toàn bộ
  * route theo tên `ApiController.<method>`).
  *
- * Không dùng object spread để gộp: `ApiController` không dùng `this.` nên
- * spread vẫn chạy được, nhưng nó chụp lại giá trị tại thời điểm spread. Re-export
- * giữ nguyên binding và không thêm chi phí khởi tạo.
+ * Ở cuối file, 16 controller được hợp nhất bằng object spread để giữ đúng tên
+ * `ApiController.<method>` mà `api.routes.js` đang dùng. Spread tạo snapshot
+ * tại thời điểm spread, nên `ApiController` KHÔNG phải view động của các
+ * controller con: đổi tên một method trong controller con sau khi barrel đã
+ * nạp sẽ không phản ánh. Ở đây điều đó vô hại vì không mã nào mutate controller
+ * và không controller nào dùng `this.` — nhưng đừng dựa vào nó để patch runtime.
  *
  * Không controller con nào được import từ barrel này — nếu không sẽ tạo
  * circular import. Mỗi controller con chỉ import service của chính nó.

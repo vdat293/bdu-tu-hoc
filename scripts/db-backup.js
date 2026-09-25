@@ -194,6 +194,17 @@ async function uploadAndVerify({ client, bucket, dumpKey, manifestKey, dumpFile,
   if (remoteSize !== Number(manifest.size)) {
     throw new Error(`Verify thất bại: size trên R2 (${remoteSize}) khác manifest (${manifest.size}).`);
   }
+  // Size KHÔNG đủ để kết luận object còn nguyên: một object bị ghi đè hoặc cắt
+  // cụt cùng kích thước vẫn pass kiểm tra size, và nếu tin nó thì bản local bị
+  // xoá => chỉ còn một bản hỏng trên R2. Metadata `bdu-sha256` đã ghi lúc put
+  // nên so được mà không tốn băng thông tải lại toàn bộ.
+  const remoteSha = String(headDump.Metadata?.['bdu-sha256'] || '').trim().toLowerCase();
+  if (remoteSha && remoteSha !== String(manifest.sha256).toLowerCase()) {
+    throw new Error(`Verify thất bại: SHA-256 trên R2 (${remoteSha}) khác manifest (${manifest.sha256}).`);
+  }
+  if (!remoteSha) {
+    logWarn(SCOPE, 'Object trên R2 không có metadata bdu-sha256 (có thể do bucket đặt metadata tự động). Chỉ xác minh được size; hãy chạy `npm run db:backup:verify` để re-hash thật.');
+  }
   const headManifest = await objectExists(client, bucket, manifestKey);
   if (!headManifest) throw new Error(`Verify thất bại: không tìm thấy manifest ${manifestKey} trên R2.`);
 
