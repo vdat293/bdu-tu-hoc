@@ -36,6 +36,20 @@ if (typeof window.URL.revokeObjectURL !== 'function') {
   });
 }
 
+// jsdom không kèm canvas: `getContext()` KHÔNG throw mà báo "Not implemented"
+// qua virtual console, vitest ghi nhận thành unhandled error và exit 1 dù mọi
+// test đều pass. Component avatar crop đã có fallback khi không lấy được
+// context (trả ảnh gốc, server tự resize), nên trả `null` ở đây là đúng nhánh
+// graceful-degradation mà code production dự kiến — trình duyệt thật cũng trả
+// null chứ không throw.
+if (typeof window.HTMLCanvasElement !== 'undefined') {
+  Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    writable: true,
+    value: () => null
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();

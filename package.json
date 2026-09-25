@@ -4,7 +4,11 @@
   "description": "Ứng dụng tra cứu bảng điểm sinh viên BDU - Đại học Bình Dương",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.12 <25"
+  },
   "scripts": {
+    "ci": "npm run lint:frontend && npm run test:frontend && npm run test:node && npm run build:client",
     "start": "node server.js",
     "dev": "npm run db:migrate && node --watch server.js",
     "dev:server": "node --watch server.js",

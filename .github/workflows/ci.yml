@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Không để hai lần push chạy chồng nhau trên cùng ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Cài dependencies
+        run: npm ci
+
+      # scripts/run-command.mjs cố tình fail-closed trên Windows (chỉ hỗ trợ
+      # POSIX process-group cleanup), nên CI phải chạy ubuntu để runner thật
+      # chạy test chứ không bị chặn sớm.
+      - name: Lint frontend
+        run: npm run lint:frontend
+
+      - name: Unit test frontend (vitest)
+        run: npm run test:frontend
+
+      - name: Unit test backend (node)
+        run: npm run test:node
+
+      - name: Build client
+        run: npm run build:client
+
+      - name: Upload dist/client artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: dist/client
+          retention-days: 3
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      # Image chứa .NET runtime + Playwright Chromium (nặng vài GB tải về), nên
+      # build lại từ đầu mỗi lần rất tốn thời gian. Cache GHA giữ lại layer
+      # giữa các run. `load: false` vì runner không cần image, chỉ cần xác nhận
+      # build được (Dockerfile:49 là smoke check runtime duy nhất cho image).
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          build-args: BUILD_ID=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
