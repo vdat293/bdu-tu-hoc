@@ -6,7 +6,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import { ApiController } from '../controllers/api.controller.js';
-import { AdminDashboardController } from '../controllers/admin-dashboard.controller.js';
+import { AdminDashboardController } from '../modules/admin/admin-dashboard.controller.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
 import { BduIdentityService } from '../services/bdu-identity.service.js';
 

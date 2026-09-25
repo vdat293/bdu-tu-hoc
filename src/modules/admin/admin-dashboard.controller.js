@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
-import { TrafficService } from '../services/traffic.service.js';
-import { BduIdentityService } from '../services/bdu-identity.service.js';
-import { IdentityAdminService } from '../services/identity-admin.service.js';
-import { BduService } from '../services/bdu.service.js';
-import { AcademicRankingService } from '../services/academic-ranking.service.js';
-import { RankingSchedulerService } from '../services/ranking-scheduler.service.js';
-import { SystemSettingsService } from '../services/system-settings.service.js';
-import { isDatabaseConfigured } from '../db/database.js';
+import { TrafficService } from '../../services/traffic.service.js';
+import { BduIdentityService } from '../../services/bdu-identity.service.js';
+import { IdentityAdminService } from '../../services/identity-admin.service.js';
+import { BduService } from '../../services/bdu.service.js';
+import { AcademicRankingService } from '../../services/academic-ranking.service.js';
+import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
+import { SystemSettingsService } from '../../services/system-settings.service.js';
+import { isDatabaseConfigured } from '../../db/database.js';
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();

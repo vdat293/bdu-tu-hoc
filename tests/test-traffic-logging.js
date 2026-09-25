@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { TrafficService, TrafficServiceInternals } from '../src/services/traffic.service.js';
-import { AdminDashboardController } from '../src/controllers/admin-dashboard.controller.js';
+import { AdminDashboardController } from '../src/modules/admin/admin-dashboard.controller.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
 import { attachRequestContext } from '../src/utils/request-context.js';
 import { isDatabaseConfigured, query } from '../src/db/database.js';

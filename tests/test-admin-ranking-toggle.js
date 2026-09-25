@@ -13,7 +13,7 @@ import { transaction, closeDatabase, isDatabaseConfigured, query } from '../src/
 import { SystemSettingsService } from '../src/services/system-settings.service.js';
 import { RankingSchedulerService } from '../src/services/ranking-scheduler.service.js';
 import { AcademicRankingService, AcademicRankingInternals } from '../src/services/academic-ranking.service.js';
-import { AdminDashboardController } from '../src/controllers/admin-dashboard.controller.js';
+import { AdminDashboardController } from '../src/modules/admin/admin-dashboard.controller.js';
 import { ApiController } from '../src/controllers/api.controller.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
 
