@@ -267,7 +267,8 @@ assert.equal(parseGraphqlStream('không phải json').length, 0);
 
 /* 11. Nối dây hệ thống: migration, route, scheduler, static media, RBAC */
 const migration = fs.readFileSync(new URL('../migrations/029_facebook_import.sql', import.meta.url), 'utf8');
-const routes = fs.readFileSync(new URL('../src/routes/api.routes.js', import.meta.url), 'utf8');
+// Route định nghĩa trong file domain identity (api.routes.js chỉ còn là assembler).
+const routes = fs.readFileSync(new URL('../src/routes/identity.routes.js', import.meta.url), 'utf8');
 const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
 // `requireCommunityModerator` đã tách sang module identity.

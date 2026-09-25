@@ -1,264 +1,66 @@
 /**
- * Unified API Routes
+ * Unified API Routes — assembler.
+ *
+ * File này KHÔNG còn chứa định nghĩa route. Mỗi nhóm route đã tách sang
+ * `src/routes/<domain>.routes.js` dưới dạng hàm `register*(router)`.
+ *
+ * Vì sao dùng hàm nhận `router` chứ không phải `express.Router()` riêng cho mỗi
+ * domain: Express khớp route THEO THỨ TỰ đăng ký. Nếu mỗi domain là một router
+ * riêng rồi `app.use()` lần lượt, thứ tự sẽ bị đảo. Truyền chung một `router` và
+ * gọi các hàm register theo đúng thứ tự dòng của file gốc cũ giữ nguyên hành vi
+ * khớp route, kể cả `router.use('/admin/dashboard', requireAdmin)` vốn là
+ * prefix-match và phải chạy sau route login.
+ *
+ * Vì vậy các domain bị xen kẽ trong file gốc được tách thành nhiều hàm register
+ * riêng (identity có 4 hàm, notifications có 2 hàm) để tái tạo đúng thứ tự.
+ * Đổi thứ tự gọi ở đây là thay đổi hành vi routing — hãy coi là thay đổi API.
  */
 
 import express from 'express';
-import multer from 'multer';
-import path from 'path';
-import { ApiController } from '../controllers/api.controller.js';
-import { AdminDashboardController } from '../modules/admin/admin-dashboard.controller.js';
 import { WordFmtService } from '../services/wordfmt.service.js';
-import { BduIdentityService } from '../services/bdu-identity.service.js';
+
+import { registerAuthRoutes } from './auth.routes.js';
+import { registerWordFmtRoutes } from './wordfmt.routes.js';
+import { registerSurveyRoutes } from './survey.routes.js';
+import { registerEnglishRoutes } from './english.routes.js';
+import { registerLearningRoutes } from './learning.routes.js';
+import {
+  registerIdentityPortalRoutes,
+  registerIdentityAdminRoutes,
+  registerFacebookImportRoutes,
+  registerIdentityAvatarRoutes
+} from './identity.routes.js';
+import { registerNotificationRoutes, registerReminderRoutes } from './notifications.routes.js';
+import { registerBroadcastRoutes } from './broadcast.routes.js';
+import { registerAdminRoutes } from './admin.routes.js';
+import { registerCommunityRoutes } from './community.routes.js';
+import { registerClubsRoutes } from './clubs.routes.js';
+import { registerMetaRoutes } from './meta.routes.js';
+import { registerVocabRoutes } from './vocab.routes.js';
+import { registerGrammarRoutes } from './grammar.routes.js';
+import { registerGamesRoutes } from './games.routes.js';
 
 const router = express.Router();
 
-// Multer upload config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'temp/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'upload-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB
-  fileFilter: (req, file, cb) => {
-    if (file.originalname.match(/\.(docx)$/i)) {
-      return cb(null, true);
-    }
-    cb(new Error('Chỉ chấp nhận file định dạng Word (.docx).'));
-  }
-});
-
-const avatarUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: Math.max(1, Math.min(10, Number(process.env.AVATAR_MAX_SIZE_MB) || 3)) * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(null, true);
-    cb(new Error('Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.'));
-  }
-});
-
-const mediaMaxMb = Math.max(
-  Number(process.env.MEDIA_IMAGE_MAX_MB) || 8,
-  Number(process.env.MEDIA_GIF_MAX_MB) || 8
-);
-const mediaUpload = multer({
-  storage: multer.memoryStorage(),
-  // Nới thêm 1MB để service kịp báo lỗi 413 kèm thông báo rõ ràng theo loại file.
-  limits: { fileSize: Math.trunc((mediaMaxMb + 1) * 1024 * 1024) },
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) return cb(null, true);
-    cb(new Error('Chỉ chấp nhận ảnh JPG, PNG, WebP hoặc GIF.'));
-  }
-});
-
-async function requireVerifiedMssv(req, res, next) {
-  try {
-    req.verifiedMssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
-    return next();
-  } catch (error) {
-    return res.status(error.status || 401).json({
-      result: false,
-      code: error.code || 'AUTH_REQUIRED',
-      message: error.message || 'Vui lòng đăng nhập để tiếp tục.'
-    });
-  }
-}
-
-// 1. Auth & Portal
-router.post('/login', ApiController.login);
-router.post('/grades', ApiController.getGrades);
-router.get('/rankings/me', ApiController.getMyAcademicRanking);
-router.get('/rankings/leaderboard', ApiController.getAcademicLeaderboard);
-router.get('/rankings/status', ApiController.getAcademicRankingStatus);
-router.post('/profile', ApiController.getProfile);
-router.get('/schedule', ApiController.getSchedule);
-router.post('/schedule', ApiController.getSchedule);
-
-// 2. Word Formatting Tool
-router.post('/wordfmt/format', requireVerifiedMssv, upload.single('document'), ApiController.formatDocx);
-router.get('/wordfmt/download/:filename', requireVerifiedMssv, ApiController.downloadFormattedDocx);
-
-// 3. Survey Automation Tool (Server-Sent Events)
-router.get('/survey/forms', ApiController.getSurveyForms);
-router.post('/survey/runs', ApiController.startSurveyRun);
-router.get('/survey/runs/:runId', ApiController.getSurveyRun);
-// Keep the SSE path neutral so browser content filters do not mistake it for
-// an external tracking/survey endpoint. It only observes an existing run.
-router.get('/tool-runs/:runId/events', ApiController.streamSurveyRun);
-// Legacy static portal compatibility. The React portal uses the run API above.
-router.get('/survey/stream', ApiController.streamSurvey);
-
-// 4. Moodle English Exercise Automation
-router.get('/english/answers', ApiController.getEnglishAnswers);
-router.post('/english/answers', ApiController.addEnglishAnswer);
-router.delete('/english/answers/:id', ApiController.deleteEnglishAnswer);
-router.post('/english/login', ApiController.loginEnglish);
-router.get('/english/:sessionId/courses', ApiController.getEnglishCourses);
-router.get('/english/:sessionId/activities', ApiController.getEnglishActivities);
-router.post('/english/:sessionId/start', ApiController.startEnglishExercise);
-router.post('/english/:sessionId/finish-course', ApiController.startEnglishCourseFinish);
-router.post('/english/:sessionId/stop', ApiController.stopEnglishExercise);
-router.delete('/english/:sessionId', ApiController.closeEnglishSession);
-router.get('/english/:sessionId/stream', ApiController.streamEnglishExercise);
-
-// 5. Learning Hub Resources
-router.get('/learning/resources', ApiController.getLearningResources);
-router.get('/learning/courses/:courseCode/posts', ApiController.getCourseLearningPosts);
-router.post('/learning/courses/:courseCode/posts', ApiController.createCourseLearningPost);
-router.delete('/learning/courses/:courseCode/posts/:postId', ApiController.deleteCourseLearningPost);
-router.post('/learning/courses/:courseCode/posts/:postId/like', ApiController.toggleCourseLearningPostLike);
-router.get('/learning/courses/:courseCode/posts/:postId/comments', ApiController.getCourseLearningPostComments);
-router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiController.addCourseLearningPostComment);
-
-router.get('/students/me/presentation', ApiController.getMyIdentityPresentation);
-router.put('/students/me/presentation', ApiController.updateMyIdentityPresentation);
-router.put('/students/me/cosmetics/frame', ApiController.updateMyEquippedFrame);
-router.get('/identity/frames', ApiController.getIdentityFrames);
-router.get('/students/search', ApiController.searchActiveStudents);
-router.get('/students/:mssv/profile', ApiController.getStudentProfile);
-
-// Thông báo tag/reply confession
-router.get('/notifications', ApiController.getNotifications);
-router.get('/notifications/unread-count', ApiController.getUnreadNotificationCount);
-router.post('/notifications/read-all', ApiController.markAllNotificationsRead);
-router.post('/notifications/:id/read', ApiController.markNotificationRead);
-
-// Nhắc lịch học opt-in (Email/Discord)
-router.get('/reminders/prefs', ApiController.getReminderPrefs);
-router.post('/reminders/consent', ApiController.consentReminders);
-router.delete('/reminders/revoke', ApiController.revokeReminders);
-router.post('/reminders/discord/code', ApiController.createDiscordLinkCode);
-router.post('/reminders/discord/oauth-url', ApiController.createDiscordOAuthUrl);
-router.post('/reminders/discord/oauth-complete', ApiController.completeDiscordOAuth);
-router.post('/reminders/discord/test', ApiController.sendDiscordTest);
-router.delete('/reminders/discord/link', ApiController.unlinkDiscordLink);
-
-// Identity entitlement administration (server-side role checked)
-router.get('/admin/identity/items', ApiController.getAdminIdentityItems);
-router.post('/admin/identity/items', ApiController.createAdminIdentityItem);
-router.put('/admin/identity/items/:id', ApiController.updateAdminIdentityItem);
-router.delete('/admin/identity/items/:id', ApiController.deleteAdminIdentityItem);
-router.get('/admin/identity/students/:mssv/grants', ApiController.getAdminIdentityGrants);
-router.post('/admin/identity/grants', ApiController.createAdminIdentityGrant);
-router.delete('/admin/identity/grants/:grantId', ApiController.revokeAdminIdentityGrant);
-router.get('/admin/identity/audit', ApiController.getAdminIdentityAudit);
-router.post('/admin/system-roles', ApiController.grantAdminSystemRole);
-router.delete('/admin/system-roles/:mssv/:role', ApiController.revokeAdminSystemRole);
-
-// Kéo bài viết từ nhóm Facebook về Confession (kiểm duyệt viên)
-router.get('/admin/facebook-import/status', ApiController.requireCommunityModerator, ApiController.getFacebookImportStatus);
-router.post('/admin/facebook-import/run', ApiController.requireCommunityModerator, ApiController.runFacebookImport);
-
-// 6b. Thông báo cập nhật website qua Discord DM (Admin Tool)
-router.get('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController.getAdminBroadcast);
-router.post('/admin/broadcast', ApiController.requireIdentityAdmin, ApiController.sendAdminBroadcast);
-router.get('/admin/avatars', ApiController.getAdminAvatars);
-router.get('/admin/avatars/:mssv', ApiController.getAdminAvatar);
-router.delete('/admin/avatars/:mssv', ApiController.requireIdentityAdmin, ApiController.deleteAdminAvatar);
-
-// Avatar tự upload cho chính người dùng (ảnh lưu trên Cloudflare R2).
-router.post('/me/avatar', requireVerifiedMssv, avatarUpload.single('avatar'), ApiController.uploadMyAvatar);
-router.delete('/me/avatar', ApiController.deleteMyAvatar);
-
-// Admin Traffic & Logs Dashboard
-router.post('/admin/dashboard/login', AdminDashboardController.login);
-router.use('/admin/dashboard', AdminDashboardController.requireAdmin);
-router.get('/admin/dashboard/overview', AdminDashboardController.getOverview);
-router.get('/admin/dashboard/timeline', AdminDashboardController.getTimeline);
-router.get('/admin/dashboard/endpoints', AdminDashboardController.getEndpoints);
-router.get('/admin/dashboard/users', AdminDashboardController.getUsers);
-router.get('/admin/dashboard/visited-students', AdminDashboardController.getVisitedStudents);
-router.get('/admin/dashboard/devices', AdminDashboardController.getDevices);
-router.get('/admin/dashboard/logs', AdminDashboardController.getLogs);
-router.get('/admin/dashboard/routes', AdminDashboardController.getRoutes);
-router.get('/admin/dashboard/users/:mssv/activity', AdminDashboardController.getUserActivity);
-router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
-router.get('/admin/dashboard/ranking-sync', AdminDashboardController.getRankingSync);
-router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRankingSync);
-router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
-
-// 6. Góc Tự Học Số (Community Study Hub & Clans)
-router.post('/community/media', requireVerifiedMssv, mediaUpload.single('file'), ApiController.uploadCommunityMedia);
-router.get('/community/posts', ApiController.getCommunityPosts);
-router.post('/community/posts', ApiController.createCommunityPost);
-router.get('/community/posts/:id', ApiController.getCommunityPost);
-router.patch('/community/posts/:id', ApiController.updateCommunityPost);
-router.delete('/community/posts/:id', ApiController.deleteCommunityPost);
-router.post('/community/posts/:id/pin', ApiController.toggleClanPostPin);
-router.post('/community/posts/:id/like', ApiController.toggleCommunityPostLike);
-router.get('/community/posts/:id/comments', ApiController.getCommunityPostComments);
-router.post('/community/posts/:id/comments', ApiController.addCommunityPostComment);
-router.patch('/community/posts/:id/comments/:commentId', ApiController.editCommunityPostComment);
-router.delete('/community/posts/:id/comments/:commentId', ApiController.deleteCommunityPostComment);
-
-// 7. CLB & Nhóm Học Tập (Clans/Guilds)
-router.get('/community/clans', ApiController.getClans);
-router.post('/community/clans', ApiController.createClan);
-router.patch('/community/clans/:id', ApiController.updateClan);
-router.delete('/community/clans/:id', ApiController.disbandClan);
-router.post('/community/clans/:id/join', ApiController.joinClan);
-router.delete('/community/clans/:id/join-requests', ApiController.cancelClanJoinRequest);
-router.get('/community/clans/:id/join-requests', ApiController.getClanJoinRequests);
-router.post('/community/clans/:id/join-requests/:requestId/review', ApiController.reviewClanJoinRequest);
-router.post('/community/clans/:id/leave', ApiController.leaveClan);
-router.get('/community/clans/:id/members', ApiController.getClanMembers);
-router.patch('/community/clans/:id/members/:mssv/role', ApiController.updateClanMemberRole);
-router.delete('/community/clans/:id/members/:mssv', ApiController.kickClanMember);
-router.get('/community/clans/:id/documents', ApiController.getClanDocuments);
-router.get('/community/clans/:id/roles', ApiController.getClanRoles);
-router.put('/community/clans/:id/roles', ApiController.updateClanRoles);
-router.get('/community/clans/:id/quiz', ApiController.getClanQuiz);
-router.put('/community/clans/:id/quiz', ApiController.updateClanQuiz);
-router.post('/community/polls/:pollId/vote', ApiController.voteClanPoll);
-
-// Health & Metrics check
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    time: new Date().toISOString(),
-    queue: WordFmtService.getQueueStats()
-  });
-});
-router.get('/queue-status', ApiController.getQueueStatus);
-router.get('/version', ApiController.getVersion);
-
-// 8. Luyện từ vựng (clone luyentu, trừ Listening/Đặc biệt)
-router.get('/vocab/themes', ApiController.listVocabThemes);
-router.get('/vocab/themes/:slug', ApiController.getVocabTheme);
-router.get('/vocab/themes/:slug/sets', ApiController.listVocabSets);
-router.get('/vocab/sets/:setId', ApiController.getVocabSet);
-router.get('/vocab/sets/:setId/words', ApiController.listVocabWords);
-router.post('/vocab/progress', ApiController.saveVocabProgress);
-router.get('/vocab/review/summary', ApiController.getVocabReviewSummary);
-router.get('/vocab/review/words', ApiController.listVocabReviewWords);
-router.post('/vocab/review', ApiController.reviewVocabWord);
-
-// 8b. Luyện ngữ pháp (clone luyennguphap: lý thuyết + bài tập + đọc hiểu)
-router.get('/grammar/groups', ApiController.listGrammarGroups);
-router.get('/grammar/paths/:pathId', ApiController.getGrammarPath);
-router.get('/grammar/lessons/:lessonId', ApiController.getGrammarLesson);
-router.post('/grammar/progress', ApiController.saveGrammarProgress);
-router.post('/grammar/extra-progress', ApiController.saveGrammarExtraProgress);
-router.post('/grammar/answer', ApiController.checkGrammarAnswer);
-
-// 9. Giải trí: online game rooms, challenges and move history
-router.get('/entertainment/games', ApiController.getEntertainmentGames);
-router.get('/entertainment/rooms', ApiController.listEntertainmentRooms);
-router.post('/entertainment/rooms', ApiController.createEntertainmentRoom);
-router.get('/entertainment/rooms/:roomRef', ApiController.getEntertainmentRoom);
-router.post('/entertainment/rooms/:roomRef/join', ApiController.joinEntertainmentRoom);
-router.post('/entertainment/rooms/:roomRef/leave', ApiController.leaveEntertainmentRoom);
-router.post('/entertainment/rooms/:roomRef/rematch', ApiController.rematchEntertainmentRoom);
-router.get('/entertainment/rooms/:roomRef/moves', ApiController.listEntertainmentMoves);
-router.post('/entertainment/rooms/:roomRef/moves', ApiController.makeEntertainmentMove);
-router.post('/entertainment/rooms/:roomRef/challenges', ApiController.createEntertainmentChallenge);
-router.get('/entertainment/challenges/:challengeId', ApiController.getEntertainmentChallenge);
-router.post('/entertainment/challenges/:challengeId/accept', ApiController.acceptEntertainmentChallenge);
+// Thứ tự bên dưới là THỨ TỰ DÒNG của file gốc trước khi tách. Giữ nguyên.
+registerAuthRoutes(router);            // 1. Auth & Portal
+registerWordFmtRoutes(router);         // 2. Word Formatting Tool
+registerSurveyRoutes(router);          // 3. Survey Automation Tool
+registerEnglishRoutes(router);         // 4. Moodle English Exercise Automation
+registerLearningRoutes(router);        // 5. Learning Hub Resources
+registerIdentityPortalRoutes(router);  // 5b. Identity presentation + student directory
+registerNotificationRoutes(router);    // 6. Thông báo tag/reply confession
+registerReminderRoutes(router);        // 6a. Nhắc lịch học opt-in
+registerIdentityAdminRoutes(router);   // 6b. Quản trị identity entitlement
+registerFacebookImportRoutes(router);  // 6c. Kéo bài Facebook về Confession
+registerBroadcastRoutes(router);       // 6d. Broadcast + admin avatars
+registerIdentityAvatarRoutes(router);  // 6e. Avatar tự upload
+registerAdminRoutes(router);           // 6f. Admin Traffic & Logs Dashboard
+registerCommunityRoutes(router);       // 7. Góc Tự Học Số (Community)
+registerClubsRoutes(router);           // 8. CLB & Nhóm Học Tập
+registerMetaRoutes(router);            // 9. Health, queue status, version
+registerVocabRoutes(router);           // 10. Luyện từ vựng
+registerGrammarRoutes(router);         // 11. Luyện ngữ pháp
+registerGamesRoutes(router);           // 12. Giải trí: online game rooms
 
 export default router;

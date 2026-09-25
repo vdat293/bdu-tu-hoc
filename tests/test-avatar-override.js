@@ -27,7 +27,8 @@ await assert.rejects(
 );
 
 const migration = fs.readFileSync('migrations/017_student_avatar_overrides.sql', 'utf8');
-const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
+// Route định nghĩa trong file domain identity (api.routes.js chỉ còn là assembler).
+const routes = fs.readFileSync('src/routes/identity.routes.js', 'utf8');
 const identity = fs.readFileSync('src/services/identity-presentation.service.js', 'utf8');
 const avatarService = fs.readFileSync('src/services/avatar-override.service.js', 'utf8');
 const adminHtml = fs.readFileSync('public/admin-tool.html', 'utf8');

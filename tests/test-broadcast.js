@@ -29,7 +29,8 @@ assert.match(service, /ON CONFLICT \(mssv, channel, occurrence_key, remind_offse
 assert.match(service, /notify_discord = TRUE AND p\.unsubscribed_at IS NULL/, 'Thiếu điều kiện người nhận opt-in');
 
 // 5. API + route có kiểm tra quyền identity admin
-const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
+// Route định nghĩa trong file domain broadcast (api.routes.js chỉ còn là assembler).
+const routes = fs.readFileSync('src/routes/broadcast.routes.js', 'utf8');
 assert.match(routes, /router\.get\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route GET /admin/broadcast có kiểm quyền');
 assert.match(routes, /router\.post\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route POST /admin/broadcast có kiểm quyền');
 // Controller broadcast đã tách sang module riêng (src/modules/broadcast/).

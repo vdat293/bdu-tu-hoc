@@ -6,7 +6,13 @@ import fs from 'node:fs';
 // upload, và admin-tool không còn thao tác upload thay người dùng.
 
 const communityService = fs.readFileSync('src/services/community.service.js', 'utf8');
-const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
+// Route community (/community/media) và route avatar (/me/avatar) đã tách sang 2
+// file domain riêng. Gộp cả hai lại để assertion âm "không còn admin upload avatar"
+// vẫn quét được toàn bộ route liên quan thay vì chỉ một file.
+const routes = [
+  fs.readFileSync('src/routes/community.routes.js', 'utf8'),
+  fs.readFileSync('src/routes/identity.routes.js', 'utf8')
+].join('\n');
 // Upload media community và upload avatar đã tách sang 2 module domain riêng.
 // Gộp cả hai lại để assertion âm "không còn uploadAdminAvatar" vẫn quét được
 // toàn bộ controller liên quan thay vì chỉ một file.

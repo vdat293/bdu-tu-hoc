@@ -111,7 +111,8 @@ assert.match(client, /toggleCourseLearningPostLike/);
 assert.match(client, /addCourseLearningPostComment/);
 assert.match(client, /deleteCourseLearningPost/);
 
-const routes = fs.readFileSync('src/routes/api.routes.js', 'utf8');
+// Route định nghĩa trong file domain learning (api.routes.js chỉ còn là assembler).
+const routes = fs.readFileSync('src/routes/learning.routes.js', 'utf8');
 assert.match(routes, /posts\/:postId\/like/);
 assert.match(routes, /posts\/:postId\/comments/);
 assert.match(routes, /router\.delete\('\/learning\/courses\/:courseCode\/posts\/:postId'/);

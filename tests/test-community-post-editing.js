@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const routes = fs.readFileSync(new URL('../src/routes/api.routes.js', import.meta.url), 'utf8');
+// Route định nghĩa trong file domain community (api.routes.js chỉ còn là assembler).
+const routes = fs.readFileSync(new URL('../src/routes/community.routes.js', import.meta.url), 'utf8');
 // Controller community đã tách sang module riêng (src/modules/community/).
 const controller = fs.readFileSync(new URL('../src/modules/community/community.controller.js', import.meta.url), 'utf8');
 const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
