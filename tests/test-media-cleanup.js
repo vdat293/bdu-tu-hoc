@@ -31,7 +31,7 @@ assert.deepEqual(
 // 2. Source wiring.
 const migration = fs.readFileSync('migrations/052_media_cleanup_queue.sql', 'utf8');
 const communityService = fs.readFileSync('src/services/community.service.js', 'utf8');
-const serverJs = fs.readFileSync('server.js', 'utf8');
+const serverJs = fs.readFileSync('src/jobs/index.js', 'utf8');
 assert.match(migration, /media_cleanup_queue/, 'Phải có bảng hàng đợi dọn ảnh');
 assert.match(communityService, /enqueuePostMedia/, 'deletePost phải xếp ảnh vào hàng đợi');
 assert.match(serverJs, /MediaCleanupService\.start\(\)/, 'Server phải chạy scheduler dọn ảnh');

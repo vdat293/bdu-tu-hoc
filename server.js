@@ -1,223 +1,20 @@
 /**
- * BDU Tự Học - Unified Express Server
- * Monolithic backend for Portal, Word Formatting, Auto Survey, and Learning Hub
+ * BDU Tự Học - Server Bootstrap
+ * Tầng khởi tạo tiến trình: dựng http server từ `createApp()`, gắn realtime,
+ * start/stop các job nền và xử lý tín hiệu dừng an toàn.
  */
 
-import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import { Readable } from 'node:stream';
 import { createServer } from 'node:http';
-import { fileURLToPath } from 'url';
-import apiRoutes from './src/routes/api.routes.js';
-import { WordFmtService } from './src/services/wordfmt.service.js';
-import { RankingSchedulerService } from './src/services/ranking-scheduler.service.js';
-import { ReminderSchedulerService } from './src/services/reminder-scheduler.service.js';
-import { OutboxMailerService } from './src/services/outbox-mailer.service.js';
+import { createApp } from './src/app.js';
+import { startJobs, stopJobs } from './src/jobs/index.js';
 import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
-import { MediaStorageService } from './src/services/media-storage.service.js';
-import { MediaCleanupService } from './src/services/media-cleanup.service.js';
-import { IdentityAdminService } from './src/services/identity-admin.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
 import { FacebookImportService } from './src/services/facebook-import.service.js';
-import { AssetHistoryService } from './src/services/asset-history.service.js';
-import { attachRequestContext } from './src/utils/request-context.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
+const app = createApp();
 const PORT = process.env.PORT || 3000;
-const fbImportMediaDir = path.resolve(__dirname, process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import');
-const clientDistDir = path.join(__dirname, 'dist', 'client');
-const clientIndexPath = path.join(clientDistDir, 'index.html');
-const hasReactClientBuild = fs.existsSync(clientIndexPath);
-
-// Ensure temp directory exists
-const tempDir = path.join(__dirname, 'temp');
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir, { recursive: true });
-}
-// Ảnh kéo từ Facebook được lưu cục bộ vì URL CDN của Facebook có chữ ký hết hạn.
-if (!fs.existsSync(fbImportMediaDir)) {
-  fs.mkdirSync(fbImportMediaDir, { recursive: true, mode: 0o750 });
-}
-// Chunk cũ của các bản build trước được giữ trong volume để HTML còn cache
-// không bị 404; serve-static cần thư mục tồn tại ngay từ request đầu tiên.
-const assetHistoryDir = AssetHistoryService.getDir();
-if (AssetHistoryService.isEnabled() && !fs.existsSync(assetHistoryDir)) {
-  fs.mkdirSync(assetHistoryDir, { recursive: true, mode: 0o750 });
-}
-
-// Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(attachRequestContext);
-app.use(TrafficService.middleware());
-// Ảnh/avatar người dùng nằm trên Cloudflare R2 (không ghi file runtime xuống
-// VPS). Khi bucket chưa gắn custom domain/r2.dev, route này stream object từ R2
-// và cache mạnh ở tầng CDN phía trước. Khi có R2_PUBLIC_BASE_URL, URL ảnh mới
-// sẽ trỏ thẳng CDN còn route này vẫn phục vụ các URL cũ đã lưu trong DB.
-app.get('/media/r2/*', async (req, res) => {
-  try {
-    const object = await MediaStorageService.getObject(req.params[0] || '');
-    res.setHeader('Content-Type', object.contentType);
-    if (object.contentLength) res.setHeader('Content-Length', String(object.contentLength));
-    if (object.etag) res.setHeader('ETag', object.etag);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    const body = object.body;
-    // AWS SDK v3 trả Node Readable ở runtime Node; chỉ chuyển đổi khi gặp
-    // web ReadableStream (ví dụ môi trường có fetch stream).
-    if (body && typeof body.pipe === 'function') body.pipe(res);
-    else Readable.fromWeb(body).pipe(res);
-  } catch (error) {
-    if (error?.status === 404) {
-      return res.status(404).json({ result: false, message: 'Không tìm thấy ảnh.' });
-    }
-    if (error?.status === 503) {
-      return res.status(503).json({ result: false, message: error.message });
-    }
-    console.error('[media] Lỗi stream ảnh R2:', error.message);
-    if (!res.headersSent) return res.status(502).json({ result: false, message: 'Không thể tải ảnh.' });
-    res.destroy?.();
-  }
-});
-app.use('/media/fb-import', express.static(fbImportMediaDir, {
-  dotfiles: 'deny',
-  // Tên file dạng `<index>.<ext>` có thể bị ghi đè khi bài viết được import lại
-  // nên không được immutable; browser/CDN revalidate sau một ngày.
-  maxAge: '1d',
-  redirect: false,
-  setHeaders(res) {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  }
-}));
-// The React build has its own immutable namespace. Legacy public assets and
-// the standalone admin surface remain available during the migration.
-// Dist được ưu tiên; nếu tầng cache phía trước còn giữ HTML cũ, request chunk
-// cũ rơi xuống bản lưu trong volume (AssetHistoryService) thay vì 404.
-app.use('/app-assets', express.static(path.join(clientDistDir, 'app-assets'), {
-  immutable: true,
-  maxAge: '1y',
-  fallthrough: true,
-  redirect: false,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  }
-}));
-app.use('/app-assets', express.static(AssetHistoryService.getDir(), {
-  immutable: true,
-  maxAge: '1y',
-  fallthrough: false,
-  redirect: false,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  }
-}));
-
-// Giải trí is a separate site, not a portal sidebar route. The portal only
-// links to this entry point; the wildcard keeps room/challenge deep links
-// working after a refresh on the VPS.
-const gamesSiteDir = path.join(__dirname, 'public', 'games');
-app.use('/games', express.static(gamesSiteDir, {
-  index: false,
-  // Không để serve-static tự 301 `/games` → `/games/`: mỗi vòng redirect là một
-  // cơ hội để proxy/CDN phía trước lặp chuyển hướng với người dùng thật.
-  redirect: false,
-  fallthrough: true,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-}));
-app.get(['/games', '/games/', '/games/*'], (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(path.join(gamesSiteDir, 'index.html'));
-});
-
-// Dedicated server-side guarded administration surface. The page itself is
-// public static HTML; every data mutation is still protected by API roles.
-app.get(['/admin-tool', '/admin-tool/'], (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin-tool.html'));
-});
-
-// Admin Dashboard - Standalone Traffic & Logs site (completely independent from portal)
-const adminSiteDir = path.join(__dirname, 'public', 'admin');
-app.use('/admin', express.static(adminSiteDir, {
-  index: false,
-  redirect: false,
-  fallthrough: true,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-}));
-app.get(['/admin', '/admin/', '/admin/*'], (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(path.join(adminSiteDir, 'index.html'));
-});
-
-// Mount public chung phải đứng SAU các mount chuyên biệt (/games, /admin,
-// /admin-tool, media). Nếu đứng trước, serve-static sẽ tự 301 `/games` →
-// `/games/` trước khi handler riêng kịp chạy; 301 là redirect cacheable nên
-// proxy/CDN phía trước có thể nhân bản và lặp vô hạn với người dùng thật.
-// Asset legacy không có hash trong tên nên phải revalidate: browser/CDN nhận
-// 304 qua ETag, còn file đổi nội dung sẽ được phục vụ ngay sau deploy.
-app.use(express.static(path.join(__dirname, 'public'), {
-  index: false,
-  redirect: false,
-  setHeaders(res, filePath) {
-    const ext = path.extname(filePath).toLowerCase();
-    if (ext === '.html' || ext === '.js' || ext === '.css') {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    } else {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    }
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  }
-}));
-
-// Mount API routes
-app.use('/api', apiRoutes);
-
-// Fallback SPA routing
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ result: false, message: 'API Endpoint not found' });
-  }
-  if (!req.accepts('html')) {
-    return res.status(404).json({ result: false, message: 'Resource not found' });
-  }
-  const indexPath = hasReactClientBuild ? clientIndexPath : path.join(__dirname, 'public', 'index.html');
-  res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(indexPath);
-});
-
-// Periodic temp file cleanup every 15 minutes
-const tempCleanupTimer = setInterval(() => {
-  WordFmtService.cleanOldTempFiles();
-}, 15 * 60 * 1000);
-tempCleanupTimer.unref?.();
-
-// Global Error Handler
-app.use((err, req, res, next) => {
-  if (err.status !== 404) console.error('Unhandled server error:', err);
-  if (err.status === 404) {
-    return res.status(404).json({ result: false, message: 'Resource not found' });
-  }
-  const isUploadLimit = err?.code === 'LIMIT_FILE_SIZE';
-  res.status(isUploadLimit ? 413 : (err.status || 500)).json({
-    result: false,
-    message: isUploadLimit ? 'Ảnh vượt quá dung lượng cho phép.' : (err.message || 'Lỗi xử lý máy chủ nội bộ.')
-  });
-});
 
 const server = createServer(app);
 CommunityRealtime.attach(server);
@@ -233,31 +30,12 @@ server.listen(PORT, () => {
   console.log(`🌐 Server đang chạy tại: http://localhost:${PORT}`);
   console.log(`⚙️  Môi trường: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
-  RankingSchedulerService.start();
-  ReminderSchedulerService.start();
-  OutboxMailerService.start();
-  TrafficService.start();
-  FacebookImportService.start();
-  AssetHistoryService.start();
-  MediaCleanupService.start();
-  IdentityAdminService.syncCatalogFromJson().then((res) => {
-    if (res?.synced) {
-      console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);
-    }
-  }).catch((err) => {
-    console.warn('[catalog-sync] Lỗi đồng bộ catalog:', err.message);
-  });
+  startJobs();
 });
 
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
-  RankingSchedulerService.stop();
-  ReminderSchedulerService.stop();
-  OutboxMailerService.stop();
-  TrafficService.stop();
-  EntertainmentGameService.stop();
-  AssetHistoryService.stop();
-  MediaCleanupService.stop();
+  stopJobs();
   await FacebookImportService.stop().catch(() => {});
   CommunityRealtime.close();
   await TrafficService.flush().catch(() => {});

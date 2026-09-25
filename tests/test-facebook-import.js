@@ -269,6 +269,10 @@ assert.equal(parseGraphqlStream('không phải json').length, 0);
 const migration = fs.readFileSync(new URL('../migrations/029_facebook_import.sql', import.meta.url), 'utf8');
 // Route định nghĩa trong file domain identity (api.routes.js chỉ còn là assembler).
 const routes = fs.readFileSync(new URL('../src/routes/identity.routes.js', import.meta.url), 'utf8');
+// Static mount nằm ở tầng express; scheduler start ở tầng jobs; stop() được
+// shutdown() của bootstrap server gọi nên vẫn ở server.js.
+const appJs = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+const jobsJs = fs.readFileSync(new URL('../src/jobs/index.js', import.meta.url), 'utf8');
 const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 const communityService = fs.readFileSync(new URL('../src/services/community.service.js', import.meta.url), 'utf8');
 // `requireCommunityModerator` đã tách sang module identity.
@@ -283,9 +287,9 @@ assert.match(routes, /admin\/facebook-import\/run.*requireCommunityModerator/);
 // `getClanMembers` ở domain clubs. Giờ ràng buộc đúng guard moderator.
 assert.match(controller, /async requireCommunityModerator\(/);
 assert.match(controller, /PermissionService\.require\(actor, 'community:mod_access'/);
-assert.match(serverJs, /FacebookImportService\.start\(\)/);
+assert.match(jobsJs, /FacebookImportService\.start\(\)/);
 assert.match(serverJs, /FacebookImportService\.stop\(\)/);
-assert.match(serverJs, /'\/media\/fb-import'/);
+assert.match(appJs, /'\/media\/fb-import'/);
 assert.match(communityService, /community:post_delete_any/);
 assert.match(service, /FB_IMPORT_PASSWORD/);
 assert.match(service, /RELOGIN_STATE_FILE/);

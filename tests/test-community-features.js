@@ -9,7 +9,7 @@ const identityService = fs.readFileSync(new URL('../src/services/identity-presen
 const adminService = fs.readFileSync(new URL('../src/services/identity-admin.service.js', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../migrations/016_community_identity_entitlements.sql', import.meta.url), 'utf8');
 const appJs = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
-const serverJs = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+const serverJs = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 
 assert.match(routes, /comments\/:commentId.*ApiController\.editCommunityPostComment/);
 assert.match(routes, /comments\/:commentId.*ApiController\.deleteCommunityPostComment/);
