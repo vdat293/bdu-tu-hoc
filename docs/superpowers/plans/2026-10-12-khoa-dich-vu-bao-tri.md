@@ -505,7 +505,12 @@ git commit -m "feat(service-lock): cong tac khoa dich vu trong /admin"
 npm run lint:frontend
 node node_modules/vitest/vitest.mjs run --config vitest.config.js
 
-# Test Node: PHẢI có env managed, nếu không load-env.js chặn bằng
+# (1) Hai script guard: chạy TRẦN, KHÔNG set env test. Chúng import bản gốc lịch sử
+# (có english-exercise.service.js) nên cần .env được nạp; NODE_ENV=test sẽ làm chúng EXIT=2.
+node scripts/verify-controller-split.mjs
+node scripts/verify-route-order.mjs
+
+# (2) Test Node: PHẢI có env managed, nếu không load-env.js chặn bằng
 # UNMANAGED_TEST_EXECUTION (xem Global Constraints). Trong PowerShell:
 #   $env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'
 node tests/test-service-lock.service.js
@@ -515,8 +520,6 @@ node tests/test-community-realtime-maintenance.js
 node tests/test-admin-service-lock.js
 node tests/test-admin-service-lock-ui.js
 node tests/test-manifest.test.mjs
-node scripts/verify-controller-split.mjs
-node scripts/verify-route-order.mjs
 node tests/test-import-resolution.js
 ```
 
