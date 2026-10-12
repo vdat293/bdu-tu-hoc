@@ -6,7 +6,7 @@ import { BduService } from '../../services/bdu.service.js';
 import { AcademicRankingService } from '../../services/academic-ranking.service.js';
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
 import { SystemSettingsService } from '../../services/system-settings.service.js';
-import { ServiceLockService, SERVICE_LOCK_SETTING_KEY } from '../../services/service-lock.service.js';
+import { ServiceLockService } from '../../services/service-lock.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { isDatabaseConfigured } from '../../db/database.js';
 
@@ -439,31 +439,15 @@ export const AdminDashboardController = {
   /**
    * Công tắc khóa dịch vụ bảo trì cho /admin.
    *
-   * Trạng thái là "nguồn sự thật" của ServiceLockService (system_settings key
-   * service_lock). GET chỉ đọc; PUT ghi rồi, khi chuyển sang khóa, đóng mọi
-   * WebSocket đang mở để tab online nhận màn hình bảo trì ngay.
-   *
-   * Vì sao đọc thêm record ở GET: getStatus() cố tình chỉ trả nội dung công
-   * khai (locked/title/message). Metadata "ai ghi sau" nằm ở cột
-   * updated_at/updated_by của bảng setting nên phải đọc record; nếu đọc lỗi
-   * thì để null chứ không kéo sập màn hình admin.
+   * GET chỉ đọc trạng thái đầy đủ (kể cả updated_at/updated_by) từ
+   * ServiceLockService.getAdminStatus(); controller KHÔNG tự biết key/shape của
+   * bảng setting. PUT ghi rồi, khi chuyển sang khóa, đóng mọi WebSocket đang mở
+   * để tab online nhận màn hình bảo trì ngay.
    */
   async getServiceLock(req, res) {
     try {
-      const [status, record] = await Promise.all([
-        ServiceLockService.getStatus(),
-        SystemSettingsService.getRecord(SERVICE_LOCK_SETTING_KEY).catch(() => null)
-      ]);
-      return res.json({
-        result: true,
-        data: {
-          locked: status.locked,
-          title: status.title,
-          message: status.message,
-          updated_at: record?.updated_at ?? null,
-          updated_by: record?.updated_by ?? null
-        }
-      });
+      const data = await ServiceLockService.getAdminStatus();
+      return res.json({ result: true, data });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi getServiceLock:', err.message);
       return res.status(err.status || 500).json({
@@ -509,9 +493,14 @@ export const AdminDashboardController = {
       });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi setServiceLock:', err.message);
-      return res.status(err.status || 500).json({
+      const status = err.status || 500;
+      // Lỗi validate (4xx) cần giữ thông báo cụ thể cho admin; lỗi hệ thống
+      // (5xx) trả chuỗi cố định để không lộ chi tiết bảng/cột Postgres.
+      return res.status(status).json({
         result: false,
-        message: err.message || 'Không thể lưu trạng thái khóa dịch vụ.'
+        message: status < 500
+          ? (err.message || 'Dữ liệu khóa dịch vụ không hợp lệ.')
+          : 'Không thể lưu trạng thái khóa dịch vụ.'
       });
     }
   }

@@ -77,6 +77,39 @@ export const ServiceLockService = {
     }
   },
 
+  /**
+   * Trạng thái đầy đủ cho /admin: như getStatus() nhưng kèm metadata "ai ghi sau"
+   * (updated_at/updated_by) nên có 4 khoá.
+   *
+   * Vì sao đọc record một lần thay vì ghép getStatus + getRecord: getStatus() đi
+   * qua cache 30 giây còn getRecord đọc thẳng bảng, ghép lại có thể lệch thời
+   * điểm (bản ghi vừa đổi). Đọc một lần record để cả 4 khoá cùng một nguồn.
+   *
+   * Fail-open giống getStatus(): lỗi DB không được biến thành sự cố màn hình
+   * admin, chỉ trả giá trị mặc định với metadata null.
+   */
+  async getAdminStatus() {
+    try {
+      const record = await SystemSettingsService.getRecord(SERVICE_LOCK_SETTING_KEY);
+      const status = normalizeStatus(record ? record.value : null);
+      return {
+        locked: status.locked,
+        title: status.title,
+        message: status.message,
+        updated_at: record && record.updated_at != null ? record.updated_at : null,
+        updated_by: record && record.updated_by != null ? record.updated_by : null
+      };
+    } catch {
+      return {
+        locked: false,
+        title: DEFAULT_TITLE,
+        message: DEFAULT_MESSAGE,
+        updated_at: null,
+        updated_by: null
+      };
+    }
+  },
+
   async setStatus(payload, updatedBy) {
     const body = payload && typeof payload === 'object' ? payload : {};
     if (typeof body.locked !== 'boolean') {

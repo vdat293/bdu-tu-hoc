@@ -15,6 +15,7 @@ import { SystemSettingsService } from '../src/services/system-settings.service.j
 
 const originalGet = SystemSettingsService.get;
 const originalSet = SystemSettingsService.set;
+const originalGetRecord = SystemSettingsService.getRecord;
 
 // Ghi lại mọi lần gọi set để khẳng định service lưu đúng shape và không ghi khi dữ liệu sai.
 const setCalls = [];
@@ -47,6 +48,10 @@ function stubSet(record) {
     setCalls.push(args);
     return record;
   };
+}
+
+function stubGetRecord(record) {
+  SystemSettingsService.getRecord = async () => record;
 }
 
 try {
@@ -163,9 +168,52 @@ try {
     assert.equal(setCalls[0][1].title, 'A');
     assert.equal(setCalls[0][1].message, 'B');
   });
+
+  // getAdminStatus: trạng thái đầy đủ cho /admin, gồm cả metadata người ghi.
+  await check('getAdminStatus trả đủ 4 trường kèm metadata khi có bản ghi', async () => {
+    stubGetRecord({
+      key: SERVICE_LOCK_SETTING_KEY,
+      value: { locked: true, title: 'Bảo trì', message: 'Chờ chút' },
+      updated_at: '2026-10-12T00:00:00.000Z',
+      updated_by: 'ADMIN_1'
+    });
+    const data = await ServiceLockService.getAdminStatus();
+    assert.deepEqual(data, {
+      locked: true,
+      title: 'Bảo trì',
+      message: 'Chờ chút',
+      updated_at: '2026-10-12T00:00:00.000Z',
+      updated_by: 'ADMIN_1'
+    });
+  });
+
+  await check('getAdminStatus chưa có bản ghi thì metadata null và dùng default', async () => {
+    stubGetRecord(null);
+    const data = await ServiceLockService.getAdminStatus();
+    assert.deepEqual(data, {
+      locked: false,
+      title: DEFAULT_TITLE,
+      message: DEFAULT_MESSAGE,
+      updated_at: null,
+      updated_by: null
+    });
+  });
+
+  await check('getAdminStatus fail-open khi DB lỗi', async () => {
+    SystemSettingsService.getRecord = async () => {
+      throw new Error('DB đang lỗi');
+    };
+    const data = await ServiceLockService.getAdminStatus();
+    assert.equal(data.locked, false);
+    assert.equal(data.title, DEFAULT_TITLE);
+    assert.equal(data.message, DEFAULT_MESSAGE);
+    assert.equal(data.updated_at, null);
+    assert.equal(data.updated_by, null);
+  });
 } finally {
   SystemSettingsService.get = originalGet;
   SystemSettingsService.set = originalSet;
+  SystemSettingsService.getRecord = originalGetRecord;
 }
 
 if (failed > 0) {

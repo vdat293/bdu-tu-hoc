@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { AdminDashboardController } from '../src/modules/admin/admin-dashboard.controller.js';
 import { ServiceLockService } from '../src/services/service-lock.service.js';
-import { SystemSettingsService } from '../src/services/system-settings.service.js';
 import { CommunityRealtime } from '../src/services/community-realtime.service.js';
 
 // Test cho API admin GET/PUT /api/admin/dashboard/service-lock (Task 5).
-// Không cần DB: monkey-patch ServiceLockService.getStatus/setStatus,
-// SystemSettingsService.getRecord và cổng realtime, rồi gọi thẳng handler với
-// fake req/res. Mỗi ca in một dòng ✓/✗; cuối cùng đặt exitCode=1 nếu có ca đỏ
-// để `node tests/test-admin-service-lock.js` fail-closed đúng cách.
+// Không cần DB: monkey-patch ServiceLockService.getAdminStatus/setStatus và cổng
+// realtime, rồi gọi thẳng handler với fake req/res. Controller không được tự biết
+// key/shape của bảng setting nên test chỉ chạm interface của ServiceLockService.
+// Mỗi ca in một dòng ✓/✗; cuối cùng đặt exitCode=1 nếu có ca đỏ để
+// `node tests/test-admin-service-lock.js` fail-closed đúng cách.
 
-const originalGetStatus = ServiceLockService.getStatus;
+const originalGetAdminStatus = ServiceLockService.getAdminStatus;
 const originalSetStatus = ServiceLockService.setStatus;
-const originalGetRecord = SystemSettingsService.getRecord;
 const originalDisconnect = CommunityRealtime.disconnectAllForMaintenance;
 
 let failed = 0;
@@ -46,12 +45,8 @@ function response() {
   };
 }
 
-function stubGetStatus(status) {
-  ServiceLockService.getStatus = async () => status;
-}
-
-function stubGetRecord(record) {
-  SystemSettingsService.getRecord = async () => record;
+function stubGetAdminStatus(data) {
+  ServiceLockService.getAdminStatus = async () => data;
 }
 
 function stubSetStatus(record) {
@@ -68,11 +63,11 @@ try {
     disconnectCalls += 1;
   };
 
-  await check('GET trả trạng thái kèm metadata người ghi', async () => {
-    stubGetStatus({ locked: false, title: 'T', message: 'M' });
-    stubGetRecord({
-      key: 'service_lock',
-      value: { locked: false },
+  await check('GET trả nguyên trạng thái đầy đủ từ getAdminStatus', async () => {
+    stubGetAdminStatus({
+      locked: false,
+      title: 'T',
+      message: 'M',
       updated_at: '2026-10-12T00:00:00.000Z',
       updated_by: 'ADMIN_1'
     });
@@ -80,18 +75,29 @@ try {
     await AdminDashboardController.getServiceLock({}, res);
     assert.equal(res.statusCode, 200, 'phải trả 200');
     assert.equal(res.body.result, true, 'result phải là true');
-    assert.equal(res.body.data.locked, false, 'data.locked theo giá trị service trả');
-    assert.equal(res.body.data.title, 'T');
-    assert.equal(res.body.data.message, 'M');
-    assert.equal(res.body.data.updated_at, '2026-10-12T00:00:00.000Z');
-    assert.equal(res.body.data.updated_by, 'ADMIN_1');
+    assert.deepEqual(res.body.data, {
+      locked: false,
+      title: 'T',
+      message: 'M',
+      updated_at: '2026-10-12T00:00:00.000Z',
+      updated_by: 'ADMIN_1'
+    });
+    assert.deepEqual(
+      Object.keys(res.body.data).sort(),
+      ['locked', 'title', 'message', 'updated_at', 'updated_by'].sort(),
+      'data phải đủ locked/title/message/updated_at/updated_by'
+    );
   });
 
-  await check('GET chịu được lỗi đọc metadata (updated_* về null)', async () => {
-    stubGetStatus({ locked: false, title: 'T', message: 'M' });
-    SystemSettingsService.getRecord = async () => {
-      throw new Error('DB đang lỗi');
-    };
+  await check('GET vẫn 200 khi getAdminStatus fail-open', async () => {
+    // Service tự fail-open; controller chỉ chuyển tiếp data.
+    stubGetAdminStatus({
+      locked: false,
+      title: 'Dịch vụ đang tạm khóa để bảo trì',
+      message: 'Hệ thống đang bảo trì, vui lòng quay lại sau.',
+      updated_at: null,
+      updated_by: null
+    });
     const res = response();
     await AdminDashboardController.getServiceLock({}, res);
     assert.equal(res.statusCode, 200);
@@ -186,9 +192,9 @@ try {
     assert.equal(bare.message, undefined, 'thiếu message phải là undefined, không phải null');
   });
 
-  await check('PUT khi service ném lỗi không có status trả 500', async () => {
+  await check('PUT lỗi ngoài dự kiến trả 500 với chuỗi cố định, không lộ err.message', async () => {
     ServiceLockService.setStatus = async () => {
-      throw new Error('lỗi ngoài dự kiến');
+      throw new Error('relation "system_settings" does not exist');
     };
     const res = response();
     await AdminDashboardController.setServiceLock(
@@ -197,11 +203,17 @@ try {
     );
     assert.equal(res.statusCode, 500, 'lỗi không có status phải thành 500');
     assert.equal(res.body.result, false);
+    assert.equal(
+      res.body.message,
+      'Không thể lưu trạng thái khóa dịch vụ.',
+      '500 phải trả chuỗi cố định'
+    );
+    assert.doesNotMatch(res.body.message, /relation|system_settings/, 'không được lộ chi tiết DB');
   });
 
-  await check('PUT lỗi validate từ service (status 400) giữ nguyên 400', async () => {
+  await check('PUT lỗi validate từ service (status 400) giữ nguyên 400 và err.message', async () => {
     ServiceLockService.setStatus = async () => {
-      const error = new Error('title quá dài');
+      const error = new Error('title tối đa 120 ký tự.');
       error.status = 400;
       throw error;
     };
@@ -212,12 +224,12 @@ try {
     );
     assert.equal(res.statusCode, 400, 'lỗi validate của service phải giữ 400');
     assert.equal(res.body.result, false);
+    assert.equal(res.body.message, 'title tối đa 120 ký tự.', '400 phải giữ nội dung validate');
   });
 } finally {
-  ServiceLockService.getStatus = originalGetStatus;
+  ServiceLockService.getAdminStatus = originalGetAdminStatus;
   ServiceLockService.setStatus = originalSetStatus;
   delete ServiceLockService.__lastSetArgs;
-  SystemSettingsService.getRecord = originalGetRecord;
   CommunityRealtime.disconnectAllForMaintenance = originalDisconnect;
 }
 
