@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, unwrap } from '../api/http.js';
 
 // Cổng chặn bảo trì toàn cục. Component chỉ NGHE event 'bdu:maintenance' do tầng
@@ -21,15 +21,24 @@ function toMaintenance(detail) {
 export default function MaintenanceGate({ children }) {
   const [maintenance, setMaintenance] = useState(null);
   const locked = maintenance !== null;
+  // Số thứ tự request /api/status. Một response chỉ được ghi trạng thái nếu nó
+  // vẫn là request mới nhất: nếu không, response mount đến muộn có thể ghi đè
+  // trạng thái khóa vừa nhận từ event và tự mở khóa sai.
+  const seqRef = useRef(0);
 
   // Gọi /api/status (công khai, không cần token). Lỗi mạng hoặc endpoint lỗi thì
   // giữ nguyên trạng thái đang hiển thị: một lần gọi hỏng không được tự thoát
   // màn hình bảo trì, cũng không được tự khóa giao diện bình thường.
   const checkStatus = useCallback(async () => {
+    const id = ++seqRef.current;
     try {
       const payload = await request('/api/status');
+      // Có request/event mới hơn xen vào trong lúc chờ ⇒ bỏ qua response cũ này.
+      if (id !== seqRef.current) return;
       const status = unwrap(payload, null);
-      if (!status) return;
+      // Chỉ tin giá trị boolean. Payload hỏng (thiếu locked, kiểu lạ) thì giữ
+      // nguyên trạng thái, không mặc định là "đã mở khóa".
+      if (!status || typeof status.locked !== 'boolean') return;
       if (status.locked) setMaintenance(toMaintenance(status));
       else setMaintenance(null);
     } catch {
@@ -43,7 +52,12 @@ export default function MaintenanceGate({ children }) {
   }, [checkStatus]);
 
   useEffect(() => {
-    const onMaintenance = (event) => setMaintenance(toMaintenance(event.detail));
+    const onMaintenance = (event) => {
+      // Đẩy seq lên để mọi response /api/status đang bay bị coi là cũ và không
+      // thể ghi đè trạng thái khóa vừa nhận từ event.
+      seqRef.current += 1;
+      setMaintenance(toMaintenance(event.detail));
+    };
     window.addEventListener('bdu:maintenance', onMaintenance);
     return () => window.removeEventListener('bdu:maintenance', onMaintenance);
   }, []);
@@ -58,9 +72,11 @@ export default function MaintenanceGate({ children }) {
   if (!locked) return children;
 
   // Lớp phủ toàn trang đè mọi route, dùng lại bộ class modal có sẵn của hệ thống
-  // (public/css/style.css) nên không phát sinh CSS mới.
+  // (public/css/style.css) nên không phát sinh CSS mới. zIndex inline cao hơn
+  // .modal-backdrop mặc định (1000) để đè cả .toast-container (9999): ToastProvider
+  // nằm ngoài gate nên toast cũ vẫn còn trên DOM khi bảo trì.
   return (
-    <div className="modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="maintenance-gate-title">
+    <div className="modal-backdrop" style={{ zIndex: 100002 }} role="alertdialog" aria-modal="true" aria-labelledby="maintenance-gate-title">
       <div className="modal-dialog">
         <div className="modal-header">
           <h2 className="modal-title" id="maintenance-gate-title">{maintenance.title}</h2>
