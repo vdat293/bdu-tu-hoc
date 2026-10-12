@@ -54,6 +54,17 @@ function loadOriginalMethods() {
 
 const MODULES_DIR = path.join(root, 'src', 'modules');
 
+// Method duoc THEM SAU ban goc, khong he ton tai trong ban goc nen khong the
+// doi chieu nguoc. Guard van phai bat "khong duoc MAT method", dong thoi bat
+// buoc nguoi them khai bao y thuc o day (kem commit) thay vi noi long dieu kien
+// "thua cung duoc" — noi long nhu vay se giau luon truong hop doi ten method.
+//
+// Hien dang rong: ban goc duoc chon tu dong la phien ban nhieu method nhat trong
+// lich su (hien tai c061b4c, da bao gom cac method diem ren luyen), nen chua co
+// method nao nam ngoai ban goc. Them method moi vao ApiController ma khong khai
+// bao o day thi script se fail.
+const ADDED_AFTER_SPLIT = new Map([]);
+
 // Method dang `  name(req, res) {` hoac `  async name(req, res) {` o indent 2
 // ben trong object literal ApiController.
 const METHOD_RE = /^ {2}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(\s*req\s*,\s*res\s*(?:,\s*next\s*)?\)\s*\{/gm;
@@ -100,15 +111,28 @@ const { names: split, count: fileCount } = collectModuleMethods(MODULES_DIR);
 
 const missing = [...original].filter((name) => !split.has(name)).sort();
 const extra = [...split].filter((name) => !original.has(name)).sort();
+const declaredExtra = extra.filter((name) => ADDED_AFTER_SPLIT.has(name));
+const unexpectedExtra = extra.filter((name) => !ADDED_AFTER_SPLIT.has(name));
+const staleDeclarations = [...ADDED_AFTER_SPLIT.keys()].filter((name) => !extra.includes(name)).sort();
 
 console.log(`File goc (${commit}) : ${original.size} method`);
 console.log(`File domain         : ${split.size} method trong ${fileCount} file controller`);
 console.log(`Thieu               : ${missing.length}${missing.length ? ` -> ${missing.join(', ')}` : ''}`);
-console.log(`Thua         : ${extra.length}${extra.length ? ` -> ${extra.join(', ')}` : ''}`);
+console.log(`Thua (da khai bao)  : ${declaredExtra.length}${declaredExtra.length ? ` -> ${declaredExtra.join(', ')}` : ''}`);
+console.log(`Thua (chua khai bao): ${unexpectedExtra.length}${unexpectedExtra.length ? ` -> ${unexpectedExtra.join(', ')}` : ''}`);
+if (staleDeclarations.length > 0) {
+  console.log(`Khai bao cu (khong con thua): ${staleDeclarations.join(', ')}`);
+}
 
-if (missing.length > 0 || extra.length > 0) {
+if (missing.length > 0 || unexpectedExtra.length > 0) {
   console.error('\nSAI LACH - tach khong trung nguyen.');
+  if (unexpectedExtra.length > 0) {
+    console.error(`Method moi phai duoc khai bao trong ADDED_AFTER_SPLIT: ${unexpectedExtra.join(', ')}`);
+  }
   process.exitCode = 1;
 } else {
-  console.log('\nOK - tap method goc va tach khop hoan toan.');
+  if (staleDeclarations.length > 0) {
+    console.log(`CANH BAO: ADDED_AFTER_SPLIT con ten khong ton tai: ${staleDeclarations.join(', ')}`);
+  }
+  console.log('\nOK - tap method goc va tach khop hoan toan (chi thua cac method da khai bao).');
 }

@@ -31,7 +31,7 @@ flowchart TB
         BOOT["server.js — bootstrap: http server, WS, listen, shutdown"]
         APP["src/app.js — createApp(): middleware, static, /api, fallback"]
         JOBS["src/jobs/index.js — 7 scheduler nền + 1 đồng bộ catalog"]
-        ROUTER["src/routes/ — assembler + 16 file route domain (19 hàm register)"]
+        ROUTER["src/routes/ — assembler + 16 file route domain (20 hàm register)"]
         CTRL["src/controllers/api.controller.js (barrel) → src/modules/<domain>/"]
         SVC["src/services/ — 42 service + src/services/games/ (11 file)"]
         DB["src/db/database.js — pool, transaction, advisory lock"]
@@ -131,11 +131,11 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 
 | Đường dẫn | Vai trò | Chức năng cụ thể |
 | :--- | :--- | :--- |
-| **`src/routes/api.routes.js`** | Assembler | **Không chứa định nghĩa route.** Tạo 1 `express.Router()` rồi gọi lần lượt 19 hàm `register*Routes(router)` theo đúng thứ tự dòng của file gốc. Thứ tự này **là hành vi routing**. |
+| **`src/routes/api.routes.js`** | Assembler | **Không chứa định nghĩa route.** Tạo 1 `express.Router()` rồi gọi lần lượt 20 hàm `register*Routes(router)` theo đúng thứ tự dòng của file gốc. Thứ tự này **là hành vi routing**. |
 | **`src/routes/<domain>.routes.js`** | 16 file route theo domain | Mỗi file export hàm `register*Routes(router, deps = {})`. `identity.routes.js` có 4 hàm, `notifications.routes.js` có 2 hàm — vì các domain bị xen kẽ trong file gốc. |
 | **`src/routes/_shared/http-deps.js`** | Dependency HTTP dùng chung | Export `ApiController` (barrel), `AdminDashboardController`, `WordFmtService`, `BduIdentityService`, 3 config `multer` (`upload`, `avatarUpload`, `mediaUpload`) và middleware `requireVerifiedMssv`. Tách riêng để mọi file route dùng **chung một instance** của multer và một instance `requireVerifiedMssv`. |
-| **`src/controllers/api.controller.js`** | Barrel gom controller | **Chỉ re-export, không chứa logic.** Export 16 `XxxController` từ `src/modules/<domain>/` và gom vào object `ApiController` để route layer gọi `ApiController.<method>`. Tổng cộng **130 method** trong 16 file controller domain (kiểm bằng `node scripts/verify-controller-split.mjs`). |
-| **`src/modules/<domain>/`** | 16 controller domain | `auth`, `academics`, `identity`, `media`, `meta`, `learning`, `games`, `wordfmt`, `survey`, `english`, `community`, `notifications`, `broadcast`, `clubs`, `vocab`, `grammar` — cộng thêm `src/modules/admin/admin-dashboard.controller.js` tách riêng ở bước đầu tiên (không nằm trong `ApiController`). |
+| **`src/controllers/api.controller.js`** | Barrel gom controller | **Chỉ re-export, không chứa logic.** Export 17 `XxxController` từ `src/modules/<domain>/` và gom vào object `ApiController` để route layer gọi `ApiController.<method>`. Tổng cộng **136 method** trong 17 file controller domain (kiểm bằng `node scripts/verify-controller-split.mjs`). |
+| **`src/modules/<domain>/`** | 17 controller domain | `auth`, `academics`, `identity`, `media`, `meta`, `learning`, `games`, `wordfmt`, `survey`, `training`, `english`, `community`, `notifications`, `broadcast`, `clubs`, `vocab`, `grammar` — cộng thêm `src/modules/admin/admin-dashboard.controller.js` tách riêng ở bước đầu tiên (không nằm trong `ApiController`). |
 | **`src/modules/_shared/`** | Helper thuần | `bearer-token.js` (gộp 4 bản sao trùng lặp, có `.trim()`), `safe-api-error.js` (lọc message lỗi trước khi trả client). Cả hai **không import gì** nên không tạo phụ thuộc vòng. |
 
 ### 4.3. Tầng nghiệp vụ & dữ liệu

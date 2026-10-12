@@ -1,6 +1,6 @@
 # Kiến trúc Backend — BDU Tự Học
 
-> Tài liệu này mô tả **tầng kiến trúc hiện tại** sau đợt tách cấu trúc (server.js → `src/app.js` + `src/jobs`, `api.routes.js` → 16 file route theo domain, `api.controller.js` 2612 dòng → 16 controller domain).
+> Tài liệu này mô tả **tầng kiến trúc hiện tại** sau đợt tách cấu trúc (server.js → `src/app.js` + `src/jobs`, `api.routes.js` → 16 file route theo domain / 20 hàm `register*Routes`, `api.controller.js` 2612 dòng → 17 controller domain).
 >
 > Bản đồ cấu trúc tổng thể cho người mới đọc nằm ở [`../READFORME.md`](../READFORME.md). Tài liệu này tập trung vào **tại sao** cấu trúc phải giữ nguyên.
 
@@ -31,7 +31,7 @@ Các điểm cần nhớ:
 
 ---
 
-## 2. Bảng 16 domain nghiệp vụ
+## 2. Bảng 17 domain nghiệp vụ
 
 Cột "Controller" là file export object literal; cột "Route" là file chứa hàm `register*Routes`. Cột "Service chính" liệt kê các service mà controller đó import (đã đối chiếu trực tiếp từ câu lệnh `import` trong file).
 
@@ -46,6 +46,7 @@ Cột "Controller" là file export object literal; cột "Route" là file chứa
 | **games** | `src/modules/games/games.controller.js` (195) | `src/routes/games.routes.js` | `entertainment-game.service.js`, `community-realtime.service.js`, `bdu-identity.service.js` |
 | **wordfmt** | `src/modules/wordfmt/wordfmt.controller.js` (130) | `src/routes/wordfmt.routes.js` | `wordfmt.service.js`, `bdu-identity.service.js` |
 | **survey** | `src/modules/survey/survey.controller.js` (135) | `src/routes/survey.routes.js` | `survey.service.js`, `survey-run.service.js`, `bdu-identity.service.js` |
+| **training** (thêm ở `c061b4c`) | `src/modules/training/training.controller.js` (106) | `src/routes/training.routes.js` | `training-score.service.js`, `training-cds-credentials.service.js`, `bdu-identity.service.js` |
 | **english** | `src/modules/english/english.controller.js` (149) | `src/routes/english.routes.js` | `english-exercise.service.js`, `permission.service.js`, `bdu-identity.service.js` |
 | **community** | `src/modules/community/community.controller.js` (450) | `src/routes/community.routes.js` | `community.service.js`, `community-realtime.service.js`, `mention.service.js`, `facebook-import.service.js`, `reminder-digest.service.js`, `bdu-identity.service.js` |
 | **notifications** | `src/modules/notifications/notifications.controller.js` (206) | `src/routes/notifications.routes.js` (2 hàm register) | `notification.service.js`, `notification-prefs.service.js`, `discord-link.service.js`, `discord-oauth.service.js`, `schedule-snapshot.service.js`, `bdu-identity.service.js` |
@@ -57,15 +58,22 @@ Cột "Controller" là file export object literal; cột "Route" là file chứa
 
 Hai điểm cần lưu ý về bảng này:
 
-1. **`admin` không nằm trong `ApiController`.** `admin-dashboard.controller.js` được tách ở bước đầu tiên (pilot) nên nó export `AdminDashboardController` riêng, được `src/routes/_shared/http-deps.js` re-export. 130 method của `ApiController` **không** chứa method của admin dashboard.
+1. **`admin` không nằm trong `ApiController`.** `admin-dashboard.controller.js` được tách ở bước đầu tiên (pilot) nên nó export `AdminDashboardController` riêng, được `src/routes/_shared/http-deps.js` re-export. 136 method của `ApiController` **không** chứa method của admin dashboard.
 2. **Không phải domain nào cũng có file route riêng.** Route file chia theo *nhóm route trong file gốc*, controller file chia theo *domain nghiệp vụ*. `academics` dùng chung route với `auth`; `media` dùng chung route với `identity` và `community`. Tên file route không suy ra được từ tên thư mục controller.
 
 ### Số liệu kiểm chứng
 
 | Kiểm tra | Lệnh | Kết quả |
 | :--- | :--- | :--- |
-| Tập method controller khớp | `node scripts/verify-controller-split.mjs` | 130 method trong 16 file controller |
-| Thứ tự route khớp bản gốc | `node scripts/verify-route-order.mjs` | So router stack với `git show HEAD:src/routes/api.routes.js` |
+| Tập method controller khớp | `node scripts/verify-controller-split.mjs` | 136 method trong 17 file controller |
+| Thứ tự route khớp bản gốc | `node scripts/verify-route-order.mjs` | Bản gốc là phiên bản nhiều route nhất **nạp được** trong lịch sử; route cũ không được mất/hoán vị |
+
+Hai script trên lấy bản gốc từ **lịch sử git** (không hard-code commit), nên khi có tính năng mới thêm method/route, chúng sẽ báo `SAI LẠCH` cho tới khi phần thêm mới được khai báo tường minh:
+
+- Method mới: thêm tên vào `ADDED_AFTER_SPLIT` trong `scripts/verify-controller-split.mjs`.
+- Route mới: thêm `"<METHOD> <path>"` vào `ROUTES_ADDED_AFTER_SPLIT` trong `scripts/verify-route-order.mjs`.
+
+Khai báo như vậy giữ guard còn hiệu lực: **mất** method/route vẫn fail, **hoán vị** route cũ vẫn fail, còn thêm mới thì buộc phải có chủ ý.
 
 ---
 
@@ -77,7 +85,7 @@ Năm quy tắc dưới đây **không được phá vỡ**. Mỗi quy tắc ghi 
 
 **Quy tắc**: `src/modules/<domain>/<domain>.controller.js` chỉ được import service của chính nó, `_shared/` helper, `src/config/*` và `src/db/database.js`. Tuyệt đối không `import { ApiController } from '../../controllers/api.controller.js'`.
 
-**Vì sao**: `api.controller.js` re-export **tất cả** 16 controller domain. Nếu một controller con import ngược lại barrel thì:
+**Vì sao**: `api.controller.js` re-export **tất cả** 17 controller domain. Nếu một controller con import ngược lại barrel thì:
 - `auth.controller.js` → `api.controller.js` → `academics.controller.js` → … → `api.controller.js` (vòng).
 - Node ESM chịu được phần lớn vòng, nhưng khi vòng đi qua object literal `export const ApiController = { ...A, ...B }` thì thứ tự khởi tạo module trở nên phụ thuộc vào thứ tự import. Method nào được gán vào `ApiController` trước có thể là `undefined` tại thời điểm module route nạp → lỗi kiểu `ApiController.login is not a function` chỉ xuất hiện ở production khi thứ tự import đổi.
 
@@ -93,7 +101,7 @@ Năm quy tắc dưới đây **không được phá vỡ**. Mỗi quy tắc ghi 
 2. Vì các domain bị **xen kẽ** trong file gốc (identity → notification → reminder → identity-admin → facebook-import → broadcast → avatar → admin), chúng được tách thành nhiều hàm register riêng: `identity.routes.js` có 4 hàm (`registerIdentityPortalRoutes`, `registerIdentityAdminRoutes`, `registerFacebookImportRoutes`, `registerIdentityAvatarRoutes`), `notifications.routes.js` có 2 hàm (`registerNotificationRoutes`, `registerReminderRoutes`). Gộp chúng lại thành 1 hàm sẽ **không** tái tạo được thứ tự cũ.
 3. File route nhận `router` dùng chung (không tạo `express.Router()` riêng cho từng domain) chính là để giữ thứ tự: nếu mỗi domain là một router riêng rồi `app.use()` lần lượt, Express sẽ ghép lại theo thứ tự `app.use` chứ không phải thứ tự đăng ký route bên trong.
 
-**Cách kiểm chứng**: `node scripts/verify-route-order.mjs` lấy bản gốc từ `git show HEAD:src/routes/api.routes.js`, dựng cả hai router rồi so **từng layer** theo thứ tự (method + path). Script bắt buộc danh sách phải giống hệt, không chỉ cùng tập.
+**Cách kiểm chứng**: `node scripts/verify-route-order.mjs` lấy bản gốc từ **lịch sử git** (phiên bản nhiều route nhất còn `import` được), dựng cả hai router rồi kiểm tra danh sách route cũ là **dãy con đúng thứ tự** của danh sách mới. Route cũ không được mất và không được hoán vị; route thêm mới phải khai báo trong `ROUTES_ADDED_AFTER_SPLIT` của script.
 
 ### 3.3. Controller có module-level state thì phải có ĐÚNG MỘT URL import
 
@@ -153,7 +161,7 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 1. **71 file test import trực tiếp `src/services/...`**. Di chuyển service nghĩa là sửa path import ở 71 file test cộng mọi nơi khác. Đây là đợt refactor rủi ro cao, độ lợi ích thấp — test vẫn cover đúng hành vi cũ.
 2. **Path theo độ sâu thư mục** (mục 3.5). `wordfmt.service.js` và `facebook-import.service.js` dùng `path.resolve(__dirname, '../../')`; di chuyển thêm 1 cấp sẽ phải sửa `ROOT_DIR` và mọi hằng dẫn xuất (`TEMP_DIR`, `PROFILES_DIR`, `DLL_PATH`) trong khi đường dẫn đó **đang chạy đúng** trong Docker.
 3. **`client/` import ngược**. `client/src/features/grammar/grammar-lib.js` đang kéo `src/utils/grammar-answers.js` vào frontend build. Khi mạng phụ thuộc còn đi xuyên biên `src/` ↔ `client/`, thêm một đợt di dời hàng loạt làm tăng rủi ro `Dockerfile` build fail mà không thêm giá trị gì cho người dùng.
-4. **Controller mới là phần thực sự cần tách**. File gốc dài 2612 dòng, chứa 130 method thuộc 16 domain; đó là điểm đau thật khi sửa code. Service vốn đã là file riêng, tên đã có domain (`bdu-identity.service.js`, `clan-role.service.js`, `media-upload.service.js`…). Di chuyển service **không làm file nào ngắn đi**.
+4. **Controller mới là phần thực sự cần tách**. File gốc dài 2612 dòng, chứa 130 method thuộc 16 domain (nay 136 method thuộc 17 domain); đó là điểm đau thật khi sửa code. Service vốn đã là file riêng, tên đã có domain (`bdu-identity.service.js`, `clan-role.service.js`, `media-upload.service.js`…). Di chuyển service **không làm file nào ngắn đi**.
 
 **Khi nào nên làm tiếp**: nếu sau này có dự án scale nhiều người thêm, và muốn mỗi domain tự chứa trọn (`src/modules/<domain>/*.service.js`), thì nên làm **một lần, có kế hoạch sửa cả 71 file test** và cập nhật `Dockerfile` + `client/src/features/grammar/grammar-lib.js` cùng lúc. Làm nửa chừng còn tệ hơn không làm.
 
