@@ -6,13 +6,14 @@ import NotificationBell from '../components/notifications/NotificationBell.jsx';
 
 const navGroups = [
   { title: 'CỔNG SINH VIÊN', items: navigation.slice(0, 4) },
-  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: navigation.slice(4, 8) },
-  { title: 'GÓC TỰ HỌC SỐ', items: navigation.slice(8) }
+  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: navigation.slice(4, 9) },
+  { title: 'GÓC TỰ HỌC SỐ', items: navigation.slice(9) }
 ];
 
 const badges = {
   '/wordfmt': ['Pro', 'badge-pill-emerald'],
   '/survey': ['Bot', 'badge-pill-purple'],
+  '/training-score': ['RL', 'badge-pill-amber'],
   '/english': ['Moodle', 'badge-pill-emerald'],
   '/enrollment': ['Soon', 'badge-pill-amber'],
   '/clans': ['Guild', 'badge-pill-emerald'],

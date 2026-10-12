@@ -11,6 +11,7 @@ const SchedulePage = lazy(() => import('../features/schedule/SchedulePage.jsx'))
 const LeaderboardPage = lazy(() => import('../features/leaderboard/LeaderboardPage.jsx'));
 const WordFmtPage = lazy(() => import('../features/wordfmt/WordFmtPage.jsx'));
 const SurveyPage = lazy(() => import('../features/survey/SurveyPage.jsx'));
+const TrainingScorePage = lazy(() => import('../features/training-score/TrainingScorePage.jsx'));
 const EnglishPage = lazy(() => import('../features/english/EnglishPage.jsx'));
 const EnrollmentPage = lazy(() => import('../features/enrollment/EnrollmentPage.jsx'));
 const LearningPage = lazy(() => import('../features/learning/LearningPage.jsx'));
@@ -42,6 +43,7 @@ export default function AppRoutes() {
       <Route path="leaderboard" element={<Lazy><LeaderboardPage /></Lazy>} />
       <Route path="wordfmt" element={<Lazy><WordFmtPage /></Lazy>} />
       <Route path="survey" element={<Lazy><SurveyPage /></Lazy>} />
+      <Route path="training-score" element={<Lazy><TrainingScorePage /></Lazy>} />
       <Route path="english" element={<Lazy><EnglishPage /></Lazy>} />
       <Route path="enrollment" element={<Lazy><EnrollmentPage /></Lazy>} />
       <Route path="learning" element={<Lazy><LearningPage /></Lazy>} />

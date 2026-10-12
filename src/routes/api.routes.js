@@ -22,6 +22,7 @@ import { WordFmtService } from '../services/wordfmt.service.js';
 import { registerAuthRoutes } from './auth.routes.js';
 import { registerWordFmtRoutes } from './wordfmt.routes.js';
 import { registerSurveyRoutes } from './survey.routes.js';
+import { registerTrainingRoutes } from './training.routes.js';
 import { registerEnglishRoutes } from './english.routes.js';
 import { registerLearningRoutes } from './learning.routes.js';
 import {
@@ -46,6 +47,7 @@ const router = express.Router();
 registerAuthRoutes(router);            // 1. Auth & Portal
 registerWordFmtRoutes(router);         // 2. Word Formatting Tool
 registerSurveyRoutes(router);          // 3. Survey Automation Tool
+registerTrainingRoutes(router);        // 3b. Training Score (điểm rèn luyện)
 registerEnglishRoutes(router);         // 4. Moodle English Exercise Automation
 registerLearningRoutes(router);        // 5. Learning Hub Resources
 registerIdentityPortalRoutes(router);  // 5b. Identity presentation + student directory
