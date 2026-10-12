@@ -27,6 +27,7 @@ export const SAFE_NODE_TESTS = [
   'test-survey-run-service.js',
   'test-training-score.service.js',
   'test-service-lock.service.js',
+  'test-service-lock-guard.js',
   'test-entertainment-game.js',
   'test-game-tic-tac-toe.js',
   'test-game-connect4.js',
