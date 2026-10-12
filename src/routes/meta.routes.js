@@ -16,4 +16,5 @@ export function registerMetaRoutes(router, deps = {}) {
   });
   router.get('/queue-status', ApiController.getQueueStatus);
   router.get('/version', ApiController.getVersion);
+  router.get('/status', ApiController.getServiceStatus);
 }

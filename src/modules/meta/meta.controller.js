@@ -1,5 +1,6 @@
 import { WordFmtService } from '../../services/wordfmt.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
+import { ServiceLockService } from '../../services/service-lock.service.js';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -40,5 +41,21 @@ export const MetaController = {
   getVersion(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.json({ result: true, build_id: resolveBuildId() });
+  },
+
+  // 10b. System: trạng thái khóa dịch vụ bảo trì (endpoint công khai /api/status).
+  // Trả ĐÚNG 3 khoá locked/title/message; không trả updated_at/updated_by vì đó
+  // là thông tin nội bộ chỉ dành cho admin. getStatus fail-open (không bao giờ
+  // ném lỗi) nên endpoint này luôn trả 200 kể cả khi DB tạm hỏng.
+  async getServiceStatus(req, res) {
+    const status = await ServiceLockService.getStatus();
+    return res.json({
+      result: true,
+      data: {
+        locked: status.locked,
+        title: status.title,
+        message: status.message
+      }
+    });
   },
 };

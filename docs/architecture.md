@@ -148,6 +148,20 @@ Ba file đang phụ thuộc điều này:
 
 Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(process.cwd(), '.env')` — phụ thuộc **cwd**, không phụ thuộc vị trí file. Nếu đổi cwd khi chạy (`docker compose exec`, systemd service) thì `.env` sẽ không được nạp.
 
+### 3.6. Cửa chặn bảo trì đứng sau static và trước router `/api`
+
+**Quy tắc**: `GET /api/status` là **endpoint công khai** để client đọc trạng thái khóa dịch vụ bảo trì. Middleware `createServiceLockGuard` trong `src/app.js` phải được gắn **sau** mọi mount static và **trước** `app.use('/api', apiRoutes)`.
+
+**Vì sao**:
+
+- **Sau static**: màn hình bảo trì là trang SPA nằm trong `public/`/`dist/client`; nếu cửa chặn đứng trước `express.static`, `/app-assets` và chính trang bảo trì sẽ bị chặn và người dùng không bao giờ thấy nội dung bảo trì.
+- **Trước router `/api`**: để chặn mọi request `/api/*` tại một điểm duy nhất mà **không** phải sửa thứ tự đăng ký route trong `api.routes.js` (thứ tự đó là hành vi routing, xem mục 3.2).
+
+**Danh sách miễn trừ** (do `src/utils/service-lock-guard.js` áp đặt): `/health`, `/version`, `/status`, và tiền tố `/admin/dashboard`. Lý do hai trường hợp quan trọng nhất:
+
+- `/health` **không** được chặn vì script deploy dựa vào nó để biết app còn sống; chặn `/health` khi đang khóa sẽ khiến deploy tưởng app chết và tự rollback.
+- `/admin/dashboard/login` **không** được chặn vì nếu chặn cả khu quản trị thì sau khi khóa xong không ai đăng nhập lại được để tắt khóa.
+
 ---
 
 ## 4. Nợ kỹ thuật còn lại

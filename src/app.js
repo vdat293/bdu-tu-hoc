@@ -15,6 +15,8 @@ import { WordFmtService } from './services/wordfmt.service.js';
 import { MediaStorageService } from './services/media-storage.service.js';
 import { AssetHistoryService } from './services/asset-history.service.js';
 import { TrafficService } from './services/traffic.service.js';
+import { ServiceLockService } from './services/service-lock.service.js';
+import { createServiceLockGuard } from './utils/service-lock-guard.js';
 import { attachRequestContext } from './utils/request-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -180,6 +182,13 @@ export function createApp() {
       res.setHeader('X-Content-Type-Options', 'nosniff');
     }
   }));
+
+  // Cửa chặn bảo trì phải đứng SAU mọi mount static (để SPA, /app-assets và
+  // màn hình bảo trì vẫn tải được khi đang khóa) và TRƯỚC app.use('/api',
+  // apiRoutes) (để chặn mọi request /api mà không phải sửa thứ tự route bên
+  // trong api.routes.js). Các path miễn trừ /health, /version, /status và
+  // /admin/dashboard được guard tự bỏ qua.
+  app.use('/api', createServiceLockGuard({ getStatus: () => ServiceLockService.getStatus() }));
 
   // Mount API routes
   app.use('/api', apiRoutes);

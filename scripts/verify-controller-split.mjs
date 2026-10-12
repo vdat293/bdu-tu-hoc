@@ -63,7 +63,11 @@ const MODULES_DIR = path.join(root, 'src', 'modules');
 // lich su (hien tai c061b4c, da bao gom cac method diem ren luyen), nen chua co
 // method nao nam ngoai ban goc. Them method moi vao ApiController ma khong khai
 // bao o day thi script se fail.
-const ADDED_AFTER_SPLIT = new Map([]);
+const ADDED_AFTER_SPLIT = new Map([
+  // getServiceStatus: them o Task 3 (cong tac khoa dich vu bao tri) de phuc vu
+  // endpoint cong khai GET /api/status. Khong co trong ban goc ApiController.
+  ['getServiceStatus', 'service lock (dot 1)']
+]);
 
 // Method dang `  name(req, res) {` hoac `  async name(req, res) {` o indent 2
 // ben trong object literal ApiController.
