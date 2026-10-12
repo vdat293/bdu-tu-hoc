@@ -15,9 +15,28 @@ export class SessionExpiredError extends ApiError {
   }
 }
 
+// Dịch vụ bị khóa để bảo trì: khác lỗi HTTP thường ở chỗ đây là trạng thái toàn
+// hệ thống, người dùng không sửa được bằng cách thao tác lại. Mang thêm title để
+// màn hình bảo trì (Task 7) có tiêu đề hiển thị, còn message đã có từ ApiError.
+export class MaintenanceError extends ApiError {
+  constructor(message = 'Hệ thống đang bảo trì, vui lòng quay lại sau.', { title = null } = {}) {
+    super(message, { status: 503, code: 'MAINTENANCE' });
+    this.name = 'MaintenanceError';
+    this.title = title;
+  }
+}
+
 function notifySessionExpired(message) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('bdu:session_expired', { detail: { message } }));
+  }
+}
+
+// Phát sự kiện thay vì để component tự import lớp lỗi: tầng HTTP và tầng UI không
+// phụ thuộc trực tiếp vào nhau, màn hình bảo trì chỉ cần nghe 'bdu:maintenance'.
+function notifyMaintenance(details) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bdu:maintenance', { detail: details }));
   }
 }
 
@@ -60,6 +79,15 @@ export async function request(path, {
   if (isExpired) {
     notifySessionExpired(message);
     throw new SessionExpiredError(message);
+  }
+  // Nhánh bảo trì phải đứng TRƯỚC nhánh !response.ok bên dưới: nếu để sau, 503 sẽ
+  // bị nhánh chung bắt trước và ném ApiError thuần, màn hình bảo trì không bao giờ
+  // hiện. Chỉ đúng mã MAINTENANCE mới kích hoạt; một 503 khác (proxy/quá tải) vẫn
+  // là lỗi thường.
+  if (response.status === 503 && data?.code === 'MAINTENANCE') {
+    const title = typeof data?.title === 'string' && data.title ? data.title : null;
+    notifyMaintenance({ title, message });
+    throw new MaintenanceError(message, { title });
   }
   if (!response.ok || (data && typeof data === 'object' && data.result === false)) {
     throw new ApiError(message, { status: response.status, code: data?.code, details: data });
