@@ -259,7 +259,7 @@ Expected: FAIL — `disconnectAllForMaintenance is not a function`
 - [ ] **Step 3: Cài đặt**
 
 Thêm `disconnectAllForMaintenance()` vào gateway (vòng lặp cùng kiểu với `close()` ở dòng ~1012, có `try/catch` từng client).
-Trong `httpServer.on('upgrade', ...)`: sau kiểm tra origin và trước `this.wss.handleUpgrade(...)`, kiểm tra trạng thái khóa; nếu đang khóa thì ghi `HTTP/1.1 503 Service Unavailable`, `Connection: close` rồi `socket.destroy()` và `return`. Handler phải là `async` (hoặc bọc IIFE) và toàn bộ nhánh mới nằm trong `try/catch` để không tạo unhandled rejection; comment nêu vì sao dùng 503 thô ở tầng socket (không đi qua Express nên không có `res`).
+Trong `httpServer.on('upgrade', ...)`: sau kiểm tra origin và trước `this.wss.handleUpgrade(...)`, kiểm tra trạng thái khóa; nếu đang khóa thì ghi `HTTP/1.1 503 Service Unavailable` + `Connection: close` bằng **`socket.end(response)`** (KHÔNG dùng `socket.write(...)` rồi `socket.destroy()` ngay: `write()` đệm bất đồng bộ, `destroy()` có thể huỷ dữ liệu đang đệm nên client nhận "socket hang up" thay vì 503 sạch) rồi `return`. Handler phải là `async` (hoặc bọc IIFE) và toàn bộ nhánh mới nằm trong `try/catch` để không tạo unhandled rejection (Node **không** tự bắt promise reject của handler `'upgrade'`); comment nêu vì sao dùng 503 thô ở tầng socket (không đi qua Express nên không có `res`).
 
 - [ ] **Step 4: Chạy lại test**
 
