@@ -58,7 +58,7 @@ Năm lớp đầu vào / chế độ lỗi dễ cắn người dùng nhất, m�
   - `ServiceLockService.getStatus(): Promise<{ locked: boolean, title: string, message: string }>` — không bao giờ ném lỗi.
   - `ServiceLockService.setStatus({ locked, title, message }, updatedBy): Promise<{ locked, title, message, updated_at, updated_by }>` — ném `Error` có `status = 400` khi dữ liệu sai.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-service-lock.service.js` theo khuôn `tests/test-profile-controller.js` (monkey-patch service, không cần DB). Nội dung là các test sau, mỗi test in một dòng `✓`/`✗` như style repo:
 
@@ -74,27 +74,27 @@ Tạo `tests/test-service-lock.service.js` theo khuôn `tests/test-profile-contr
 | `setStatus` từ chối `message` quá dài | `message` 501 ký tự ⇒ `400`, không ghi |
 | `setStatus` trim chuỗi | `title: '  A  '` ⇒ `set` nhận `'A'` |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock.service.js`
 Expected: FAIL — `Cannot find module '../src/services/service-lock.service.js'`
 
-- [ ] **Step 3: Viết `src/services/service-lock.service.js`**
+- [x] **Step 3: Viết `src/services/service-lock.service.js`**
 
 Chỉ khai báo các hằng ở Interfaces và hai method. `getStatus()` dùng `SystemSettingsService.get(SERVICE_LOCK_SETTING_KEY)` bọc `try/catch` để fail-open; `setStatus()` validate theo Global Constraints rồi gọi `SystemSettingsService.set(...)`. Comment đầu file ghi rõ: vì sao fail-open (không biến sự cố DB thành sự cố toàn site) và vì sao giới hạn độ dài (nội dung này sẽ được trả ở endpoint công khai `/api/status`).
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock.service.js`
 Expected: PASS toàn bộ, không warning.
 
-- [ ] **Step 5: Khai test vào manifest và kiểm tra guard**
+- [x] **Step 5: Khai test vào manifest và kiểm tra guard**
 
 Thêm `'test-service-lock.service.js'` vào `SAFE_NODE_TESTS` trong `scripts/test-manifest.mjs`.
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-manifest.test.mjs`
 Expected: PASS (nếu quên khai, test này fail với "every top-level test file is explicitly classified").
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/services/service-lock.service.js tests/test-service-lock.service.js scripts/test-manifest.mjs
@@ -114,7 +114,7 @@ git commit -m "feat(service-lock): them ServiceLockService doc/ghi trang thai kh
 - Consumes: không import gì từ Task 1 (nhận hàm qua tham số để test được).
 - Produces: `createServiceLockGuard({ getStatus })` trả về middleware Express `(req, res, next) => void`. Khi chặn: `res.status(503).json({ result:false, code:'MAINTENANCE', title, message })`.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-service-lock-guard.js` (chỉ dùng `node:assert/strict`, không cần DB). Fake `req` = `{ path, method:'GET' }`, fake `res` theo khuôn `response()` trong `tests/test-profile-controller.js`, `next` = hàm đếm số lần gọi. Các ca:
 
@@ -130,27 +130,27 @@ Tạo `tests/test-service-lock-guard.js` (chỉ dùng `node:assert/strict`, khô
 | fail-open khi `getStatus` ném | `getStatus` ném lỗi ⇒ `next()`, không `503`, không unhandled rejection |
 | `res` không có `json` vẫn không sập | `getStatus` ném và `res` tối thiểu ⇒ `next()` |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-guard.js`
 Expected: FAIL — không tìm thấy module `../src/utils/service-lock-guard.js`
 
-- [ ] **Step 3: Viết `src/utils/service-lock-guard.js`**
+- [x] **Step 3: Viết `src/utils/service-lock-guard.js`**
 
 Cài đặt: chuẩn hoá path trước khi so (`path` bắt đầu bằng `/api` thì cắt 4 ký tự đầu), rồi đối chiếu danh sách miễn trừ ở Global Constraints; mọi nhánh lỗi của `getStatus` phải rơi vào `next()`. Comment đầu file nêu đúng lý do kỹ thuật của bước chuẩn hoá: Express cắt tiền tố mount khỏi `req.path` **chỉ khi** middleware được mount tại `/api`, nên code không được phép phụ thuộc vào chi tiết đó.
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-guard.js`
 Expected: PASS toàn bộ.
 
-- [ ] **Step 5: Khai vào manifest + kiểm tra guard**
+- [x] **Step 5: Khai vào manifest + kiểm tra guard**
 
 Thêm `'test-service-lock-guard.js'` vào `SAFE_NODE_TESTS`.
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-manifest.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/utils/service-lock-guard.js tests/test-service-lock-guard.js scripts/test-manifest.mjs
@@ -174,7 +174,7 @@ git commit -m "feat(service-lock): middleware chan request khi dang khoa, co fai
 - Consumes: `ServiceLockService.getStatus()` (Task 1), `createServiceLockGuard({ getStatus })` (Task 2).
 - Produces: `MetaController.getServiceStatus(req, res)` trả `{ result:true, data:{ locked, title, message } }`; path công khai `GET /api/status`.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-service-lock-endpoint.js`:
 
@@ -186,42 +186,42 @@ Tạo `tests/test-service-lock-endpoint.js`:
 | **vị trí cửa chặn** | đọc `src/app.js`: index của `createServiceLockGuard` phải **nhỏ hơn** index của `app.use('/api', apiRoutes)` (test cấu trúc, chặn việc ai đó di chuyển cửa chặn xuống sau router) |
 | **cửa chặn phải sau mount static** | đọc `src/app.js`: index của `createServiceLockGuard` phải **lớn hơn** index của `app.use(express.static(path.join(ROOT_DIR, 'public')`. Nếu không, SPA và `/app-assets` bị chặn ⇒ màn hình bảo trì không bao giờ tải được. |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-endpoint.js`
 Expected: FAIL — `ApiController.getServiceStatus is not a function` (hoặc assert route chưa tồn tại).
 
-- [ ] **Step 3: Cài đặt**
+- [x] **Step 3: Cài đặt**
 
 `meta.controller.js`: thêm method `getServiceStatus` gọi `ServiceLockService.getStatus()` và trả đúng 3 khoá (không trả `updated_at/updated_by`). Import `ServiceLockService` từ `../../services/service-lock.service.js`.
 `meta.routes.js`: thêm dòng route `/status` cạnh `/health`, `/version`.
 `app.js`: import `ServiceLockService` và `createServiceLockGuard`, rồi chèn `app.use('/api', createServiceLockGuard({ getStatus: () => ServiceLockService.getStatus() }));` **ngay trước** dòng `app.use('/api', apiRoutes)` — kèm comment ngắn nêu lý do thứ tự này (sau static để SPA vẫn tải được; trước router để không phải sửa `api.routes.js`).
 
-- [ ] **Step 4: Chạy lại test + guard**
+- [x] **Step 4: Chạy lại test + guard**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-endpoint.js`
 Expected: PASS.
 Run: `node scripts/verify-controller-split.mjs`
 Expected: FAIL với "Method moi phai duoc khai bao trong ADDED_AFTER_SPLIT: getServiceStatus" — đây là hành vi đúng của guard.
 
-- [ ] **Step 5: Khai guard cho method mới**
+- [x] **Step 5: Khai guard cho method mới**
 
 Thêm `['getServiceStatus', 'service lock (dot 1)']` vào `ADDED_AFTER_SPLIT` trong `scripts/verify-controller-split.mjs`.
 Run: `node scripts/verify-controller-split.mjs`
 Expected: `OK - tap method goc va tach khop hoan toan`.
 
-- [ ] **Step 6: Ghi quy tắc vào `docs/architecture.md`**
+- [x] **Step 6: Ghi quy tắc vào `docs/architecture.md`**
 
 Thêm một mục ngắn (sau mục 3.2) nêu: `/api/status` là endpoint công khai; cửa chặn bảo trì nằm trong `src/app.js` **sau** các mount static và **trước** `app.use('/api', apiRoutes)`; danh sách miễn trừ gồm `/health`, `/version`, `/status`, `/admin/dashboard`; lý do `/health` không được chặn (deploy tự rollback) và `/admin/dashboard/login` không được chặn (không thì khóa xong không vào lại được).
 
-- [ ] **Step 7: Xác minh bằng server thật**
+- [x] **Step 7: Xác minh bằng server thật**
 
 Run: `npm run dev:server` (cửa sổ khác) rồi `curl -s http://127.0.0.1:3000/api/status`
 Expected: `{"result":true,"data":{"locked":false,...}}`
 Run: `curl -s -o NUL -w "%{http_code}" http://127.0.0.1:3000/api/health`
 Expected: `200`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/app.js src/modules/meta/meta.controller.js src/routes/meta.routes.js scripts/verify-controller-split.mjs docs/architecture.md tests/test-service-lock-endpoint.js scripts/test-manifest.mjs
@@ -241,7 +241,7 @@ git commit -m "feat(service-lock): gan cua chan vao app va them /api/status cong
 - Consumes: `ServiceLockService.getStatus()` (Task 1) — chỉ dùng để guard gọi; test của task này monkey-patch.
 - Produces: `CommunityRealtime.disconnectAllForMaintenance(): void` — đóng mọi client bằng `ws.close(1001, 'Dich vu dang bao tri')`, chịu được client đã chết (bọc `try/catch` từng client).
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-community-realtime-maintenance.js`:
 
@@ -251,26 +251,26 @@ Tạo `tests/test-community-realtime-maintenance.js`:
 | client đã chết không làm sập | một client có `ws.close` ném lỗi ⇒ lời gọi vẫn hoàn tất, client còn lại vẫn được đóng |
 | set rỗng | gọi khi `clients` rỗng ⇒ không ném |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-community-realtime-maintenance.js`
 Expected: FAIL — `disconnectAllForMaintenance is not a function`
 
-- [ ] **Step 3: Cài đặt**
+- [x] **Step 3: Cài đặt**
 
 Thêm `disconnectAllForMaintenance()` vào gateway (vòng lặp cùng kiểu với `close()` ở dòng ~1012, có `try/catch` từng client).
 Trong `httpServer.on('upgrade', ...)`: sau kiểm tra origin và trước `this.wss.handleUpgrade(...)`, kiểm tra trạng thái khóa; nếu đang khóa thì ghi `HTTP/1.1 503 Service Unavailable` + `Connection: close` bằng **`socket.end(response)`** (KHÔNG dùng `socket.write(...)` rồi `socket.destroy()` ngay: `write()` đệm bất đồng bộ, `destroy()` có thể huỷ dữ liệu đang đệm nên client nhận "socket hang up" thay vì 503 sạch) rồi `return`. Handler phải là `async` (hoặc bọc IIFE) và toàn bộ nhánh mới nằm trong `try/catch` để không tạo unhandled rejection (Node **không** tự bắt promise reject của handler `'upgrade'`); comment nêu vì sao dùng 503 thô ở tầng socket (không đi qua Express nên không có `res`).
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-community-realtime-maintenance.js`
 Expected: PASS.
 
-- [ ] **Step 5: Khai manifest**
+- [x] **Step 5: Khai manifest**
 
 Thêm `'test-community-realtime-maintenance.js'` vào `SAFE_NODE_TESTS`; run `node tests/test-manifest.test.mjs` → PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/services/community-realtime.service.js tests/test-community-realtime-maintenance.js scripts/test-manifest.mjs
@@ -295,7 +295,7 @@ git commit -m "feat(service-lock): tu choi websocket moi va dong ket noi dang mo
   - `AdminDashboardController.setServiceLock(req, res)` → như trên sau khi ghi; `400` khi validate lỗi; gọi `disconnectAllForMaintenance()` khi `locked === true`
   - `updatedBy = req.identityAdminMssv || 'ADMIN_KEY'`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-admin-service-lock.js` (monkey-patch, **không** cần DB):
 
@@ -309,21 +309,21 @@ Tạo `tests/test-admin-service-lock.js` (monkey-patch, **không** cần DB):
 | `PUT` body sai ⇒ `400` | `{ locked:'true' }` ⇒ `400`, `setStatus` **không** được gọi |
 | lỗi ngoài dự kiến ⇒ `500` | `setStatus` ném lỗi không có `status` ⇒ `500`, body `result:false` |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock.js`
 Expected: FAIL — `AdminDashboardController.getServiceLock is not a function`
 
-- [ ] **Step 3: Cài đặt controller + route**
+- [x] **Step 3: Cài đặt controller + route**
 
 Hai method theo đúng khuôn `getRankingSync`/`updateRankingSync` (cùng file, cùng cách bọc `try/catch` và trả `err.status || 500`). Route dùng `PUT` thêm vào `admin.routes.js` ngay sau `PUT /admin/dashboard/ranking-sync` để giữ nhóm.
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock.js`
 Expected: PASS.
 
-- [ ] **Step 5: Khai guard thứ tự route**
+- [x] **Step 5: Khai guard thứ tự route**
 
 Run: `node scripts/verify-route-order.mjs`
 Expected: FAIL — báo thiếu/lệch, liệt kê các route mới.
@@ -331,11 +331,11 @@ Thêm vào `ROUTES_ADDED_AFTER_SPLIT`: `'GET /admin/dashboard/service-lock'`, `'
 Run lại: `node scripts/verify-route-order.mjs`
 Expected: `OK - thu tu route cu giong het ban goc, khong hoan vi, khong mat route.`
 
-- [ ] **Step 6: Khai manifest**
+- [x] **Step 6: Khai manifest**
 
 Thêm `'test-admin-service-lock.js'` vào `SAFE_NODE_TESTS`; run `node tests/test-manifest.test.mjs` → PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/modules/admin/admin-dashboard.controller.js src/routes/admin.routes.js scripts/verify-route-order.mjs tests/test-admin-service-lock.js scripts/test-manifest.mjs
@@ -354,7 +354,7 @@ git commit -m "feat(service-lock): api admin GET/PUT cong tac khoa dich vu"
 - Consumes: `request()` hiện có.
 - Produces: `MaintenanceError extends ApiError` (`status: 503`, `code: 'MAINTENANCE'`, có `title`, `message`), hàm `notifyMaintenance(details)` phát `window.dispatchEvent(new CustomEvent('bdu:maintenance', { detail }))`.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Thêm vào `tests/frontend/http.test.js` (đã có `vi.stubGlobal('fetch', ...)`) hai ca:
 
@@ -363,21 +363,21 @@ Thêm vào `tests/frontend/http.test.js` (đã có `vi.stubGlobal('fetch', ...)`
 | 503 + `code:'MAINTENANCE'` | `await expect(request('/api/profile')).rejects.toMatchObject({ name:'MaintenanceError', status:503, code:'MAINTENANCE' })`, và listener `window.addEventListener('bdu:maintenance')` nhận được `detail.title`/`detail.message` |
 | 503 **không** có `code:'MAINTENANCE'` | vẫn là `ApiError` thường (không phải `MaintenanceError`) — chốt rằng chỉ đúng mã đó mới kích hoạt màn hình bảo trì |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `node node_modules/vitest/vitest.mjs run --config vitest.config.js http.test.js`
 Expected: FAIL — `MaintenanceError` chưa tồn tại / rejection là `ApiError` thường.
 
-- [ ] **Step 3: Cài đặt trong `client/src/api/http.js`**
+- [x] **Step 3: Cài đặt trong `client/src/api/http.js`**
 
 Thêm class + hàm phát event cạnh `SessionExpiredError`/`notifySessionExpired` (giữ đúng khuôn đang có), và nhánh trong `request()` **trước** nhánh `!response.ok` (dòng 63) theo điều kiện `response.status === 503 && data?.code === 'MAINTENANCE'`. Comment nêu vì sao thứ tự nhánh quan trọng.
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `node node_modules/vitest/vitest.mjs run --config vitest.config.js http.test.js`
 Expected: PASS cả ca cũ lẫn ca mới.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add client/src/api/http.js tests/frontend/http.test.js
@@ -397,7 +397,7 @@ git commit -m "feat(service-lock): client nhan dien ma MAINTENANCE va phat su ki
 - Consumes: event `bdu:maintenance` (Task 6), endpoint công khai `GET /api/status` (Task 3).
 - Produces: component `MaintenanceGate` nhận `children`, render children khi bình thường, render màn hình bảo trì khi đang khóa.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/frontend/maintenance-gate.test.jsx` theo khuôn `tests/frontend/clubs-rebuild-smoke.test.jsx` (`vi.hoisted`, `vi.stubGlobal('fetch', ...)`, `@testing-library/react`, dùng `vi.useFakeTimers()` cho ca poll):
 
@@ -410,29 +410,29 @@ Tạo `tests/frontend/maintenance-gate.test.jsx` theo khuôn `tests/frontend/clu
 | lỗi `/api/status` không tự thoát | fetch reject ⇒ màn hình bảo trì **giữ nguyên**, không unmount |
 | không poll khi bình thường | sau khi khởi động với `locked:false`, `advanceTimersByTime(60_000)` ⇒ `fetch` vẫn chỉ được gọi **1 lần** |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `node node_modules/vitest/vitest.mjs run --config vitest.config.js maintenance-gate.test.jsx`
 Expected: FAIL — không tìm thấy module `MaintenanceGate.jsx`
 
-- [ ] **Step 3: Cài đặt component + bọc vào App**
+- [x] **Step 3: Cài đặt component + bọc vào App**
 
 `MaintenanceGate.jsx`: state trạng thái; `useEffect` gọi `/api/status` một lần khi mount và đăng ký listener `bdu:maintenance` (dọn listener khi unmount); khi đang khóa thì `setInterval` 30 giây gọi lại `/api/status`; nút "Thử lại" gọi lại ngay. Màn hình là lớp phủ toàn trang, chỉ dùng class CSS đã có trong `client/src/styles/app.css` (nếu cần class mới thì thêm ở cuối file với comment nêu lý do).
 `App.jsx`: `<AppProviders><MaintenanceGate><AppRoutes /></MaintenanceGate></AppProviders>`.
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `node node_modules/vitest/vitest.mjs run --config vitest.config.js maintenance-gate.test.jsx`
 Expected: PASS cả 6 ca.
 
-- [ ] **Step 5: Chạy toàn bộ test frontend + lint**
+- [x] **Step 5: Chạy toàn bộ test frontend + lint**
 
 Run: `node node_modules/vitest/vitest.mjs run --config vitest.config.js`
 Expected: tất cả file PASS (285+ ca, gồm `routing-contract.test.js` — phải không đổi vì không thêm route).
 Run: `npm run lint:frontend`
 Expected: 0 error (1 warning `exhaustive-deps` ở `EnglishPage.jsx` là có sẵn).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add client/src/app/MaintenanceGate.jsx client/src/app/App.jsx tests/frontend/maintenance-gate.test.jsx
@@ -452,7 +452,7 @@ git commit -m "feat(service-lock): man hinh bao tri toan trang cho nguoi dung"
 - Consumes: `GET`/`PUT /api/admin/dashboard/service-lock` (Task 5).
 - Produces: trong tab System của `/admin` có toggle `#service-lock-toggle`, 2 ô nhập `#service-lock-title`, `#service-lock-message`, và vùng trạng thái `#service-lock-state`.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/test-admin-service-lock-ui.js` theo khuôn `tests/test-admin-ranking-toggle.js` (đọc file bằng `fs.readFileSync` + `assert.match`, **không** cần DB):
 
@@ -463,27 +463,27 @@ Tạo `tests/test-admin-service-lock-ui.js` theo khuôn `tests/test-admin-rankin
 | JS có xác nhận trước khi khóa | `admin.js` có `confirm(` trong luồng bật khóa (đọc bằng regex trên đoạn quanh `service-lock-toggle`) |
 | route được đăng ký | `src/routes/admin.routes.js` khớp `router.get('/admin/dashboard/service-lock'` và `router.put('/admin/dashboard/service-lock'` |
 
-- [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
+- [x] **Step 2: Chạy test cho tới khi thấy nó fail**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock-ui.js`
 Expected: FAIL ở assert đầu tiên (markup chưa có).
 
-- [ ] **Step 3: Cài đặt UI**
+- [x] **Step 3: Cài đặt UI**
 
 `index.html`: thêm card "Khóa dịch vụ" trong tab System, cùng khu vực với card ranking.
 `admin.js`: `state.serviceLock`; `renderServiceLock(data)`; gọi API trong `Promise.all` sẵn có; handler toggle đọc 2 ô nhập, hỏi `confirm()` **chỉ khi bật khóa**, gọi `PUT`, cập nhật `renderServiceLock` và `showToast` (bám sát cách `rankingSyncToggle` đang làm, kể cả việc chặn double-submit).
 `admin.css`: style theo card có sẵn.
 
-- [ ] **Step 4: Chạy lại test**
+- [x] **Step 4: Chạy lại test**
 
 Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock-ui.js`
 Expected: PASS.
 
-- [ ] **Step 5: Khai manifest**
+- [x] **Step 5: Khai manifest**
 
 Thêm `'test-admin-service-lock-ui.js'` vào `SAFE_NODE_TESTS`; run `node tests/test-manifest.test.mjs` → PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add public/admin/index.html public/admin/admin.js public/admin/admin.css tests/test-admin-service-lock-ui.js scripts/test-manifest.mjs
@@ -499,7 +499,7 @@ git commit -m "feat(service-lock): cong tac khoa dich vu trong /admin"
 **Interfaces:**
 - Consumes: toàn bộ Task 1–8.
 
-- [ ] **Step 1: Chạy toàn bộ kiểm tra tự động**
+- [x] **Step 1: Chạy toàn bộ kiểm tra tự động**
 
 ```bash
 npm run lint:frontend
@@ -525,7 +525,7 @@ node tests/test-import-resolution.js
 
 Expected: tất cả PASS; 2 script guard in `OK`.
 
-- [ ] **Step 2: Khóa site và kiểm tra 4 nhóm miễn trừ**
+- [x] **Step 2: Khóa site và kiểm tra 4 nhóm miễn trừ**
 
 Với server đang chạy (`npm run dev:server`) và token admin lấy từ `/admin` (hoặc `ADMIN_DASHBOARD_KEY` trong `.env`):
 
@@ -543,14 +543,14 @@ curl -s http://127.0.0.1:3000/api/profile
 
 Expected: `profile=503`; `health=200`; `version=200`; `status=200`; body của `/api/profile` có `"code":"MAINTENANCE"` kèm `title`/`message` đúng như vừa nhập.
 
-- [ ] **Step 3: Kiểm tra trên trình duyệt**
+- [x] **Step 3: Kiểm tra trên trình duyệt**
 
 1. Mở `http://127.0.0.1:3000/` → thấy màn hình bảo trì với nội dung vừa nhập (không cần F5).
 2. Mở `/admin` → dashboard vẫn dùng được (owner/`x-admin-key` không bị chặn).
 3. DevTools → tab Network → WS: kết nối `/ws/community` bị từ chối; và nếu bật khóa khi socket đang mở thì thấy đóng mã `1001`.
 4. Bấm "Thử lại" sau khi mở khóa (bước 4) → màn hình biến mất.
 
-- [ ] **Step 4: Mở khóa và xác nhận trở lại bình thường**
+- [x] **Step 4: Mở khóa và xác nhận trở lại bình thường**
 
 ```bash
 curl -s -X PUT http://127.0.0.1:3000/api/admin/dashboard/service-lock \
@@ -562,7 +562,7 @@ curl -s -o NUL -w "profile=%{http_code}\n" http://127.0.0.1:3000/api/profile
 
 Expected: `profile=401` (chưa đăng nhập, **không phải** 503) ⇒ cửa chặn đã mở.
 
-- [ ] **Step 5: Xác nhận không rò rỉ thông tin nội bộ**
+- [x] **Step 5: Xác nhận không rò rỉ thông tin nội bộ**
 
 ```bash
 curl -s http://127.0.0.1:3000/api/status
@@ -570,7 +570,7 @@ curl -s http://127.0.0.1:3000/api/status
 
 Expected: chỉ có `locked`, `title`, `message` — không có `updated_by`, `updated_at`.
 
-- [ ] **Step 6: Commit (chỉ khi có sửa trong bước 1–5)**
+- [x] **Step 6: Commit (chỉ khi có sửa trong bước 1–5)**
 
 ```bash
 git add -A
