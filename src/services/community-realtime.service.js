@@ -5,6 +5,7 @@ import { BduIdentityService } from './bdu-identity.service.js';
 import { normalizeCourseCode } from './learning.service.js';
 import { EntertainmentGameService, viewerStateFor, viewerLegalMovesFor } from './entertainment-game.service.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
+import { ServiceLockService } from './service-lock.service.js';
 
 const WS_PATH = '/ws/community';
 const MAX_PAYLOAD = 16 * 1024;
@@ -177,25 +178,53 @@ class CommunityRealtimeGateway {
       headers.push('X-Accel-Buffering: no');
     });
 
-    httpServer.on('upgrade', (request, socket, head) => {
-      let url;
+    // Vì sao handler là async: cần await ServiceLockService.getStatus() để biết
+    // dịch vụ có đang khóa bảo trì hay không. EventEmitter của Node KHÔNG bắt
+    // promise bị reject (giống Express 4 với middleware async), nên toàn bộ thân
+    // handler phải nằm trong try/catch; nếu không, một lỗi bất ngờ sẽ thành
+    // unhandled rejection và có thể hạ tiến trình.
+    httpServer.on('upgrade', async (request, socket, head) => {
       try {
-        url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
-      } catch {
-        socket.destroy();
-        return;
-      }
-      if (url.pathname !== WS_PATH) return;
-      if (!isAllowedOrigin(request)) {
-        socket.destroy();
-        return;
-      }
+        let url;
+        try {
+          url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+        } catch {
+          socket.destroy();
+          return;
+        }
+        if (url.pathname !== WS_PATH) return;
+        if (!isAllowedOrigin(request)) {
+          socket.destroy();
+          return;
+        }
 
-      try {
+        // Công tắc khóa dịch vụ: từ chối nâng cấp kết nối mới khi đang bảo trì.
+        // Phải trả lời thô ở tầng socket vì handshake WebSocket không đi qua
+        // Express nên không có `res`/middleware nào chặn sẵn; nếu chỉ ngồi im,
+        // client sẽ treo ở trạng thái CONNECTING cho tới khi hết timeout. Mọi
+        // nhánh kết thúc đều phải `return` để không chạy tiếp xuống handleUpgrade
+        // sau khi đã destroy() socket.
+        let locked = false;
+        try {
+          const status = await ServiceLockService.getStatus();
+          locked = Boolean(status && status.locked === true);
+        } catch {
+          // Fail-open giống cửa chặn HTTP: không đọc được trạng thái (DB hỏng...)
+          // thì coi như KHÔNG khóa, thay vì tự khóa oan cả realtime.
+          locked = false;
+        }
+        if (locked) {
+          socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+
         this.wss.handleUpgrade(request, socket, head, (ws) => {
           this.wss.emit('connection', ws, request);
         });
       } catch {
+        // Không để bất kỳ nhánh nào rò promise ra ngoài; đóng socket để client
+        // không bị treo nửa vời khi handshake hỏng.
         socket.destroy();
       }
     });
@@ -1018,6 +1047,23 @@ class CommunityRealtimeGateway {
     }
     this.wss?.close();
     this.wss = null;
+  }
+
+  // Đóng mọi kết nối đang mở khi bật khóa bảo trì (Task 5 gọi sau khi ghi trạng
+  // thái khóa). Cùng khuôn với close(): lặp trên bản sao để removeClient (xoá khỏi
+  // Set) không phá vỡ vòng lặp. Tách try/catch riêng cho removeClient và close vì:
+  // (1) client trong test có thể là stub tối giản, thiếu `rooms` nên removeClient
+  // sẽ ném; (2) một socket đã chết có thể ném khi close(). Dù nhánh nào lỗi, các
+  // client còn lại vẫn PHẢI được đóng nên tuyệt đối không để lỗi lan ra vòng lặp.
+  disconnectAllForMaintenance() {
+    for (const client of [...this.clients]) {
+      try {
+        this.removeClient(client);
+      } catch {}
+      try {
+        client.ws.close(1001, 'Dich vu dang bao tri');
+      } catch {}
+    }
   }
 }
 
