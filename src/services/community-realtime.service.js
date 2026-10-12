@@ -203,7 +203,7 @@ class CommunityRealtimeGateway {
         // Express nên không có `res`/middleware nào chặn sẵn; nếu chỉ ngồi im,
         // client sẽ treo ở trạng thái CONNECTING cho tới khi hết timeout. Mọi
         // nhánh kết thúc đều phải `return` để không chạy tiếp xuống handleUpgrade
-        // sau khi đã destroy() socket.
+        // sau khi đã đóng socket.
         let locked = false;
         try {
           const status = await ServiceLockService.getStatus();
@@ -214,8 +214,12 @@ class CommunityRealtimeGateway {
           locked = false;
         }
         if (locked) {
-          socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
-          socket.destroy();
+          // Vì sao dùng end() chứ KHÔNG write() rồi destroy() ngay: write() chỉ
+          // đệm bất đồng bộ, còn destroy() huỷ stream và có thể nuốt phần đang
+          // đệm trước khi flush tới client — client khi đó nhận "socket hang up"
+          // thay vì 503 sạch. end(response) flush toàn bộ rồi mới gửi FIN, nên
+          // phản hồi 503 luôn tới được client.
+          socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
           return;
         }
 

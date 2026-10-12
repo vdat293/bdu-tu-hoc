@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
+import { createServer } from 'node:http';
+import { EventEmitter, once } from 'node:events';
+import WebSocket from 'ws';
 import { CommunityRealtime } from '../src/services/community-realtime.service.js';
 import { ServiceLockService } from '../src/services/service-lock.service.js';
 
-// Test đơn vị cho phần WebSocket của công tắc khóa bảo trì:
+// Test cho phần WebSocket của công tắc khóa bảo trì:
 //   1. disconnectAllForMaintenance() đóng mọi client đang mở, chịu được client
 //      đã chết và không sập khi tập client rỗng.
-//   2. Cửa chặn 'upgrade' từ chối kết nối mới khi đang khóa (trả 503 ở tầng
-//      socket), cho qua khi mở, và fail-open khi đọc trạng thái lỗi.
+//   2. Cửa chặn 'upgrade' từ chối kết nối mới khi đang khóa, cho qua khi mở, và
+//      fail-open khi đọc trạng thái lỗi (dùng httpServer giả để chạy nhanh).
+//   3. Hồi quy thật: http server + client `ws` thật phải nhận HTTP 503 sạch chứ
+//      không phải lỗi mạng kiểu hang-up/ECONNRESET — bắt đúng lỗi khi ai đó quay
+//      lại dùng write()+destroy() thay vì end().
 //
 // Không cần DB: ServiceLockService.getStatus được monkey-patch theo từng ca.
 // Mỗi ca in một dòng ✓/✗; cuối cùng đặt exitCode=1 nếu có ca đỏ để
@@ -31,14 +36,20 @@ function flush() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-// Socket tối giản ghi lại những gì đã ghi và có bị destroy() hay không.
+// Socket tối giản ghi lại những gì đã ghi/end và có bị destroy() hay không.
 function makeSocket() {
   return {
     written: [],
+    ended: false,
     destroyed: false,
     write(chunk) {
       this.written.push(String(chunk));
       return true;
+    },
+    end(chunk) {
+      if (chunk !== undefined) this.written.push(String(chunk));
+      this.ended = true;
+      return this;
     },
     destroy() {
       this.destroyed = true;
@@ -48,6 +59,36 @@ function makeSocket() {
 
 function upgradeRequest() {
   return { url: '/ws/community', headers: { host: 'localhost' } };
+}
+
+// Mở một kết nối ws thật tới server đang khóa và phân loại kết cục:
+//   - { statusCode: 503 } nếu handshake bị từ chối bằng HTTP 503 (đúng).
+//   - { error } nếu rơi vào lỗi mạng/ECONNRESET/hang-up (hỏng).
+function probeUpgrade(url) {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws.terminate(); } catch {}
+      resolve(result);
+    };
+    const timer = setTimeout(
+      () => finish({ statusCode: null, error: new Error('timeout: không nhận phản hồi nào') }),
+      3000
+    );
+    timer.unref?.();
+    // Khi có listener 'unexpected-response', ws không tự abort — ta tự đọc mã
+    // trạng thái rồi đóng, nên lấy được đúng 503 mà không cần parse chuỗi lỗi.
+    ws.once('unexpected-response', (req, res) => {
+      res.resume();
+      finish({ statusCode: res.statusCode, error: null });
+    });
+    ws.once('error', (error) => finish({ statusCode: null, error }));
+    ws.once('open', () => finish({ statusCode: null, error: new Error('kết nối đã mở dù đang khóa') }));
+  });
 }
 
 const originalGetStatus = ServiceLockService.getStatus;
@@ -100,9 +141,7 @@ try {
     }
   });
 
-  // --- Phần 2: cửa chặn 'upgrade' ---
-  // Dùng EventEmitter làm httpServer giả để không cần bind cổng thật. attach()
-  // chỉ chạy một lần trong tiến trình test này.
+  // --- Phần 2: cửa chặn 'upgrade' (httpServer giả) ---
   const fakeServer = new EventEmitter();
   CommunityRealtime.attach(fakeServer);
 
@@ -121,12 +160,12 @@ try {
       const socket = makeSocket();
       fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
       await flush();
-      assert.equal(socket.destroyed, true, 'socket phải bị destroy() khi đang khóa');
+      assert.equal(socket.ended, true, 'socket phải được end() khi đang khóa');
       assert.ok(
         socket.written.some((line) => line.startsWith('HTTP/1.1 503')),
         'phải ghi phản hồi 503 ở tầng socket'
       );
-      assert.equal(upgradeCalls, 0, 'không được handleUpgrade khi đã destroy() socket');
+      assert.equal(upgradeCalls, 0, 'không được handleUpgrade khi đã từ chối');
     });
 
     await check('cho upgrade khi không khóa', async () => {
@@ -136,7 +175,7 @@ try {
       fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
       await flush();
       assert.equal(upgradeCalls, 1, 'phải handleUpgrade khi không khóa');
-      assert.equal(socket.destroyed, false, 'không được đóng socket khi không khóa');
+      assert.equal(socket.ended, false, 'không được end() socket khi không khóa');
     });
 
     await check('fail-open khi getStatus ném (vẫn cho upgrade)', async () => {
@@ -148,18 +187,51 @@ try {
       fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
       await flush();
       assert.equal(upgradeCalls, 1, 'lỗi đọc trạng thái phải fail-open, không chặn realtime');
-      assert.equal(socket.destroyed, false, 'fail-open không được đóng socket');
+      assert.equal(socket.ended, false, 'fail-open không được end() socket');
     });
   } finally {
     CommunityRealtime.wss.handleUpgrade = originalHandleUpgrade;
   }
+
+  // Nhả gateway khỏi httpServer giả để attach() lần nữa với HTTP server thật.
+  CommunityRealtime.close();
+
+  // --- Phần 3: hồi quy với http server + client ws thật ---
+  const httpServer = createServer();
+  CommunityRealtime.attach(httpServer);
+  httpServer.listen(0, '127.0.0.1');
+  await once(httpServer, 'listening');
+  const { port } = httpServer.address();
+
+  try {
+    await check('ws thật nhận HTTP 503 sạch, không phải hang-up/ECONNRESET', async () => {
+      ServiceLockService.getStatus = async () => ({
+        locked: true,
+        title: 'Bảo trì',
+        message: 'Thử lại sau.'
+      });
+      const result = await probeUpgrade(`ws://127.0.0.1:${port}/ws/community`);
+      if (result.statusCode == null) {
+        // Nếu 'unexpected-response' không bắn, ít nhất lỗi phải nhắc tới 503,
+        // tuyệt đối không được là hang-up/ECONNRESET (dấu hiệu mất 503).
+        const message = String(result.error && result.error.message);
+        assert.match(message, /503/, `phải nhận 503, thực nhận: ${message}`);
+        assert.doesNotMatch(
+          message,
+          /ECONNRESET|socket hang up/i,
+          `không được hang-up/ECONNRESET, thực nhận: ${message}`
+        );
+      } else {
+        assert.equal(result.statusCode, 503, `phải nhận đúng 503, thực nhận ${result.statusCode}`);
+      }
+    });
+  } finally {
+    CommunityRealtime.close();
+    await new Promise((resolve) => httpServer.close(resolve));
+  }
 } finally {
   ServiceLockService.getStatus = originalGetStatus;
 }
-
-// Dọn tài nguyên attach() đã tạo (heartbeat + wss). clients đã được khôi phục về
-// Set gốc rỗng nên close() không gặp stub thiếu trường.
-CommunityRealtime.close();
 
 if (failed > 0) {
   console.log(`✗ CommunityRealtime maintenance: ${failed} ca thất bại.`);
