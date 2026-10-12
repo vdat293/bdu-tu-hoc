@@ -35,7 +35,11 @@ const state = {
   isPurging: false,
   rankingToggleBusy: false,
   rankingSync: null,
-  rankingSyncMutationAt: 0
+  rankingSyncMutationAt: 0,
+  serviceLockBusy: false,
+  serviceLock: null,
+  serviceLockMutationAt: 0,
+  serviceLockDirty: false
 };
 
 // DOM References
@@ -159,7 +163,16 @@ const dom = {
   rankingSyncLast: document.getElementById('ranking-sync-last'),
   rankingSyncLastSub: document.getElementById('ranking-sync-last-sub'),
   rankingSyncNext: document.getElementById('ranking-sync-next'),
-  rankingSyncNextSub: document.getElementById('ranking-sync-next-sub')
+  rankingSyncNextSub: document.getElementById('ranking-sync-next-sub'),
+
+  // Service lock toggle (tab System)
+  serviceLockToggle: document.getElementById('service-lock-toggle'),
+  serviceLockState: document.getElementById('service-lock-state'),
+  serviceLockStateSub: document.getElementById('service-lock-state-sub'),
+  serviceLockUpdated: document.getElementById('service-lock-updated'),
+  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub'),
+  serviceLockTitle: document.getElementById('service-lock-title'),
+  serviceLockMessage: document.getElementById('service-lock-message')
 };
 
 let currentSelectedLog = null;
@@ -411,7 +424,8 @@ dom.btnThemeToggle.addEventListener('click', () => {
 async function fetchAllData(isBackground = false) {
   try {
     const rankingSyncRequestedAt = Date.now();
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync] = await Promise.all([
+    const serviceLockRequestedAt = Date.now();
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
@@ -419,7 +433,8 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/logs?timeRange=${state.timeRange}&page=${state.logFilters.page}&limit=${state.logFilters.limit}&status=${state.logFilters.status}&method=${state.logFilters.method}&route=${encodeURIComponent(state.logFilters.route)}&search=${encodeURIComponent(state.logFilters.search)}&mssv=${encodeURIComponent(state.logFilters.mssv)}`),
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`),
-      api(`/api/admin/dashboard/ranking-sync`).catch(() => null)
+      api(`/api/admin/dashboard/ranking-sync`).catch(() => null),
+      api(`/api/admin/dashboard/service-lock`).catch(() => null)
     ]);
 
     renderOverview(overview);
@@ -430,6 +445,7 @@ async function fetchAllData(isBackground = false) {
     renderVisitedStudents(visitedData);
     renderSystem(system);
     renderRankingSync(rankingSync, rankingSyncRequestedAt);
+    renderServiceLock(serviceLock, serviceLockRequestedAt);
   } catch (err) {
     if (!isBackground) {
       console.error('[Admin] Lỗi nạp dữ liệu:', err.message);
@@ -1327,6 +1343,93 @@ if (dom.rankingSyncToggle) {
       showToast(err.message || 'Không lưu được cấu hình đồng bộ.', 'error');
     } finally {
       dom.rankingSyncToggle.disabled = state.rankingSync?.env_enabled === false;
+    }
+  });
+}
+
+// Service lock toggle (tab System)
+function renderServiceLock(data, requestedAt = Date.now()) {
+  if (!dom.serviceLockToggle || !data || state.serviceLockBusy) return;
+  // Bỏ qua payload cũ nếu admin vừa bấm công tắc sau khi request được gửi.
+  if (requestedAt < state.serviceLockMutationAt) return;
+  state.serviceLock = data;
+
+  const locked = Boolean(data.locked);
+  dom.serviceLockToggle.checked = locked;
+
+  dom.serviceLockState.textContent = locked ? '● Đang khóa' : '● Đang mở';
+  dom.serviceLockState.className = locked ? 'sys-val text-red' : 'sys-val text-green';
+  if (dom.serviceLockStateSub) {
+    dom.serviceLockStateSub.textContent = locked
+      ? 'Người dùng đang thấy màn hình bảo trì'
+      : 'Dịch vụ hoạt động bình thường';
+  }
+
+  // Chỉ nạp lại ô nhập khi admin chưa gõ gì kể từ lần lưu trước, để auto-refresh
+  // (mỗi 15 giây) không ghi đè nội dung admin vừa nhập mà chưa kịp lưu.
+  if (!state.serviceLockDirty) {
+    if (dom.serviceLockTitle) dom.serviceLockTitle.value = data.title || '';
+    if (dom.serviceLockMessage) dom.serviceLockMessage.value = data.message || '';
+  }
+
+  if (dom.serviceLockUpdated) {
+    dom.serviceLockUpdated.textContent = data.updated_at ? formatDateTime(data.updated_at) : '--';
+  }
+  if (dom.serviceLockUpdatedSub) {
+    dom.serviceLockUpdatedSub.textContent = data.updated_by
+      ? `Bởi ${data.updated_by}`
+      : 'Chưa từng thay đổi';
+  }
+}
+
+// Đánh dấu "đang sửa" để auto-refresh không ghi đè nội dung chưa lưu.
+if (dom.serviceLockTitle) {
+  dom.serviceLockTitle.addEventListener('input', () => { state.serviceLockDirty = true; });
+}
+if (dom.serviceLockMessage) {
+  dom.serviceLockMessage.addEventListener('input', () => { state.serviceLockDirty = true; });
+}
+
+if (dom.serviceLockToggle) {
+  dom.serviceLockToggle.addEventListener('change', async () => {
+    const locked = dom.serviceLockToggle.checked;
+
+    // Chỉ hỏi xác nhận khi BẬT khóa: khóa dịch vụ sẽ đá toàn bộ người dùng đang
+    // online sang màn hình bảo trì, còn mở khóa thì an toàn nên không cần hỏi.
+    if (locked) {
+      const ok = window.confirm(
+        'Khóa dịch vụ sẽ đưa toàn bộ người dùng đang truy cập sang màn hình bảo trì. Tiếp tục?'
+      );
+      if (!ok) {
+        dom.serviceLockToggle.checked = false;
+        return;
+      }
+    }
+
+    // Ô nhập trống gửi '' (KHÔNG phải null) để API hiểu là dùng nội dung mặc định;
+    // gửi null sẽ bị 400.
+    const title = dom.serviceLockTitle ? dom.serviceLockTitle.value.trim() : '';
+    const message = dom.serviceLockMessage ? dom.serviceLockMessage.value.trim() : '';
+
+    state.serviceLockBusy = true;
+    dom.serviceLockToggle.disabled = true;
+    try {
+      const data = await api('/api/admin/dashboard/service-lock', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked, title, message })
+      });
+      state.serviceLockMutationAt = Date.now();
+      state.serviceLockBusy = false;
+      state.serviceLockDirty = false;
+      renderServiceLock(data, state.serviceLockMutationAt);
+      showToast(locked ? 'Đã khóa dịch vụ để bảo trì.' : 'Đã mở khóa dịch vụ.', 'success');
+    } catch (err) {
+      state.serviceLockBusy = false;
+      dom.serviceLockToggle.checked = !locked;
+      showToast(err.message || 'Không lưu được trạng thái khóa dịch vụ.', 'error');
+    } finally {
+      dom.serviceLockToggle.disabled = false;
     }
   });
 }

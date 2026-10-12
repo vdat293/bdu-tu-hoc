@@ -1042,6 +1042,43 @@ body {
 
 .sys-val.text-green { color: var(--accent-green); }
 
+.sys-val.text-red { color: var(--accent-red); }
+
+/* Form khóa dịch vụ bảo trì (tab System) */
+.service-lock-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.service-lock-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-lock-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+
+.service-lock-input::placeholder {
+  color: var(--text-muted);
+}
+
+.service-lock-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
 .sys-sub {
   font-size: 0.75rem;
   color: var(--text-muted);

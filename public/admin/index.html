@@ -511,6 +511,46 @@
             </p>
           </div>
 
+          <div class="panel-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Khóa Dịch Vụ Bảo Trì</h2>
+                <p class="card-subtitle">Bật để đưa toàn bộ người dùng sang màn hình bảo trì; tắt để mở lại ngay</p>
+              </div>
+              <label class="switch" title="Bật/tắt khóa dịch vụ bảo trì">
+                <input type="checkbox" id="service-lock-toggle" aria-label="Bật tắt khóa dịch vụ bảo trì" />
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="system-metrics-row">
+              <div class="sys-card">
+                <span class="sys-label">Trạng Thái</span>
+                <span class="sys-val" id="service-lock-state">--</span>
+                <span class="sys-sub" id="service-lock-state-sub">--</span>
+              </div>
+              <div class="sys-card">
+                <span class="sys-label">Cập Nhật Gần Nhất</span>
+                <span class="sys-val" id="service-lock-updated">--</span>
+                <span class="sys-sub" id="service-lock-updated-sub">--</span>
+              </div>
+            </div>
+            <div class="service-lock-form">
+              <label class="service-lock-field">
+                <span class="sys-label">Tiêu đề màn hình bảo trì</span>
+                <input type="text" id="service-lock-title" class="service-lock-input" maxlength="120"
+                  placeholder="Dịch vụ đang tạm khóa để bảo trì" />
+              </label>
+              <label class="service-lock-field">
+                <span class="sys-label">Nội dung thông báo</span>
+                <textarea id="service-lock-message" class="service-lock-input" rows="2" maxlength="500"
+                  placeholder="Hệ thống đang bảo trì, vui lòng quay lại sau."></textarea>
+              </label>
+            </div>
+            <p class="maintenance-info-content" style="margin-top: 14px;">
+              Để trống ô nội dung sẽ dùng thông báo mặc định. Khi bật khóa, các kết nối realtime đang mở sẽ bị đóng để mọi người nhận màn hình bảo trì ngay.
+            </p>
+          </div>
+
           <div class="panel-card">
             <div class="card-header">
               <div>
