@@ -101,7 +101,11 @@ const ROUTES_ADDED_AFTER_SPLIT = new Set([
   'POST /training-score/submit',
   // Route them o Task 3 (cong tac khoa dich vu bao tri): endpoint cong khai de
   // client doc trang thai khoa. Khong co trong ban goc api.routes.js.
-  'GET /status'
+  'GET /status',
+  // Route admin cua Task 5 (cong tac khoa dich vu bao tri): bat/tat khoa qua
+  // /admin; khong co trong ban goc api.routes.js.
+  'GET /admin/dashboard/service-lock',
+  'PUT /admin/dashboard/service-lock'
 ]);
 
 try {

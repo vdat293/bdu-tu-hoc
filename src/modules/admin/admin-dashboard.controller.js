@@ -6,6 +6,8 @@ import { BduService } from '../../services/bdu.service.js';
 import { AcademicRankingService } from '../../services/academic-ranking.service.js';
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
 import { SystemSettingsService } from '../../services/system-settings.service.js';
+import { ServiceLockService, SERVICE_LOCK_SETTING_KEY } from '../../services/service-lock.service.js';
+import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { isDatabaseConfigured } from '../../db/database.js';
 
 function normalizeMssv(value) {
@@ -431,6 +433,86 @@ export const AdminDashboardController = {
     } catch (err) {
       console.error('[AdminDashboard] Lỗi updateRankingSync:', err.message);
       return res.status(500).json({ result: false, message: 'Không thể lưu cấu hình đồng bộ xếp hạng.' });
+    }
+  },
+
+  /**
+   * Công tắc khóa dịch vụ bảo trì cho /admin.
+   *
+   * Trạng thái là "nguồn sự thật" của ServiceLockService (system_settings key
+   * service_lock). GET chỉ đọc; PUT ghi rồi, khi chuyển sang khóa, đóng mọi
+   * WebSocket đang mở để tab online nhận màn hình bảo trì ngay.
+   *
+   * Vì sao đọc thêm record ở GET: getStatus() cố tình chỉ trả nội dung công
+   * khai (locked/title/message). Metadata "ai ghi sau" nằm ở cột
+   * updated_at/updated_by của bảng setting nên phải đọc record; nếu đọc lỗi
+   * thì để null chứ không kéo sập màn hình admin.
+   */
+  async getServiceLock(req, res) {
+    try {
+      const [status, record] = await Promise.all([
+        ServiceLockService.getStatus(),
+        SystemSettingsService.getRecord(SERVICE_LOCK_SETTING_KEY).catch(() => null)
+      ]);
+      return res.json({
+        result: true,
+        data: {
+          locked: status.locked,
+          title: status.title,
+          message: status.message,
+          updated_at: record?.updated_at ?? null,
+          updated_by: record?.updated_by ?? null
+        }
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getServiceLock:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: 'Không thể đọc trạng thái khóa dịch vụ.'
+      });
+    }
+  },
+
+  async setServiceLock(req, res) {
+    try {
+      const { locked, title, message } = req.body || {};
+
+      // Chặn ngay tại controller (như updateRankingSync) để payload sai không
+      // chạm tới service và luôn trả 400 nhất quán.
+      if (typeof locked !== 'boolean') {
+        return res.status(400).json({
+          result: false,
+          message: 'Trường locked phải là true hoặc false.'
+        });
+      }
+
+      // ServiceLockService coi null là dữ liệu sai (400) nhưng undefined/'' là
+      // "dùng nội dung mặc định". Ô nhập trống của form gửi '' nên giữ nguyên;
+      // tuyệt đối không đổi giá trị rỗng thành null ở đây.
+      const data = await ServiceLockService.setStatus(
+        { locked, title, message },
+        req.identityAdminMssv || 'ADMIN_KEY'
+      );
+
+      // Chỉ đóng realtime khi chuyển sang trạng thái khóa; mở khóa không đụng
+      // tới client đang kết nối.
+      if (data.locked === true) {
+        CommunityRealtime.disconnectAllForMaintenance();
+      }
+
+      return res.json({
+        result: true,
+        message: data.locked
+          ? 'Đã khóa dịch vụ để bảo trì.'
+          : 'Đã mở khóa dịch vụ.',
+        data
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi setServiceLock:', err.message);
+      return res.status(err.status || 500).json({
+        result: false,
+        message: err.message || 'Không thể lưu trạng thái khóa dịch vụ.'
+      });
     }
   }
 };
