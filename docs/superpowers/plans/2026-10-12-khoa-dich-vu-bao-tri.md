@@ -25,6 +25,9 @@
 - Route/method mới **phải** được khai vào `scripts/verify-route-order.mjs` (`ROUTES_ADDED_AFTER_SPLIT`) hoặc `scripts/verify-controller-split.mjs` (`ADDED_AFTER_SPLIT`).
 - Comment và thông báo: **tiếng Việt**, giải thích "vì sao" như style hiện có trong repo; không dùng emoji.
 - Test Node chạy trực tiếp (`node tests/<file>`) — runner `npm run test:node` fail-closed trên Windows theo thiết kế.
+- **Chạy test Node phải kèm env managed**, nếu không `src/config/load-env.js` ném `UNMANAGED_TEST_EXECUTION` cho mọi test import gián tiếp `src/db/database.js`. Dạng đúng trong PowerShell:
+  `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/<file>`
+  Lưu ý: ở chế độ test, `.env` **không** được nạp ⇒ các test này phải tự đủ, không được phụ thuộc `DATABASE_URL`.
 
 ## Review Focus
 
@@ -73,7 +76,7 @@ Tạo `tests/test-service-lock.service.js` theo khuôn `tests/test-profile-contr
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-service-lock.service.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock.service.js`
 Expected: FAIL — `Cannot find module '../src/services/service-lock.service.js'`
 
 - [ ] **Step 3: Viết `src/services/service-lock.service.js`**
@@ -82,13 +85,13 @@ Chỉ khai báo các hằng ở Interfaces và hai method. `getStatus()` dùng `
 
 - [ ] **Step 4: Chạy lại test**
 
-Run: `node tests/test-service-lock.service.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock.service.js`
 Expected: PASS toàn bộ, không warning.
 
 - [ ] **Step 5: Khai test vào manifest và kiểm tra guard**
 
 Thêm `'test-service-lock.service.js'` vào `SAFE_NODE_TESTS` trong `scripts/test-manifest.mjs`.
-Run: `node tests/test-manifest.test.mjs`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-manifest.test.mjs`
 Expected: PASS (nếu quên khai, test này fail với "every top-level test file is explicitly classified").
 
 - [ ] **Step 6: Commit**
@@ -129,7 +132,7 @@ Tạo `tests/test-service-lock-guard.js` (chỉ dùng `node:assert/strict`, khô
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-service-lock-guard.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-guard.js`
 Expected: FAIL — không tìm thấy module `../src/utils/service-lock-guard.js`
 
 - [ ] **Step 3: Viết `src/utils/service-lock-guard.js`**
@@ -138,13 +141,13 @@ Cài đặt: chuẩn hoá path trước khi so (`path` bắt đầu bằng `/api
 
 - [ ] **Step 4: Chạy lại test**
 
-Run: `node tests/test-service-lock-guard.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-guard.js`
 Expected: PASS toàn bộ.
 
 - [ ] **Step 5: Khai vào manifest + kiểm tra guard**
 
 Thêm `'test-service-lock-guard.js'` vào `SAFE_NODE_TESTS`.
-Run: `node tests/test-manifest.test.mjs`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-manifest.test.mjs`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -185,7 +188,7 @@ Tạo `tests/test-service-lock-endpoint.js`:
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-service-lock-endpoint.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-endpoint.js`
 Expected: FAIL — `ApiController.getServiceStatus is not a function` (hoặc assert route chưa tồn tại).
 
 - [ ] **Step 3: Cài đặt**
@@ -196,7 +199,7 @@ Expected: FAIL — `ApiController.getServiceStatus is not a function` (hoặc as
 
 - [ ] **Step 4: Chạy lại test + guard**
 
-Run: `node tests/test-service-lock-endpoint.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-service-lock-endpoint.js`
 Expected: PASS.
 Run: `node scripts/verify-controller-split.mjs`
 Expected: FAIL với "Method moi phai duoc khai bao trong ADDED_AFTER_SPLIT: getServiceStatus" — đây là hành vi đúng của guard.
@@ -250,7 +253,7 @@ Tạo `tests/test-community-realtime-maintenance.js`:
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-community-realtime-maintenance.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-community-realtime-maintenance.js`
 Expected: FAIL — `disconnectAllForMaintenance is not a function`
 
 - [ ] **Step 3: Cài đặt**
@@ -260,7 +263,7 @@ Trong `httpServer.on('upgrade', ...)`: sau kiểm tra origin và trước `this.
 
 - [ ] **Step 4: Chạy lại test**
 
-Run: `node tests/test-community-realtime-maintenance.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-community-realtime-maintenance.js`
 Expected: PASS.
 
 - [ ] **Step 5: Khai manifest**
@@ -308,7 +311,7 @@ Tạo `tests/test-admin-service-lock.js` (monkey-patch, **không** cần DB):
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-admin-service-lock.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock.js`
 Expected: FAIL — `AdminDashboardController.getServiceLock is not a function`
 
 - [ ] **Step 3: Cài đặt controller + route**
@@ -317,7 +320,7 @@ Hai method theo đúng khuôn `getRankingSync`/`updateRankingSync` (cùng file, 
 
 - [ ] **Step 4: Chạy lại test**
 
-Run: `node tests/test-admin-service-lock.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock.js`
 Expected: PASS.
 
 - [ ] **Step 5: Khai guard thứ tự route**
@@ -462,7 +465,7 @@ Tạo `tests/test-admin-service-lock-ui.js` theo khuôn `tests/test-admin-rankin
 
 - [ ] **Step 2: Chạy test cho tới khi thấy nó fail**
 
-Run: `node tests/test-admin-service-lock-ui.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock-ui.js`
 Expected: FAIL ở assert đầu tiên (markup chưa có).
 
 - [ ] **Step 3: Cài đặt UI**
@@ -473,7 +476,7 @@ Expected: FAIL ở assert đầu tiên (markup chưa có).
 
 - [ ] **Step 4: Chạy lại test**
 
-Run: `node tests/test-admin-service-lock-ui.js`
+Run: `$env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'; node tests/test-admin-service-lock-ui.js`
 Expected: PASS.
 
 - [ ] **Step 5: Khai manifest**
@@ -501,6 +504,10 @@ git commit -m "feat(service-lock): cong tac khoa dich vu trong /admin"
 ```bash
 npm run lint:frontend
 node node_modules/vitest/vitest.mjs run --config vitest.config.js
+
+# Test Node: PHẢI có env managed, nếu không load-env.js chặn bằng
+# UNMANAGED_TEST_EXECUTION (xem Global Constraints). Trong PowerShell:
+#   $env:NODE_ENV='test'; $env:BDU_TEST_MODE='1'; $env:BDU_TEST_RUNNER='safe'
 node tests/test-service-lock.service.js
 node tests/test-service-lock-guard.js
 node tests/test-service-lock-endpoint.js
