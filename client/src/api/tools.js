@@ -38,6 +38,65 @@ export async function getSurveyRunStatus(token, runId, { signal } = {}) {
   return unwrap(data, data);
 }
 
+export async function getTrainingSemesters(token, { signal } = {}) {
+  const data = await request('/api/training-score/semesters', {
+    token,
+    signal,
+    defaultMessage: 'Không thể tải danh sách học kỳ điểm rèn luyện.'
+  });
+  return unwrap(data, data)?.items || [];
+}
+
+export async function getTrainingCriteria(token, hocKy, { signal } = {}) {
+  const data = await request(`/api/training-score/criteria?hocKy=${encodeURIComponent(hocKy)}`, {
+    token,
+    signal,
+    defaultMessage: 'Không thể tải tiêu chí điểm rèn luyện.'
+  });
+  return unwrap(data, data);
+}
+
+export async function syncTraining616(token, payload, { signal } = {}) {
+  const data = await request('/api/training-score/cds-sync', {
+    method: 'POST',
+    token,
+    body: payload,
+    signal,
+    defaultMessage: 'Không thể đồng bộ tiêu chí 6.16 từ app sinh viên.'
+  });
+  return unwrap(data, data);
+}
+
+export async function getTrainingCdsCredentials(token, { signal } = {}) {
+  const data = await request('/api/training-score/cds-credentials', {
+    token,
+    signal,
+    defaultMessage: 'Không thể kiểm tra đồng bộ app sinh viên.'
+  });
+  return unwrap(data, data);
+}
+
+export async function deleteTrainingCdsCredentials(token, { signal } = {}) {
+  const data = await request('/api/training-score/cds-credentials', {
+    method: 'DELETE',
+    token,
+    signal,
+    defaultMessage: 'Không thể xoá đồng bộ app sinh viên.'
+  });
+  return unwrap(data, data);
+}
+
+export async function submitTrainingScore(token, payload, { signal } = {}) {
+  const data = await request('/api/training-score/submit', {
+    method: 'POST',
+    token,
+    body: payload,
+    signal,
+    defaultMessage: 'Không thể lưu điểm rèn luyện.'
+  });
+  return unwrap(data, data);
+}
+
 export async function loginEnglish(token, credentials, { signal } = {}) {
   const data = await request('/api/english/login', { method: 'POST', token, body: credentials, signal, defaultMessage: 'Không thể đăng nhập Moodle.' });
   return unwrap(data, data);

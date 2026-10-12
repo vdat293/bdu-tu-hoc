@@ -5,6 +5,7 @@ export const navigation = [
   { path: '/leaderboard', label: 'Bảng xếp hạng', icon: '♛', keywords: 'xếp hạng gpa top khóa' },
   { path: '/wordfmt', label: 'Chuẩn hóa Word BDU', icon: '▤', keywords: 'word docx văn bản' },
   { path: '/survey', label: 'Auto đánh giá khảo sát', icon: '✓', keywords: 'khảo sát đánh giá giảng viên' },
+  { path: '/training-score', label: 'Auto điểm rèn luyện', icon: '☑', keywords: 'điểm rèn luyện dgrl đánh giá kết quả rèn luyện' },
   { path: '/english', label: 'Auto bài tập tiếng Anh', icon: 'A', keywords: 'english moodle quiz' },
   { path: '/enrollment', label: 'Đăng ký môn học', icon: '+', keywords: 'đăng ký tín chỉ học phần' },
   { path: '/learning', label: 'Kho Tài Liệu', icon: '09', keywords: 'kho tài liệu video học liệu môn học' },

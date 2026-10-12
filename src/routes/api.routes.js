@@ -94,6 +94,14 @@ router.get('/tool-runs/:runId/events', ApiController.streamSurveyRun);
 // Legacy static portal compatibility. The React portal uses the run API above.
 router.get('/survey/stream', ApiController.streamSurvey);
 
+// 3b. Training Score (điểm rèn luyện) - tự chấm mục 5 rồi lưu lên cổng BDU.
+router.get('/training-score/semesters', ApiController.getTrainingSemesters);
+router.get('/training-score/criteria', ApiController.getTrainingCriteria);
+router.post('/training-score/cds-sync', ApiController.syncTraining616);
+router.get('/training-score/cds-credentials', ApiController.getTrainingCdsCredentials);
+router.delete('/training-score/cds-credentials', ApiController.deleteTrainingCdsCredentials);
+router.post('/training-score/submit', ApiController.submitTrainingScore);
+
 // 4. Moodle English Exercise Automation
 router.get('/english/answers', ApiController.getEnglishAnswers);
 router.post('/english/answers', ApiController.addEnglishAnswer);
