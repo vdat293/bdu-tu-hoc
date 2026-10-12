@@ -26,3 +26,6 @@ scratch/
 data/pos-report.json
 .agents/
 skills-lock.json
+
+# Scratch c?a quy trình SDD (ledger, brief, review package) - không commit
+.superpowers/
