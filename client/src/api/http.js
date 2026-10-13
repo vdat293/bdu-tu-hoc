@@ -18,11 +18,14 @@ export class SessionExpiredError extends ApiError {
 // Dịch vụ bị khóa để bảo trì: khác lỗi HTTP thường ở chỗ đây là trạng thái toàn
 // hệ thống, người dùng không sửa được bằng cách thao tác lại. Mang thêm title để
 // màn hình bảo trì (Task 7) có tiêu đề hiển thị, còn message đã có từ ApiError.
+// Kèm `group` (nhóm tính năng bị khoá) vì từ khi khoá theo nhóm, màn hình bảo trì
+// chỉ chặn trang thuộc đúng nhóm đó; không có group thì chỉ còn cách chặn cả site.
 export class MaintenanceError extends ApiError {
-  constructor(message = 'Hệ thống đang bảo trì, vui lòng quay lại sau.', { title = null } = {}) {
+  constructor(message = 'Hệ thống đang bảo trì, vui lòng quay lại sau.', { title = null, group = null } = {}) {
     super(message, { status: 503, code: 'MAINTENANCE' });
     this.name = 'MaintenanceError';
     this.title = title;
+    this.group = group;
   }
 }
 
@@ -86,8 +89,11 @@ export async function request(path, {
   // là lỗi thường.
   if (response.status === 503 && data?.code === 'MAINTENANCE') {
     const title = typeof data?.title === 'string' && data.title ? data.title : null;
-    notifyMaintenance({ title, message });
-    throw new MaintenanceError(message, { title });
+    // Chỉ nhận group khi là chuỗi không rỗng; payload cũ/legacy thiếu group trở
+    // thành null để tầng UI biết đây không phải khoá theo nhóm cụ thể.
+    const group = typeof data?.group === 'string' && data.group ? data.group : null;
+    notifyMaintenance({ group, title, message });
+    throw new MaintenanceError(message, { title, group });
   }
   if (!response.ok || (data && typeof data === 'object' && data.result === false)) {
     throw new ApiError(message, { status: response.status, code: data?.code, details: data });

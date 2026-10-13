@@ -18,14 +18,30 @@ describe('frontend HTTP transport', () => {
 
   // 503 kèm đúng mã MAINTENANCE phải thành MaintenanceError và phát sự kiện
   // 'bdu:maintenance' mang title/message để màn hình bảo trì (Task 7) hiển thị.
+  // Từ khi khoá theo nhóm, màn hình bảo trì chỉ chặn trang của đúng nhóm bị khoá,
+  // nên cả lỗi lẫn sự kiện phải mang thêm `group` để tầng UI biết đang khoá nhóm nào.
   it('maps 503 with MAINTENANCE code to MaintenanceError and emits bdu:maintenance', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: false, code: 'MAINTENANCE', title: 'Dịch vụ đang tạm khóa', message: 'Hệ thống đang bảo trì.' }), { status: 503, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: false, code: 'MAINTENANCE', group: 'vocab', title: 'Dịch vụ đang tạm khóa', message: 'Hệ thống đang bảo trì.' }), { status: 503, headers: { 'content-type': 'application/json' } })));
     const listener = vi.fn();
     window.addEventListener('bdu:maintenance', listener);
     try {
-      await expect(request('/api/profile')).rejects.toMatchObject({ name: 'MaintenanceError', status: 503, code: 'MAINTENANCE' });
+      await expect(request('/api/vocab/themes')).rejects.toMatchObject({ name: 'MaintenanceError', status: 503, code: 'MAINTENANCE', group: 'vocab' });
       expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener.mock.calls[0][0].detail).toMatchObject({ title: 'Dịch vụ đang tạm khóa', message: 'Hệ thống đang bảo trì.' });
+      expect(listener.mock.calls[0][0].detail).toMatchObject({ group: 'vocab', title: 'Dịch vụ đang tạm khóa', message: 'Hệ thống đang bảo trì.' });
+    } finally {
+      window.removeEventListener('bdu:maintenance', listener);
+    }
+  });
+
+  // Khoá legacy hoặc phản hồi cũ có thể không kèm group: phải giữ nguyên hành vi cũ
+  // (group = null) thay vì ném lỗi hay nhét chuỗi "undefined" vào sự kiện.
+  it('keeps group null when the MAINTENANCE payload omits it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: false, code: 'MAINTENANCE', message: 'Hệ thống đang bảo trì.' }), { status: 503, headers: { 'content-type': 'application/json' } })));
+    const listener = vi.fn();
+    window.addEventListener('bdu:maintenance', listener);
+    try {
+      await expect(request('/api/profile')).rejects.toMatchObject({ name: 'MaintenanceError', status: 503, group: null });
+      expect(listener.mock.calls[0][0].detail.group).toBeNull();
     } finally {
       window.removeEventListener('bdu:maintenance', listener);
     }
