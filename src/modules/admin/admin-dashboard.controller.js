@@ -438,12 +438,13 @@ export const AdminDashboardController = {
   },
 
   /**
-   * Công tắc khóa dịch vụ bảo trì cho /admin.
+   * Công tắc khóa dịch vụ bảo trì theo nhóm cho /admin.
    *
-   * GET chỉ đọc trạng thái đầy đủ (kể cả updated_at/updated_by) từ
+   * GET chỉ đọc trạng thái đầy đủ (groups + catalog + updated_at/updated_by) từ
    * ServiceLockService.getAdminStatus(); controller KHÔNG tự biết key/shape của
-   * bảng setting. PUT ghi rồi, khi chuyển sang khóa, đóng mọi WebSocket đang mở
-   * để tab online nhận màn hình bảo trì ngay.
+   * bảng setting. PUT ghi ĐÚNG một nhóm qua setGroupStatus rồi, chỉ khi nhóm
+   * `community` chuyển sang khóa mới đóng mọi WebSocket đang mở để tab online
+   * nhận màn hình bảo trì ngay (khóa nhóm khác không đụng tới realtime).
    */
   async getServiceLock(req, res) {
     try {
@@ -460,36 +461,39 @@ export const AdminDashboardController = {
 
   async setServiceLock(req, res) {
     try {
-      const { locked, title, message } = req.body || {};
+      const { group, locked, title, message } = req.body || {};
 
       // Chặn ngay tại controller (như updateRankingSync) để payload sai không
-      // chạm tới service và luôn trả 400 nhất quán.
-      if (typeof locked !== 'boolean') {
+      // chạm tới service và luôn trả 400 nhất quán. Chỉ kiểm tra kiểu sơ bộ
+      // (group là chuỗi, locked là boolean); service sẽ từ chối group lạ,
+      // portal hoặc nội dung quá dài bằng lỗi 400 chi tiết.
+      if (typeof group !== 'string' || typeof locked !== 'boolean') {
         return res.status(400).json({
           result: false,
-          message: 'Trường locked phải là true hoặc false.'
+          message: 'Trường group phải là chuỗi và locked phải là true hoặc false.'
         });
       }
 
       // ServiceLockService coi null là dữ liệu sai (400) nhưng undefined/'' là
       // "dùng nội dung mặc định". Ô nhập trống của form gửi '' nên giữ nguyên;
       // tuyệt đối không đổi giá trị rỗng thành null ở đây.
-      const data = await ServiceLockService.setStatus(
-        { locked, title, message },
+      const data = await ServiceLockService.setGroupStatus(
+        { group, locked, title, message },
         req.identityAdminMssv || 'ADMIN_KEY'
       );
 
-      // Chỉ đóng realtime khi chuyển sang trạng thái khóa; mở khóa không đụng
-      // tới client đang kết nối.
-      if (data.locked === true) {
+      // Chỉ đóng realtime khi nhóm community chuyển sang trạng thái khóa; mở
+      // khóa hoặc khóa nhóm khác không đụng tới client đang kết nối vì các
+      // tính năng đó không dùng kênh WebSocket cộng đồng.
+      if (group === 'community' && locked === true) {
         CommunityRealtime.disconnectAllForMaintenance();
       }
 
       return res.json({
         result: true,
-        message: data.locked
-          ? 'Đã khóa dịch vụ để bảo trì.'
-          : 'Đã mở khóa dịch vụ.',
+        message: locked
+          ? `Đã khóa nhóm ${group} để bảo trì.`
+          : `Đã mở khóa nhóm ${group}.`,
         data
       });
     } catch (err) {
