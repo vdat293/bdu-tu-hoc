@@ -59,7 +59,6 @@ Các giá trị dưới đây **không** nằm trong repo; phải có trước k
 | `SMTP_*`, `MAIL_FROM` | cấp lại |
 | `BACKUP_DATABASE_URL`, `BACKUP_R2_BUCKET` | tạo tại chỗ (xem 6.3) |
 | GHCR read token (PAT `read:packages`) | GitHub → Settings → Developer settings |
-| Email nhận cảnh báo ngân sách | do người vận hành cấp |
 
 Các giá trị **đã có sẵn** trong `.env` local và dùng lại được:
 `POSTGRES_*`, `CDS_USER`, `CDS_PASSWORD`, `DISCORD_*` (gồm `DISCORD_BOT_TOKEN`),
@@ -202,7 +201,7 @@ Không mở `3000`, `5432` ra ngoài. `postgres` chỉ trong network của Compo
 
 ### 5.5. Ngân sách
 
-- AWS Budgets: budget theo tháng **30 USD**, cảnh báo ở 80% actual và 100% forecasted, gửi tới email do người vận hành cấp.
+- **Không tạo AWS Budgets** (chủ sở hữu đã quyết bỏ để tránh phụ thuộc email). Chi phí theo dõi thủ công bằng AWS Cost Explorer khi cần; trần chi phí vẫn là 30 USD/tháng theo mục 4.3.
 
 ---
 
@@ -213,7 +212,7 @@ Không mở `3000`, `5432` ra ngoài. `postgres` chỉ trong network của Compo
 | File | Vai trò |
 | --- | --- |
 | `aws/README.md` | Cách dùng, kiến trúc, chi phí, ánh xạ với spec này |
-| `aws/infra.sh` | Script idempotent: `check \| deploy \| status \| ssh \| cleanup`. Tạo VPC/subnet/IGW/RT/SG/key pair/EC2/EIP/DLM/Budget |
+| `aws/infra.sh` | Script idempotent: `check \| deploy \| status \| ssh \| cleanup`. Tạo VPC/subnet/IGW/RT/SG/key pair/EC2/EIP/DLM |
 | `aws/user-data.sh` | cloud-init cho lần boot đầu |
 | `aws/cleanup.sh` | Xoá tài nguyên đúng thứ tự phụ thuộc, idempotent, có retry `DependencyViolation` |
 | `aws/dlm-policy.json` | Body lifecycle policy |
@@ -363,7 +362,7 @@ liệu sai, restore từ object backup R2 có `reason=pre-deploy`.
 | Backup định kỳ | service `bdu-db-backup` với `BACKUP_ENABLED=1`, cron cấu hình qua `BACKUP_CRON` |
 | Kiểm backup khôi phục được | `npm run db:backup:verify` |
 | Snapshot EBS | DLM `bdu-tu-hoc-snapshots`, 1 bản/ngày giữ 7 |
-| Ngân sách | AWS Budgets cảnh báo 30 USD |
+| Chi phí | Theo dõi thủ công bằng AWS Cost Explorer; trần 30 USD/tháng |
 | Dọn đĩa | `docker image prune -f`, `docker system df` |
 | Origin cert hết hạn | Origin Certificate hiệu lực tới 15 năm; ghi nhớ gia hạn thủ công (Cloudflare Dashboard) |
 

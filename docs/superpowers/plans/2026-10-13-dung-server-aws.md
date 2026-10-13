@@ -148,7 +148,7 @@ git commit -m "ci(deploy): build day image len GHCR va deploy EC2"
 **Interfaces:**
 - Consumes: không.
 - Produces:
-  - `aws/infra.sh <check|deploy|status|ssh|cleanup>`; state file `aws/infra.state` với các khóa `REGION`, `VPC_ID`, `SUBNET_ID`, `IGW_ID`, `RT_ID`, `SG_ID`, `KEY_NAME`, `KEY_PATH`, `INSTANCE_ID`, `EIP_ALLOC_ID`, `EIP_PUBLIC_IP`, `DLM_POLICY_ID`, `BUDGET_NAME`.
+  - `aws/infra.sh <check|deploy|status|ssh|cleanup>`; state file `aws/infra.state` với các khóa `REGION`, `VPC_ID`, `SUBNET_ID`, `IGW_ID`, `RT_ID`, `SG_ID`, `KEY_NAME`, `KEY_PATH`, `INSTANCE_ID`, `EIP_ALLOC_ID`, `EIP_PUBLIC_IP`, `DLM_POLICY_ID`.
   - `aws/user-data.sh` đọc 2 biến `DEPLOY_PUBLIC_KEY` và `APP_DIR` (được `infra.sh` thay trước khi truyền `--user-data`).
   - `aws/cleanup.sh [--yes]` xoá theo thứ tự phụ thuộc và idempotent.
 
@@ -172,8 +172,9 @@ Idempotent, mỗi bước kiểm state trước khi tạo. Thứ tự và tham s
 7. `run-instances` với `t3a.small`, `--metadata-options HttpTokens=required,HttpPutResponseHopLimit=1`, root gp3 30 GB `DeleteOnTermination=true` `Encrypted=true`, `--user-data file://<file tạm đã thay biến>`, tag `Project=bdu-tu-hoc`, `Name=bdu-tu-hoc-app` → `INSTANCE_ID`.
 8. `allocate-address` + `associate-address` → `EIP_ALLOC_ID`, `EIP_PUBLIC_IP`.
 9. DLM: tạo role `bdu-tu-hoc-dlm-role` (trust `dlm.amazonaws.com`, gắn `arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole`), `create-lifecycle-policy` từ `aws/dlm-policy.json` (cron `0 18 * * ? *`, `RetentionCount` 7, target tag `Project=bdu-tu-hoc`) → `DLM_POLICY_ID`.
-10. Budgets: budget tháng 30 USD + 2 notification (80% actual, 100% forecasted) tới email do người vận hành cấp → `BUDGET_NAME`.
-11. `wait instance-status-ok`, chờ `/var/lib/cloud/instance/boot-finished` qua SSH.
+10. `wait instance-status-ok`, chờ `/var/lib/cloud/instance/boot-finished` qua SSH.
+
+Không tạo AWS Budgets (chủ sở hữu đã quyết bỏ).
 
 Mọi giá trị lấy bằng `--output text` phải lọc `\r` (Git Bash trên Windows chèn CRLF) — bọc `aws()` như `aws-script/lab01.sh` đang làm.
 
@@ -183,7 +184,7 @@ Mọi giá trị lấy bằng `--output text` phải lọc `\r` (Git Bash trên 
 
 - [ ] **Step 5: Viết `aws/cleanup.sh`**
 
-Xoá theo thứ tự: instance → EIP (release) → volume mồ côi → DLM policy → IAM role → SG → route table → subnet → IGW → VPC; budget xoá riêng. Idempotent, retry khi gặp `DependencyViolation`, ghi log `aws/cleanup-log.txt`, hỏi xác nhận trừ khi `--yes`.
+Xoá theo thứ tự: instance → EIP (release) → volume mồ côi → DLM policy → IAM role → SG → route table → subnet → IGW → VPC. Idempotent, retry khi gặp `DependencyViolation`, ghi log `aws/cleanup-log.txt`, hỏi xác nhận trừ khi `--yes`.
 
 - [ ] **Step 6: Viết `aws/README.md`**
 
@@ -202,7 +203,7 @@ Expected: `bash -n` không in gì; `check` in ra `Account: 143784554304` và `0`
 
 ```bash
 git add aws/
-git commit -m "feat(aws): script dung ha tang EC2 + VPC + EIP + DLM + budget"
+git commit -m "feat(aws): script dung ha tang EC2 + VPC + EIP + DLM"
 ```
 
 ---
@@ -225,7 +226,7 @@ Expected: kết thúc bằng `EIP_PUBLIC_IP=<ip>`; instance ở trạng thái `r
 
 - [ ] **Step 2: Kiểm tài nguyên đã tạo**
 
-`aws ec2 describe-instances`, `describe-security-groups`, `describe-addresses`, `aws dlm get-lifecycle-policies`, `aws budgets describe-budgets`. Expected: có đúng 1 instance `t3a.small`, 1 EIP, SG có đúng 3 ingress, 1 DLM policy, 1 budget.
+`aws ec2 describe-instances`, `describe-security-groups`, `describe-addresses`, `aws dlm get-lifecycle-policies`. Expected: có đúng 1 instance `t3a.small`, 1 EIP, SG có đúng 3 ingress, 1 DLM policy.
 
 - [ ] **Step 3: Xác nhận cổng 80/443 mở, 3000/5432 đóng**
 
@@ -469,9 +470,9 @@ ssh -i aws/bdu-tu-hoc-deploy.pem deploy@<EIP> \
 
 Expected: tạo object trên R2; `db:backup:verify` báo xanh.
 
-- [ ] **Step 2: Kiểm DLM và budget**
+- [ ] **Step 2: Kiểm DLM**
 
-`aws dlm get-lifecycle-policies` → 1 policy `bdu-tu-hoc-snapshots`; `aws budgets describe-budgets --account-id 143784554304` → 1 budget 30 USD. Sau ≥1 ngày, `aws ec2 describe-snapshots --owner-ids self` phải có snapshot.
+`aws dlm get-lifecycle-policies` → 1 policy `bdu-tu-hoc-snapshots`. Sau ≥1 ngày, `aws ec2 describe-snapshots --owner-ids self` phải có snapshot.
 
 - [ ] **Step 3: Kiểm cổng từ Internet (Review Focus #5)**
 
@@ -496,6 +497,6 @@ git commit -m "docs(aws): ghi moc baseline va ket qua nghiem thu 12 tieu chi"
 
 ## Ghi chú thực thi
 
-- **Đầu vào phải có trước Task 4:** email nhận cảnh báo ngân sách; Cloudflare Origin Certificate; `R2_*`; `ADMIN_DASHBOARD_KEY`; `GHCR` PAT read-only; `SMTP_*`.
+- **Đầu vào phải có trước Task 4:** Cloudflare Origin Certificate; `R2_*`; `ADMIN_DASHBOARD_KEY`; `GHCR` PAT read-only; `SMTP_*`. (Không tạo AWS Budgets — đã quyết bỏ.)
 - Thao tác AWS chạy qua AWS MCP trong phiên này (account đã đăng nhập); thao tác repo chạy cục bộ.
 - Sau Task 8, máy vẫn tính phí ~24 USD/tháng; muốn tạm dừng mà giữ dữ liệu thì `stop-instances` (không `terminate`), hoặc `bash aws/cleanup.sh` để xoá sạch.
