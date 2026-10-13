@@ -228,6 +228,23 @@ await checkAsync('features: endpoint lạ map theo tính năng + share trên t�
   assert.equal(data.items[0].share, 1);
 });
 
+await checkAsync('features: nhánh other vẫn nằm trong tổng (Review Focus #2)', async () => {
+  // Vì sao khoá tầng query: endpoint lạ (đăng nhập, admin...) phải rơi vào
+  // `other` mà vẫn được đếm trong `totalRequests`, không bốc hơi khỏi tổng.
+  const runner = makeRunner(() => ({
+    rows: [
+      { endpoint: '/api/login', requests: 5, users: 4, errors: 1 },
+      { endpoint: '/wordfmt/format', requests: 3, users: 2, errors: 0 }
+    ]
+  }));
+  const data = await TrafficInsightsService.getFeatures({ timeRange: '7d' }, runner);
+  assert.equal(data.items.length, 1);
+  assert.equal(data.items[0].id, 'wordfmt');
+  assert.ok(data.other.requests > 0);
+  assert.equal(data.totalRequests, 8);
+  assert.equal(data.items[0].share + data.other.share, 1);
+});
+
 await checkAsync("features 'all': bỏ delta, params không mốc thời gian", async () => {
   const runner = makeRunner(() => ({
     rows: [{ feature_id: 'wordfmt', requests: 3, users: 2, errors: 0 }]
@@ -258,7 +275,12 @@ await checkAsync('heatmap: matrix 7x24 và peak đúng ô lớn nhất', async (
   assert.equal(data.max, 167);
 });
 
-await checkAsync('cohort: totals và dayBuckets cộng khớp', async () => {
+await checkAsync('cohort: totals lấy từ lượt tổng, buckets giữ theo ngày', async () => {
+  // Vì sao KHÔNG assert tổng buckets khớp totals: `new` mỗi ngày đếm người
+  // mới trong ngày đó, còn `totals.new` là DISTINCT cả cửa sổ — cùng một người
+  // chỉ tính một lần ở totals nhưng xuất hiện ở đúng một bucket ngày, còn
+  // `returning` mỗi ngày đếm trùng người qua nhiều ngày nên tổng buckets luôn
+  // lớn hơn totals. Hai con số khác định nghĩa, chỉ buckets cộng nội bộ.
   const runner = makeRunner((sql) => {
     // Vì sao rẽ nhánh theo SQL: cohort chạy 2 lượt (buckets theo ngày +
     // tổng/stickiness); fake nhận diện lượt buckets qua `date_trunc`.
@@ -279,11 +301,7 @@ await checkAsync('cohort: totals và dayBuckets cộng khớp', async () => {
   for (const bucket of data.dayBuckets) {
     assert.equal(bucket.new + bucket.returning, bucket.active);
   }
-  const sumNew = data.dayBuckets.reduce((sum, bucket) => sum + bucket.new, 0);
-  const sumReturning = data.dayBuckets.reduce((sum, bucket) => sum + bucket.returning, 0);
-  assert.equal(data.totals.new, sumNew);
-  assert.equal(data.totals.returning, sumReturning);
-  assert.equal(data.totals.new, 3);
+  assert.deepEqual(data.totals, { active: 7, new: 3, returning: 6 });
   assert.deepEqual(data.stickiness, { dau: 4, wau: 7, ratio: 0.5714 });
 });
 
@@ -332,6 +350,38 @@ await checkAsync('journey rỗng: events/sessions/transitions [] và không ném
   assert.deepEqual(data.sessions, []);
   assert.deepEqual(data.transitions, []);
   assert.equal(data.truncated, false);
+});
+
+await checkAsync('journey: tách 2 phiên và transitions đếm trước serialize', async () => {
+  // Vì sao khoá thứ tự này: `buildSessions` giữ sự kiện gốc ở thuộc tính
+  // non-enumerable `session.events`; nếu serialize phiên trước khi gọi
+  // `summarizeTransitions` thì transitions rơi về `[]` im lặng mà không test
+  // nào bắt (các ca journey khác đều `rows: []`).
+  const base = Date.UTC(2026, 0, 1, 0, 0, 0);
+  const row = (minutes, path) => ({
+    created_at: new Date(base + minutes * 60 * 1000),
+    method: 'GET',
+    path,
+    route: null,
+    status_code: 200,
+    response_time_ms: 50,
+    device_type: 'desktop'
+  });
+  const runner = makeRunner((sql) => {
+    if (/FROM students/i.test(sql)) return { rows: [] };
+    return { rows: [row(0, '/a'), row(1, '/b'), row(121, '/c')] };
+  });
+  const data = await TrafficInsightsService.getUserJourney({ mssv: 'SV001', timeRange: '7d' }, runner);
+  // `/c` cách `/b` 2 giờ (> 30 phút) nên tách thành 2 phiên.
+  assert.equal(data.sessions.length, 2);
+  assert.deepEqual(Object.keys(data.sessions[0]), ['startAt', 'endAt', 'durationMs', 'eventCount', 'features']);
+  // Chuyển `/a`→`/b` trong cùng phiên phải được đếm; `/b`→`/c` bắc qua ranh
+  // giới phiên nên không có mặt.
+  assert.deepEqual(
+    data.transitions.find((t) => t.from === '/a' && t.to === '/b'),
+    { from: '/a', to: '/b', count: 1 }
+  );
+  assert.equal(data.transitions.find((t) => t.from === '/b' && t.to === '/c'), undefined);
 });
 
 await checkAsync('chưa cấu hình DB: gọi không runner trả rỗng, không 500', async () => {

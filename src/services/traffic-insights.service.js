@@ -311,42 +311,38 @@ export async function getFeatures({ timeRange } = {}, runner) {
     }
   }
 
-  const buckets = new Map();
-  for (const row of currentRes.rows ?? []) {
-    const id = featureIdFromRow(row);
-    const bucket = buckets.get(id) ?? { requests: 0, users: 0, errors: 0 };
-    bucket.requests += num(row?.requests);
-    bucket.users += num(row?.users);
-    bucket.errors += num(row?.errors ?? row?.error_count);
-    buckets.set(id, bucket);
-  }
+  // Gom qua `bucketByFeature` (hàm thuần Task 2) để production và test dùng
+  // chung một đường gom "id lạ ⇒ nhóm Khác". Vì sao không tự gom bằng Map ở
+  // đây: hai chỗ gom song song sẽ lệch shape `other` lúc nào không hay
+  // (`bucketByFeature` trả `errorRate`, endpoint cần `share` nên bổ sung sau).
+  const bucketRows = (currentRes.rows ?? []).map((row) => ({
+    featureId: featureIdFromRow(row),
+    requests: num(row?.requests),
+    users: num(row?.users),
+    errors: num(row?.errors ?? row?.error_count)
+  }));
+  const { items: bucketed, other: bucketedOther } = bucketByFeature(bucketRows);
 
-  const totalRequests = [...buckets.values()].reduce((sum, bucket) => sum + bucket.requests, 0);
-  const items = [];
-  let other = { requests: 0, users: 0, share: 0 };
-  for (const [id, bucket] of buckets) {
-    const share = totalRequests > 0 ? round4(bucket.requests / totalRequests) : 0;
-    if (id === OTHER_FEATURE.id) {
-      other = { requests: bucket.requests, users: bucket.users, share };
-      continue;
-    }
+  const totalRequests = bucketRows.reduce((sum, row) => sum + row.requests, 0);
+  const otherShare = totalRequests > 0 ? round4(bucketedOther.requests / totalRequests) : 0;
+  const other = { requests: bucketedOther.requests, users: bucketedOther.users, share: otherShare };
+  const items = bucketed.map((entry) => {
     // deltaPct null khi `all` (không kỳ trước) hoặc kỳ trước bằng 0 (tránh chia 0).
     let deltaPct = null;
     if (interval) {
-      const prev = prevMap.get(id) ?? 0;
-      deltaPct = prev > 0 ? Math.round(((bucket.requests - prev) / prev) * 1000) / 10 : null;
+      const prev = prevMap.get(entry.id) ?? 0;
+      deltaPct = prev > 0 ? Math.round(((entry.requests - prev) / prev) * 1000) / 10 : null;
     }
-    items.push({
-      id,
-      label: labelForFeature(id),
-      requests: bucket.requests,
-      users: bucket.users,
-      share,
-      errorRate: bucket.requests > 0 ? bucket.errors / bucket.requests : 0,
+    return {
+      id: entry.id,
+      label: entry.label,
+      requests: entry.requests,
+      users: entry.users,
+      share: totalRequests > 0 ? round4(entry.requests / totalRequests) : 0,
+      errorRate: entry.errorRate,
       deltaPct
-    });
-  }
-  items.sort((a, b) => b.requests - a.requests);
+    };
+  });
   return { timeRange: range, totalRequests, items, other };
 }
 
