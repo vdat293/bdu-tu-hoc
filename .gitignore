@@ -38,4 +38,8 @@ aws-script/
 # chứng chỉ Cloudflare Origin. Sinh ra lúc chạy, KHÔNG commit.
 aws/*.state
 aws/*.pem
+aws/*.pub
+aws/*.generated.*
+aws/known_hosts
+aws/cleanup-log.txt
 deploy/caddy/certs/

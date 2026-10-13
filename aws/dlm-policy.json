@@ -1,0 +1,28 @@
+{
+  "Description": "Snapshot EBS hang ngay cho volume cua bdu-tu-hoc, giu 7 ban gan nhat.",
+  "State": "ENABLED",
+  "ExecutionRoleArn": "__DLM_ROLE_ARN__",
+  "PolicyDetails": {
+    "PolicyType": "IMAGE_MANAGEMENT",
+    "ResourceTypes": ["VOLUME"],
+    "ResourceLocations": ["CLOUD"],
+    "TargetTags": [
+      {
+        "Key": "Project",
+        "Value": "bdu-tu-hoc"
+      }
+    ],
+    "Schedules": [
+      {
+        "Name": "daily-snapshot-retain-7",
+        "CopyTags": true,
+        "CreateRule": {
+          "CronExpression": "cron(0 18 * * ? *)"
+        },
+        "RetainRule": {
+          "Count": 7
+        }
+      }
+    ]
+  }
+}
