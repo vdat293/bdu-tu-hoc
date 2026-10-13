@@ -2602,6 +2602,235 @@ body {
   }
 }
 
+/* --------------------------------------------------------------------------
+   MODAL HÀNH TRÌNH (Task 10)
+   Dòng thời gian gom theo phiên: mỗi phiên là một khối có đường viền nhạt, bên
+   trong là các sự kiện xếp dọc. Sự kiện lỗi được đánh dấu BẰNG CẢ màu (nền đỏ +
+   viền đỏ) LẪN chữ/icon — spec mục 4.1 cấm truyền nghĩa chỉ bằng màu.
+   Bố cục dùng flex-wrap + min-width:0 thay vì grid cố định cột: đường dẫn dài
+   (URL có query string) không được đẩy tràn ngang modal ở 375px.
+   -------------------------------------------------------------------------- */
+.journey-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.journey-stat {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card-hover);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.journey-stat-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.journey-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.journey-stat-value.error {
+  color: var(--color-destructive);
+}
+
+/* Nhắc "đã cắt bớt sự kiện": nền cảnh báo + viền + chữ, không chỉ dựa vào màu. */
+.journey-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-warning);
+  background: var(--tint-warning);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.journey-section-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.journey-section-hint {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.journey-session {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.journey-session-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.journey-session-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+}
+
+.journey-session-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--color-destructive);
+}
+
+.journey-feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.journey-feature-chip {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-card-hover);
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.journey-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.journey-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.journey-event:hover {
+  background: var(--bg-card-hover);
+}
+
+.journey-event-time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-sub);
+}
+
+.journey-event-feature {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* min-width:0 + cắt bằng dấu chấm lửng: URL dài không kéo rộng cả modal. */
+.journey-event-path {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journey-event-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-destructive);
+}
+
+.journey-event--error {
+  background: var(--tint-danger);
+  border-color: var(--color-destructive);
+}
+
+.journey-event--error:hover {
+  background: var(--tint-danger);
+}
+
+.journey-transitions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.journey-transition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hover);
+}
+
+.journey-transition-path {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-main);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.journey-transition-arrow {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.journey-transition-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
 /* Tôn trọng prefers-reduced-motion: tắt toàn bộ chuyển động/hiệu ứng
    không thiết, chỉ giữ thay đổi trạng thái tức thì. */
 @media (prefers-reduced-motion: reduce) {

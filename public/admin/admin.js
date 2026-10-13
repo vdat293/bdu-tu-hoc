@@ -105,6 +105,18 @@ const dom = {
   btnActivityDismiss: document.getElementById('btn-activity-dismiss'),
   btnActivityFilterLogs: document.getElementById('btn-activity-filter-logs'),
 
+  // Modal Hành trình (Task 10)
+  modalJourney: document.getElementById('modal-journey'),
+  journeyTitle: document.getElementById('journey-title'),
+  journeySub: document.getElementById('journey-sub'),
+  journeySummary: document.getElementById('journey-summary'),
+  journeyNotice: document.getElementById('journey-notice'),
+  journeyTimeline: document.getElementById('journey-timeline'),
+  journeyTransitions: document.getElementById('journey-transitions'),
+  btnCloseJourney: document.getElementById('btn-close-journey'),
+  btnJourneyDismiss: document.getElementById('btn-journey-dismiss'),
+  btnJourneyFilterLogs: document.getElementById('btn-journey-filter-logs'),
+
   // KPIs
   kpiTotalRequests: document.getElementById('kpi-total-requests'),
   kpiGrowth: document.getElementById('kpi-growth'),
@@ -189,6 +201,8 @@ const dom = {
 
 let currentSelectedLog = null;
 let currentActivityMssv = '';
+// MSSV đang mở modal Hành trình; dùng lại cho nút "Lọc trong Nhật Ký".
+let currentJourneyMssv = '';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -1705,16 +1719,266 @@ function labelForTimeRange(range) {
   }[range] || range;
 }
 
+/* ==========================================================================
+   MODAL HÀNH TRÌNH (Task 10)
+   Vì sao cần: `getUserActivity` (modal Dấu vết API) chỉ TỔNG HỢP theo route,
+   nhìn không ra người dùng đi đâu trước sau. Endpoint journey trả kèm thứ tự
+   thời gian + phiên + chuyển trang, đủ để trả lời "sinh viên này đã làm gì".
+   Mọi số ở đây đều lấy từ endpoint, không tự tính lại: ranh giới phiên 30 phút
+   do backend quyết định, client tính thêm sẽ lệch với số liệu "số phiên".
+   ========================================================================== */
+
+// Số sự kiện tối đa một lần mở hành trình. Khớp mặc định của endpoint (spec
+// mục 6.2e) và được dùng lại cho câu nhắc khi `truncated` bật, để người đọc
+// không phải tự đoán bản sự kiện bị cắt ở mốc nào.
+const JOURNEY_EVENT_LIMIT = 200;
+// Hành trình cố định 7 ngày thay vì bám mốc thời gian ở topbar: mốc mặc định
+// 24h thường rỗng với một sinh viên, mà một hành trình rỗng thì vô nghĩa.
+const JOURNEY_TIME_RANGE = '7d';
+
 /**
- * Mở "Hành trình" của một sinh viên: dòng thời gian có thứ tự + tách phiên.
- * KHUNG HÀM cho Task 10 — nơi đây sẽ gọi
- * GET /api/admin/dashboard/insights/users/:mssv/journey rồi render timeline
- * theo phiên vào modal #modal-journey. Task 8 chỉ dựng nút bấm nối tới hàm này
- * để hành trình có chỗ mở; chưa gọi endpoint nên báo rõ thay vì im lặng.
+ * Mở "Hành trình" của một sinh viên: gọi
+ * GET /api/admin/dashboard/insights/users/:mssv/journey rồi vẽ dòng thời gian
+ * theo phiên vào modal #modal-journey.
+ * MSSV đi qua encodeURIComponent vì nó lấy từ dữ liệu bảng và có thể chứa ký
+ * tự lạ; nếu không, một mã sai sẽ làm hỏng URL thay vì báo lỗi cho người đọc.
  */
-function openJourney(mssv) {
-  showToast(`Hành trình của ${mssv} sẽ mở khi có modal chi tiết.`, 'info');
+async function openJourney(mssv) {
+  const cleanMssv = String(mssv ?? '').trim();
+  currentJourneyMssv = cleanMssv;
+
+  // Hiện trạng thái đang tải TRƯỚC khi mở modal: API có thể mất hơn nửa giây,
+  // mở modal trống rồi nhảy số liệu sau tạo cảm giác vỡ.
+  dom.journeyTitle.textContent = `Hành Trình • ${cleanMssv}`;
+  dom.journeySub.textContent = labelForTimeRange(JOURNEY_TIME_RANGE);
+  renderSkeleton(dom.journeySummary, 2);
+  renderSkeleton(dom.journeyTimeline, 4);
+  renderSkeleton(dom.journeyTransitions, 2);
+  dom.journeyNotice.style.display = 'none';
+  dom.journeyNotice.textContent = '';
+  dom.modalJourney.style.display = 'flex';
+
+  try {
+    const data = await api(`/api/admin/dashboard/insights/users/${encodeURIComponent(cleanMssv)}/journey?limit=${JOURNEY_EVENT_LIMIT}&timeRange=${JOURNEY_TIME_RANGE}`);
+    state.insights.journey = data;
+    renderJourney(data);
+  } catch (err) {
+    // Trạng thái lỗi phải nêu nguyên nhân và có nút thử lại (spec mục 4.1),
+    // không để hai khối bên dưới trống câm.
+    renderError(dom.journeySummary, err.message || 'Không tải được hành trình của sinh viên này.', {
+      title: 'Không tải được hành trình',
+      onRetry: () => openJourney(cleanMssv)
+    });
+    renderEmpty(dom.journeyTimeline, 'Chưa có dữ liệu để dựng dòng thời gian.', { title: 'Dòng thời gian trống' });
+    renderEmpty(dom.journeyTransitions, 'Chưa có dữ liệu để tổng hợp chuyển trang.', { title: 'Chuyển trang trống' });
+  }
 }
+
+function renderJourney(data = {}) {
+  const events = Array.isArray(data.events) ? data.events : [];
+  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+  const transitions = Array.isArray(data.transitions) ? data.transitions : [];
+  const student = data.student || null;
+  const mssv = data.mssv || currentJourneyMssv;
+
+  dom.journeyTitle.textContent = `Hành Trình • ${mssv}`;
+  // student null là hành trình biên: tài khoản đã bị xoá nhưng log còn. Nói rõ
+  // chuyện đó thay vì để tiêu đề trống --, vì không nói thì người đọc tưởng dữ
+  // liệu hỏng chứ không phải vì không có hồ sơ.
+  dom.journeySub.textContent = student
+    ? [
+      student.full_name,
+      student.class_code ? `Lớp ${student.class_code}` : null,
+      labelForTimeRange(JOURNEY_TIME_RANGE)
+    ].filter(Boolean).join(' • ')
+    : `Không tìm thấy hồ sơ sinh viên — vẫn hiện dấu vết truy cập • ${labelForTimeRange(JOURNEY_TIME_RANGE)}`;
+
+  renderJourneySummary(events, sessions);
+  renderJourneyNotice(Boolean(data.truncated));
+  renderJourneyTimeline(events, sessions);
+  renderJourneyTransitions(transitions);
+}
+
+/** Tóm tắt 4 con số để không phải đọc timeline để biết hành trình to hay nhỏ. */
+function renderJourneySummary(events = [], sessions = []) {
+  const errorCount = events.filter((event) => isJourneyError(event)).length;
+  const firstAt = events.length ? events[0].at : null;
+  const lastAt = events.length ? events[events.length - 1].at : null;
+  const stats = [
+    { label: 'Lượt truy cập', value: formatNumber(events.length) },
+    { label: 'Số phiên', value: formatNumber(sessions.length) },
+    { label: 'Lượt bị lỗi', value: formatNumber(errorCount), tone: errorCount > 0 ? ' error' : '' },
+    { label: 'Hoạt động', value: events.length ? `${formatDateTime(firstAt)} → ${formatDateTime(lastAt)}` : '--' }
+  ];
+  dom.journeySummary.innerHTML = stats.map((stat) => `
+    <div class="journey-stat">
+      <span class="journey-stat-label">${escapeHtml(stat.label)}</span>
+      <span class="journey-stat-value${stat.tone || ''}">${escapeHtml(stat.value)}</span>
+    </div>
+  `).join('');
+}
+
+/**
+ * Nhắc khi endpoint báo `truncated` (số sự kiện chạm trần `limit`).
+ * Không nhắc thì người đọc tưởng đã thấy TOÀN BỘ lịch sử và kết luận sai về
+ * người dùng chỉ dùng trang trong khoảng ngắn đó.
+ */
+function renderJourneyNotice(truncated) {
+  if (!truncated) {
+    dom.journeyNotice.style.display = 'none';
+    dom.journeyNotice.textContent = '';
+    return;
+  }
+  dom.journeyNotice.textContent = `Chuỗi truy cập dài hơn giới hạn: chỉ hiển thị ${formatNumber(JOURNEY_EVENT_LIMIT)} sự kiện gần nhất, phần cũ hơn không nằm trong danh sách này.`;
+  dom.journeyNotice.style.display = 'block';
+}
+
+/**
+ * Sự kiện bị coi là lỗi khi server gắn cờ `isError` HOẶC mã trạng thái >= 400.
+ * Vì sao cần cả hai: cờ `isError` là đường chính, còn mã trạng thái giữ cho các
+ * bản ghi cũ/khác nguồn chỉ có mã mà không có cờ.
+ */
+function isJourneyError(event = {}) {
+  return event.isError === true || safeNumber(event.statusCode) >= 400;
+}
+
+/**
+ * Gom sự kiện (đã ASC) vào đúng phiên tương ứng trong `sessions`.
+ * Phiên là các đoạn thời gian không chồng nhau nên chỉ cần một con trỏ đi tiến;
+ * không dùng `findIndex` từ đầu mỗi sự kiện để khỏi O(n·m) trên 200 sự kiện.
+ * Sự kiện nằm ngoài mọi phiên (trường hợp timestamp lệch) gom vào nhóm cuối với
+ * `session = null` để không bị rơi mất dữ liệu.
+ */
+function groupJourneyEvents(events = [], sessions = []) {
+  const groups = [];
+  let cursor = 0;
+  for (const event of events) {
+    const at = new Date(event?.at).getTime();
+    while (cursor < sessions.length && Number.isFinite(at) && at > new Date(sessions[cursor]?.endAt).getTime()) {
+      cursor += 1;
+    }
+    const session = sessions[cursor] || null;
+    const last = groups[groups.length - 1];
+    if (last && last.session === session) last.events.push(event);
+    else groups.push({ session, events: [event] });
+  }
+  return groups;
+}
+
+function renderJourneyTimeline(events = [], sessions = []) {
+  if (!events.length) {
+    renderEmpty(dom.journeyTimeline, 'Sinh viên này chưa có lượt truy cập nào trong khoảng thời gian đang xem.', {
+      title: 'Chưa có dấu vết truy cập',
+      hint: 'Chuỗi truy cập thường nằm ở bảng Nhật ký — thử lọc theo MSSV để kiểm tra lại.'
+    });
+    return;
+  }
+  const groups = groupJourneyEvents(events, sessions);
+  dom.journeyTimeline.innerHTML = groups.map((group, index) => renderJourneySession(group, index + 1)).join('');
+}
+
+function renderJourneySession(group, index) {
+  const session = group.session || {};
+  const events = group.events || [];
+  const startAt = session.startAt ?? events[0]?.at;
+  const endAt = session.endAt ?? events[events.length - 1]?.at;
+  const features = Array.isArray(session.features) ? session.features : [];
+  const errorCount = events.filter((event) => isJourneyError(event)).length;
+
+  // Nhóm không khớp phiên nào (timestamp lệch) ghi rõ thay vì giả vờ có phiên.
+  const title = session
+    ? `Phiên ${index} • ${formatDateTime(startAt)} → ${formatDateTime(endAt)} • ${formatNumber(session.eventCount ?? events.length)} lượt • ${formatDurationMs(session.durationMs ?? 0)}`
+    : `Ngoài phiên • ${formatDateTime(startAt)} • ${formatNumber(events.length)} lượt`;
+
+  return `
+    <article class="journey-session">
+      <header class="journey-session-head">
+        <span class="journey-session-title">${escapeHtml(title)}</span>
+        ${errorCount > 0
+          ? `<span class="journey-session-error">${renderIcon('alert', 'svg-icon svg-icon--sm')}<span>${formatNumber(errorCount)} lượt lỗi</span></span>`
+          : ''}
+      </header>
+      ${features.length
+        ? `<div class="journey-feature-chips">${features.map((feature) => `<span class="journey-feature-chip">${escapeHtml(feature)}</span>`).join('')}</div>`
+        : ''}
+      <ol class="journey-events">${events.map((event) => renderJourneyEvent(event)).join('')}</ol>
+    </article>`;
+}
+
+function renderJourneyEvent(event = {}) {
+  const isError = isJourneyError(event);
+  const statusCode = safeNumber(event.statusCode);
+  const method = String(event.method ?? '').toUpperCase();
+  const path = String(event.path ?? '');
+  // featureLabel là nhãn tiếng Việt do backend dịch sẵn; fallback về featureId rồi
+  // "Khác" để không bao giờ hiện dòng trống ở cột tính năng.
+  const featureLabel = event.featureLabel || event.featureId || 'Khác';
+
+  return `
+    <li class="journey-event${isError ? ' journey-event--error' : ''}">
+      <span class="journey-event-time">${escapeHtml(journeyClock(event.at))}</span>
+      <span class="method-tag method-${cssToken(method)}">${escapeHtml(method)}</span>
+      <span class="journey-event-feature">${escapeHtml(featureLabel)}</span>
+      <span class="journey-event-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+      ${isError
+        ? `<span class="journey-event-flag">${renderIcon('alert', 'svg-icon svg-icon--sm')}<span>Lỗi</span></span>`
+        : ''}
+      <span class="status-badge ${journeyStatusClass(statusCode)}">${formatNumber(statusCode)}</span>
+      <span class="latency-badge ${journeyLatencyClass(safeNumber(event.responseTimeMs))}">${formatDurationMs(event.responseTimeMs)}</span>
+    </li>`;
+}
+
+/** Giờ phút của một sự kiện; phiên đã có mốc giờ ở tiêu đề nên không lặp ngày. */
+function journeyClock(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function journeyStatusClass(statusCode) {
+  // Bậc màu bám đúng bảng Nhật ký (stat-2xx / 3xx / 4xx / 5xx); số mã vẫn luôn
+  // được in ra cạnh nên người đọc không phải đoán ngưỡng bằng màu.
+  if (statusCode >= 500) return 'stat-5xx';
+  if (statusCode >= 400) return 'stat-4xx';
+  if (statusCode >= 300) return 'stat-3xx';
+  return 'stat-2xx';
+}
+
+function journeyLatencyClass(ms) {
+  if (ms < 300) return 'lat-fast';
+  return ms < 800 ? 'lat-med' : 'lat-slow';
+}
+
+function renderJourneyTransitions(transitions = []) {
+  if (!transitions.length) {
+    renderEmpty(dom.journeyTransitions, 'Chưa có cặp trang nào được đi liền nhau trong cùng một phiên.', {
+      title: 'Chưa có chuyển trang'
+    });
+    return;
+  }
+  dom.journeyTransitions.innerHTML = `
+    <ol class="journey-transitions">
+      ${transitions.map((item) => `
+        <li class="journey-transition">
+          <span class="journey-transition-path" title="${escapeHtml(item.from)}">${escapeHtml(item.from)}</span>
+          <span class="journey-transition-arrow" aria-hidden="true">→</span>
+          <span class="journey-transition-path" title="${escapeHtml(item.to)}">${escapeHtml(item.to)}</span>
+          <span class="journey-transition-count">${formatNumber(item.count)} lượt</span>
+        </li>`).join('')}
+    </ol>`;
+}
+
+function closeJourneyModal() {
+  dom.modalJourney.style.display = 'none';
+}
+
+dom.btnCloseJourney.addEventListener('click', closeJourneyModal);
+dom.btnJourneyDismiss.addEventListener('click', closeJourneyModal);
+dom.btnJourneyFilterLogs.addEventListener('click', () => {
+  if (!currentJourneyMssv) return;
+  closeJourneyModal();
+  filterByMssv(currentJourneyMssv);
+});
 
 async function openStudentActivity(mssv) {
   currentActivityMssv = mssv;

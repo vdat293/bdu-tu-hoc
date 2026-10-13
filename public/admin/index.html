@@ -824,6 +824,48 @@
     </div>
   </div>
 
+  <!-- Modal 5: Hành trình người dùng (Task 10) -->
+  <!-- Mở từ nút "Hành trình" trong bảng Sinh viên. Hai khối chính: dòng thời
+       gian đã gom theo phiên (do backend tách ở mốc 30 phút) và chuyển trang
+       thường gặp. -->
+  <div class="modal-overlay" id="modal-journey" style="display: none;">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="journey-title">Hành Trình Của Sinh Viên</h3>
+          <span class="modal-sub" id="journey-sub">--</span>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-journey" aria-label="Đóng cửa sổ hành trình sinh viên">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="journey-summary" id="journey-summary"></div>
+        <!-- Nhắc khi endpoint trả `truncated`; nội dung do JS đổ vào, không ghi sẵn. -->
+        <p class="journey-notice" id="journey-notice" style="display: none;"></p>
+
+        <section>
+          <h4 class="journey-section-title">Dòng thời gian theo phiên</h4>
+          <p class="journey-section-hint">Phiên được tách khi nghỉ quá 30 phút. Dòng có nền đỏ và chữ "Lỗi" là yêu cầu bị lỗi (4xx/5xx).</p>
+          <div id="journey-timeline"></div>
+        </section>
+
+        <section>
+          <h4 class="journey-section-title">Chuyển trang thường gặp</h4>
+          <p class="journey-section-hint">Các cặp trang được đi liền nhau trong cùng một phiên, nhiều nhất trước.</p>
+          <div id="journey-transitions"></div>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-outline" id="btn-journey-filter-logs">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Lọc trong Nhật Ký</span>
+        </button>
+        <button type="button" class="btn-action-primary" id="btn-journey-dismiss">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Region -->
   <div class="admin-toast-container" id="admin-toast-container"></div>
 

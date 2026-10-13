@@ -168,6 +168,97 @@ check('ô heatmap rỗng không bị hạ mờ mất tương phản (F3)', () =>
   );
 });
 
+/* --------------------------------------------------------------------------
+   Task 10 — modal Hành trình.
+   Ba hợp đồng dễ vỡ nhất của modal này:
+     1. markup phải có #modal-journey + #journey-timeline + #journey-transitions
+        nằm TRONG modal (thiếu thẻ thì hàm render có chỗ để đổ dữ liệu vào đâu?),
+     2. openJourney gọi đúng endpoint insights/users/:mssv/journey và encode MSSV
+        — gọi nhầm đường dẫn là mở modal xong không có gì để hiện,
+     3. phải tôn trọng cờ `truncated` và nói rõ đã cắt ở mốc nào, tránh người đọc
+        tưởng hành trình đầy đủ trong khi server chỉ trả 200 sự kiện gần nhất.
+   Rủi ro biên đã nêu ở Review Focus #4: sinh viên không tồn tại (student null),
+   không có sự kiện nào (events rỗng) — cả hai phải hiện empty state êm, không
+   để khối trống câm.
+   -------------------------------------------------------------------------- */
+
+/** Cắt nguyên khối hành trình: từ openJourney() tới openStudentActivity(). */
+function sliceJourneySection() {
+  const start = adminJs.indexOf('function openJourney(');
+  assert.ok(start !== -1, 'admin.js thiếu hàm openJourney()');
+  const end = adminJs.indexOf('async function openStudentActivity(', start);
+  assert.ok(end !== -1, 'Không tìm thấy mốc cuối khối hành trình trong admin.js');
+  return adminJs.slice(start, end);
+}
+
+check('markup modal Hành trình có #modal-journey, #journey-timeline, #journey-transitions', () => {
+  assert.ok(indexHtml.includes('id="modal-journey"'), 'index.html thiếu modal #modal-journey');
+  for (const id of ['journey-timeline', 'journey-transitions']) {
+    assert.ok(indexHtml.includes(`id="${id}"`), `index.html thiếu khối #${id}`);
+  }
+  // Hai khối phải nằm TRONG modal, không phải rơi lại ở tab nào đó: renderJourney()
+  // đổ dữ liệu vào chúng và người dùng chỉ thấy được khi modal mở.
+  const modalStart = indexHtml.indexOf('id="modal-journey"');
+  const modalEnd = indexHtml.indexOf('admin-toast-container', modalStart);
+  assert.ok(modalEnd !== -1, 'Không tìm thấy mốc cuối sau modal Hành trình');
+  const modal = indexHtml.slice(modalStart, modalEnd);
+  for (const id of ['journey-timeline', 'journey-transitions']) {
+    assert.ok(modal.includes(`id="${id}"`), `#${id} phải nằm trong modal Hành trình`);
+  }
+  // Nút đóng là bắt buộc: modal không có lối thoát thì người dùng mắc kẹt.
+  assert.ok(indexHtml.includes('id="btn-close-journey"'), 'index.html thiếu nút #btn-close-journey');
+});
+
+check('admin.js có gọi endpoint insights/users/:mssv/journey', () => {
+  assert.ok(adminJs.includes('insights/users/'), 'admin.js chưa gọi endpoint insights/users/');
+  assert.ok(adminJs.includes('journey'), 'admin.js chưa có phần hành trình');
+  const journey = sliceJourneySection();
+  assert.match(journey, /insights\/users\//, 'openJourney() phải gọi endpoint insights/users/');
+  // MSSV là dữ liệu người dùng nhập từ bảng, có thể chứa ký tự lạ; encode trước
+  // khi ghép vào đường dẫn để không làm hỏng URL (và không tự dựng HTML).
+  assert.match(journey, /encodeURIComponent\(/, 'openJourney() phải encodeURIComponent(mssv)');
+});
+
+check('modal Hành trình tôn trọng cờ truncated', () => {
+  const journey = sliceJourneySection();
+  assert.match(journey, /truncated/, 'admin.js phải đọc cờ truncated của endpoint');
+  assert.match(
+    journey,
+    /sự kiện gần nhất/,
+    'Nhắc khi truncated phải nói rõ chỉ hiển thị bao nhiêu sự kiện gần nhất'
+  );
+});
+
+check('hành trình render theo phiên, đánh dấu lỗi và hiện nhãn tính năng', () => {
+  const journey = sliceJourneySection();
+  // Gom theo `sessions` là điểm cốt lõi: mốc 30 phút do backend quyết định, tự
+  // chia lại ở client sẽ lệch với số liệu "số phiên" mà endpoint trả về.
+  assert.match(journey, /sessions/, 'Hành trình phải nhóm sự kiện theo sessions');
+  assert.match(journey, /isError/, 'Phải đánh dấu sự kiện lỗi');
+  assert.match(journey, /featureLabel/, 'Mỗi sự kiện phải hiện featureLabel');
+});
+
+check('hành trình escape dữ liệu và xử lý student null / events rỗng', () => {
+  const journey = sliceJourneySection();
+  assert.match(journey, /escapeHtml\(/, 'Mọi dữ liệu chèn DOM ở hành trình phải qua escapeHtml');
+  // student: null (tài khoản đã xoá, log còn) và events: [] đều phải ra empty
+  // state có lời giải thích, không phải khối trống.
+  assert.match(journey, /data\.student/, 'renderJourney() phải đọc student (kể cả khi null)');
+  assert.match(journey, /renderEmpty\(/, 'Hành trình phải có trạng thái rỗng qua renderEmpty');
+});
+
+check('lớp CSS tuỳ chọn trong hành trình luôn có giá trị thay thế', () => {
+  // Đã từng sinh ra class "journey-stat-valueundefined": ô tóm tắt không khai
+  // `tone` nối thẳng vào class attribute, làm mất style của chính ô đó. Test
+  // tĩnh không render nên phải ghim thẳng quy tắc fallback.
+  const journey = sliceJourneySection();
+  assert.match(
+    journey,
+    /class="journey-stat-value\$\{[^}]+\|\|\s*''\}"/,
+    'Lớp tuỳ chọn phải có fallback (ví dụ ${stat.tone || \'\'}), không nối thẳng giá trị có thể undefined'
+  );
+});
+
 if (failed > 0) {
   console.log(`✗ Admin insights UI: ${failed} ca thất bại.`);
   process.exitCode = 1;
