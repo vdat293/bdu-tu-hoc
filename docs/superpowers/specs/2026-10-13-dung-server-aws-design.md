@@ -239,6 +239,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.aws.yml
 IMAGE_TAG=<sha 12 ký tự>
 GHCR_PULL_TOKEN=<PAT read:packages>
 BACKUP_DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
+MIGRATION_DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
 BACKUP_R2_BUCKET=<bucket backup riêng, KHÁC R2_BUCKET media>
 BACKUP_ENABLED=1
 BACKUP_CRON=0 17 * * *
