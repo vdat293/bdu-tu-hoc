@@ -1569,6 +1569,29 @@ body {
   line-height: 1.6;
 }
 
+/* Ngăn xếp panel của tab Hệ thống: khoảng cách giữa các panel và ghi chú gom
+   một chỗ trong CSS thay vì style inline rải rác trong markup — đổi một chỗ
+   là cả tab đổi theo, đúng bộ thành phần dùng chung (spec mục 4.4). */
+.system-stack > .panel-card + .panel-card {
+  margin-top: 20px;
+}
+
+.system-stack .system-note {
+  margin-top: 14px;
+}
+
+/* Danh sách chính sách lưu trữ: giữ nguyên dấu đầu dòng như trước đây
+   (vẽ bằng CSS để markup <ul>/<li> giữ ngữ nghĩa cho trình đọc màn hình). */
+.maintenance-info-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.maintenance-info-list > li::before {
+  content: '• ';
+}
+
 /* Modals */
 .modal-overlay {
   position: fixed;

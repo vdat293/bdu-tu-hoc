@@ -349,6 +349,42 @@ check('id cũ của hai tab Nhật ký + Sinh viên vẫn được giữ', () =>
   }
 });
 
+/* --------------------------------------------------------------------------
+   Task 9 — tab Hệ thống.
+   Hai hợp đồng dễ vỡ nhất khi làm lại tab này:
+     1. Panel VPS + ranking-sync + service-lock phải dùng bộ thành phần chung
+        (.panel-card/.system-metrics-row/.sys-card) và KHÔNG còn style inline
+        rải rác — nếu không, đổi token là tab này lệch khỏi các tab còn lại.
+     2. Logic service-lock/ranking-sync giữ nguyên: đúng endpoint, đúng
+        method PUT, confirm() chỉ trong nhánh BẬT khóa. Đổi nhầm là đá nhầm
+        người dùng ra màn hình bảo trì hoặc tắt nhầm đồng bộ xếp hạng.
+   -------------------------------------------------------------------------- */
+
+check('tab Hệ thống dùng thành phần chung, không còn style inline', () => {
+  const systemPane = sliceBetween(indexHtml, 'id="pane-system"', '</section>');
+  assert.match(systemPane, /class="panel-card"/, 'Vùng Hệ thống phải dùng thành phần chung .panel-card');
+  assert.match(systemPane, /class="system-metrics-row"/, 'Vùng Hệ thống phải giữ lưới .system-metrics-row');
+  assert.match(systemPane, /class="sys-card"/, 'Vùng Hệ thống phải giữ thẻ số liệu .sys-card');
+  // Style lẻ trong markup là mầm lệch theme: khoảng cách gom vào CSS
+  // (.system-stack), đổi một chỗ là cả tab đổi theo.
+  assert.doesNotMatch(systemPane, /style="/, 'Vùng Hệ thống không được còn style inline');
+  assert.ok(adminCss.includes('.system-stack'), 'admin.css phải có class .system-stack cho tab Hệ thống');
+});
+
+check('logic service-lock và ranking-sync giữ nguyên sau redesign', () => {
+  // Endpoint + method là hợp đồng với backend: đổi nhầm là công tắc gọi sai chỗ.
+  assert.match(adminJs, /\/api\/admin\/dashboard\/service-lock/, 'admin.js phải giữ endpoint service-lock');
+  assert.match(adminJs, /\/api\/admin\/dashboard\/ranking-sync/, 'admin.js phải giữ endpoint ranking-sync');
+  assert.match(adminJs, /method:\s*'PUT'/, "admin.js phải giữ method: 'PUT'");
+  // confirm() chỉ trong nhánh BẬT khóa: khóa nhầm đá toàn bộ người dùng đang
+  // online sang màn hình bảo trì, còn mở khóa thì an toàn nên không hỏi.
+  const lockFlow = adminJs.slice(
+    adminJs.indexOf('serviceLockToggle.addEventListener'),
+    adminJs.indexOf('serviceLockToggle.addEventListener') + 2000
+  );
+  assert.match(lockFlow, /if\s*\(\s*\w*[Ll]ocked\w*\s*\)[\s\S]*confirm\(/, 'confirm() phải nằm trong nhánh bật khóa');
+});
+
 if (failed > 0) {
   console.log(`✗ Admin redesign UI foundation: ${failed} ca thất bại.`);
   process.exitCode = 1;

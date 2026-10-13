@@ -2102,7 +2102,9 @@ function renderSystem(system = {}) {
   dom.sysWs.textContent = `● ${rt.connected_clients || 0} sockets`;
   dom.sysRooms.textContent = `${rt.active_rooms || 0} phòng hoạt động`;
 
-  dom.sysDbLogs.textContent = `${(db.totalLogs || 0).toLocaleString()} logs`;
+  // Dùng helper định dạng số dùng chung để cùng một con số hiện ra cùng một
+  // kiểu ở mọi tab (spec mục 4.1); safeNumber bên trong chịu null/undefined.
+  dom.sysDbLogs.textContent = `${formatNumber(db.totalLogs)} logs`;
   dom.sysBuffer.textContent = `Bộ đệm RAM: ${system.bufferQueueSize || 0} items`;
 }
 
@@ -2131,7 +2133,7 @@ function renderRankingSync(data, requestedAt = Date.now()) {
   if (latest && latest.completed_at) {
     dom.rankingSyncLast.textContent = formatDateTime(latest.completed_at);
     dom.rankingSyncLastSub.textContent = latest.status === 'succeeded'
-      ? `${(latest.student_count || 0).toLocaleString()} sinh viên`
+      ? `${formatNumber(latest.student_count)} sinh viên`
       : `Lần cuối: ${latest.status}`;
   } else {
     dom.rankingSyncLast.textContent = '--';

@@ -523,9 +523,12 @@
           </div>
         </section>
 
-        <!-- 5. VPS Health & Maintenance Tab -->
-        <section class="tab-pane" id="pane-system">
-          <div class="panel-card" style="margin-bottom: 20px;">
+        <!-- 5. VPS Health & Maintenance Tab.
+             Panel VPS + ranking-sync + service-lock dùng chung .panel-card và
+             .system-metrics-row/.sys-card như các tab còn lại (spec mục 4.4).
+             Logic service-lock/ranking-sync giữ nguyên, chỉ đổi trình bày. -->
+        <section class="tab-pane system-stack" id="pane-system">
+          <div class="panel-card">
             <div class="card-header">
               <div>
                 <h2 class="card-title">Sức Khỏe Máy Chủ AWS VPS</h2>
@@ -561,7 +564,7 @@
             </div>
           </div>
 
-          <div class="panel-card" style="margin-bottom: 20px;">
+          <div class="panel-card">
             <div class="card-header">
               <div>
                 <h2 class="card-title">Đồng Bộ Xếp Hạng Học Tập</h2>
@@ -589,12 +592,12 @@
                 <span class="sys-sub" id="ranking-sync-next-sub">03:00 Asia/Ho_Chi_Minh</span>
               </div>
             </div>
-            <p class="maintenance-info-content" id="ranking-sync-note" style="margin-top: 14px;">
+            <p class="maintenance-info-content system-note" id="ranking-sync-note">
               Bật/tắt chỉ ảnh hưởng lần chạy 03:00 kế tiếp (không chạy ngay). Khi tắt, sinh viên vẫn xem được snapshot gần nhất.
             </p>
           </div>
 
-          <div class="panel-card" style="margin-bottom: 20px;">
+          <div class="panel-card">
             <div class="card-header">
               <div>
                 <h2 class="card-title">Khóa Dịch Vụ Bảo Trì</h2>
@@ -629,7 +632,7 @@
                   placeholder="Hệ thống đang bảo trì, vui lòng quay lại sau."></textarea>
               </label>
             </div>
-            <p class="maintenance-info-content" style="margin-top: 14px;">
+            <p class="maintenance-info-content system-note">
               Để trống ô nội dung sẽ dùng thông báo mặc định. Khi bật khóa, các kết nối realtime đang mở sẽ bị đóng để mọi người nhận màn hình bảo trì ngay.
             </p>
           </div>
@@ -641,11 +644,13 @@
                 <p class="card-subtitle">Cơ chế In-Memory Batch Buffer bảo vệ tài nguyên</p>
               </div>
             </div>
-            <div class="maintenance-info-content">
-              <p>• <strong>Batch Buffer Queue:</strong> Các request log được gom trong bộ nhớ RAM và định kỳ ghi xuống PostgreSQL mỗi 3 giây hoặc khi đủ 50 items. Nhờ vậy, máy chủ AWS VPS không bị nghẽn I/O khi sinh viên tra cứu điểm/lịch học đồng thời.</p>
-              <p>• <strong>Tự động loại trừ Asset tĩnh:</strong> Các file CSS, JS, ảnh và avatar có mã phản hồi thành công (&lt; 400) được tự động bỏ qua để giữ bảng log tinh gọn, tập trung 100% vào logic nghiệp vụ và người dùng.</p>
-              <p>• <strong>Tự động Dọn Dẹp:</strong> Hệ thống tự động xóa log cũ hơn 14 ngày mỗi 24 giờ. Bạn cũng có thể chủ động bấm nút "Dọn Dẹp Log Cũ" ở góc trên để giải phóng dung lượng ngay tức thì.</p>
-            </div>
+            <!-- Danh sách dùng <ul> để trình đọc màn hình nhận ra đây là 3 ý
+                 riêng biệt; dấu đầu dòng do CSS vẽ lại cho giống hệt trước đây. -->
+            <ul class="maintenance-info-content maintenance-info-list">
+              <li><strong>Batch Buffer Queue:</strong> Các request log được gom trong bộ nhớ RAM và định kỳ ghi xuống PostgreSQL mỗi 3 giây hoặc khi đủ 50 items. Nhờ vậy, máy chủ AWS VPS không bị nghẽn I/O khi sinh viên tra cứu điểm/lịch học đồng thời.</li>
+              <li><strong>Tự động loại trừ Asset tĩnh:</strong> Các file CSS, JS, ảnh và avatar có mã phản hồi thành công (&lt; 400) được tự động bỏ qua để giữ bảng log tinh gọn, tập trung 100% vào logic nghiệp vụ và người dùng.</li>
+              <li><strong>Tự động Dọn Dẹp:</strong> Hệ thống tự động xóa log cũ hơn 14 ngày mỗi 24 giờ. Bạn cũng có thể chủ động bấm nút "Dọn Dẹp Log Cũ" ở góc trên để giải phóng dung lượng ngay tức thì.</li>
+            </ul>
           </div>
         </section>
       </main>
