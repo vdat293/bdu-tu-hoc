@@ -78,6 +78,26 @@ check('FEATURE_GROUPS đủ 11 nhóm và mỗi nhóm có apiPrefixes/pagePrefixe
   }
 });
 
+check('ghim danh sách id và thứ tự nhóm', () => {
+  // Vì sao ghim cứng: file này là "nguồn sự thật duy nhất" mà Task 3 sẽ dựng
+  // CASE WHEN từ hằng số FEATURE_GROUPS. Kiểm kiểu dữ liệu thôi thì một lỗi gõ
+  // id hay đổi thứ tự sẽ trôi qua mà không test nào bắt.
+  assert.deepEqual(
+    FEATURE_GROUPS.map((group) => group.id),
+    ['portal', 'wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+  );
+});
+
+check('ghim apiPrefixes của clubs (không rơi sót poll)', () => {
+  // Vì sao ghim riêng nhóm clubs: đây là nhóm dùng chung tiền tố gốc /community
+  // với community, dễ bị gán thiếu prefix khi sửa tay; sót '/community/polls'
+  // sẽ khiến poll CLB bị đếm lẫn sang nhóm khác mà số liệu vẫn "trông đúng".
+  assert.deepEqual(
+    FEATURE_GROUPS.find((group) => group.id === 'clubs').apiPrefixes,
+    ['/community/clans', '/community/polls']
+  );
+});
+
 if (failed > 0) {
   console.log(`✗ Feature groups: ${failed} ca thất bại.`);
   process.exitCode = 1;
