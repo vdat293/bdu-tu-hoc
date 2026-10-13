@@ -2574,15 +2574,25 @@ if (dom.rankingSyncToggle) {
 // + trạng thái riêng, và PUT đúng một nhóm { group, locked, title, message }.
 function renderServiceLock(data, requestedAt = Date.now()) {
   const listEl = dom.serviceLockList;
-  if (!listEl || !data || !Array.isArray(data.catalog) || !data.groups) return;
+  if (!listEl || !data || !data.groups) return;
+  // PUT chỉ trả { groups, updated_at, updated_by } (không có catalog) để nhẹ
+  // payload; mượn catalog từ GET gần nhất trong state để vẫn vẽ NGAY sau PUT
+  // thay vì đứng yên tới auto-refresh (~15 giây). Vì sao merge vào state: lần
+  // render sau (kể cả PUT thiếu catalog tiếp) vẫn còn catalog để dùng.
+  const catalog = Array.isArray(data.catalog)
+    ? data.catalog
+    : (state.serviceLock && Array.isArray(state.serviceLock.catalog)
+      ? state.serviceLock.catalog
+      : null);
+  if (!catalog) return;
   // Bỏ qua payload cũ nếu admin vừa bấm công tắc sau khi request được gửi.
   if (requestedAt < state.serviceLockMutationAt) return;
-  state.serviceLock = data;
+  state.serviceLock = { ...data, catalog };
 
   // Cập nhật tại chỗ từng dòng thay vì vẽ lại cả danh sách: vẽ lại sẽ cướp
   // focus của ô admin đang gõ mỗi lần auto-refresh chạy (mỗi 15 giây).
   const seen = new Set();
-  for (const item of data.catalog) {
+  for (const item of catalog) {
     const group = item && typeof item.id === 'string' ? item.id : '';
     if (!group || seen.has(group)) continue;
     seen.add(group);

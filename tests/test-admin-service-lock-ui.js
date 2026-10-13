@@ -75,6 +75,19 @@ check('route backend service-lock đã đăng ký GET/PUT', () => {
   assert.match(adminRoutes, /router\.put\('\/admin\/dashboard\/service-lock'/);
 });
 
+check('renderServiceLock vẽ ngay sau PUT thiếu catalog (mượn catalog từ GET)', () => {
+  // PUT chỉ trả { groups, updated_at, updated_by }; nếu render đòi catalog là
+  // mảng cứng thì return sớm và dòng + tóm tắt đứng yên tới auto-refresh (~15s).
+  const start = adminJs.indexOf('function renderServiceLock');
+  assert.ok(start !== -1, 'admin.js thiếu hàm renderServiceLock(data)');
+  const flow = adminJs.slice(start, start + 3000);
+  assert.match(
+    flow,
+    /state\.serviceLock\?\.\bcatalog\b|state\.serviceLock\s*&&[\s\S]{0,120}\bcatalog\b/,
+    'renderServiceLock phải mượn state.serviceLock.catalog khi data.catalog không phải mảng'
+  );
+});
+
 if (failed > 0) {
   console.log(`✗ Admin service-lock UI theo nhóm: ${failed} ca thất bại.`);
   process.exitCode = 1;
