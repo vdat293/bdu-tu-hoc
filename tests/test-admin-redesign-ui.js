@@ -202,10 +202,12 @@ check('tab Tổng quan dùng thành phần chung và giữ id KPI cũ', () => {
 
 check('preview top tính năng ở Tổng quan tái dùng renderFeatureRanking', () => {
   assert.ok(indexHtml.includes('id="endpoints-list-preview"'), 'index.html phải giữ #endpoints-list-preview');
+  // Ghim CẢ tuỳ chọn compact + limit: nếu ai bỏ `{ limit: 5, compact: true }`,
+  // panel hẹp sẽ nhận bảng 8 cột và tràn ngang — đúng lỗi cần chặn.
   assert.match(
     adminJs,
-    /renderFeatureRanking\([^)]*endpoints-list-preview/,
-    'admin.js phải tái dùng renderFeatureRanking cho preview xếp hạng tính năng của Tổng quan'
+    /renderFeatureRanking\([^)]*endpoints-list-preview',\s*\{\s*limit:\s*5,\s*compact:\s*true\s*\}/,
+    'admin.js phải tái dùng renderFeatureRanking cho preview xếp hạng tính năng của Tổng quan với { limit: 5, compact: true }'
   );
 });
 

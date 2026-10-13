@@ -755,7 +755,12 @@ function renderTimelineChart(timeline = []) {
     }
   }
 
-  if (typeof Chart === 'undefined') return;
+  if (typeof Chart === 'undefined') {
+    // Chart.js không nạp được (file thiếu/bị chặn): để khối vẽ trống 300px là lỗi
+    // câm. Báo rõ ở đúng khối trạng thái của biểu đồ Tổng quan.
+    renderError('#overview-timeline-state', 'Không tải được Chart.js.');
+    return;
+  }
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   const textColor = isDark ? '#94a3b8' : '#475569';
@@ -909,23 +914,32 @@ function renderOverviewFeaturePreview(features, endpoints = []) {
   if (features) {
     renderFeatureRanking(features, '#endpoints-list-preview', { limit: 5, compact: true });
   } else if (Array.isArray(endpoints) && endpoints.length) {
-    renderEndpoints(endpoints);
+    // Hạ cấp: dữ liệu vẫn là TUYẾN ĐƯỜNG thô, không phải xếp hạng tính năng, nên
+    // phải nói rõ để người dùng không đọc nhầm loại dữ liệu theo tiêu đề khối.
+    renderEndpoints(endpoints, {
+      note: 'Tạm thời hiển thị top tuyến đường thay cho xếp hạng tính năng (xếp hạng chưa tải được).'
+    });
   } else {
     renderError('#endpoints-list-preview', 'Không tải được xếp hạng tính năng.', { title: 'Lỗi xếp hạng tính năng' });
   }
 }
 
 // 3.2. Danh sách tuyến đường/API thô — đường hạ cấp của preview Tổng quan.
-function renderEndpoints(endpoints = []) {
+// `options.note` (nếu có) chèn một dòng chú thích ngay trên danh sách để nói rõ
+// đây KHÔNG phải xếp hạng tính năng.
+function renderEndpoints(endpoints = [], options = {}) {
   const el = resolveElement('#endpoints-list-preview');
   if (!el) return;
+  const noteHtml = options.note
+    ? `<p class="card-subtitle">${escapeHtml(options.note)}</p>`
+    : '';
   if (!endpoints.length) {
-    el.innerHTML = '<div class="text-center-muted">Chưa có dữ liệu API</div>';
+    el.innerHTML = `${noteHtml}<div class="text-center-muted">Chưa có dữ liệu API</div>`;
     return;
   }
 
   const maxCount = Math.max(...endpoints.map((e) => safeNumber(e.count)), 1);
-  el.innerHTML = endpoints.slice(0, 7).map((ep) => {
+  el.innerHTML = noteHtml + endpoints.slice(0, 7).map((ep) => {
     const count = safeNumber(ep.count);
     const pct = Math.min(100, Math.round((count / maxCount) * 100));
     const method = String(ep.method || '').toUpperCase();
