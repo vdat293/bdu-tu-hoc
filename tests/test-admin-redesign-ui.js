@@ -315,25 +315,31 @@ check('admin.js không còn emoji nào (chỉ dùng inline SVG)', () => {
    -------------------------------------------------------------------------- */
 
 check('bảng Nhật ký và Sinh viên được bọc trong khung .table-scroll', () => {
+  // Không chỉ khẳng định class có mặt: phải đúng cấu trúc "khung bao quanh bảng"
+  // (<div class="table-scroll"> rồi tới <table>), nếu không thì bảng vẫn có thể
+  // nằm ngoài khung cuộn và đẩy tràn trang dù class xuất hiện đâu đó.
   const logsPane = sliceBetween(indexHtml, 'id="pane-logs"', '</section>');
-  assert.ok(
-    logsPane.includes('class="table-scroll"'),
-    'Vùng Nhật ký phải bọc bảng trong .table-scroll để bảng không đẩy tràn cả trang'
+  assert.match(
+    logsPane,
+    /<div class="table-scroll">\s*<table/,
+    'Vùng Nhật ký phải đặt .table-scroll BAO QUANH <table> để bảng không đẩy tràn cả trang'
   );
   const usersPane = sliceBetween(indexHtml, 'id="pane-users"', '</section>');
-  assert.ok(
-    usersPane.includes('class="table-scroll"'),
-    'Vùng Sinh viên phải bọc bảng trong .table-scroll để bảng không đẩy tràn cả trang'
+  assert.match(
+    usersPane,
+    /<div class="table-scroll">\s*<table/,
+    'Vùng Sinh viên phải đặt .table-scroll BAO QUANH <table> để bảng không đẩy tràn cả trang'
   );
 });
 
 check('bảng Sinh viên có nút Hành trình gọi openJourney()', () => {
-  assert.match(adminJs, /openJourney\(/, 'admin.js phải có hàm/gọi openJourney()');
-  // Chỉ có hàm mà không nối nút thì hành trình không mở được từ giao diện.
+  // Ghim NÚT GỌI hàm, không chỉ khai báo function openJourney(). Chỉ khớp
+  // /openJourney\(/ thì chính dòng `function openJourney(` cũng thoả — nút có
+  // thể chưa được nối mà test vẫn xanh. Yêu cầu chuỗi nút nằm NGAY trước lời gọi.
   assert.match(
     adminJs,
-    /btn-view-student-journey/,
-    'admin.js phải dựng nút .btn-view-student-journey trong bảng Sinh viên'
+    /btn-view-student-journey[\s\S]{0,400}openJourney\(/,
+    'admin.js phải có nút .btn-view-student-journey được NỐI tới openJourney()'
   );
 });
 

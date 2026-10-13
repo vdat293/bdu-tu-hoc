@@ -740,7 +740,11 @@ body {
    hệ điều hành). Tên cũ "charts-overview-row" đã bị bỏ vì tab Charts không còn. */
 .two-col-row {
   display: grid;
-  grid-template-columns: 2fr 1.2fr;
+  /* minmax(0, ...) bắt buộc: track `fr` mặc định có min-width:auto nên nó bị nới
+     theo min-content của con — canvas Chart.js giữ chiều rộng cũ khi thu nhỏ
+     cửa sổ (resize 1024→375) khiến cả trang tràn ngang ~345px. Kẹp về 0 thì
+     canvas co lại theo khung. Cùng cách đã dùng cho .insight-stack. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);
   gap: 18px;
   margin-bottom: 24px;
 }
@@ -753,7 +757,7 @@ body {
 }
 
 @media (max-width: 1024px) {
-  .two-col-row { grid-template-columns: 1fr; }
+  .two-col-row { grid-template-columns: minmax(0, 1fr); }
 }
 
 .chart-wrapper {
@@ -1141,6 +1145,18 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+}
+
+/* Header dính (th{position:sticky;top:0}) chỉ hoạt động khi khung là scroll
+   container THEO CHIỀU DỌC: nếu wrapper không có max-height thì clientHeight
+   luôn bằng scrollHeight, thanh cuộn dọc không xuất hiện và sticky không có
+   "đích" để dính (nó dính theo viewport, không theo bảng). Giới hạn chiều cao
+   cho 2 bảng nhiều dòng (Nhật ký, Sinh viên) để header dính thật sự hoạt động.
+   min(70vh, 640px): đủ đọc nhiều dòng nhưng không chiếm trọn màn hình laptop. */
+#pane-logs .table-scroll,
+#pane-users .table-scroll {
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
 }
 
 .table-scroll .admin-data-table,
