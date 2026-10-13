@@ -129,7 +129,7 @@ Quy tắc:
 
 ## 6. Server — `TrafficInsightsService`
 
-**File mới:** `src/services/traffic-insights.service.js`, dùng `query` từ `src/db/database.js` và `isDatabaseConfigured()` như `traffic.service.js`. Fail-soft: DB lỗi/chưa cấu hình ⇒ trả cấu trúc rỗng hợp lệ (không ném lỗi ra request), giống tinh thần fail-open của service-lock.
+**File mới:** `src/services/traffic-insights.service.js`, dùng `query` từ `src/db/database.js` và `isDatabaseConfigured()` như `traffic.service.js`. Hành vi lỗi (nhất quán với yêu cầu trạng thái lỗi ở mục 4.1): khi **chưa cấu hình DB** (`isDatabaseConfigured()` false) ⇒ trả cấu trúc rỗng hợp lệ (chạy local không DB thì trang không đỏ); khi DB **đã cấu hình nhưng truy vấn lỗi** ⇒ để lỗi nổi lên, controller trả 500 và UI hiện trạng thái lỗi (không giấu lỗi thật).
 
 Xuất hai loại:
 1. **Hàm thuần** (test không cần DB): `featureForPath` (re-export từ config), `buildSessions(events, gapMs)`, `summarizeTransitions(sessions)`, `bucketByFeature(rows)`.
