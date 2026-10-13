@@ -240,7 +240,7 @@ IMAGE_TAG=<sha 12 ký tự>
 GHCR_PULL_TOKEN=<PAT read:packages>
 BACKUP_DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
 MIGRATION_DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
-BACKUP_R2_BUCKET=<bucket backup riêng, KHÁC R2_BUCKET media>
+BACKUP_R2_BUCKET=<bucket backup riêng, KHÁC R2_BUCKET media; ĐỂ TRỐNG nếu chỉ muốn backup local + DLM snapshot>
 BACKUP_ENABLED=1
 BACKUP_CRON=0 17 * * *
 WS_TRUST_PROXY=true
@@ -361,7 +361,7 @@ liệu sai, restore từ object backup R2 có `reason=pre-deploy`.
 | Biết bản đang chạy | `curl -s https://sv.bdu.io.vn/api/version` → build id (12 ký tự SHA) |
 | Log | `docker compose logs --tail=200 bdu-hub` |
 | Backup định kỳ | service `bdu-db-backup` với `BACKUP_ENABLED=1`, cron cấu hình qua `BACKUP_CRON` |
-| Kiểm backup khôi phục được | `npm run db:backup:verify` |
+| Kiểm backup khôi phục được | `npm run db:backup:verify` (chỉ khi có `BACKUP_R2_BUCKET` + `DRILL_DATABASE_URL`) |
 | Snapshot EBS | DLM `bdu-tu-hoc-snapshots`, 1 bản/ngày giữ 7 |
 | Chi phí | Theo dõi thủ công bằng AWS Cost Explorer; trần 30 USD/tháng |
 | Dọn đĩa | `docker image prune -f`, `docker system df` |
@@ -398,7 +398,7 @@ còn kết quả trong `docs/superpowers/` và `.superpowers/`.
 5. Đăng nhập BDU thật bằng `CDS_USER`/`CDS_PASSWORD` → bảng điểm hiển thị.
 6. Đếm `students`, `community_posts`, `vocab_words` khớp với dump; `fingerprint(bdu_hub)` trùng `fingerprint(bdu_fresh)`.
 7. Ảnh cũ load được từ R2 (xác nhận bucket còn sống; nếu bucket đã mất thì ghi nhận và xử lý riêng).
-8. `npm run db:backup` tạo object trên R2; `npm run db:backup:verify` xanh.
+8. `npm run db:backup` tạo file dump trong `data/backups/` (chế độ local; `BACKUP_R2_BUCKET` để trống cũng chạy, `uploaded=false`); DLM tạo snapshot EBS hằng ngày.
 9. Từ một máy ngoài Internet: cổng 3000 và 5432 **đóng**; 22/80/443 mở.
 10. Rollback: đổi `IMAGE_TAG` về SHA trước, `up -d`, app vẫn healthy.
 11. Bot Discord online; xác nhận không còn nơi nào khác chạy cùng token.

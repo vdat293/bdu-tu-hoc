@@ -54,12 +54,15 @@ docker compose version >/dev/null 2>&1 || die "Thiếu docker compose v2."
 [ -f "$DUMP_FILE" ] || die "Không thấy file dump: $APP_DIR/$DUMP_FILE"
 
 missing=""
+# BACKUP_R2_BUCKET KHÔNG bắt buộc: db-backup.js vẫn dump ra file local khi thiếu
+# R2 (uploaded=false) và deploy.sh chấp nhận file local làm bản backup bền.
 for k in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL MIGRATION_DATABASE_URL \
-         IMAGE_TAG COMPOSE_FILE BACKUP_DATABASE_URL BACKUP_R2_BUCKET \
+         IMAGE_TAG COMPOSE_FILE BACKUP_DATABASE_URL \
          BDU_MAINTENANCE_ALLOW_PRODUCTION WS_ALLOWED_ORIGINS; do
   grep -q "^${k}=." .env || missing="$missing $k"
 done
 [ -z "$missing" ] || die "Thiếu hoặc rỗng trong .env:$missing"
+grep -q '^BACKUP_R2_BUCKET=.' .env || warn "Chưa có BACKUP_R2_BUCKET: backup chỉ nằm local (+ DLM snapshot). Thêm sau nếu muốn bản off-site."
 ok "Điều kiện đạt ($(git rev-parse --short HEAD))"
 
 # -----------------------------------------------------------------------------

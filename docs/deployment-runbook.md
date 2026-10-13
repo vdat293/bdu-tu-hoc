@@ -159,9 +159,9 @@ ghi sau mốc backup.
 
 | Việc | Lệnh / cách |
 | --- | --- |
-| Backup thủ công | `docker compose run --rm --no-deps bdu-hub npm run db:backup -- --reason manual` |
-| Kiểm backup khôi phục được | `docker compose run --rm --no-deps bdu-hub npm run db:backup:verify` |
-| Backup định kỳ | service `bdu-db-backup` với `BACKUP_ENABLED=1`, lịch qua `BACKUP_CRON` |
+| Backup thủ công | `docker compose run --rm --no-deps bdu-hub npm run db:backup -- --reason manual` (dump ra `data/backups/`) |
+| Kiểm backup khôi phục được | `docker compose run --rm --no-deps bdu-hub npm run db:backup:verify` (cần `BACKUP_R2_BUCKET` + `DRILL_DATABASE_URL`) |
+| Backup định kỳ | service `bdu-db-backup` với `BACKUP_ENABLED=1`, lịch qua `BACKUP_CRON` (dump ra `data/backups/`) |
 | Snapshot đĩa | DLM `bdu-tu-hoc-snapshots`, 1 bản/ngày, giữ 7 (`aws/infra.sh status` để xem ID) |
 | Khôi phục DB | `BDU_MAINTENANCE_ALLOW_PRODUCTION=1 docker compose run --rm bdu-hub npm run db:restore -- <file> --allow-production --yes` |
 
