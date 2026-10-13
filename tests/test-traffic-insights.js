@@ -113,6 +113,25 @@ check('chuyển trang không vượt ranh giới phiên', () => {
   assert.equal(transitions.find((t) => t.from === '/b' && t.to === '/c'), undefined);
 });
 
+check('phiên serialize ra JSON chỉ còn đúng 5 trường hợp đồng', () => {
+  // Vì sao canh: giá trị của việc giữ `events` ở thuộc tính không liệt kê nằm ở
+  // chỗ phiên trả ra API chỉ còn 5 trường; nếu ai đó đổi sang thuộc tính thường
+  // thì `events` (mảng sự kiện gốc) sẽ lọt vào JSON mà không test nào bắt.
+  const sessions = buildSessions([ev(0, '/a', 'vocab'), ev(1, '/b', 'grammar')]);
+  assert.deepEqual(
+    Object.keys(sessions[0]),
+    ['startAt', 'endAt', 'durationMs', 'eventCount', 'features']
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(sessions[0])), {
+    // JSON.stringify chuyển Date thành chuỗi ISO, nên kỳ vọng phải là chuỗi ISO.
+    startAt: new Date(BASE).toISOString(),
+    endAt: new Date(BASE + 60 * 1000).toISOString(),
+    durationMs: 60000,
+    eventCount: 2,
+    features: ['vocab', 'grammar']
+  });
+});
+
 check('top N: cắt đúng số lượng và sắp theo count giảm dần', () => {
   // Một phiên đủ dài để /a→/b lặp 3 lần và /b→/a lặp 2 lần.
   const sessions = buildSessions([
