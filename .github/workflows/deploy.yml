@@ -1,21 +1,31 @@
-name: Deploy VPS
+name: Deploy EC2
 
 # =============================================================================
-# Deploy production lên VPS.
+# Deploy production lên EC2 (AWS).
+#
+# WORKFLOW NÀY LÀM HAI VIỆC:
+#   1. build  — build image và ĐẨY LÊN GHCR với tag = 12 ký tự đầu của commit.
+#   2. deploy — SSH vào EC2 chạy `deploy/deploy.sh` với DEPLOY_SHA tương ứng.
+#
+# VÌ SAO BUILD Ở ĐÂY CHỨ KHÔNG BUILD TRÊN EC2:
+#   EC2 là t3a.small (2 GB RAM) và image chứa .NET runtime + Playwright
+#   Chromium. Build tại chỗ sẽ OOM. EC2 chỉ `docker compose pull` theo
+#   IMAGE_TAG rồi `up -d --no-build`.
 #
 # VÌ SAO DEPLOY LÀ DOWNTIME VÀI GIÂY (không phải zero-downtime):
 #   App chỉ chạy ĐÚNG 1 replica vì WebSocket + broadcast nằm trong cùng một
 #   process Node. Muốn zero-downtime phải tách WebSocket ra service riêng và
-#   thêm shared pub/sub adapter (Redis) — việc này chưa làm. `docker compose
-#   up -d --build` dừng container cũ rồi mới bật container mới, nên có một khoảng
-#   vài giây không phục vụ. Client sẽ tự reconnect WebSocket sau đó.
+#   thêm shared pub/sub adapter (Redis) — việc này chưa làm. Client sẽ tự
+#   reconnect WebSocket sau đó.
 #
 # Ghi chú kiến trúc liên quan:
-#   - Migration KHÔNG chạy trong `command` của container nữa. Nó chạy đúng
-#     1 lần trong deploy/deploy.sh, sau khi backup DB đã thành công. Nhờ vậy
-#     restart container không vô tình chạy migration.
-#   - File .env production KHÔNG nằm trong secrets của repo: nó nằm trên VPS
+#   - Migration KHÔNG chạy trong `command` của container. Nó chạy đúng 1 lần
+#     trong deploy/deploy.sh, sau khi backup DB đã thành công.
+#   - File .env production KHÔNG nằm trong secrets của repo: nó nằm trên EC2
 #     và chỉ được đọc ở máy đó. Secrets ở đây chỉ là thông tin SSH.
+#   - Image tag của deploy là 12 ký tự đầu của commit. Commit được push lên
+#     `main` thì image chắc chắn có; deploy một commit cũ qua workflow_dispatch
+#     yêu cầu image của commit đó đã từng được đẩy lên GHCR.
 # =============================================================================
 
 on:
@@ -31,7 +41,7 @@ on:
         default: 'main'
 
 # KHÔNG dùng `needs: [CI]` để tránh vòng phụ thuộc: workflow này tự build lại
-# image nên lỗi build vẫn bị chặn trước khi đụng VPS. Nếu muốn deploy chỉ khi
+# image nên lỗi build vẫn bị chặn trước khi đụng EC2. Nếu muốn deploy chỉ khi
 # CI xanh, thêm `workflow_run` (chạy sau khi CI kết thúc) thay vì `needs`.
 #
 # cancel-in-progress: false là CỐ Ý: huỷ giữa chừng một deploy có thể rơi vào
@@ -46,30 +56,43 @@ permissions:
 
 jobs:
   build:
-    name: Build image (chặn lỗi Dockerfile)
+    name: Build & push image lên GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Đẩy image lên ghcr.io cần quyền ghi package của GITHUB_TOKEN.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      # Mục đích KHÔNG phải đẩy image lên registry, mà là bắt lỗi Dockerfile /
-      # lỗi build client trước khi SSH vào VPS. `push: false` + `load: false`
-      # nên runner không cần lưu image nặng vài GB. VPS tự build lại lúc deploy
-      # (cache layer của Docker trên VPS vẫn được tái dùng).
+      # Tag image = 12 ký tự đầu của commit, KHỚP `IMAGE_TAG` mà deploy.sh đặt
+      # trên EC2 (deploy.sh cũng cắt 12 ký tự). Lệch độ dài là pull sai tag.
+      - name: Chốt short SHA (12 ký tự)
+        id: shortsha
+        run: echo "sha=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build image (không push)
+      - name: Đăng nhập GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          load: false
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ steps.shortsha.outputs.sha }}
           build-args: BUILD_ID=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy lên VPS
+    name: Deploy lên EC2
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: build
@@ -109,44 +132,45 @@ jobs:
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
           echo "Deploy commit ${SHA} (${TARGET_REF})"
 
-      - name: Chạy deploy/deploy.sh trên VPS
+      - name: Chạy deploy/deploy.sh trên EC2
         # BẮT BUỘC có env ở đây. `envs:` chỉ khai báo TÊN biến được forward;
-        # nếu không định nghĩa `DEPLOY_SHA` ở step này thì VPS nhận chuỗi rỗng
+        # nếu không định nghĩa `DEPLOY_SHA` ở step này thì EC2 nhận chuỗi rỗng
         # và deploy.sh rơi về `git rev-parse HEAD` trên đĩa => deploy nhầm bản
         # cũ và cổng `git merge-base --is-ancestor` bị vô hiệu hoá.
         if: steps.resolve.outputs.sha != ''
         env:
           DEPLOY_SHA: ${{ steps.resolve.outputs.sha }}
-          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          APP_DIR: ${{ secrets.AWS_APP_DIR }}
         uses: appleboy/ssh-action@v1.2.2
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT || '22' }}
-          # VPS có sẵn bash; script dùng `set -euo pipefail` + trap nên phải chạy
-          # bằng bash, không phải sh.
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.AWS_SSH_PORT || '22' }}
+          # EC2 có sẵn bash; script dùng `set -euo pipefail` + trap nên phải
+          # chạy bằng bash, không phải sh.
           shell: bash
-          # Gửi nguyên file deploy/deploy.sh từ repo lên VPS rồi chạy.
+          # Gửi nguyên file deploy/deploy.sh từ repo lên EC2 rồi chạy.
           script_path: deploy/deploy.sh
-          # Script tự đọc .env trên VPS; ở đây chỉ truyền commit cần deploy.
-          envs: 'DEPLOY_SHA,VPS_APP_DIR'
-          # Build image trên VPS có thể mất vài phút.
+          # Script tự đọc .env trên EC2; ở đây chỉ truyền commit cần deploy và
+          # thư mục app.
+          envs: 'DEPLOY_SHA,APP_DIR'
+          # Pull image trên EC2 nhanh, nhưng migrate DB có thể lâu.
           command_timeout: 40m
 
       - name: Gợi ý khi deploy fail
         if: failure()
         run: |
-          echo "::error::Deploy thất bại. Xem log ở trên để biết bước nào fail, sau đó làm theo docs/deployment-runbook.md (mục Rollback) trên VPS."
+          echo "::error::Deploy thất bại. Xem log ở trên để biết bước nào fail, sau đó làm theo docs/deployment-runbook.md (mục Rollback) trên EC2."
 
 # Secrets cần thiết (Settings → Secrets and variables → Actions):
-#   VPS_HOST               địa chỉ IP/domain VPS
-#   VPS_USER               user SSH (nên là user riêng, không phải root)
-#   VPS_SSH_PRIVATE_KEY    private key (deploy key), đã thêm vào
-#                          ~/.ssh/authorized_keys trên VPS
-#   VPS_APP_DIR            thư mục app trên VPS, ví dụ /opt/bdu-tu-hoc
-#   VPS_SSH_PORT           tuỳ chọn, mặc định 22
+#   AWS_HOST               Elastic IP của EC2
+#   AWS_USER               user SSH (là `deploy`, không phải root)
+#   AWS_SSH_PRIVATE_KEY    private key (deploy key), đã thêm vào
+#                          ~deploy/.ssh/authorized_keys trên EC2
+#   AWS_APP_DIR            thư mục app trên EC2, ví dụ /opt/bdu-tu-hoc
+#   AWS_SSH_PORT           tuỳ chọn, mặc định 22
 #
-# .env production KHÔNG đưa vào secrets: file này nằm trên VPS và chỉ được
+# .env production KHÔNG đưa vào secrets: file này nằm trên EC2 và chỉ được
 # đọc bởi deploy/deploy.sh + docker compose tại chỗ. Nhờ vậy secret không bị
 # in ra log của Actions.
