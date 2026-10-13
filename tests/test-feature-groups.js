@@ -98,6 +98,28 @@ check('ghim apiPrefixes của clubs (không rơi sót poll)', () => {
   );
 });
 
+check('tiền tố không lồng nhau giữa các nhóm (giữ JS và SQL cùng kết luận)', () => {
+  // `featureForPath` (JS) cho tiền tố DÀI NHẤT thắng; `buildFeatureCaseSql` (SQL)
+  // dựng CASE nên phải sắp giảm dần theo độ dài. Nếu có cặp tiền tố lồng nhau
+  // (hoặc trùng chuỗi ở hai nhóm) thì hai đường tra cứu có thể cho hai đáp án
+  // khác nhau ⇒ số liệu lệch mà không test nào bắt.
+  const entries = FEATURE_GROUPS.flatMap((group) => (
+    [...group.apiPrefixes, ...group.pagePrefixes].map((prefix) => ({ prefix, id: group.id }))
+  ));
+  for (const a of entries) {
+    for (const b of entries) {
+      if (a.prefix === b.prefix) {
+        assert.equal(a.id, b.id, `tiền tố "${a.prefix}" bị khai ở cả "${a.id}" và "${b.id}"`);
+        continue;
+      }
+      assert.ok(
+        !(b.prefix.length > a.prefix.length && b.prefix.startsWith(a.prefix)),
+        `tiền tố "${b.prefix}" (${b.id}) lồng trong "${a.prefix}" (${a.id}): SQL/JS có thể gán khác nhau`
+      );
+    }
+  }
+});
+
 if (failed > 0) {
   console.log(`✗ Feature groups: ${failed} ca thất bại.`);
   process.exitCode = 1;

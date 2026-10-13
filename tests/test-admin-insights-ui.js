@@ -21,6 +21,7 @@ import fs from 'node:fs';
 const indexHtml = fs.readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
 const adminJs = fs.readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8');
 const adminCss = fs.readFileSync(new URL('../public/admin/admin.css', import.meta.url), 'utf8');
+const routeGuard = fs.readFileSync(new URL('../scripts/verify-route-order.mjs', import.meta.url), 'utf8');
 
 let failed = 0;
 
@@ -85,6 +86,80 @@ check('một endpoint insights lỗi KHÔNG làm sập cả dashboard', () => {
   for (const line of lines) {
     assert.match(line, /\.catch\(/, `Lời gọi insights phải bọc .catch(() => null): ${line.trim()}`);
   }
+});
+
+check('endpoint LEGACY lỗi không kẹt 5 khối Insights ở skeleton "Đang tải…"', () => {
+  // `Promise.all` all-or-nothing: một endpoint cũ (overview/logs/visited-students/
+  // system) chết là không tới renderInsights(), mà skeleton chỉ dựng một lần ở
+  // init ⇒ 5 khối đứng im "Đang tải…" vĩnh viễn. Nhánh catch phải tự vẽ lại:
+  // khối có dữ liệu thì vẽ, khối không thì ra trạng thái lỗi kèm nút Thử lại.
+  const start = adminJs.indexOf('async function fetchAllData(');
+  const catchStart = adminJs.indexOf('} catch (err) {', start);
+  assert.ok(catchStart !== -1, 'fetchAllData phải có nhánh catch');
+  const next = adminJs.indexOf('\nfunction ', catchStart);
+  const branch = adminJs.slice(catchStart, next === -1 ? adminJs.length : next);
+  assert.match(branch, /renderInsights\(\)/, 'nhánh catch của fetchAllData phải gọi renderInsights()');
+  assert.match(branch, /renderDevices\(null\)/, 'khối Thiết bị cũng phải thoát skeleton (null ≠ dữ liệu rỗng)');
+  // Vẽ trạng thái lỗi chỉ khi không phải nền tự làm mới: refresh nền lỗi thì giữ
+  // dữ liệu đang có, không xoá sạch rồi báo lỗi.
+  const guardIdx = branch.indexOf('if (!isBackground) {');
+  assert.ok(guardIdx !== -1, 'nhánh catch phải giữ điều kiện if (!isBackground) như hai renderError kia');
+  const guarded = branch.slice(guardIdx);
+  const insightsIdx = guarded.indexOf('renderInsights()');
+  assert.ok(insightsIdx !== -1, 'renderInsights() phải nằm sau if (!isBackground)');
+  assert.match(
+    // Bỏ chú thích trước khi so phủ định: sau khối catch còn chú thích của hàm kế tiếp.
+    guarded.slice(guarded.indexOf('}', insightsIdx)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''),
+    /^[\s}]*$/,
+    'sau khối if (!isBackground) không được vẽ thêm gì (refresh nền lỗi thì giữ dữ liệu đang có)'
+  );
+});
+
+check('heatmap và cohort nói rõ khi mốc bị thu về 30 ngày', () => {
+  // Backend thu `all` về 30 ngày cho đúng 2 khối này rồi trả `requestedTimeRange`
+  // để client biết mốc đã chọn là gì. Không nói ra thì số trên màn hình bị đọc
+  // là phủ toàn bộ lịch sử.
+  for (const fnName of ['renderHoursHeatmap', 'renderCohort']) {
+    assert.match(
+      sliceFunction(fnName),
+      /cappedRangeText\(/,
+      `${fnName} phải gọi cappedRangeText() để báo khi khối bị thu về 30 ngày`
+    );
+  }
+  const helper = sliceFunction('cappedRangeText');
+  assert.match(helper, /requestedTimeRange/, 'helper phải đọc requestedTimeRange của endpoint');
+  assert.match(helper, /state\.timeRange/, 'thiếu requestedTimeRange thì fallback về mốc đang chọn');
+  assert.match(helper, /30 ngày/, 'chú thích phải nói rõ bị thu về 30 ngày');
+});
+
+check('series cohort không gọi tắt "Mới" (đếm theo ngày, không phải người mới)', () => {
+  // SQL đếm `new` theo NGÀY: một người lần đầu vào hệ thống ngày 5 vẫn được đếm
+  // ở mọi ngày họ hoạt động sau đó. Gọi series đó là "Mới" khiến người đọc tưởng
+  // mỗi ngày có một lớp người mới thật sự mới.
+  const cohort = sliceFunction('renderCohort');
+  assert.match(cohort, /label: 'Hoạt động lần đầu trong kỳ'/, 'series per-day phải nói đúng nghĩa số');
+  assert.doesNotMatch(cohort, /label: 'Mới'/, 'không được để series per-day mang nhãn "Mới"');
+  assert.match(
+    cohort,
+    /tính lại ở từng ngày/,
+    'phải giải thích vì sao series per-day khác số "Mới" ở dải số (số người khác nhau cả kỳ)'
+  );
+});
+
+check('guard thứ tự route chạy được khi trần, không cần env', () => {
+  // Guard này sinh ra để canh chính 5 route insights trong
+  // ROUTES_ADDED_AFTER_SPLIT. Nó đọc ENGLISH_ANSWERS_PATH mà không set mặc định
+  // thì thiếu env là exit 2 — chết cam đúng lúc cần canh.
+  assert.match(
+    routeGuard,
+    /ENGLISH_ANSWERS_PATH\s*\?\?=/,
+    'verify-route-order.mjs phải đặt mặc định cho ENGLISH_ANSWERS_PATH (??=)'
+  );
+  assert.ok(
+    routeGuard.search(/ENGLISH_ANSWERS_PATH\s*\?\?=/) < routeGuard.indexOf('await import('),
+    'mặc định phải đặt TRƯỚC vòng import bản gốc'
+  );
+  assert.match(routeGuard, /from 'node:os'/, 'phải import node:os để dựng đường dẫn mặc định');
 });
 
 check('state.insights và 4 hàm render của tab Insights đã có', () => {

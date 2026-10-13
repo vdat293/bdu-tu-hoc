@@ -301,6 +301,13 @@ check('admin.js không còn emoji nào (chỉ dùng inline SVG)', () => {
   // renderDevices phải đi qua ICONS chứ không chọn emoji theo tên thiết bị.
   assert.match(adminJs, /const DEVICE_PRESENTATION = \{/, 'admin.js phải khai bảng map tên thiết bị → icon SVG');
   assert.match(adminJs, /DEVICE_PRESENTATION\[name\]/, 'renderDevices phải tra DEVICE_PRESENTATION để lấy icon');
+  // CSS cũng phải sạch emoji kể cả trong chú thích: icon không hiện ra nhưng lọt
+  // vào diff/console và làm "dọn emoji" thành việc không bao giờ xong.
+  assert.doesNotMatch(
+    adminCss,
+    EMOJI_RE,
+    `admin.css còn emoji trong chú thích — thay bằng chữ: ${(adminCss.match(EMOJI_RE) || []).join(' ')}`
+  );
 });
 
 /* --------------------------------------------------------------------------

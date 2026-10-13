@@ -10,10 +10,18 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Biến môi trường dùng chung của bộ script kiểm tra. Script này KHÔNG đọc nó
+// (chỉ giữ đường dẫn để đặt chỗ nhất quán), nhưng nếu để undefined thì
+// `const { ENGLISH_ANSWERS_PATH } = process.env` bên dưới vẫn chạy được — đặt
+// mặc định NGAY TRƯỚC vòng import để `node scripts/verify-route-order.mjs`
+// chạy TRẦN (không cần ai set env) không bị chết cam.
+process.env.ENGLISH_ANSWERS_PATH ??= path.join(os.tmpdir(), 'verify-route-order-english-answers.json');
 
 // Ban goc phai nam trong repo de cac import tuong doi giong het.
 const oldRelative = 'src/routes/__verify_old_api.routes.js';

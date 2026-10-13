@@ -1256,8 +1256,8 @@ body {
 }
 
 /* Dòng thông báo lỗi của request. Icon cảnh báo là inline SVG (trước đây là
-   emoji ⚠ nên render khác nhau theo font của máy); ô chữ bọc trong span riêng để
-   cắt bằng ellipsis vẫn đúng khi thêm icon. */
+   emoji dấu chấm thanh nên render khác nhau theo font của máy); ô chữ bọc trong
+   span riêng để cắt bằng ellipsis vẫn đúng khi thêm icon. */
 .path-err {
   display: inline-flex;
   align-items: center;
@@ -1416,8 +1416,9 @@ body {
 }
 
 /* Nhãn trạng thái sinh viên ở bảng "Sinh viên đã vào web". Trước đây màu nền/màu
-   chữ nằm rải rác trong thuộc tính style của JS và có emoji 🟢/⚪; giờ chuyển hết
-   vào class để đổi theme một chỗ. Cả hai biến thể đều CÓ CHỮ, không chỉ màu. */
+   chữ nằm rải rác trong thuộc tính style của JS và có emoji tròn xanh/tròn trắng;
+   giờ chuyển hết vào class để đổi theme một chỗ. Cả hai biến thể đều CÓ CHỮ,
+   không chỉ màu. */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1770,7 +1771,8 @@ body {
 }
 
 /* Nút chép trong modal chi tiết nhật ký: icon SVG + chữ nên cần flex để chúng
-   thẳng hàng (trước đây gộp emoji 📋 vào chuỗi text nên không căn được). */
+   thẳng hàng (trước đây gộp emoji bảng ghi tay vào chuỗi text nên không căn
+   được). */
 .btn-copy-code {
   display: inline-flex;
   align-items: center;

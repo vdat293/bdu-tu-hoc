@@ -232,18 +232,26 @@ function tzExpr(column = 'created_at') {
 // FEATURE_GROUPS (literal tĩnh, không phải input người dùng nên không lo SQL
 // injection). Mỗi tiền tố so cả dạng có/không `/api` vì `route` lưu kèm `/api`
 // còn lượt tải trang SPA lưu path trần.
+//
+// Vì sao sắp theo ĐỘ DÀI GIẢM DẦN trước khi dựng CASE: `CASE` lấy `WHEN`
+// đúng trước, còn `featureForPath` lấy tiền tố DÀI NHẤT. Dựng theo thứ tự
+// khai báo trong FEATURE_GROUPS là hai đường tra cứu có thể cho hai đáp án khác
+// nhau khi một tiền tố là tiền tố của tiền tố khómg. Sắp giống hệt PREFIX_INDEX
+// bên `feature-groups.js` nên SQL và JS luôn cùng một taxonomy.
 function buildFeatureCaseSql() {
-  const whens = FEATURE_GROUPS.map((group) => {
-    const conditions = [...group.apiPrefixes, ...group.pagePrefixes].flatMap((prefix) => {
-      const safe = String(prefix).replace(/'/g, "''");
-      return [
-        `${ENDPOINT_EXPR} = '${safe}'`,
-        `${ENDPOINT_EXPR} LIKE '${safe}/%'`,
-        `${ENDPOINT_EXPR} = '/api${safe}'`,
-        `${ENDPOINT_EXPR} LIKE '/api${safe}/%'`
-      ];
-    });
-    return `WHEN ${conditions.join(' OR ')} THEN '${group.id}'`;
+  const entries = FEATURE_GROUPS
+    .flatMap((group) => [...group.apiPrefixes, ...group.pagePrefixes]
+      .map((prefix) => ({ prefix, id: group.id })))
+    .sort((a, b) => b.prefix.length - a.prefix.length);
+  const whens = entries.map(({ prefix, id }) => {
+    const safe = String(prefix).replace(/'/g, "''");
+    const conditions = [
+      `${ENDPOINT_EXPR} = '${safe}'`,
+      `${ENDPOINT_EXPR} LIKE '${safe}/%'`,
+      `${ENDPOINT_EXPR} = '/api${safe}'`,
+      `${ENDPOINT_EXPR} LIKE '/api${safe}/%'`
+    ];
+    return `WHEN ${conditions.join(' OR ')} THEN '${id}'`;
   });
   return `(CASE ${whens.join(' ')} ELSE '${OTHER_FEATURE.id}' END)`;
 }
@@ -351,9 +359,15 @@ export async function getFeatures({ timeRange } = {}, runner) {
  */
 export async function getHourHeatmap({ timeRange } = {}, runner) {
   const range = normalizeTimeRange(timeRange);
+  // `all` quá rộng cho heatmap nên thu về cửa sổ 30 ngày theo plan. Tính TRƯỚC
+  // `empty()` vì payload phải nói ra khoảng ĐÃ DÙNG (`timeRange`) chứ không nói
+  // khoảng đã chọn: trả `timeRange: range` khi SQL chạy trên 30d là nói dối,
+  // người đọc tưởng số 168 ô phủ toàn bộ lịch sử.
+  const effective = range === 'all' ? '30d' : range;
   const exec = runner ?? query;
   const empty = () => ({
-    timeRange: range,
+    timeRange: effective,
+    requestedTimeRange: range,
     tz: ANALYTICS_TZ,
     weekdays: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'],
     matrix: Array.from({ length: 7 }, () => Array(24).fill(0)),
@@ -362,8 +376,6 @@ export async function getHourHeatmap({ timeRange } = {}, runner) {
   });
   if (!runner && !isDatabaseConfigured()) return empty();
 
-  // `all` quá rộng cho heatmap nên thu về cửa sổ 30 ngày theo plan.
-  const effective = range === 'all' ? '30d' : range;
   const interval = getTimeRangeInterval(effective);
   const filter = interval ? `WHERE created_at >= NOW() - ${interval}` : '';
   const tz = tzExpr();
@@ -399,12 +411,20 @@ export async function getHourHeatmap({ timeRange } = {}, runner) {
 /**
  * (c) Cohort/giữ chân theo ngày: `new` là mssv có lần xuất hiện đầu toàn thời
  * gian nằm trong cửa sổ, còn lại là `returning`.
+ *
+ * LƯU Ý ĐỌC SỐ: ở tầng BUCKET (theo ngày) `new` được tính lại MỖI NGÀY — một
+ * người lần đầu vào hệ thống ngày 5 vẫn được đếm là "mới" ở mọi ngày họ hoạt
+ * động sau đó ⇒ cộng các bucket `new` luôn ≥ `totals.new` (đếm DISTINCT cả kỳ).
+ * Tên series ở client phải nói đúng nghĩa này, đừng gọi tắt là "Mới".
  */
 export async function getCohort({ timeRange } = {}, runner) {
   const range = normalizeTimeRange(timeRange);
+  // Như heatmap: `all` bị thu về 30 ngày, nên payload phải nói khoảng ĐÃ DÙNG.
+  const effective = range === 'all' ? '30d' : range;
   const exec = runner ?? query;
   const empty = () => ({
-    timeRange: range,
+    timeRange: effective,
+    requestedTimeRange: range,
     dayBuckets: [],
     totals: { active: 0, new: 0, returning: 0 },
     stickiness: { dau: 0, wau: 0, ratio: 0 },
@@ -412,7 +432,6 @@ export async function getCohort({ timeRange } = {}, runner) {
   });
   if (!runner && !isDatabaseConfigured()) return empty();
 
-  const effective = range === 'all' ? '30d' : range;
   const interval = getTimeRangeInterval(effective);
   const tz = tzExpr('tl.created_at');
   const bucketsSql = `
@@ -474,7 +493,8 @@ export async function getCohort({ timeRange } = {}, runner) {
   const wau = num(total?.wau);
   const active7 = num(total?.active7);
   return {
-    timeRange: range,
+    timeRange: effective,
+    requestedTimeRange: range,
     dayBuckets,
     totals: {
       active: num(total?.active),
@@ -584,9 +604,13 @@ export async function getUserJourney({ mssv, timeRange, limit } = {}, runner) {
     WHERE tl.mssv = $1 ${timeFilter}
     ORDER BY created_at ASC
     LIMIT $2;`;
+  // Lấy DƯ MỘT dòng so với trần rồi cắt bỏ: chỉ khi có dòng thứ N+1 mới chắc
+  // chắn là dữ liệu bị cắt. So `>= safeLimit` thì hành trình vừa đúng N sự kiện
+  // (không hề bị cắt) cũng bị gắn cờ `truncated`, và câu nhắc "các lượt mới
+  // hơn không được tải" thành khẳng định sai.
   const [studentRes, eventsRes] = await Promise.all([
     exec(studentSql, [cleanMssv]),
-    exec(eventsSql, [cleanMssv, safeLimit])
+    exec(eventsSql, [cleanMssv, safeLimit + 1])
   ]);
 
   const studentRow = studentRes.rows?.[0] ?? null;
@@ -600,7 +624,9 @@ export async function getUserJourney({ mssv, timeRange, limit } = {}, runner) {
     }
     : null;
 
-  const events = (eventsRes.rows ?? []).map((row) => {
+  const rawEvents = Array.isArray(eventsRes.rows) ? eventsRes.rows : [];
+  const truncated = rawEvents.length > safeLimit;
+  const events = rawEvents.slice(0, safeLimit).map((row) => {
     const path = row?.path ?? row?.route ?? '';
     const group = featureForPath(row?.route ?? row?.path ?? '');
     const statusCode = num(row?.status_code ?? row?.statusCode);
@@ -639,7 +665,7 @@ export async function getUserJourney({ mssv, timeRange, limit } = {}, runner) {
     events,
     sessions,
     transitions,
-    truncated: (eventsRes.rows ?? []).length >= safeLimit
+    truncated
   };
 }
 

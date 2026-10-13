@@ -709,6 +709,18 @@ async function fetchAllData(isBackground = false) {
       renderError('#overview-timeline-state', 'Không tải được biểu đồ lưu lượng.', { title: 'Lỗi biểu đồ lưu lượng' });
       renderError('#endpoints-list-preview', 'Không tải được xếp hạng tính năng.', { title: 'Lỗi xếp hạng tính năng' });
     }
+    // 5 khối của tab Insights KHÔNG được kẹt ở skeleton "Đang tải…" chỉ vì một
+    // endpoint khác (overview/logs/visited-students/system…) chết trong
+    // Promise.all: nhánh lỗi này chạy trước khi renderInsights() kịp vẽ, mà
+    // skeleton thì chỉ được dựng một lần lúc init ⇒ trước đây chúng đứng im
+    // "Đang tải…" vĩnh viễn. Vẽ lại ở đây: khối nào có dữ liệu vẫn vẽ, khối nào
+    // không thì ra trạng thái lỗi kèm nút "Thử lại" (null ≠ dữ liệu rỗng).
+    // Cùng điều kiện `!isBackground` như trên: nền tự làm mới lỗi thì giữ dữ
+    // liệu đang có, không xoá sạch rồi báo lỗi.
+    if (!isBackground) {
+      renderDevices(null);
+      renderInsights();
+    }
   }
 }
 
@@ -1145,7 +1157,13 @@ function renderFeatureRanking(data = {}, target = '#feature-ranking', options = 
   // phân biệt được màu vẫn đọc được chiều đi (spec mục 4.1).
   const deltaCell = (delta) => {
     if (delta === null || delta === undefined) {
-      return '<span class="rank-delta trend-neutral">— chưa có kỳ trước</span>';
+      // Hai nguyên nhân khác nhau, nói đúng để không hứa hụt một kỳ so sánh:
+      // `all` không có kỳ trước nào, còn lại là kỳ trước thật sự không có lượt
+      // (backend để deltaPct null thay vì chia cho 0).
+      const text = state.timeRange === 'all'
+        ? '— không có kỳ trước'
+        : '— kỳ trước không có lượt';
+      return `<span class="rank-delta trend-neutral">${text}</span>`;
     }
     const value = safeNumber(delta);
     if (value > 0) return `<span class="rank-delta trend-up">▲ +${formatNumber(value, 1)}%</span>`;
@@ -1215,6 +1233,25 @@ function renderFeatureRanking(data = {}, target = '#feature-ranking', options = 
 }
 
 /**
+ * Câu chú thích khi khoảng khối này thực sự dùng KHÁC khoảng người đọc đang chọn.
+ *
+ * Vì sao cần: heatmap và cohort thu mốc Toàn bộ thời gian về 30 ngày — lưới
+ * 7×24 và dải ngày vẽ trên nhiều năm không ai đọc nổi. Endpoint trả
+ * `timeRange` = khoảng ĐÃ DÙNG và `requestedTimeRange` = khoảng ĐÃ CHỌN; hai
+ * cái lệch nhau mà không nói thì số trên màn hình bị đọc là phủ toàn bộ lịch
+ * sử. Trả '' khi khớp nhau (trường hợp thường) thì không sinh chú thích thừa.
+ *
+ * @param {object} data - payload của endpoint insights
+ * @param {string} reason - lý do bị thu (khác nhau giữa heatmap và cohort)
+ */
+function cappedRangeText(data = {}, reason = '') {
+  const requested = String(data.requestedTimeRange ?? state.timeRange);
+  const effective = String(data.timeRange ?? requested);
+  if (effective === requested || effective !== '30d') return '';
+  return `Lưu ý: khối này chỉ dựng trên 30 ngày gần nhất dù bạn chọn ${labelForTimeRange(requested)} — ${reason}.`;
+}
+
+/**
  * Khối 2 — "sinh viên hoạt động vào khung giờ nào?".
  * Lưới CSS 7×24 (mỗi ô IN SỐ, không chỉ tô màu) cộng thêm bảng số dự phòng:
  * người in đen trắng, copy ra Excel hay không phân biệt màu vẫn đọc được.
@@ -1279,6 +1316,12 @@ function renderHoursHeatmap(data = {}) {
       <span class="heatmap-legend-title">Nhiều hơn</span>
     </div>`;
 
+  // Chú thích "bị thu về 30 ngày" chỉ hiện khi người đọc đang chọn Toàn bộ.
+  const capText = cappedRangeText(data, 'lưới giờ × thứ sẽ không còn đọc được');
+  const capHtml = capText
+    ? `<p class="card-subtitle" style="margin-top: 6px;">${escapeHtml(capText)}</p>`
+    : '';
+
   // role="img" + aria-label gọn: đọc 168 ô bằng trình đọc màn hình sẽ nghe lại cả
   // bảng; dữ liệu đầy đủ vẫn có ở bảng số dự phòng ngay dưới (mở ra bằng
   // bàn phím được).
@@ -1290,7 +1333,8 @@ function renderHoursHeatmap(data = {}) {
         ${rows}
       </div>
     </div>
-    <p class="card-subtitle" style="margin-top: 10px;">Ô viền đậm là khung giờ cao điểm nhất: ${escapeHtml(peakText)}. Số trên 1.000 được viết gọn (1,2k); số đầy đủ nằm ở rê chuột và trong bảng số bên dưới.</p>`;
+    <p class="card-subtitle" style="margin-top: 10px;">Ô viền đậm là khung giờ cao điểm nhất: ${escapeHtml(peakText)}. Số trên 1.000 được viết gọn (1,2k); số đầy đủ nằm ở rê chuột và trong bảng số bên dưới.</p>
+    ${capHtml}`;
 
   if (!tableEl) return;
   const headCells = Array.from({ length: 24 }, (_, hour) => `<th scope="col">${String(hour).padStart(2, '0')}</th>`).join('');
@@ -1357,9 +1401,12 @@ function renderCohort(data = {}) {
 
   const totals = data.totals || {};
   const stickiness = data.stickiness || {};
+  // `Mới` ở đây là số NGƯỜI KHÁC NHAU có lần đầu trong kỳ (DISTINCT cả cửa sổ),
+  // khác với series "Hoạt động lần đầu trong kỳ" của biểu đồ (tính lại mỗi
+  // ngày) — nên ghi rõ "cả kỳ" để hai con số không bị đọc là cùng một thứ.
   const stats = [
     { label: 'Người dùng trong kỳ', value: formatNumber(totals.active) },
-    { label: 'Mới', value: formatNumber(totals.new) },
+    { label: 'Mới (cả kỳ)', value: formatNumber(totals.new) },
     { label: 'Quay lại', value: formatNumber(totals.returning) },
     { label: 'DAU (hôm nay)', value: formatNumber(stickiness.dau) },
     { label: 'Hoạt động 7 ngày', value: formatNumber(stickiness.wau) },
@@ -1375,7 +1422,9 @@ function renderCohort(data = {}) {
 
   // Canvas chỉ tạo một lần: Chart.js đọc DOM lúc vẽ, nên nếu thay canvas mỗi lần
   // tự làm mới (15 giây) thì biểu đồ nhấp nháy và dựng lại từ đầu. Dải số thì rẻ,
-  // cứ vẽ lại mỗi lần.
+  // cứ vẽ lại mỗi lần. Ô chú thích cũng phải tự đổi chỗ vì innerHTML chỉ được
+  // dựng đúng một lần — bỏ trống rồi hy vọng không ai đọc là cách chắc chắn
+  // hiện sai.
   const canvas = el.querySelector('#cohort-canvas');
   if (canvas) {
     const statsEl = el.querySelector('.cohort-stat-row');
@@ -1384,8 +1433,16 @@ function renderCohort(data = {}) {
     el.innerHTML = `
       <div class="cohort-stat-row">${statsHtml}</div>
       <div class="chart-wrapper">
-        <canvas id="cohort-canvas" role="img" aria-label="${escapeHtml('Số người dùng hoạt động, mới và quay lại theo từng ngày.')}"></canvas>
-      </div>`;
+        <canvas id="cohort-canvas" role="img" aria-label="${escapeHtml('Số người dùng hoạt động, hoạt động lần đầu trong kỳ và quay lại theo từng ngày.')}"></canvas>
+      </div>
+      <p class="card-subtitle" style="margin-top: 10px;">Chuỗi Hoạt động lần đầu trong kỳ được tính lại ở từng ngày nên một người vào hệ thống lần đầu trong kỳ vẫn xuất hiện ở những ngày họ hoạt động sau đó; số Mới (cả kỳ) ở dải số là số người khác nhau, mỗi người chỉ tính một lần.</p>
+      <p class="card-subtitle capped-range-note" style="margin-top: 6px; display: none;"></p>`;
+  }
+  const capEl = el.querySelector('.capped-range-note');
+  if (capEl) {
+    const capText = cappedRangeText(data, 'dải ngày sẽ kéo dài vô độ');
+    capEl.textContent = capText;
+    capEl.style.display = capText ? '' : 'none';
   }
 
   const target = el.querySelector('#cohort-canvas');
@@ -1408,7 +1465,10 @@ function renderCohort(data = {}) {
         pointRadius: 2
       },
       {
-        label: 'Mới',
+        // Nhãn nói đúng nghĩa số: backend đếm theo NGÀY người có lần xuất hiện
+        // đầu tiên nằm trong cửa sổ, nên gọi tắt "Mới" sẽ khiến người đọc tưởng
+        // mỗi ngày có một lớp người mới thật sự mới (xem chú thích dưới khối).
+        label: 'Hoạt động lần đầu trong kỳ',
         data: dayBuckets.map((bucket) => safeNumber(bucket?.new)),
         borderColor: '#10b981',
         backgroundColor: 'transparent',
@@ -1517,7 +1577,8 @@ function renderQuality(data = {}) {
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <p class="card-subtitle" style="margin-top: 10px;">Ngưỡng màu tham chiếu: dưới 300 ms là nhanh, 300–800 ms là chấp nhận được, trên 800 ms là chậm.</p>`;
+    <p class="card-subtitle" style="margin-top: 10px;">Ngưỡng màu tham chiếu: dưới 300 ms là nhanh, 300–800 ms là chấp nhận được, trên 800 ms là chậm.</p>
+    <p class="card-subtitle" style="margin-top: 6px;">Tổng yêu cầu ở trên tính cả lưu lượng tới endpoint không thuộc tính năng nào (đăng nhập, hồ sơ, admin — ở bảng xếp hạng gọi là nhóm Khác), nên tổng các dòng trong bảng có thể nhỏ hơn tổng đó; bảng này không có dòng Khác vì endpoint chỉ trả số đo độ trễ theo từng nhóm tính năng.</p>`;
 }
 
 // 5. Render Detailed Logs

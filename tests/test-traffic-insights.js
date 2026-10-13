@@ -305,6 +305,38 @@ await checkAsync('cohort: totals lấy từ lượt tổng, buckets giữ theo n
   assert.deepEqual(data.stickiness, { dau: 4, wau: 7, ratio: 0.5714 });
 });
 
+await checkAsync("'all': heatmap và cohort nói khoảng ĐÃ DÙNG, không nói khoảng đã chọn", async () => {
+  // Vì sao: SQL của 2 khối này thu `all` về 30 ngày. Trả `timeRange: 'all'`
+  // trong khi số chỉ phủ 30 ngày là nói dối người đọc; `requestedTimeRange`
+  // giữ lại lựa chọn của họ để client hiện chú thích.
+  const runner = makeRunner(() => ({ rows: [] }));
+  const hours = await TrafficInsightsService.getHourHeatmap({ timeRange: 'all' }, runner);
+  assert.equal(hours.timeRange, '30d', 'heatmap phải trả khoảng đã dùng (30d)');
+  assert.equal(hours.requestedTimeRange, 'all', 'heatmap phải giữ lại khoảng người đọc chọn');
+  assert.match(runner.calls[0].sql, /INTERVAL '30 days'/, 'SQL heatmap phải chạy trên 30 ngày');
+
+  const cohort = await TrafficInsightsService.getCohort({ timeRange: 'all' }, runner);
+  assert.equal(cohort.timeRange, '30d');
+  assert.equal(cohort.requestedTimeRange, 'all');
+  for (const call of runner.calls) assert.match(call.sql, /INTERVAL '30 days'/);
+
+  // Mốc nào không bị thu thì hai trường phải trùng nhau (client đừng bật chú thích oan).
+  const weekHours = await TrafficInsightsService.getHourHeatmap({ timeRange: '7d' }, runner);
+  assert.equal(weekHours.timeRange, '7d');
+  assert.equal(weekHours.requestedTimeRange, '7d');
+  const weekCohort = await TrafficInsightsService.getCohort({ timeRange: '7d' }, runner);
+  assert.equal(weekCohort.timeRange, '7d');
+  assert.equal(weekCohort.requestedTimeRange, '7d');
+});
+
+await checkAsync("'all' khi chưa cấu hình DB: heatmap/cohort vẫn nói 30d", async () => {
+  const hours = await TrafficInsightsService.getHourHeatmap({ timeRange: 'all' });
+  assert.equal(hours.timeRange, '30d');
+  const cohort = await TrafficInsightsService.getCohort({ timeRange: 'all' });
+  assert.equal(cohort.timeRange, '30d');
+  assert.equal(cohort.requestedTimeRange, 'all');
+});
+
 await checkAsync('quality: p95Ms lấy từ cột p95 của runner', async () => {
   const runner = makeRunner((sql) => {
     if (/GROUP BY/i.test(sql)) {
@@ -334,13 +366,44 @@ await checkAsync('journey: ORDER BY ASC + clamp limit 9999 về 500 + mssv hoa',
   assert.equal(data.mssv, 'SV001');
   const eventCall = runner.calls.find((call) => /ORDER BY created_at ASC/i.test(call.sql));
   assert.ok(eventCall, 'câu sự kiện phải ORDER BY created_at ASC');
-  assert.ok(eventCall.params.includes(500), 'limit 9999 phải clamp về 500 trong params');
+  // Trần là 500; câu SQL lấy 501 (N+1) để phân biệt "vừa đủ N sự kiện" với
+  // "bị cắt" — xem ca 'truncated chỉ bật khi có dòng N+1' bên dưới.
+  assert.ok(eventCall.params.includes(501), 'limit 9999 phải clamp về 500 (+1 dòng dò bị cắt) trong params');
   assert.deepEqual(data.student, {
     mssv: 'SV001',
     full_name: 'An',
     class_code: 'L1',
     faculty_code: 'CNTT'
   });
+});
+
+await checkAsync('journey: truncated chỉ bật khi có dòng thứ N+1', async () => {
+  // Vì sao: `LIMIT N` không phân biệt được "hành trình vừa đủ N sự kiện" với
+  // "bị cắt ở N sự kiện". So `rows.length >= N` thì một hành trình KHÔNG bị cắt
+  // vẫn bị gắn cờ và câu nhắc "cách lượt mới hơn không được tải" thành nói dối.
+  // Endpoint lấy N+1 rồi cắt bỏ dòng dò.
+  const run = async (count) => {
+    const base = Date.UTC(2026, 0, 1, 0, 0, 0);
+    const rows = Array.from({ length: count }, (_, i) => ({
+      created_at: new Date(base + i * 60 * 1000),
+      method: 'GET',
+      path: `/p${i}`,
+      route: null,
+      status_code: 200,
+      response_time_ms: 10,
+      device_type: 'desktop'
+    }));
+    const runner = makeRunner((sql) => (/FROM students/i.test(sql) ? { rows: [] } : { rows }));
+    return TrafficInsightsService.getUserJourney({ mssv: 'SV001', timeRange: '7d', limit: 2 }, runner);
+  };
+
+  const exactly = await run(2);
+  assert.equal(exactly.truncated, false, 'đúng bằng trần thì KHÔNG được báo truncated');
+  assert.equal(exactly.events.length, 2);
+
+  const over = await run(3);
+  assert.equal(over.truncated, true, 'có dòng N+1 thì phải báo truncated');
+  assert.equal(over.events.length, 2, 'dòng dò thừa phải bị cắt bỏ trước khi trả');
 });
 
 await checkAsync('journey rỗng: events/sessions/transitions [] và không ném', async () => {
