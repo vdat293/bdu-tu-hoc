@@ -1,9 +1,9 @@
 {
-  "Description": "Snapshot EBS hang ngay cho volume cua bdu-tu-hoc, giu 7 ban gan nhat.",
+  "Description": "Snapshot EBS hang ngay cho volume bdu-tu-hoc giu 7 ban gan nhat",
   "State": "ENABLED",
   "ExecutionRoleArn": "__DLM_ROLE_ARN__",
   "PolicyDetails": {
-    "PolicyType": "IMAGE_MANAGEMENT",
+    "PolicyType": "EBS_SNAPSHOT_MANAGEMENT",
     "ResourceTypes": ["VOLUME"],
     "ResourceLocations": ["CLOUD"],
     "TargetTags": [

@@ -125,7 +125,7 @@ ensure_subnet() {
   fi
   log "Tạo subnet public 10.20.1.0/24 tại $AZ..."
   SUBNET_ID="$(aws ec2 create-subnet --vpc-id "$VPC_ID" --cidr-block 10.20.1.0/24 \
-    --availability-zone "$AZ" --no-map-public-ip-on-launch \
+    --availability-zone "$AZ" \
     --tag-specifications "ResourceType=subnet,Tags=[{Key=Name,Value=$P-public-$AZ},{Key=Project,Value=$P}]" \
     --query 'Subnet.SubnetId' --output text)"
   setstate SUBNET_ID "$SUBNET_ID"
@@ -227,14 +227,25 @@ ensure_instance() {
   [[ -n "$ami" ]] || die "Không lấy được AMI từ SSM public parameter."
   log "AMI: $ami"
 
-  log "Sinh user-data (thay placeholder, lọc CR)..."
+  log "Sinh user-data (thay placeholder, lọc CR, chuyển ASCII)..."
   local pub_file tmp_ud
   pub_file="$(keypair_pub)"
   [[ -f "$pub_file" ]] || ssh-keygen -y -f "$KEY_PATH" > "$pub_file"
   tmp_ud="$DIR/user-data.generated.sh"
-  tr -d '\r' < "$DIR/user-data.sh" \
-    | sed "s|__DEPLOY_PUBLIC_KEY__|$(cat "$pub_file")|" \
-    | sed "s|__APP_DIR__|$APP_DIR|" > "$tmp_ud"
+  # AWS CLI trên Windows decode paramfile theo encoding hệ thống, không phải
+  # UTF-8 -> file có dấu tiếng Việt sẽ lỗi "text contents could not be decoded".
+  # Vì vậy bản GỬI LÊN chỉ chứa ASCII; comment mất dấu, phần thực thi không đổi.
+  if command -v iconv >/dev/null 2>&1; then
+    tr -d '\r' < "$DIR/user-data.sh" \
+      | sed "s|__DEPLOY_PUBLIC_KEY__|$(cat "$pub_file")|" \
+      | sed "s|__APP_DIR__|$APP_DIR|" \
+      | iconv -f UTF-8 -t ASCII//TRANSLIT//IGNORE > "$tmp_ud"
+  else
+    tr -d '\r' < "$DIR/user-data.sh" \
+      | sed "s|__DEPLOY_PUBLIC_KEY__|$(cat "$pub_file")|" \
+      | sed "s|__APP_DIR__|$APP_DIR|" \
+      | LC_ALL=C tr -cd '\11\12\15\40-\176' > "$tmp_ud"
+  fi
   local ud_win
   ud_win="$(winpath "$tmp_ud")"
 
