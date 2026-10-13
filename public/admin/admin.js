@@ -29,7 +29,20 @@ const state = {
   },
   charts: {
     preview: null,
-    detailed: null
+    detailed: null,
+    cohort: null
+  },
+  // 4 khối phân tích của tab Insights. Mỗi endpoint được bọc .catch(() => null)
+  // nên `null` ở đây có nghĩa "endpoint này lỗi" — khối tương ứng sẽ tự hiện
+  // trạng thái lỗi thay vì im lặng (khác với `{}` là "chạy được nhưng rỗng").
+  insights: {
+    features: null,
+    hours: null,
+    cohort: null,
+    quality: null,
+    // `journey` do modal Hành trình (Task 10) ghi vào; khai trước để khớp hợp
+    // đồng state.insights trong spec mục 7.1, không phải sửa lại cấu trúc sau.
+    journey: null
   },
   refreshTimer: null,
   isPurging: false,
@@ -528,6 +541,7 @@ function updateAuthDisplay() {
 const tabTitles = {
   overview: 'Tổng Quan Lưu Lượng',
   charts: 'Biểu Đồ & Xu Hướng',
+  insights: 'Phân Tích Hành Vi Người Dùng',
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
   system: 'Sức Khỏe VPS & Hệ Thống'
@@ -604,6 +618,9 @@ dom.btnThemeToggle.addEventListener('click', () => {
   // Re-render charts with new theme colors
   if (state.charts.preview) state.charts.preview.update();
   if (state.charts.detailed) state.charts.detailed.update();
+  // Biểu đồ cohort vẽ lại từ dữ liệu đang có: Chart.js đọc màu lúc vẽ nên
+  // update() không đổi được màu trục/nhãn sang bảng màu của theme mới.
+  if (state.insights && state.insights.cohort) renderCohort(state.insights.cohort);
 });
 
 // Data Fetching & Rendering
@@ -611,7 +628,7 @@ async function fetchAllData(isBackground = false) {
   try {
     const rankingSyncRequestedAt = Date.now();
     const serviceLockRequestedAt = Date.now();
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock] = await Promise.all([
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
@@ -620,7 +637,14 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`),
       api(`/api/admin/dashboard/ranking-sync`).catch(() => null),
-      api(`/api/admin/dashboard/service-lock`).catch(() => null)
+      api(`/api/admin/dashboard/service-lock`).catch(() => null),
+      // 4 endpoint phân tích (Task 6). Mỗi cái bọc .catch(() => null) để MỘT
+      // endpoint lỗi — ví dụ truy vấn p95 quá nặng bị timeout — KHÔNG làm hỏng
+      // cả dashboard; khối tương ứng tự hiện trạng thái lỗi, các khối khác vẫn vẽ.
+      api(`/api/admin/dashboard/insights/features?timeRange=${state.timeRange}`).catch(() => null),
+      api(`/api/admin/dashboard/insights/hours?timeRange=${state.timeRange}`).catch(() => null),
+      api(`/api/admin/dashboard/insights/cohort?timeRange=${state.timeRange}`).catch(() => null),
+      api(`/api/admin/dashboard/insights/quality?timeRange=${state.timeRange}`).catch(() => null)
     ]);
 
     renderOverview(overview);
@@ -632,6 +656,14 @@ async function fetchAllData(isBackground = false) {
     renderSystem(system);
     renderRankingSync(rankingSync, rankingSyncRequestedAt);
     renderServiceLock(serviceLock, serviceLockRequestedAt);
+    state.insights = {
+      ...state.insights,
+      features: insightFeatures,
+      hours: insightHours,
+      cohort: insightCohort,
+      quality: insightQuality
+    };
+    renderInsights();
   } catch (err) {
     if (!isBackground) {
       console.error('[Admin] Lỗi nạp dữ liệu:', err.message);
@@ -902,6 +934,467 @@ function renderDevices(data = {}) {
       </div>
     `;
   }
+}
+
+/* ==========================================================================
+   TAB INSIGHTS (Task 6) — 4 khối, 4 câu hỏi khác nhau
+   --------------------------------------------------------------------------
+   Vì sao vẽ tách khỏi phần còn lại: các endpoint phân tích nặng hơn hẳn phần
+   giám sát và mỗi cái đã được bọc .catch() nên phải vẽ độc lập — một khối lỗi
+   không được làm trắng tab.
+   Mọi khối đều có đủ 3 trạng thái chuẩn: renderSkeleton (đang tải), renderEmpty
+   (rỗng) và renderError (lỗi) — không để khoảng trắng hay lỗi câm.
+   ========================================================================== */
+
+/** Nhãn 7 thứ; khớp với `weekdays` server trả về (Thứ 2 = 0). */
+const HEATMAP_WEEKDAYS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+
+/**
+ * Số rút gọn để in trong ô heatmap: ô chỉ rộng khoảng 28px nên bốn chữ số sẽ
+ * tràn và phá lưới. Số đầy đủ vẫn có ở `title` của ô và ở bảng số dự phòng —
+ * đây chỉ là lớp hiển thị thứ hai, không phải nơi đọc giá trị chính.
+ */
+function compactCount(value) {
+  const count = safeNumber(value);
+  if (count < 1000) return formatNumber(count);
+  if (count < 1000000) return `${formatNumber(count / 1000, 1)}k`;
+  return `${formatNumber(count / 1000000, 1)}tr`;
+}
+
+/** Trạng thái "đang tải" cho 4 khối Insights, gọi một lần lúc mở trang. */
+function renderInsightsSkeleton() {
+  renderSkeleton('#feature-ranking', 5);
+  renderSkeleton('#hours-heatmap', 4);
+  renderSkeleton('#hours-heatmap-table', 1);
+  renderSkeleton('#cohort-chart', 4);
+  renderSkeleton('#quality-table', 4);
+}
+
+/** Vẽ cả 4 khối từ state.insights; khối nào không có dữ liệu thì báo riêng. */
+function renderInsights() {
+  const { features, hours, cohort, quality } = state.insights;
+
+  if (features) {
+    renderFeatureRanking(features);
+  } else {
+    renderError('#feature-ranking', 'Không tải được xếp hạng tính năng.', { title: 'Lỗi xếp hạng tính năng' });
+  }
+
+  if (hours) {
+    renderHoursHeatmap(hours);
+  } else {
+    renderError('#hours-heatmap', 'Không tải được nhiệt đồ khung giờ.', { title: 'Lỗi nhiệt đồ khung giờ' });
+    renderError('#hours-heatmap-table', 'Không tải được bảng số theo khung giờ.');
+  }
+
+  if (cohort) {
+    renderCohort(cohort);
+  } else {
+    destroyCohortChart();
+    renderError('#cohort-chart', 'Không tải được dữ liệu người dùng quay lại.', { title: 'Lỗi dữ liệu quay lại' });
+  }
+
+  if (quality) {
+    renderQuality(quality);
+  } else {
+    renderError('#quality-table', 'Không tải được số liệu chất lượng dịch vụ.', { title: 'Lỗi số liệu chất lượng' });
+  }
+}
+
+/**
+ * Khối 1 — "Sinh viên dùng tính năng nào nhiều nhất?".
+ * Vì sao bảng chứ không phải biểu đồ tròn: cần so sánh CHÍNH XÁC giữa các nhóm
+ * và đọc kèm số người dùng/tỷ lệ lỗi; tròn cắt mất chiều thứ ba.
+ */
+function renderFeatureRanking(data = {}, target = '#feature-ranking') {
+  const el = resolveElement(target);
+  if (!el) return;
+  const items = Array.isArray(data.items) ? data.items : [];
+  const totalRequests = safeNumber(data.totalRequests);
+  if (!items.length && totalRequests <= 0) {
+    renderEmpty(el, 'Chưa có lượt truy cập nào trong mốc thời gian đang chọn.', {
+      hint: 'Đổi mốc thời gian ở thanh trên (ví dụ 7D) hoặc chờ thêm dữ liệu.'
+    });
+    return;
+  }
+
+  // Xu hướng luôn kèm ký hiệu ▲/▼ + số chứ không chỉ đổi màu, để người không
+  // phân biệt được màu vẫn đọc được chiều đi (spec mục 4.1).
+  const deltaCell = (delta) => {
+    if (delta === null || delta === undefined) {
+      return '<span class="rank-delta trend-neutral">— chưa có kỳ trước</span>';
+    }
+    const value = safeNumber(delta);
+    if (value > 0) return `<span class="rank-delta trend-up">▲ +${formatNumber(value, 1)}%</span>`;
+    if (value < 0) return `<span class="rank-delta trend-down">▼ ${formatNumber(value, 1)}%</span>`;
+    return '<span class="rank-delta trend-neutral">■ 0%</span>';
+  };
+
+  const rows = items.map((item, index) => {
+    const requests = safeNumber(item.requests);
+    const sharePct = totalRequests > 0 ? (requests / totalRequests) * 100 : 0;
+    const label = String(item.label ?? item.id ?? '');
+    return `
+      <tr>
+        <td class="rank-index">${index + 1}</td>
+        <td class="rank-label" title="${escapeHtml(label)}">${escapeHtml(label)}</td>
+        <td class="text-mono">${formatNumber(requests)}</td>
+        <td class="text-mono">${formatNumber(item.users)}</td>
+        <td class="text-mono">${formatPercent(sharePct)}</td>
+        <td class="text-mono">${formatPercent(safeNumber(item.errorRate) * 100)}</td>
+        <td>${deltaCell(item.deltaPct)}</td>
+        <td class="rank-bar-cell">
+          <div class="rank-bar"><div class="rank-bar-fill" style="width: ${Math.min(100, Math.round(sharePct * 10) / 10)}%"></div></div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Nhóm "Khác" vẫn phải hiện: lưu lượng tới endpoint không thuộc nhóm nào là
+  // lưu lượng thật; giấu nó đi sẽ khiến bảng lệch với KPI Tổng Quan.
+  const other = data.other || {};
+  const otherRequests = safeNumber(other.requests);
+  const otherSharePct = totalRequests > 0 ? (otherRequests / totalRequests) * 100 : 0;
+  const otherRow = otherRequests > 0
+    ? `<tr>
+        <td class="rank-index">—</td>
+        <td class="rank-label">Khác (không thuộc nhóm nào)</td>
+        <td class="text-mono">${formatNumber(otherRequests)}</td>
+        <td class="text-mono">${formatNumber(other.users)}</td>
+        <td class="text-mono">${formatPercent(otherSharePct)}</td>
+        <td class="text-mono">—</td>
+        <td><span class="rank-delta trend-neutral">— không theo dõi</span></td>
+        <td class="rank-bar-cell">
+          <div class="rank-bar"><div class="rank-bar-fill" style="width: ${Math.min(100, Math.round(otherSharePct * 10) / 10)}%"></div></div>
+        </td>
+      </tr>`
+    : '';
+
+  el.innerHTML = `
+    <div class="table-scroll">
+      <table class="admin-data-table">
+        <caption class="sr-only">Xếp hạng tính năng theo số lượt yêu cầu</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Tính năng</th>
+            <th scope="col">Lượt</th>
+            <th scope="col">Người dùng</th>
+            <th scope="col">Tỷ trọng</th>
+            <th scope="col">Tỷ lệ lỗi</th>
+            <th scope="col">So với kỳ trước</th>
+            <th scope="col">Thanh tỷ trọng</th>
+          </tr>
+        </thead>
+        <tbody>${rows}${otherRow}</tbody>
+      </table>
+    </div>
+    <p class="card-subtitle" style="margin-top: 10px;">Tổng ${formatNumber(totalRequests)} lượt trong ${escapeHtml(labelForTimeRange(state.timeRange))}. Cột "Người dùng" đếm MSSV/IP khác nhau gọi vào tính năng đó.</p>`;
+}
+
+/**
+ * Khối 2 — "sinh viên hoạt động vào khung giờ nào?".
+ * Lưới CSS 7×24 (mỗi ô IN SỐ, không chỉ tô màu) cộng thêm bảng số dự phòng:
+ * người in đen trắng, copy ra Excel hay không phân biệt màu vẫn đọc được.
+ */
+function renderHoursHeatmap(data = {}) {
+  const el = resolveElement('#hours-heatmap');
+  if (!el) return;
+  const tableEl = resolveElement('#hours-heatmap-table');
+
+  const weekdays = Array.isArray(data.weekdays) && data.weekdays.length === 7
+    ? data.weekdays.map((name) => String(name ?? ''))
+    : HEATMAP_WEEKDAYS;
+  // Ép ma trận về đúng 7×24: server luôn trả vậy, nhưng nếu thiếu hàng/cột (DB
+  // rỗng hoặc endpoint đổi hình dạng) thì lưới vẫn giữ nguyên bố cục, không lệch hàng.
+  const matrix = Array.from({ length: 7 }, (_, day) => {
+    const row = Array.isArray(data.matrix?.[day]) ? data.matrix[day] : [];
+    return Array.from({ length: 24 }, (_, hour) => safeNumber(row[hour]));
+  });
+  const total = matrix.reduce((sum, row) => sum + row.reduce((rowSum, value) => rowSum + value, 0), 0);
+
+  if (total <= 0) {
+    renderEmpty(el, 'Chưa có lượt truy cập nào để dựng nhiệt đồ.', {
+      hint: 'Chọn mốc thời gian rộng hơn (7D hoặc 30D) ở thanh trên.'
+    });
+    if (tableEl) renderEmpty(tableEl, 'Chưa có số liệu theo khung giờ.');
+    return;
+  }
+
+  const peak = data.peak || {};
+  const max = matrix.reduce((rowMax, row) => Math.max(rowMax, ...row), 0);
+  const peakDay = safeNumber(peak.weekday);
+  const peakHour = safeNumber(peak.hour);
+  const weekdayAt = (day) => escapeHtml(weekdays[day] || 'Thứ ?');
+
+  const hourHeader = Array.from(
+    { length: 24 },
+    (_, hour) => `<span class="heatmap-hour">${hour % 3 === 0 ? hour : ''}</span>`
+  ).join('');
+
+  const rows = matrix.map((row, day) => {
+    const cells = row.map((count, hour) => {
+      // ceil() chia 6 bậc trên giá trị thực (max, max/5, ...) nên ô nhỏ vẫn khác
+      // sắc ô bằng 0, còn ô lớn nhất luôn đạt bậc 5.
+      const level = max > 0 ? Math.min(5, Math.ceil((count / max) * 5)) : 0;
+      const isPeak = count > 0 && day === peakDay && hour === peakHour;
+      const tip = `${weekdays[day] || ''} ${String(hour).padStart(2, '0')}:00 — ${formatNumber(count)} lượt`;
+      const zeroClass = count === 0 ? ' heatmap-cell--zero' : '';
+      const peakClass = isPeak ? ' heatmap-cell--peak' : '';
+      return `<div class="heatmap-cell heatmap-lv${level}${zeroClass}${peakClass}" title="${escapeHtml(tip)}">${compactCount(count)}</div>`;
+    }).join('');
+    return `<span class="heatmap-label">${weekdayAt(day)}</span>${cells}`;
+  }).join('');
+
+  const peakText = safeNumber(peak.count) > 0
+    ? `${weekdays[peakDay] || ''} lúc ${String(peakHour).padStart(2, '0')}:00 với ${formatNumber(peak.count)} lượt`
+    : 'chưa có đỉnh rõ ràng';
+
+  const legend = `
+    <div class="heatmap-legend">
+      <span class="heatmap-legend-title">Ít hơn</span>
+      ${[0, 1, 2, 3, 4, 5].map((lv) => `<span class="heatmap-swatch heatmap-lv${lv}"></span>`).join('')}
+      <span class="heatmap-legend-title">Nhiều hơn</span>
+    </div>`;
+
+  // role="img" + aria-label gọn: đọc 168 ô bằng trình đọc màn hình sẽ nghe lại cả
+  // bảng; dữ liệu đầy đủ vẫn có ở bảng số dự phòng ngay dưới (mở ra bằng
+  // bàn phím được).
+  el.innerHTML = `
+    ${legend}
+    <div class="table-scroll">
+      <div class="heatmap-grid" role="img" aria-label="${escapeHtml(`Nhiệt đồ lượt truy cập theo 7 ngày và 24 giờ, tổng ${formatNumber(total)} lượt. Khung giờ cao điểm nhất: ${peakText}.`)}">
+        <span class="heatmap-label"></span>${hourHeader}
+        ${rows}
+      </div>
+    </div>
+    <p class="card-subtitle" style="margin-top: 10px;">Ô viền đậm là khung giờ cao điểm nhất: ${escapeHtml(peakText)}. Số trên 1.000 được viết gọn (1,2k); số đầy đủ nằm ở rê chuột và trong bảng số bên dưới.</p>`;
+
+  if (!tableEl) return;
+  const headCells = Array.from({ length: 24 }, (_, hour) => `<th scope="col">${String(hour).padStart(2, '0')}</th>`).join('');
+  const bodyRows = matrix.map((row, day) => {
+    const rowTotal = row.reduce((sum, value) => sum + value, 0);
+    let bestHour = 0;
+    row.forEach((value, hour) => {
+      if (value > row[bestHour]) bestHour = hour;
+    });
+    return `
+      <tr>
+        <th scope="row">${weekdayAt(day)}</th>
+        ${row.map((value) => `<td>${formatNumber(value)}</td>`).join('')}
+        <td><strong>${formatNumber(rowTotal)}</strong></td>
+        <td class="heatmap-peak-hour">${String(bestHour).padStart(2, '0')}:00 (${formatNumber(row[bestHour])})</td>
+      </tr>`;
+  }).join('');
+
+  tableEl.innerHTML = `
+    <table class="admin-data-table heatmap-numbers">
+      <caption class="sr-only">Số lượt truy cập theo từng giờ trong tuần — cùng dữ liệu với nhiệt đồ</caption>
+      <thead>
+        <tr><th scope="col">Thứ</th>${headCells}<th scope="col">Tổng</th><th scope="col">Giờ cao nhất</th></tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+}
+
+/** Bỏ biểu đồ cohort cũ trước khi thay innerHTML (canvas bị tách mà Chart.js
+ *  vẫn giữ tham chiếu thì lần vẽ sau sẽ ném lỗi). */
+function destroyCohortChart() {
+  if (!state.charts.cohort) return;
+  state.charts.cohort.destroy();
+  state.charts.cohort = null;
+}
+
+/**
+ * Nhãn ngày của cohort. Server trả chuỗi `YYYY-MM-DD` đã tính theo giờ Việt
+ * Nam nên cắt thẳng từ chuỗi; gọi new Date() sẽ lệch một ngày ở máy đặt múi
+ * giờ âm.
+ */
+function formatCohortDay(value) {
+  const match = String(value ?? '').match(/^\d{4}-(\d{2})-(\d{2})/);
+  if (match) return `${match[2]}/${match[1]}`;
+  return formatDateTime(value);
+}
+
+/**
+ * Khối 3 — "người dùng có quay lại không?". Trả lời bằng dải số (đọc trước) và
+ * biểu đồ theo ngày (nhìn sau): dải số trả lời "giữ chân bao nhiêu", biểu đồ
+ * trả lời "vào ngày nào".
+ */
+function renderCohort(data = {}) {
+  const el = resolveElement('#cohort-chart');
+  if (!el) return;
+  const dayBuckets = Array.isArray(data.dayBuckets) ? data.dayBuckets : [];
+  if (!dayBuckets.length) {
+    destroyCohortChart();
+    renderEmpty(el, 'Chưa có dữ liệu hoạt động theo ngày.', {
+      hint: 'Cần ít nhất một ngày có sinh viên đăng nhập trong mốc thời gian đang chọn.'
+    });
+    return;
+  }
+
+  const totals = data.totals || {};
+  const stickiness = data.stickiness || {};
+  const stats = [
+    { label: 'Người dùng trong kỳ', value: formatNumber(totals.active) },
+    { label: 'Mới', value: formatNumber(totals.new) },
+    { label: 'Quay lại', value: formatNumber(totals.returning) },
+    { label: 'DAU (hôm nay)', value: formatNumber(stickiness.dau) },
+    { label: 'Hoạt động 7 ngày', value: formatNumber(stickiness.wau) },
+    { label: 'Tỷ lệ DAU/WAU', value: formatPercent(safeNumber(stickiness.ratio) * 100) },
+    { label: 'Quay lại sau 7 ngày', value: formatPercent(safeNumber(data.returnRate7d) * 100) }
+  ];
+
+  const statsHtml = stats.map((stat) => `
+    <div class="cohort-stat">
+      <span class="cohort-stat-label">${escapeHtml(stat.label)}</span>
+      <span class="cohort-stat-value">${escapeHtml(stat.value)}</span>
+    </div>`).join('');
+
+  // Canvas chỉ tạo một lần: Chart.js đọc DOM lúc vẽ, nên nếu thay canvas mỗi lần
+  // tự làm mới (15 giây) thì biểu đồ nhấp nháy và dựng lại từ đầu. Dải số thì rẻ,
+  // cứ vẽ lại mỗi lần.
+  const canvas = el.querySelector('#cohort-canvas');
+  if (canvas) {
+    const statsEl = el.querySelector('.cohort-stat-row');
+    if (statsEl) statsEl.innerHTML = statsHtml;
+  } else {
+    el.innerHTML = `
+      <div class="cohort-stat-row">${statsHtml}</div>
+      <div class="chart-wrapper">
+        <canvas id="cohort-canvas" role="img" aria-label="${escapeHtml('Số người dùng hoạt động, mới và quay lại theo từng ngày.')}"></canvas>
+      </div>`;
+  }
+
+  const target = el.querySelector('#cohort-canvas');
+  if (typeof Chart === 'undefined' || !target) return;
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const textColor = isDark ? '#94a3b8' : '#475569';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+  const chartData = {
+    labels: dayBuckets.map((bucket) => formatCohortDay(bucket?.date)),
+    datasets: [
+      {
+        label: 'Hoạt động',
+        data: dayBuckets.map((bucket) => safeNumber(bucket?.active)),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 2
+      },
+      {
+        label: 'Mới',
+        data: dayBuckets.map((bucket) => safeNumber(bucket?.new)),
+        borderColor: '#10b981',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 2
+      },
+      {
+        label: 'Quay lại',
+        data: dayBuckets.map((bucket) => safeNumber(bucket?.returning)),
+        borderColor: '#f59e0b',
+        backgroundColor: 'transparent',
+        borderDash: [4, 3],
+        tension: 0.3,
+        pointRadius: 2
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 11 } }
+      }
+    },
+    scales: {
+      x: { ticks: { color: textColor, maxTicksLimit: 14 }, grid: { color: gridColor } },
+      y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } }
+    }
+  };
+
+  // Cùng cách làm như renderTimelineChart: đổi dữ liệu/tuỳ chọn rồi update() nếu
+  // biểu đồ đã tồn tại, còn không thì mới tạo mới.
+  if (state.charts.cohort) {
+    state.charts.cohort.data = chartData;
+    state.charts.cohort.options = chartOptions;
+    state.charts.cohort.update();
+  } else {
+    state.charts.cohort = new Chart(target, { type: 'line', data: chartData, options: chartOptions });
+  }
+}
+
+/**
+ * Khối 4 — "tính năng nào chậm hoặc hay lỗi?".
+ * Vì sao p95 chứ không phải trung bình: vài request chậm kéo trung bình lệch hẳn,
+ * còn p95 nói "95% yêu cầu nhanh hơn con số này" — đúng ý nghĩa khi cảm nhận
+ * được độ trễ.
+ */
+function renderQuality(data = {}) {
+  const el = resolveElement('#quality-table');
+  if (!el) return;
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) {
+    renderEmpty(el, 'Chưa có số liệu chất lượng cho mốc thời gian đang chọn.', {
+      hint: 'Độ trễ chỉ được ghi khi có request hoàn tất, nên khoảng thời gian quá ngắn có thể chưa có số.'
+    });
+    return;
+  }
+
+  // Màu nhanh/chậm chỉ là trợ giúp: luôn kèm số và chữ để không phải đoán ngưỡng.
+  const latencyCls = (ms) => (ms < 300 ? 'lat-fast' : ms < 800 ? 'lat-med' : 'lat-slow');
+  const overall = data.overall || {};
+  const overallStats = [
+    { label: 'Tổng yêu cầu', value: formatNumber(overall.requests) },
+    { label: 'Tỷ lệ lỗi (4xx/5xx)', value: formatPercent(safeNumber(overall.errorRate) * 100) },
+    { label: 'Độ trễ trung bình', value: formatDurationMs(overall.avgMs) },
+    { label: 'Độ trễ p95', value: formatDurationMs(overall.p95Ms) }
+  ];
+
+  const rows = items.map((item) => {
+    const p95 = safeNumber(item.p95Ms);
+    const label = String(item.label ?? item.id ?? '');
+    return `
+      <tr>
+        <td class="rank-label" title="${escapeHtml(label)}">${escapeHtml(label)}</td>
+        <td class="text-mono">${formatNumber(item.requests)}</td>
+        <td class="text-mono">${formatPercent(safeNumber(item.errorRate) * 100)}</td>
+        <td class="text-mono">${formatDurationMs(item.avgMs)}</td>
+        <td class="text-mono"><span class="latency-badge ${latencyCls(p95)}">${formatDurationMs(p95)}</span></td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="quality-summary">
+      ${overallStats.map((stat) => `
+        <div class="quality-stat">
+          <span class="quality-stat-label">${escapeHtml(stat.label)}</span>
+          <span class="quality-stat-value">${escapeHtml(stat.value)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="table-scroll">
+      <table class="admin-data-table">
+        <caption class="sr-only">Độ trễ và tỷ lệ lỗi theo tính năng</caption>
+        <thead>
+          <tr>
+            <th scope="col">Tính năng</th>
+            <th scope="col">Lượt</th>
+            <th scope="col">Tỷ lệ lỗi</th>
+            <th scope="col">Trung bình</th>
+            <th scope="col">p95</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="card-subtitle" style="margin-top: 10px;">Ngưỡng màu tham chiếu: dưới 300 ms là nhanh, 300–800 ms là chấp nhận được, trên 800 ms là chậm.</p>`;
 }
 
 // 5. Render Detailed Logs
@@ -1671,6 +2164,8 @@ async function init() {
   // Icon của nút đổi theme phải khớp theme đang bật, nếu không lần đầu mở trang
   // sẽ hiện mặt trăng trong khi nền đang sáng (mâu thuẫn với chính nút đó).
   renderThemeToggleIcon(currentTheme());
+  // Tab Insights phải có trạng thái "đang tải" ngay từ đầu, không để trống.
+  renderInsightsSkeleton();
   startAutoRefresh();
   await fetchAllData();
   fetchRoutes();

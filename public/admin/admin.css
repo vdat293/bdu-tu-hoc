@@ -88,6 +88,17 @@
   --accent-green: var(--color-success);
   --accent-amber: var(--color-warning);
   --accent-red: var(--color-destructive);
+
+  /* Thang màu heatmap 6 bậc (0 = rỗng, 5 = cao nhất). Mỗi bậc khai cả nền và
+     màu chữ riêng, và màu chữ ĐÃ ĐO để đạt >= 4.5:1 với chữ trong ô ở CẢ HAI
+     theme — đây là lý do không dùng gradient chung rồi bắt chữ trắng mặc định:
+     #3B82F6 với chữ trắng chỉ đạt 3,7:1 nên bậc 3 phải đậm hơn (#2563EB = 5,2:1). */
+  --heat-0-bg: #EEF2F7; --heat-0-fg: #475569;
+  --heat-1-bg: #DBEAFE; --heat-1-fg: #1E3A8A;
+  --heat-2-bg: #93C5FD; --heat-2-fg: #0F172A;
+  --heat-3-bg: #2563EB; --heat-3-fg: #FFFFFF;
+  --heat-4-bg: #B45309; --heat-4-fg: #FFFFFF;
+  --heat-5-bg: #DC2626; --heat-5-fg: #FFFFFF;
 }
 
 /* ==========================================================================
@@ -130,6 +141,16 @@
   --bg-card-hover: rgba(30, 41, 59, 0.6);
   --border-subtle: rgba(255, 255, 255, 0.04);
   --accent-purple: #a855f7;
+
+  /* Thang màu heatmap (cool → hot) riêng cho theme tối: bậc 3-4 dùng nền sáng hơn
+     (đúng màu token của theme tối) nhưng phải đổi sang chữ TỐI, vì #3B82F6/#D97706
+     với chữ trắng chỉ đạt ~3,2-3,7:1. */
+  --heat-0-bg: rgba(148, 163, 184, 0.14); --heat-0-fg: #94A3B8;
+  --heat-1-bg: rgba(96, 165, 250, 0.26);  --heat-1-fg: #BFDBFE;
+  --heat-2-bg: rgba(96, 165, 250, 0.48);  --heat-2-fg: #EFF6FF;
+  --heat-3-bg: #3B82F6;                   --heat-3-fg: #0B1220;
+  --heat-4-bg: #D97706;                   --heat-4-fg: #0B1220;
+  --heat-5-bg: #DC2626;                   --heat-5-fg: #FFFFFF;
 }
 
 * {
@@ -2025,6 +2046,265 @@ body {
 
   .charts-overview-row {
     gap: 12px;
+  }
+}
+
+/* ==========================================================================
+   TAB INSIGHTS — xếp hạng tính năng, heatmap giờ × thứ, cohort, chất lượng
+   --------------------------------------------------------------------------
+   Vì sao dùng lưới CSS chứ không vẽ heatmap bằng thư viện: 168 ô là dữ liệu
+   tĩnh theo mốc thời gian, CSS grid rẻ hơn nhiều, in được số thật trong từng ô
+   (nên không phải dựa vào màu) và đổi màu theo theme chỉ bằng token.
+   Cột đầu là nhãn thứ; 24 cột sau là 24 giờ trong ngày.
+   ========================================================================== */
+.insight-stack {
+  display: grid;
+  gap: 18px;
+}
+
+/* Thanh tỷ trọng cạnh tên tính năng */
+.rank-bar {
+  height: 6px;
+  width: 100%;
+  min-width: 90px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rank-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  border-radius: 3px;
+}
+
+.rank-index {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  width: 34px;
+}
+
+.rank-label {
+  font-weight: 700;
+  color: var(--text-main);
+  min-width: 160px;
+}
+
+.rank-delta {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rank-bar-cell {
+  min-width: 140px;
+}
+
+/* Chú thích màu + thứ tự đọc của lưới heatmap */
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.heatmap-legend-title {
+  font-weight: 600;
+}
+
+.heatmap-swatch {
+  width: 22px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+  background: var(--heat-bg);
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 84px repeat(24, minmax(28px, 1fr));
+  gap: 2px;
+  /* Ô luôn in số: 24 cột thì phải đủ rộng, còn hẹp quá thì cuộn ngang TRONG
+     khung .table-scroll chứ không làm tràn cả trang (spec mục 4.1). */
+  min-width: 760px;
+}
+
+.heatmap-label,
+.heatmap-hour {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+}
+
+.heatmap-label {
+  justify-content: flex-end;
+  text-align: right;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+.heatmap-hour {
+  justify-content: center;
+}
+
+.heatmap-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 2px;
+  border-radius: 4px;
+  background: var(--heat-bg);
+  color: var(--heat-fg);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  /* Ô không bấm được nên con trỏ chuột để rê chuột vẫn thấy con trỏ trỏ giá trị
+     trong title; nhưng bản thân không có hành vi tương tác để bị kỳ vọng sai. */
+  cursor: help;
+  /* Ô hẹp ~28px: số dài hơn thì cắt bớt chứ không phá lưới (số đầy đủ vẫn có
+     ở title và ở bảng số dự phòng). */
+  overflow: hidden;
+}
+
+.heatmap-cell--zero {
+  opacity: 0.6;
+  font-weight: 500;
+}
+
+/* Ô đỉnh được khoanh viền + dấu mũi tên, không chỉ bằng màu sắc nóng hơn. */
+.heatmap-cell--peak {
+  outline: 2px solid var(--text-main);
+  outline-offset: -2px;
+}
+
+.heatmap-lv0 { --heat-bg: var(--heat-0-bg); --heat-fg: var(--heat-0-fg); }
+.heatmap-lv1 { --heat-bg: var(--heat-1-bg); --heat-fg: var(--heat-1-fg); }
+.heatmap-lv2 { --heat-bg: var(--heat-2-bg); --heat-fg: var(--heat-2-fg); }
+.heatmap-lv3 { --heat-bg: var(--heat-3-bg); --heat-fg: var(--heat-3-fg); }
+.heatmap-lv4 { --heat-bg: var(--heat-4-bg); --heat-fg: var(--heat-4-fg); }
+.heatmap-lv5 { --heat-bg: var(--heat-5-bg); --heat-fg: var(--heat-5-fg); }
+
+/* Bảng số dự phòng: đường đọc dữ liệu khi không phân biệt được màu (in đen trắng,
+   người mù màu, hoặc sao chép số ra Excel). */
+.insight-details {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.insight-details-summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  padding: 6px 0;
+}
+
+.heatmap-numbers .admin-data-table {
+  min-width: 900px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.heatmap-numbers .admin-data-table th,
+.heatmap-numbers .admin-data-table td {
+  padding: 6px 5px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.heatmap-numbers .admin-data-table th:first-child,
+.heatmap-numbers .admin-data-table td:first-child {
+  text-align: left;
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+}
+
+.heatmap-peak-hour {
+  color: var(--color-warning);
+  font-weight: 800;
+}
+
+/* Dải số nhỏ của cohort: câu trả lời đọc trước khi nhìn vào biểu đồ */
+.cohort-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cohort-stat {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card-hover);
+  padding: 8px 10px;
+}
+
+.cohort-stat-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.cohort-stat-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Ô tổng quan chất lượng (đặt trên bảng p95) */
+.quality-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.quality-stat {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card-hover);
+  padding: 10px 12px;
+}
+
+.quality-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.quality-stat-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  /* Lưới heatmap và bảng số chỉ cuộn ngang trong khung của chúng. */
+  .heatmap-grid {
+    min-width: 700px;
+  }
+
+  .cohort-stat-row,
+  .quality-summary {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   }
 }
 

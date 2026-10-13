@@ -41,6 +41,10 @@
           <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
           <span class="nav-label">Biểu Đồ & Xu Hướng</span>
         </button>
+        <button type="button" class="nav-btn" data-tab="insights">
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>
+          <span class="nav-label">Phân Tích Hành Vi Người Dùng</span>
+        </button>
         <button type="button" class="nav-btn" data-tab="logs">
           <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
           <span class="nav-label">Nhật Ký Truy Cập</span>
@@ -259,7 +263,63 @@
           </div>
         </section>
 
-        <!-- 3. Access Logs Tab -->
+        <!-- 3. Insights Tab: phân tích hành vi người dùng (mọi mốc giờ đều theo Asia/Ho_Chi_Minh) -->
+        <section class="tab-pane" id="pane-insights">
+          <div class="insight-stack">
+            <!-- 3.1. Xếp hạng tính năng: "sinh viên dùng gì nhiều nhất?" -->
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Sinh Viên Dùng Tính Năng Nào Nhiều Nhất?</h2>
+                  <p class="card-subtitle">Xếp hạng theo số lượt trong mốc thời gian đang chọn ở thanh trên; cột "So với kỳ trước" so với khoảng dài bằng ngay trước đó.</p>
+                </div>
+              </div>
+              <!-- JS đổ dữ liệu vào đây (xem renderFeatureRanking). -->
+              <div id="feature-ranking"></div>
+            </div>
+
+            <!-- 3.2. Heatmap giờ × thứ: "sinh viên hoạt động vào khung giờ nào?" -->
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Sinh Viên Hoạt Động Vào Khung Giờ Nào?</h2>
+                  <p class="card-subtitle">Lưới 7 ngày × 24 giờ theo giờ Việt Nam; mỗi ô có số lượt, rê chuột hiện chi tiết. Bảng số ở dưới là đường dự phòng khi không đọc được màu.</p>
+                </div>
+              </div>
+              <div id="hours-heatmap"></div>
+              <details class="insight-details">
+                <summary class="insight-details-summary">Xem dạng bảng số (7 ngày × 24 giờ)</summary>
+                <div id="hours-heatmap-table" class="table-scroll"></div>
+              </details>
+            </div>
+
+            <!-- 3.3. Cohort / giữ chân: "người dùng có quay lại không?" -->
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Người Dùng Có Quay Lại Không?</h2>
+                  <p class="card-subtitle">Mỗi cột là một ngày: số người hoạt động, số mới và số quay lại; tỷ lệ quay lại sau 7 ngày nằm trong dải số phía trên biểu đồ.</p>
+                </div>
+              </div>
+              <!-- JS dựng dải số + biểu đồ Chart.js vào đây (xem renderCohort). -->
+              <div id="cohort-chart"></div>
+            </div>
+
+            <!-- 3.4. Chất lượng dịch vụ: "tính năng nào chậm hoặc hay lỗi?" -->
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Tính Năng Nào Chậm Hoặc Hay Lỗi?</h2>
+                  <p class="card-subtitle">Độ trễ p95 = 95% yêu cầu nhanh hơn con số này; dùng p95 vì trung bình bị vài request chậm kéo lệch.</p>
+                </div>
+              </div>
+              <!-- JS đổ dữ liệu vào đây (xem renderQuality). -->
+              <div id="quality-table"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Access Logs Tab -->
         <section class="tab-pane" id="pane-logs">
           <div class="panel-card">
             <div class="card-header">
@@ -355,7 +415,7 @@
           </div>
         </section>
 
-        <!-- 4. Quản Lý Sinh Viên Đã Vào Web (Bảng students trên VPS) -->
+        <!-- 5. Quản Lý Sinh Viên Đã Vào Web (Bảng students trên VPS) -->
         <section class="tab-pane" id="pane-users">
           <!-- Mini KPI Cards for Visitors -->
           <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
@@ -473,7 +533,7 @@
           </div>
         </section>
 
-        <!-- 5. VPS Health & Maintenance Tab -->
+        <!-- 6. VPS Health & Maintenance Tab -->
         <section class="tab-pane" id="pane-system">
           <div class="panel-card" style="margin-bottom: 20px;">
             <div class="card-header">
