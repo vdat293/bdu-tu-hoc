@@ -191,6 +191,16 @@ function cssToken(value) {
   return String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'unknown';
 }
 
+/**
+ * Ép về số hữu hạn, NaN/undefined/null → 0.
+ * Mọi số từ API vào đều phải đi qua đây trước khi định dạng, nếu không
+ * toLocaleString/toFixed sẽ in ra "NaN" thành chữ trên bảng.
+ */
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 /* ==========================================================================
    BỘ ICON SVG DÙNG CHUNG (thay emoji)
    --------------------------------------------------------------------------
@@ -292,29 +302,20 @@ function formatDateTime(value) {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** Biến thể có giây — dùng khi cần phân biệt hai sự kiện rất gần nhau. */
-function formatDateTimeSeconds(value) {
-  if (!value) return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
 /* ==========================================================================
-   TRẠNG THÁI KHỐI DỮ LIỆU DÙNG CHUNG (spec mục 4.1)
+   TRẠNG THÁI KHÔNG DỮ LIỆU DÙNG CHUNG (spec mục 4.1)
    Mọi khối dữ liệu phải có đủ 3 trạng thái: đang tải (skeleton), rỗng (lời
    nhắc) và lỗi (kèm nút thử lại) — KHÔNG để khoảng trắng hoặc lỗi câm.
-   Các helper nhận id hoặc element để dùng được ở mọi tab.
+   Các helper nhận id, selector hoặc element để dùng được ở mọi tab.
    ========================================================================== */
 
+/** Chấp nhận "#id", ".class", "id" thuần hoặc sẵn là element. */
 function resolveElement(target) {
   if (!target) return null;
-  if (typeof target === 'string') {
-    return document.getElementById(target)
-      || document.querySelector(target.startsWith('.') ? target : null);
-  }
-  return target;
+  if (typeof target !== 'string') return target;
+  const key = target.trim();
+  if (key.startsWith('#') || key.startsWith('.')) return document.querySelector(key);
+  return document.getElementById(key);
 }
 
 /**

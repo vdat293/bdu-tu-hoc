@@ -382,7 +382,10 @@ body {
   gap: 16px;
 }
 
-.btn-sidebar-toggle {
+/* Nút mở sidebar trên điện thoại: chỉ hiện dưới 900px (rule mở nằm trong
+   @media ở cuối file). Phải bọc thêm .admin-topbar để thắng .icon-btn khai
+   báo sau ở đây — cùng specificity thì rule nào viết sau sẽ thắng. */
+.admin-topbar .btn-sidebar-toggle {
   display: none;
   background: transparent;
   border: none;
@@ -1803,8 +1806,8 @@ body {
     margin-left: 0;
   }
 
-  .btn-sidebar-toggle {
-    display: block;
+  .admin-topbar .btn-sidebar-toggle {
+    display: inline-flex;
   }
 
   .admin-topbar {

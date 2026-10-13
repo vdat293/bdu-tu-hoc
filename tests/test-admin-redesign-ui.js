@@ -114,6 +114,7 @@ check('sidebar và topbar dùng inline SVG, không còn emoji', () => {
 
 check('helper định dạng và trạng thái dùng chung đã có trong admin.js', () => {
   for (const fnName of [
+    'safeNumber',
     'formatNumber',
     'formatPercent',
     'formatDurationMs',
@@ -124,6 +125,10 @@ check('helper định dạng và trạng thái dùng chung đã có trong admin.
   ]) {
     assert.match(adminJs, new RegExp(`function ${fnName}\\(`), `admin.js thiếu helper ${fnName}`);
   }
+  // safeNumber là nền của cả nhóm: formatNumber/formatDurationMs gọi nó. Nếu ai
+  // đó xoá nhầm (đã xảy ra ở vòng implementer đầu) thì mọi tab gọi tới đều vỡ
+  // bằng ReferenceError lúc chạy chứ không phải lúc test — nên ghim riêng ra.
+  assert.match(adminJs, /function safeNumber\(value\)/, 'admin.js phải giữ hàm safeNumber(value)');
 });
 
 check('id cũ của tab Hệ thống vẫn được giữ nguyên', () => {
