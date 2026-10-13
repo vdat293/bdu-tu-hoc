@@ -86,6 +86,7 @@ try {
     resetCalls();
     stubGet(null);
     const status = await ServiceLockService.getStatus();
+    assert.deepEqual(getCalls[0], [SERVICE_LOCK_SETTING_KEY]);
     assert.deepEqual(Object.keys(status.groups).sort(), [...LOCKABLE_FEATURE_IDS].sort());
     for (const id of LOCKABLE_FEATURE_IDS) {
       assert.deepEqual(status.groups[id], {
@@ -149,6 +150,31 @@ try {
     );
   });
 
+  await check('getAdminStatus chưa có bản ghi thì metadata null và dùng default', async () => {
+    resetCalls();
+    stubGetRecord(null);
+    const data = await ServiceLockService.getAdminStatus();
+    assert.deepEqual(Object.keys(data.groups).sort(), [...LOCKABLE_FEATURE_IDS].sort());
+    for (const id of LOCKABLE_FEATURE_IDS) {
+      assert.equal(data.groups[id].locked, false);
+    }
+    assert.equal(data.updated_at, null);
+    assert.equal(data.updated_by, null);
+  });
+
+  await check('getAdminStatus fail-open khi DB lỗi', async () => {
+    resetCalls();
+    SystemSettingsService.getRecord = async () => {
+      throw new Error('DB đang lỗi');
+    };
+    const data = await ServiceLockService.getAdminStatus();
+    assert.equal(data.groups.vocab.locked, false);
+    assert.equal(data.groups.vocab.title, DEFAULT_TITLE);
+    assert.equal(data.catalog.length, 10);
+    assert.equal(data.updated_at, null);
+    assert.equal(data.updated_by, null);
+  });
+
   await check('setGroupStatus ghi đúng nhóm và trim chuỗi', async () => {
     resetCalls();
     stubGet({ groups: {} });
@@ -182,6 +208,24 @@ try {
     assert.equal(saved.groups.wordfmt.locked, true);
     assert.equal(saved.groups.wordfmt.title, 'W');
     assert.equal(saved.groups.vocab.locked, true);
+  });
+
+  await check('setGroupStatus trên bản ghi legacy không mở oan nhóm khác', async () => {
+    resetCalls();
+    stubGet({ locked: true, title: 'T', message: 'M' });
+    stubSet({ value: {}, updated_at: null, updated_by: 'ADMIN' });
+    await ServiceLockService.setGroupStatus({ group: 'vocab', locked: false }, 'ADMIN');
+    const saved = setCalls[0][1];
+    // Vì sao assert đủ 10 khoá: bản ghi cũ khóa toàn site, nếu merge chỉ ghi nhóm
+    // vừa sửa thì 9 nhóm còn lại mất trạng thái khóa (tự mở oan sau deploy).
+    assert.deepEqual(Object.keys(saved.groups).sort(), [...LOCKABLE_FEATURE_IDS].sort());
+    assert.equal(saved.groups.vocab.locked, false);
+    for (const id of LOCKABLE_FEATURE_IDS) {
+      if (id === 'vocab') continue;
+      assert.equal(saved.groups[id].locked, true);
+      assert.equal(saved.groups[id].title, 'T');
+      assert.equal(saved.groups[id].message, 'M');
+    }
   });
 
   await check('setGroupStatus từ chối group lạ (portal và xxx)', async () => {
