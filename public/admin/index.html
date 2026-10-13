@@ -603,12 +603,8 @@
             <div class="card-header">
               <div>
                 <h2 class="card-title">Khóa Dịch Vụ Bảo Trì</h2>
-                <p class="card-subtitle">Bật để đưa toàn bộ người dùng sang màn hình bảo trì; tắt để mở lại ngay</p>
+                <p class="card-subtitle">Bật công tắc của nhóm nào thì trang thuộc nhóm đó hiện màn hình bảo trì; các nhóm còn lại hoạt động bình thường</p>
               </div>
-              <label class="switch" title="Bật/tắt khóa dịch vụ bảo trì">
-                <input type="checkbox" id="service-lock-toggle" aria-label="Bật tắt khóa dịch vụ bảo trì" />
-                <span class="slider"></span>
-              </label>
             </div>
             <div class="system-metrics-row">
               <div class="sys-card">
@@ -622,20 +618,38 @@
                 <span class="sys-sub" id="service-lock-updated-sub">--</span>
               </div>
             </div>
-            <div class="service-lock-form">
-              <label class="service-lock-field">
-                <span class="sys-label">Tiêu đề màn hình bảo trì</span>
-                <input type="text" id="service-lock-title" class="service-lock-input" maxlength="120"
-                  placeholder="Dịch vụ đang tạm khóa để bảo trì" />
-              </label>
-              <label class="service-lock-field">
-                <span class="sys-label">Nội dung thông báo</span>
-                <textarea id="service-lock-message" class="service-lock-input" rows="2" maxlength="500"
-                  placeholder="Hệ thống đang bảo trì, vui lòng quay lại sau."></textarea>
-              </label>
-            </div>
+            <!-- Danh sách công tắc theo nhóm do admin.js dựng động từ
+              GET /api/admin/dashboard/service-lock (catalog + groups). Mỗi dòng
+              nhân bản từ mẫu dưới nên id service-lock-* cũ vẫn còn trong mẫu. -->
+            <div class="service-lock-list" id="service-lock-list" aria-live="polite"></div>
+            <template id="service-lock-row-template">
+              <div class="service-lock-row" data-group="">
+                <div class="service-lock-row-head">
+                  <div class="service-lock-row-heading">
+                    <span class="service-lock-group-label">Nhóm dịch vụ</span>
+                    <span class="sys-sub service-lock-row-state">--</span>
+                  </div>
+                  <label class="switch service-lock-row-switch" title="Bật/tắt khóa nhóm dịch vụ này">
+                    <input type="checkbox" id="service-lock-toggle" class="service-lock-row-toggle" aria-label="Bật tắt khóa nhóm dịch vụ" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div class="service-lock-form">
+                  <label class="service-lock-field">
+                    <span class="sys-label">Tiêu đề màn hình bảo trì</span>
+                    <input type="text" id="service-lock-title" class="service-lock-input service-lock-row-title" maxlength="120"
+                      placeholder="Dịch vụ đang tạm khóa để bảo trì" />
+                  </label>
+                  <label class="service-lock-field">
+                    <span class="sys-label">Nội dung thông báo</span>
+                    <textarea id="service-lock-message" class="service-lock-input service-lock-row-message" rows="2" maxlength="500"
+                      placeholder="Hệ thống đang bảo trì, vui lòng quay lại sau."></textarea>
+                  </label>
+                </div>
+              </div>
+            </template>
             <p class="maintenance-info-content system-note">
-              Để trống ô nội dung sẽ dùng thông báo mặc định. Khi bật khóa, các kết nối realtime đang mở sẽ bị đóng để mọi người nhận màn hình bảo trì ngay.
+              Để trống ô nội dung sẽ dùng thông báo mặc định. Chỉ nhóm Community khi bị khóa mới đóng các kết nối realtime đang mở; các nhóm khác chỉ chặn API và trang của đúng nhóm đó.
             </p>
           </div>
 

@@ -48,10 +48,14 @@ const state = {
   rankingToggleBusy: false,
   rankingSync: null,
   rankingSyncMutationAt: 0,
-  serviceLockBusy: false,
+  serviceLockBusy: new Set(),
   serviceLock: null,
   serviceLockMutationAt: 0,
-  serviceLockDirty: false
+  // Nhóm đang được admin gõ tiêu đề/nội dung mà chưa lưu; auto-refresh (mỗi
+  // 15 giây) phải bỏ qua ô nhập của đúng nhóm đó để không ghi đè nội dung
+  // chưa kịp lưu. Vì sao là Set theo group: mỗi dòng có ô nhập riêng nên cờ
+  // boolean chung cũ sẽ chặn refresh cả 10 dòng chỉ vì 1 dòng đang sửa.
+  serviceLockDirty: new Set()
 };
 
 // DOM References
@@ -189,14 +193,14 @@ const dom = {
   rankingSyncNext: document.getElementById('ranking-sync-next'),
   rankingSyncNextSub: document.getElementById('ranking-sync-next-sub'),
 
-  // Service lock toggle (tab System)
-  serviceLockToggle: document.getElementById('service-lock-toggle'),
+  // Service lock theo nhóm (tab System): danh sách dòng dựng động từ
+  // GET /api/admin/dashboard/service-lock (catalog + groups).
+  serviceLockList: document.getElementById('service-lock-list'),
+  serviceLockRowTemplate: document.getElementById('service-lock-row-template'),
   serviceLockState: document.getElementById('service-lock-state'),
   serviceLockStateSub: document.getElementById('service-lock-state-sub'),
   serviceLockUpdated: document.getElementById('service-lock-updated'),
-  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub'),
-  serviceLockTitle: document.getElementById('service-lock-title'),
-  serviceLockMessage: document.getElementById('service-lock-message')
+  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub')
 };
 
 let currentSelectedLog = null;
@@ -2564,31 +2568,54 @@ if (dom.rankingSyncToggle) {
   });
 }
 
-// Service lock toggle (tab System)
+// Danh sách công tắc khóa dịch vụ theo nhóm (tab System).
+// Vì sao dựng động: số nhóm lấy từ API (catalog) nên thêm/bớt nhóm ở backend
+// không phải sửa markup; mỗi dòng gồm nhãn nhóm + switch + ô tiêu đề/nội dung
+// + trạng thái riêng, và PUT đúng một nhóm { group, locked, title, message }.
 function renderServiceLock(data, requestedAt = Date.now()) {
-  if (!dom.serviceLockToggle || !data || state.serviceLockBusy) return;
+  const listEl = dom.serviceLockList;
+  if (!listEl || !data || !Array.isArray(data.catalog) || !data.groups) return;
   // Bỏ qua payload cũ nếu admin vừa bấm công tắc sau khi request được gửi.
   if (requestedAt < state.serviceLockMutationAt) return;
   state.serviceLock = data;
 
-  const locked = Boolean(data.locked);
-  dom.serviceLockToggle.checked = locked;
+  // Cập nhật tại chỗ từng dòng thay vì vẽ lại cả danh sách: vẽ lại sẽ cướp
+  // focus của ô admin đang gõ mỗi lần auto-refresh chạy (mỗi 15 giây).
+  const seen = new Set();
+  for (const item of data.catalog) {
+    const group = item && typeof item.id === 'string' ? item.id : '';
+    if (!group || seen.has(group)) continue;
+    seen.add(group);
+    const label = item.label || group;
+    let rowEl = listEl.querySelector(`[data-group="${cssToken(group)}"]`);
+    if (!rowEl) {
+      rowEl = buildServiceLockRow(group, label);
+      if (!rowEl) continue;
+      listEl.appendChild(rowEl);
+    }
+    updateServiceLockRow(rowEl, group, label, data.groups[group] || {});
+  }
+  // Dọn dòng thừa nếu backend bớt nhóm (không bao giờ xóa ô đang sửa dở).
+  for (const rowEl of [...listEl.children]) {
+    if (rowEl.dataset && rowEl.dataset.group && !seen.has(rowEl.dataset.group)) {
+      rowEl.remove();
+    }
+  }
 
-  dom.serviceLockState.textContent = locked ? '● Đang khóa' : '● Đang mở';
-  dom.serviceLockState.className = locked ? 'sys-val text-red' : 'sys-val text-green';
+  const lockedCount = [...seen].filter(
+    (group) => data.groups[group] && data.groups[group].locked === true
+  ).length;
+  if (dom.serviceLockState) {
+    dom.serviceLockState.textContent = lockedCount > 0
+      ? `● Đang khóa ${lockedCount}/${seen.size} nhóm`
+      : '● Đang mở toàn bộ';
+    dom.serviceLockState.className = lockedCount > 0 ? 'sys-val text-red' : 'sys-val text-green';
+  }
   if (dom.serviceLockStateSub) {
-    dom.serviceLockStateSub.textContent = locked
-      ? 'Người dùng đang thấy màn hình bảo trì'
-      : 'Dịch vụ hoạt động bình thường';
+    dom.serviceLockStateSub.textContent = lockedCount > 0
+      ? 'Trang thuộc nhóm bị khóa đang thấy màn hình bảo trì'
+      : 'Mọi dịch vụ hoạt động bình thường';
   }
-
-  // Chỉ nạp lại ô nhập khi admin chưa gõ gì kể từ lần lưu trước, để auto-refresh
-  // (mỗi 15 giây) không ghi đè nội dung admin vừa nhập mà chưa kịp lưu.
-  if (!state.serviceLockDirty) {
-    if (dom.serviceLockTitle) dom.serviceLockTitle.value = data.title || '';
-    if (dom.serviceLockMessage) dom.serviceLockMessage.value = data.message || '';
-  }
-
   if (dom.serviceLockUpdated) {
     dom.serviceLockUpdated.textContent = data.updated_at ? formatDateTime(data.updated_at) : '--';
   }
@@ -2599,54 +2626,114 @@ function renderServiceLock(data, requestedAt = Date.now()) {
   }
 }
 
-// Đánh dấu "đang sửa" để auto-refresh không ghi đè nội dung chưa lưu.
-if (dom.serviceLockTitle) {
-  dom.serviceLockTitle.addEventListener('input', () => { state.serviceLockDirty = true; });
-}
-if (dom.serviceLockMessage) {
-  dom.serviceLockMessage.addEventListener('input', () => { state.serviceLockDirty = true; });
+// Nhân bản một dòng từ <template>, đổi id theo group để <label> vẫn trỏ đúng
+// ô nhập và không trùng id giữa các dòng. Vì sao query theo class rồi mới đặt
+// id: id trong mẫu là cố định nên không thể query trực tiếp theo group.
+function buildServiceLockRow(group, label) {
+  const template = dom.serviceLockRowTemplate;
+  if (!template || !template.content) return null;
+  const fragment = template.content.cloneNode(true);
+  const rowEl = fragment.querySelector('.service-lock-row');
+  if (!rowEl) return null;
+  const safe = cssToken(group);
+  rowEl.dataset.group = group;
+  const labelEl = rowEl.querySelector('.service-lock-group-label');
+  // Nhãn từ server gán qua textContent (không parse HTML) nên không cần
+  // escapeHtml mà vẫn an toàn XSS; id hậu tố đi qua cssToken để chắc chắn
+  // là slug hợp lệ, tránh chèn ký tự lạ vào thuộc tính id.
+  if (labelEl) labelEl.textContent = label;
+  const toggle = rowEl.querySelector('.service-lock-row-toggle');
+  if (toggle) {
+    toggle.id = `service-lock-toggle-${safe}`;
+    toggle.setAttribute('aria-label', `Bật tắt khóa nhóm ${label}`);
+  }
+  const titleInput = rowEl.querySelector('.service-lock-row-title');
+  if (titleInput) {
+    titleInput.id = `service-lock-title-${safe}`;
+    titleInput.addEventListener('input', () => { state.serviceLockDirty.add(group); });
+  }
+  const messageInput = rowEl.querySelector('.service-lock-row-message');
+  if (messageInput) {
+    messageInput.id = `service-lock-message-${safe}`;
+    messageInput.addEventListener('input', () => { state.serviceLockDirty.add(group); });
+  }
+  bindServiceLockToggle(rowEl, group, label);
+  return rowEl;
 }
 
-if (dom.serviceLockToggle) {
-  dom.serviceLockToggle.addEventListener('change', async () => {
-    const locked = dom.serviceLockToggle.checked;
+// Đổ trạng thái của một nhóm vào dòng đã có. Ô nhập chỉ nạp lại khi admin chưa
+// gõ gì ở dòng đó kể từ lần lưu trước (cờ dirty theo group), để auto-refresh
+// không ghi đè nội dung chưa kịp lưu; công tắc đang gửi PUT thì giữ nguyên để
+// không giật ngược tay admin.
+function updateServiceLockRow(rowEl, group, label, entry) {
+  const locked = entry.locked === true;
+  const toggle = rowEl.querySelector('.service-lock-row-toggle');
+  if (toggle && !state.serviceLockBusy.has(group)) {
+    toggle.checked = locked;
+  }
+  const stateEl = rowEl.querySelector('.service-lock-row-state');
+  if (stateEl) {
+    stateEl.textContent = locked ? 'Đang khóa — người dùng thấy màn hình bảo trì' : 'Đang mở';
+    stateEl.className = locked
+      ? 'sys-sub service-lock-row-state text-red'
+      : 'sys-sub service-lock-row-state text-green';
+  }
+  if (!state.serviceLockDirty.has(group)) {
+    const titleInput = rowEl.querySelector('.service-lock-row-title');
+    // Giá trị từ server gán qua .value (không parse HTML) nên an toàn XSS mà
+    // không cần escapeHtml; dùng escapeHtml ở đây sẽ hiện sai chữ (&amp;).
+    if (titleInput) titleInput.value = entry.title || '';
+    const messageInput = rowEl.querySelector('.service-lock-row-message');
+    if (messageInput) messageInput.value = entry.message || '';
+  }
+}
 
-    // Chỉ hỏi xác nhận khi BẬT khóa: khóa dịch vụ sẽ đá toàn bộ người dùng đang
-    // online sang màn hình bảo trì, còn mở khóa thì an toàn nên không cần hỏi.
+// Handler công tắc của một dòng: PUT đúng nhóm đó rồi vẽ lại từ dữ liệu server
+// trả về (server là nguồn sự thật, tránh lệch với validate/maxlength ở backend).
+function bindServiceLockToggle(rowEl, group, label) {
+  const serviceLockToggle = rowEl.querySelector('.service-lock-row-toggle');
+  if (!serviceLockToggle) return;
+  serviceLockToggle.addEventListener('change', async () => {
+    const locked = serviceLockToggle.checked;
+
+    // Chỉ hỏi xác nhận khi BẬT khóa: khóa nhóm sẽ đá người dùng đang xem trang
+    // của nhóm sang màn hình bảo trì, còn mở khóa thì an toàn nên không cần hỏi.
     if (locked) {
       const ok = window.confirm(
-        'Khóa dịch vụ sẽ đưa toàn bộ người dùng đang truy cập sang màn hình bảo trì. Tiếp tục?'
+        `Khóa nhóm "${label}" sẽ đưa người dùng đang xem trang của nhóm này sang màn hình bảo trì. Tiếp tục?`
       );
       if (!ok) {
-        dom.serviceLockToggle.checked = false;
+        serviceLockToggle.checked = false;
         return;
       }
     }
 
     // Ô nhập trống gửi '' (KHÔNG phải null) để API hiểu là dùng nội dung mặc định;
     // gửi null sẽ bị 400.
-    const title = dom.serviceLockTitle ? dom.serviceLockTitle.value.trim() : '';
-    const message = dom.serviceLockMessage ? dom.serviceLockMessage.value.trim() : '';
+    const titleInput = rowEl.querySelector('.service-lock-row-title');
+    const messageInput = rowEl.querySelector('.service-lock-row-message');
+    const title = titleInput ? titleInput.value.trim() : '';
+    const message = messageInput ? messageInput.value.trim() : '';
 
-    state.serviceLockBusy = true;
-    dom.serviceLockToggle.disabled = true;
+    state.serviceLockBusy.add(group);
+    serviceLockToggle.disabled = true;
     try {
       const data = await api('/api/admin/dashboard/service-lock', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locked, title, message })
+        body: JSON.stringify({ group, locked, title, message })
       });
       state.serviceLockMutationAt = Date.now();
-      state.serviceLockBusy = false;
-      state.serviceLockDirty = false;
+      state.serviceLockBusy.delete(group);
+      state.serviceLockDirty.delete(group);
       renderServiceLock(data, state.serviceLockMutationAt);
-      showToast(locked ? 'Đã khóa dịch vụ để bảo trì.' : 'Đã mở khóa dịch vụ.', 'success');
+      showToast(locked ? `Đã khóa nhóm ${label} để bảo trì.` : `Đã mở khóa nhóm ${label}.`, 'success');
     } catch (err) {
-      state.serviceLockBusy = false;
-      dom.serviceLockToggle.checked = !locked;
+      state.serviceLockBusy.delete(group);
+      serviceLockToggle.checked = !locked;
       showToast(err.message || 'Không lưu được trạng thái khóa dịch vụ.', 'error');
     } finally {
-      dom.serviceLockToggle.disabled = false;
+      serviceLockToggle.disabled = false;
     }
   });
 }

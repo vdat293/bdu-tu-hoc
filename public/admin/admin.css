@@ -1508,6 +1508,57 @@ body {
   border-color: var(--accent-blue);
 }
 
+/* Danh sách công tắc khóa theo nhóm (tab System): mỗi dòng là một thẻ viền
+mỏng để tách các nhóm khi quét nhanh, tái dùng .service-lock-form có sẵn cho
+hai ô nhập nên không nhân bản rule. */
+.service-lock-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.service-lock-row {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card-hover);
+}
+
+.service-lock-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-lock-row-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.service-lock-group-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Nới vùng bấm của công tắc theo dòng lên ~44px để dễ chạm trên mobile mà
+không đổi kích thước mắt thấy của .switch dùng chung. */
+.service-lock-row-switch {
+  padding: 8px;
+  margin: -8px;
+}
+
+.service-lock-row-state.text-green { color: var(--accent-green); }
+
+.service-lock-row-state.text-red { color: var(--accent-red); }
+
+.service-lock-row .service-lock-form {
+  margin-top: 10px;
+}
+
 .sys-sub {
   font-size: 0.75rem;
   color: var(--text-muted);
