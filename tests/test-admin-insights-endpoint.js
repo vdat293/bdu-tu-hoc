@@ -79,6 +79,8 @@ try {
     );
     assert.equal(res.statusCode, 200, 'phải trả 200');
     assert.equal(received && received.mssv, 'SV1', 'service phải nhận mssv đã viết hoa');
+    assert.equal(received && received.timeRange, '7d', 'service phải nhận timeRange từ query');
+    assert.equal(received && received.limit, '50', 'service phải nhận limit từ query');
   });
 
   await check('GET journey khi student null vẫn trả 200, không 404', async () => {
@@ -125,6 +127,15 @@ try {
         `thiếu route ${routePath} trong src/routes/admin.routes.js`
       );
     }
+    // Vì sao khoá vị trí: Express khớp theo thứ tự đăng ký; nếu 5 route insights
+    // nằm TRÊN `router.use('/admin/dashboard', ...)` thì guard requireAdmin bị
+    // qua mặt và endpoint thành công cộng. Hai assert dưới bắt đúng thứ tự này.
+    const guardPos = source.indexOf("router.use('/admin/dashboard'");
+    const lockPos = source.indexOf("router.put('/admin/dashboard/service-lock'");
+    const featuresPos = source.indexOf('insights/features');
+    assert.ok(guardPos !== -1 && lockPos !== -1 && featuresPos !== -1, 'phải tìm thấy guard, service-lock và insights trong file route');
+    assert.ok(featuresPos > guardPos, 'route insights phải nằm SAU guard requireAdmin');
+    assert.ok(featuresPos > lockPos, 'route insights phải nằm SAU PUT /admin/dashboard/service-lock');
   });
 } finally {
   TrafficInsightsService.getFeatures = originals.getFeatures;
