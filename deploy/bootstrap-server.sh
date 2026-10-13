@@ -44,6 +44,13 @@ psql_q() { docker compose exec -T postgres sh -c "$1" | tr -d '\r'; }
 
 cd "$APP_DIR" || die "Không vào được APP_DIR=$APP_DIR"
 
+# docker compose tự đọc .env, nhưng script cũng cần vài biến để dựng tham số.
+# Đọc tường minh thay vì `source .env` để tránh thực thi nội dung lạ trong file.
+POSTGRES_DB="$(grep -m1 '^POSTGRES_DB=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+POSTGRES_USER="$(grep -m1 '^POSTGRES_USER=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+[ -n "${POSTGRES_DB:-}" ] && [ -n "${POSTGRES_USER:-}" ] \
+  || die "Thiếu POSTGRES_DB/POSTGRES_USER trong .env."
+
 # -----------------------------------------------------------------------------
 # 1. Điều kiện
 # -----------------------------------------------------------------------------
