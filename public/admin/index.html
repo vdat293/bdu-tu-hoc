@@ -85,13 +85,15 @@
 
         <div class="topbar-right">
           <!-- Time Range Buttons -->
-          <div class="time-range-group" id="time-range-group">
-            <button type="button" class="range-pill" data-range="1h">1H</button>
-            <button type="button" class="range-pill" data-range="6h">6H</button>
-            <button type="button" class="range-pill active" data-range="24h">24H</button>
-            <button type="button" class="range-pill" data-range="7d">7D</button>
-            <button type="button" class="range-pill" data-range="30d">30D</button>
-            <button type="button" class="range-pill" data-range="all">ALL</button>
+          <!-- aria-pressed để trình đọc màn hình đọc được mốc nào đang bật,
+               giống hệt nhóm chip Nhật ký; admin.js cập nhật theo class .active. -->
+          <div class="time-range-group" id="time-range-group" role="group" aria-label="Chọn mốc thời gian">
+            <button type="button" class="range-pill" data-range="1h" aria-pressed="false">1H</button>
+            <button type="button" class="range-pill" data-range="6h" aria-pressed="false">6H</button>
+            <button type="button" class="range-pill active" data-range="24h" aria-pressed="true">24H</button>
+            <button type="button" class="range-pill" data-range="7d" aria-pressed="false">7D</button>
+            <button type="button" class="range-pill" data-range="30d" aria-pressed="false">30D</button>
+            <button type="button" class="range-pill" data-range="all" aria-pressed="false">ALL</button>
           </div>
 
           <!-- Auto Refresh Selector -->
@@ -658,8 +660,10 @@
   </div>
 
   <!-- Modal 1: Request Inspector / Log Detail Modal -->
+  <!-- role/aria-modal/aria-labelledby đặt trên .modal-card (hộp thoại thật),
+       không phải trên .modal-overlay vì lớp overlay chỉ là nền phủ. -->
   <div class="modal-overlay" id="modal-log-detail" style="display: none;">
-    <div class="modal-card">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-log-title">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="modal-log-title">Chi Tiết Nhật Ký Yêu Cầu</h3>
@@ -684,7 +688,7 @@
 
   <!-- Modal 2: Admin Auth / Key Gate Modal -->
   <div class="modal-overlay" id="modal-auth-gate" style="display: none;">
-    <div class="modal-card modal-card-auth">
+    <div class="modal-card modal-card-auth" role="dialog" aria-modal="true" aria-labelledby="modal-auth-title">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="modal-auth-title">
@@ -724,7 +728,7 @@
 
   <!-- Modal 3: Purge Logs Modal -->
   <div class="modal-overlay" id="modal-purge-logs" style="display: none;">
-    <div class="modal-card">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-purge-title">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="modal-purge-title">
@@ -773,7 +777,7 @@
 
   <!-- Modal 4: Student API Activity Trace -->
   <div class="modal-overlay" id="modal-student-activity" style="display: none;">
-    <div class="modal-card modal-card-wide">
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="student-activity-title">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="student-activity-title">Dấu Vết API Theo Sinh Viên</h3>
@@ -829,7 +833,7 @@
        gian đã gom theo phiên (do backend tách ở mốc 30 phút) và chuyển trang
        thường gặp. -->
   <div class="modal-overlay" id="modal-journey" style="display: none;">
-    <div class="modal-card modal-card-wide">
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="journey-title">
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="journey-title">Hành Trình Của Sinh Viên</h3>

@@ -584,16 +584,28 @@ function switchTab(tabId) {
 }
 
 // Time Range Controls
+// aria-pressed được ghi theo class .active để trình đọc màn hình đọc được
+// mốc nào đang bật (không dựa vào màu — spec mục 4.1); giống hệt nhóm chip
+// Nhật ký nên hai bộ lọc có cùng cách báo trạng thái.
+function syncRangePillStates() {
+  dom.rangePills.forEach((pill) => {
+    pill.setAttribute('aria-pressed', String(pill.classList.contains('active')));
+  });
+}
+
 dom.rangePills.forEach((pill) => {
   pill.addEventListener('click', () => {
     dom.rangePills.forEach((p) => p.classList.remove('active'));
     pill.classList.add('active');
+    syncRangePillStates();
     state.timeRange = pill.getAttribute('data-range');
     state.logFilters.page = 1;
     fetchAllData();
     fetchRoutes();
   });
 });
+
+syncRangePillStates();
 
 // Auto-Refresh
 dom.selectRefreshRate.addEventListener('change', (e) => {
@@ -992,15 +1004,17 @@ function renderDevices(data = {}) {
   }
 
   const chip = (row) => `<div class="breakdown-chip"><span>${escapeHtml(row.name)}</span><span class="chip-val">${formatNumber(row.count)}</span></div>`;
+  // Nhãn nhóm là h3 (không phải div trơn) để trình đọc màn hình đi đúng phân
+  // cấp: h2 tiêu đề khối "Sinh Viên Xem Trang Bằng Máy Gì?" -> h3 nhóm con.
   osEl.innerHTML = `
     ${os.length ? `
       <div class="breakdown-group">
-        <div class="breakdown-group-title">Hệ Điều Hành</div>
+        <h3 class="breakdown-group-title">Hệ Điều Hành</h3>
         <div class="pills-wrap">${os.map(chip).join('')}</div>
       </div>` : ''}
     ${browsers.length ? `
       <div class="breakdown-group" style="margin-top: 10px;">
-        <div class="breakdown-group-title">Trình Duyệt</div>
+        <h3 class="breakdown-group-title">Trình Duyệt</h3>
         <div class="pills-wrap">${browsers.map(chip).join('')}</div>
       </div>` : ''}
   `;
@@ -1505,9 +1519,11 @@ function renderLogs(logsData = {}) {
   const logs = logsData.logs || [];
   const p = logsData.pagination || { total: 0, page: 1, limit: 50, totalPages: 1 };
 
-  dom.logsTotalCount.textContent = `${p.total.toLocaleString()} bản ghi`;
-  dom.badgeTotalLogs.textContent = p.total.toLocaleString();
-  dom.paginationInfo.textContent = `Trang ${p.page} / ${p.totalPages} (Tổng ${p.total.toLocaleString()})`;
+  // Cùng một số phải hiện ra cùng một kiểu ở mọi tab: dùng helper chung thay vì
+  // .toLocaleString() trần (locale của trình duyệt có thể khác nhau).
+  dom.logsTotalCount.textContent = `${formatNumber(p.total)} bản ghi`;
+  dom.badgeTotalLogs.textContent = formatNumber(p.total);
+  dom.paginationInfo.textContent = `Trang ${p.page} / ${p.totalPages} (Tổng ${formatNumber(p.total)})`;
 
   dom.btnPagePrev.disabled = p.page <= 1;
   dom.btnPageNext.disabled = p.page >= p.totalPages;
@@ -1591,7 +1607,7 @@ const COPIED_ICON = `${renderIcon('check', 'svg-icon svg-icon--sm')}<span>Đã c
 function openLogDetailModal(log) {
   currentSelectedLog = log;
   dom.modalLogTitle.textContent = `Yêu Cầu #${log.id} • ${log.method} ${log.statusCode}`;
-  dom.modalLogTime.textContent = new Date(log.createdAt).toLocaleString();
+  dom.modalLogTime.textContent = formatDateTime(log.createdAt);
 
   const hasQuery = log.query && Object.keys(log.query).length > 0;
   const queryJson = hasQuery ? JSON.stringify(log.query, null, 2) : '';
@@ -1732,9 +1748,16 @@ function labelForTimeRange(range) {
 // mục 6.2e) và được dùng lại cho câu nhắc khi `truncated` bật, để người đọc
 // không phải tự đoán bản sự kiện bị cắt ở mốc nào.
 const JOURNEY_EVENT_LIMIT = 200;
-// Hành trình cố định 7 ngày thay vì bám mốc thời gian ở topbar: mốc mặc định
-// 24h thường rỗng với một sinh viên, mà một hành trình rỗng thì vô nghĩa.
-const JOURNEY_TIME_RANGE = '7d';
+
+/**
+ * Mốc thời gian ĐÃ DÙNG để tải hành trình hiện tại.
+ *
+ * Vì sao nhớ riêng thay vì đọc thẳng `state.timeRange` lúc vẽ: người đọc có
+ * thể đổi mốc ở topbar khi modal đang mở, lúc đó nhãn "7 ngày qua" in ra sẽ
+ * không còn khớp với dữ liệu đang hiển thị. Ghi lại lúc mở và dùng lại cho mọi
+ * nhãn giữ một bản hiển thị luôn nói đúng với đúng dữ liệu đó.
+ */
+let journeyTimeRange = '24h';
 
 /**
  * Mở "Hành trình" của một sinh viên: gọi
@@ -1747,10 +1770,17 @@ async function openJourney(mssv) {
   const cleanMssv = String(mssv ?? '').trim();
   currentJourneyMssv = cleanMssv;
 
+  // Bám đúng mốc thời gian ở topbar như modal Dấu vết API (spec mục 4.1: bộ lọc
+  // ở topbar giữ nguyên khi chuyển tab, mọi màn đọc cùng một mốc). Trước đây
+  // modal này cố định 7d nên hai màn cùng nói về một sinh viên lại lệch nhau.
+  // Đổi lại rủi ro hành trình rỗng ở mốc ngắn được xử lý bằng lời nhắc ở
+  // trạng thái rỗng (gợi ý nới mốc), thay vì bằng một mốc lệch.
+  journeyTimeRange = state.timeRange;
+
   // Hiện trạng thái đang tải TRƯỚC khi mở modal: API có thể mất hơn nửa giây,
   // mở modal trống rồi nhảy số liệu sau tạo cảm giác vỡ.
   dom.journeyTitle.textContent = `Hành Trình • ${cleanMssv}`;
-  dom.journeySub.textContent = labelForTimeRange(JOURNEY_TIME_RANGE);
+  dom.journeySub.textContent = labelForTimeRange(journeyTimeRange);
   renderSkeleton(dom.journeySummary, 2);
   renderSkeleton(dom.journeyTimeline, 4);
   renderSkeleton(dom.journeyTransitions, 2);
@@ -1759,7 +1789,7 @@ async function openJourney(mssv) {
   dom.modalJourney.style.display = 'flex';
 
   try {
-    const data = await api(`/api/admin/dashboard/insights/users/${encodeURIComponent(cleanMssv)}/journey?limit=${JOURNEY_EVENT_LIMIT}&timeRange=${JOURNEY_TIME_RANGE}`);
+    const data = await api(`/api/admin/dashboard/insights/users/${encodeURIComponent(cleanMssv)}/journey?limit=${JOURNEY_EVENT_LIMIT}&timeRange=${encodeURIComponent(journeyTimeRange)}`);
     state.insights.journey = data;
     renderJourney(data);
   } catch (err) {
@@ -1789,9 +1819,9 @@ function renderJourney(data = {}) {
     ? [
       student.full_name,
       student.class_code ? `Lớp ${student.class_code}` : null,
-      labelForTimeRange(JOURNEY_TIME_RANGE)
+      labelForTimeRange(journeyTimeRange)
     ].filter(Boolean).join(' • ')
-    : `Không tìm thấy hồ sơ sinh viên — vẫn hiện dấu vết truy cập • ${labelForTimeRange(JOURNEY_TIME_RANGE)}`;
+    : `Không tìm thấy hồ sơ sinh viên — vẫn hiện dấu vết truy cập • ${labelForTimeRange(journeyTimeRange)}`;
 
   const truncated = Boolean(data.truncated);
   renderJourneySummary(events, sessions, truncated);
@@ -1839,7 +1869,7 @@ function renderJourneyNotice(truncated) {
     dom.journeyNotice.textContent = '';
     return;
   }
-  dom.journeyNotice.textContent = `Chuỗi truy cập dài hơn giới hạn: danh sách chỉ gồm ${formatNumber(JOURNEY_EVENT_LIMIT)} sự kiện đầu tiên (cũ nhất) trong ${labelForTimeRange(JOURNEY_TIME_RANGE)}; các lượt mới hơn không được tải — hãy thu hẹp khoảng thời gian.`;
+  dom.journeyNotice.textContent = `Chuỗi truy cập dài hơn giới hạn: danh sách chỉ gồm ${formatNumber(JOURNEY_EVENT_LIMIT)} sự kiện đầu tiên (cũ nhất) trong ${labelForTimeRange(journeyTimeRange)}; các lượt mới hơn không được tải — hãy thu hẹp khoảng thời gian.`;
   dom.journeyNotice.style.display = 'block';
 }
 
@@ -1877,9 +1907,11 @@ function groupJourneyEvents(events = [], sessions = []) {
 
 function renderJourneyTimeline(events = [], sessions = []) {
   if (!events.length) {
-    renderEmpty(dom.journeyTimeline, 'Sinh viên này chưa có lượt truy cập nào trong khoảng thời gian đang xem.', {
+    // Mốc thời gian do người đọc chọn ở topbar nên khi rỗng phải nói rõ đang
+    // xem khoảng nào và làm sao xem rộng ra — im lặng thì dễ tưởng hỏng dữ liệu.
+    renderEmpty(dom.journeyTimeline, `Sinh viên này chưa có lượt truy cập nào trong ${labelForTimeRange(journeyTimeRange).toLowerCase()}.`, {
       title: 'Chưa có dấu vết truy cập',
-      hint: 'Chuỗi truy cập thường nằm ở bảng Nhật ký — thử lọc theo MSSV để kiểm tra lại.'
+      hint: 'Thử nới mốc thời gian ở thanh trên (7D/30D/ALL), hoặc lọc Nhật ký theo MSSV để kiểm tra lại.'
     });
     return;
   }
@@ -2037,8 +2069,8 @@ function renderStudentActivity(data = {}) {
   ].filter(Boolean).join(' • ');
 
   dom.studentActivitySummary.innerHTML = `
-    <div class="activity-stat"><span class="label">Tổng request</span><span class="value">${(summary.totalRequests || 0).toLocaleString()}</span></div>
-    <div class="activity-stat"><span class="label">Lỗi (4xx/5xx)</span><span class="value ${summary.errorCount ? 'text-error' : ''}">${(summary.errorCount || 0).toLocaleString()}</span></div>
+    <div class="activity-stat"><span class="label">Tổng request</span><span class="value">${formatNumber(summary.totalRequests)}</span></div>
+    <div class="activity-stat"><span class="label">Lỗi (4xx/5xx)</span><span class="value ${summary.errorCount ? 'text-error' : ''}">${formatNumber(summary.errorCount)}</span></div>
     <div class="activity-stat"><span class="label">Độ trễ TB</span><span class="value">${summary.avgLatency || 0} ms</span></div>
     <div class="activity-stat"><span class="label">Request đầu</span><span class="value small">${formatDateTime(summary.firstSeen)}</span></div>
     <div class="activity-stat"><span class="label">Request cuối</span><span class="value small">${formatDateTime(summary.lastSeen)}</span></div>
@@ -2048,7 +2080,7 @@ function renderStudentActivity(data = {}) {
     <tr>
       <td><span class="route-code" title="${escapeHtml(row.route)}">${escapeHtml(row.route)}</span></td>
       <td><span class="method-tag method-${cssToken(row.method)}">${escapeHtml(row.method)}</span></td>
-      <td><strong>${safeNumber(row.count).toLocaleString()}</strong></td>
+      <td><strong>${formatNumber(row.count)}</strong></td>
       <td>${safeNumber(row.errorCount) > 0 ? `<span class="status-badge stat-4xx">${safeNumber(row.errorCount)}</span>` : '0'}</td>
       <td>${formatDateTime(row.lastCalled)}</td>
       <td>${safeNumber(row.avgLatency)} ms</td>
@@ -2190,19 +2222,19 @@ function renderVisitedStudents(res = {}) {
 
   // Update Stats & Badges
   if (dom.badgeActiveStudents) {
-    dom.badgeActiveStudents.textContent = (stats.visitedStudents || 0).toLocaleString();
+    dom.badgeActiveStudents.textContent = formatNumber(stats.visitedStudents);
   }
   if (dom.kpiVisitedActive) {
-    dom.kpiVisitedActive.textContent = (stats.visitedStudents || 0).toLocaleString();
+    dom.kpiVisitedActive.textContent = formatNumber(stats.visitedStudents);
   }
   if (dom.kpiVisitedToday) {
-    dom.kpiVisitedToday.textContent = (stats.visitedToday || 0).toLocaleString();
+    dom.kpiVisitedToday.textContent = formatNumber(stats.visitedToday);
   }
   if (dom.kpiVisited7Days) {
-    dom.kpiVisited7Days.textContent = (stats.visited7Days || 0).toLocaleString();
+    dom.kpiVisited7Days.textContent = formatNumber(stats.visited7Days);
   }
   if (dom.kpiVisitedTotal) {
-    dom.kpiVisitedTotal.textContent = (stats.totalStudents || 0).toLocaleString();
+    dom.kpiVisitedTotal.textContent = formatNumber(stats.totalStudents);
   }
 
   // Update Table Body
@@ -2250,7 +2282,7 @@ function renderVisitedStudents(res = {}) {
           <td><span style="font-size: 0.78rem; font-family: var(--font-mono); font-weight: 600; color: var(--text-main);">${lastLogin}</span></td>
           <td style="text-align: center;">
             <strong style="color: ${reqCount > 0 ? 'var(--accent-blue)' : 'var(--text-muted)'}; font-size: 0.85rem;">
-              ${reqCount.toLocaleString()} req
+              ${formatNumber(reqCount)} req
             </strong>
           </td>
           <td style="text-align: center;">${statusBadge}</td>
@@ -2290,7 +2322,7 @@ function renderVisitedStudents(res = {}) {
   if (dom.visitedPaginationInfo) {
     const startItem = pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
     const endItem = Math.min(pagination.page * pagination.limit, pagination.total);
-    dom.visitedPaginationInfo.textContent = `Hiển thị ${startItem}–${endItem} trên tổng số ${pagination.total.toLocaleString()} sinh viên`;
+    dom.visitedPaginationInfo.textContent = `Hiển thị ${startItem}–${endItem} trên tổng số ${formatNumber(pagination.total)} sinh viên`;
   }
   if (dom.visitedPageCurrent) {
     dom.visitedPageCurrent.textContent = `${pagination.page} / ${Math.max(1, pagination.totalPages)}`;
@@ -2592,6 +2624,40 @@ dom.btnConfirmPurge.addEventListener('click', async () => {
     dom.purgeAlertMsg.style.display = 'block';
     dom.btnConfirmPurge.disabled = false;
     dom.btnConfirmPurge.textContent = 'Xác Nhận Xóa Log';
+  }
+});
+
+/* ==========================================================================
+   ĐÓNG CỬA SỔ BẰNG PHÍM ESC (Task 11 — spec mục 4.1 "thao tác được bằng bàn phím")
+   --------------------------------------------------------------------------
+   Trước đây cả 5 cửa sổ chỉ đóng được bằng chuột hoặc Tab+Enter, nên người
+   điều khiển bằng bàn phím bị kẹt trong hộp thoại. Đóng bằng Esc là kỳ vọng
+   chuẩn và không đổi hành vi đóng hiện có: mỗi mục gọi đúng hàm close sẵn có.
+   Thứ tự trong mảng là thứ tự ưu tiên; chỉ một cửa sổ mở tại một thời điểm nên
+   cửa sổ đang hiện là cửa sổ đầu tiên tìm thấy.
+   ========================================================================== */
+const ESC_CLOSABLE_MODALS = [
+  { get: () => dom.modalJourney, close: () => closeJourneyModal() },
+  { get: () => dom.modalLogDetail, close: () => closeLogDetailModal() },
+  { get: () => dom.modalStudentActivity, close: () => closeStudentActivityModal() },
+  { get: () => dom.modalPurgeLogs, close: () => closePurgeModal() },
+  {
+    get: () => dom.modalAuthGate,
+    // Cửa sổ xác thực CỐ Ý giấu nút đóng khi bị chặn (chưa đăng nhập). Esc ở
+    // trạng thái đó cũng phải giữ nguyên hành vi: đóng được thì người dùng
+    // bấm nhầm Esc một phát là rơi vào trang trống không hiểu vì sao.
+    close: () => { if (dom.btnCloseAuthModal.style.display !== 'none') closeAuthModal(); }
+  }
+];
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  for (const modal of ESC_CLOSABLE_MODALS) {
+    const overlay = modal.get();
+    if (!overlay || overlay.style.display === 'none') continue;
+    modal.close();
+    event.preventDefault();
+    return;
   }
 });
 

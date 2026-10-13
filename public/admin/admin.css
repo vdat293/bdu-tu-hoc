@@ -41,6 +41,17 @@
   --color-destructive: #DC2626;
   --color-ring: #1E40AF;
 
+  /* Màu CHỮ khi đứng trên nền tint (huy hiệu mã trạng thái, pill xu hướng,
+     ô báo lỗi, nhãn "Lỗi" ở dòng sự kiện).
+     Vì sao tách khỏi --color-success/--color-warning/--color-destructive: ba
+     màu gốc được chọn để đạt 4.5:1 trên nền card TRẮNG, nhưng nền tint pha
+     thêm màu nên chữ tụt xuống ~4.0-4.5:1 (đo được ở .journey-stat-value.error
+     và .journey-event-flag). Bản ở đây đậm hơn để lấy lại >= 4.5:1 ngay trên
+     chính nền tint, thay vì bỏ tint làm mất phân cấp thị giác. */
+  --color-success-text: #166534;     /* 6.4:1 trên tint-success */
+  --color-warning-text: #92400E;     /* 6.1:1 trên tint-warning */
+  --color-destructive-text: #B91C1C; /* 5.4:1 trên tint-danger */
+
   /* Nền mờ cho huy hiệu trạng thái; dùng alpha thấp nên cả hai theme đều ổn. */
   --tint-primary: rgba(59, 130, 246, 0.12);
   --tint-secondary: rgba(59, 130, 246, 0.18);
@@ -124,6 +135,12 @@
   --color-warning: #FBBF24;
   --color-destructive: #F87171;
   --color-ring: #93C5FD;
+
+  /* Theme tối: nền tint tối nên ba màu chữ trên tint vốn đã đạt >= 5.7:1.
+     Khai lại ở đây để rule bên dưới đọc MỘT tên token ở cả hai theme. */
+  --color-success-text: #34D399;
+  --color-warning-text: #FBBF24;
+  --color-destructive-text: #F87171;
 
   --tint-primary: rgba(96, 165, 250, 0.16);
   --tint-secondary: rgba(96, 165, 250, 0.24);
@@ -593,8 +610,8 @@ body {
    (trước đây light dùng #60a5fa chỉ đạt ~2.6:1 trên nền trắng). */
 .icon-blue { background: var(--tint-primary); color: var(--color-primary); }
 .icon-purple { background: rgba(124, 58, 237, 0.12); color: var(--accent-purple); }
-.icon-green { background: var(--tint-success); color: var(--color-success); }
-.icon-amber { background: var(--tint-warning); color: var(--color-warning); }
+.icon-green { background: var(--tint-success); color: var(--color-success-text); }
+.icon-amber { background: var(--tint-warning); color: var(--color-warning-text); }
 
 /* Biến thể .kpi-icon-wrap mà markup cũ đang dùng: ép cùng khuôn hình với
    .kpi-icon để icon SVG không phình theo kích thước mặc định của <svg>. */
@@ -624,9 +641,9 @@ body {
   color: var(--text-muted);
 }
 
-.kpi-trend.positive { color: var(--color-success); }
+.kpi-trend.positive { color: var(--color-success-text); }
 .kpi-trend.neutral { color: var(--text-muted); }
-.kpi-trend.negative { color: var(--color-destructive); }
+.kpi-trend.negative { color: var(--color-destructive-text); }
 
 .kpi-value {
   font-size: 2.1rem;
@@ -651,9 +668,9 @@ body {
 }
 
 /* Xu hướng: luôn kèm ký hiệu ▲/▼ và số, KHÔNG chỉ dựa vào màu (spec mục 4.1). */
-.trend-up { background: var(--tint-success); color: var(--color-success); }
-.trend-down { background: var(--tint-danger); color: var(--color-destructive); }
-.trend-warning { background: var(--tint-warning); color: var(--color-warning); }
+.trend-up { background: var(--tint-success); color: var(--color-success-text); }
+.trend-down { background: var(--tint-danger); color: var(--color-destructive-text); }
+.trend-warning { background: var(--tint-warning); color: var(--color-warning-text); }
 .trend-neutral { background: var(--tint-neutral); color: var(--text-sub); }
 
 .kpi-highlight {
@@ -682,9 +699,9 @@ body {
   font-family: var(--font-mono);
 }
 
-.badge-2xx { background: var(--tint-success); color: var(--color-success); }
-.badge-4xx { background: var(--tint-warning); color: var(--color-warning); }
-.badge-5xx { background: var(--tint-danger); color: var(--color-destructive); }
+.badge-2xx { background: var(--tint-success); color: var(--color-success-text); }
+.badge-4xx { background: var(--tint-warning); color: var(--color-warning-text); }
+.badge-5xx { background: var(--tint-danger); color: var(--color-destructive-text); }
 
 .kpi-footer-note {
   font-size: 0.75rem;
@@ -879,10 +896,10 @@ body {
 }
 
 /* Nhãn method: màu token + chữ in đậm để phân biệt được mà không cần nhìn màu. */
-.method-get { background: var(--tint-success); color: var(--color-success); }
+.method-get { background: var(--tint-success); color: var(--color-success-text); }
 .method-post { background: var(--tint-secondary); color: var(--color-info); }
-.method-put { background: var(--tint-warning); color: var(--color-warning); }
-.method-delete { background: var(--tint-danger); color: var(--color-destructive); }
+.method-put { background: var(--tint-warning); color: var(--color-warning-text); }
+.method-delete { background: var(--tint-danger); color: var(--color-destructive-text); }
 
 .endpoint-path {
   font-family: var(--font-mono);
@@ -976,12 +993,15 @@ body {
   gap: 14px;
 }
 
+/* Nhãn nhóm (Hệ điều hành / Trình duyệt) dùng thẻ h3 để trình đọc màn hình
+   đi đúng phân cấp h2 (tiêu đề khối) -> h3 (nhóm con), thay vì một div trơn.
+   margin-top: 0 để không nhận margin mặc định của thẻ heading. */
 .breakdown-group-title {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
 }
 
 .pills-wrap {
@@ -1269,10 +1289,10 @@ body {
   border-radius: 4px;
 }
 
-.stat-2xx { background: var(--tint-success); color: var(--color-success); }
+.stat-2xx { background: var(--tint-success); color: var(--color-success-text); }
 .stat-3xx { background: var(--tint-secondary); color: var(--color-info); }
-.stat-4xx { background: var(--tint-warning); color: var(--color-warning); }
-.stat-5xx { background: var(--tint-danger); color: var(--color-destructive); }
+.stat-4xx { background: var(--tint-warning); color: var(--color-warning-text); }
+.stat-5xx { background: var(--tint-danger); color: var(--color-destructive-text); }
 
 .latency-badge {
   font-size: 0.75rem;
@@ -1411,7 +1431,7 @@ body {
 
 .status-pill--active {
   background: var(--tint-success);
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .status-pill--inactive {
@@ -1768,7 +1788,7 @@ body {
 .detail-error-box {
   background: var(--tint-danger);
   border: 1px solid var(--color-destructive);
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
   padding: 10px 14px;
   border-radius: 8px;
   font-family: var(--font-mono);
@@ -1959,7 +1979,7 @@ body {
 
 .auth-error {
   background: var(--tint-danger);
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
   padding: 8px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -2002,7 +2022,7 @@ body {
   font-weight: 600;
   text-align: center;
   background: var(--tint-success);
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 /* Toast Container */
@@ -2242,7 +2262,7 @@ body {
 }
 
 .state-error .state-icon {
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
 }
 
 /* Nút "Thử lại" trong trạng thái lỗi: luôn cho đường thoái thay vì chỉ báo lỗi. */
@@ -2256,7 +2276,7 @@ body {
   border-radius: 999px;
   border: 1px solid var(--color-destructive);
   background: transparent;
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
@@ -2642,7 +2662,7 @@ body {
 }
 
 .journey-stat-value.error {
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
 }
 
 /* Nhắc "đã cắt bớt sự kiện": nền cảnh báo + viền + chữ, không chỉ dựa vào màu. */
@@ -2702,7 +2722,7 @@ body {
   gap: 4px;
   font-size: 0.74rem;
   font-weight: 700;
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
 }
 
 .journey-feature-chips {
@@ -2775,7 +2795,7 @@ body {
   gap: 4px;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--color-destructive);
+  color: var(--color-destructive-text);
 }
 
 .journey-event--error {

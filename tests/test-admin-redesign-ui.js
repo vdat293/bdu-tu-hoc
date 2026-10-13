@@ -385,6 +385,399 @@ check('logic service-lock và ranking-sync giữ nguyên sau redesign', () => {
   assert.match(lockFlow, /if\s*\(\s*\w*[Ll]ocked\w*\s*\)[\s\S]*confirm\(/, 'confirm() phải nằm trong nhánh bật khóa');
 });
 
+/* --------------------------------------------------------------------------
+   Task 11 — trợ năng, tương phản, đồng bộ thời gian/số, chuyển động, tràn ngang.
+   --------------------------------------------------------------------------
+   Nhóm này GHIM những hợp đồng số đo được, không chỉ "có vẻ đúng":
+     1. Cả 5 cửa sổ phải là hộp thoại cho trình đọc màn hình (role/aria-modal/
+        aria-labelledby trỏ đúng tiêu đề) và đóng được bằng Esc.
+     2. Tương phản: những cặp chữ-trên-nền-tint dưới 4.5:1 ở theme sáng được
+        TÍNH LẠI ngay trong test (pha màu + công thức WCAG) chứ không ghi tay
+        "mình đo rồi" — đổi token một cái là test đỏ.
+     3. Bộ lọc phải báo trạng thái không chỉ bằng màu (aria-pressed) và mọi màn
+        phải đọc CÙNG một mốc thời gian + cùng một cách định dạng số.
+   -------------------------------------------------------------------------- */
+
+/* ---- 1a. Ngữ nghĩa hộp thoại của cả 5 cửa sổ ---- */
+
+check('cả 5 cửa sổ đều khai báo hộp thoại cho trình đọc màn hình', () => {
+  // Ghim theo bảng: [id overlay, id tiêu đề]. aria-labelledby trỏ sai id là
+  // hộp thoại không tên — trình đọc màn hình chỉ đọc "hộp thoại" trống trơn.
+  const dialogs = [
+    ['modal-log-detail', 'modal-log-title'],
+    ['modal-auth-gate', 'modal-auth-title'],
+    ['modal-purge-logs', 'modal-purge-title'],
+    ['modal-student-activity', 'student-activity-title'],
+    ['modal-journey', 'journey-title']
+  ];
+  const htmlIds = new Set([...indexHtml.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+
+  for (const [overlayId, titleId] of dialogs) {
+    const from = indexHtml.indexOf(`id="${overlayId}"`);
+    assert.ok(from !== -1, `index.html mất cửa sổ #${overlayId}`);
+    const block = indexHtml.slice(from, indexHtml.indexOf('\n  </div>', from));
+    assert.match(
+      block,
+      /class="modal-card[^"]*"[^>]*role="dialog"/,
+      `#${overlayId}: .modal-card phải có role="dialog"`
+    );
+    assert.match(block, /aria-modal="true"/, `#${overlayId}: thiếu aria-modal="true"`);
+    assert.match(
+      block,
+      new RegExp(`aria-labelledby="${titleId}"`),
+      `#${overlayId}: thiếu aria-labelledby="${titleId}"`
+    );
+    assert.ok(htmlIds.has(titleId), `#${overlayId} trỏ aria-labelledby tới id không tồn tại: ${titleId}`);
+  }
+});
+
+check('Esc đóng được cả 5 cửa sổ mà không đổi hành vi đóng hiện có', () => {
+  // Ghim đủ 5 hàm close: thiếu một là người điều khiển bằng bàn phím bị kẹt
+  // trong đúng cửa sổ đó.
+  const escStart = adminJs.indexOf('ESC_CLOSABLE_MODALS');
+  assert.ok(escStart !== -1, 'admin.js phải khai bảng cửa sổ đóng bằng Esc');
+  const escBlock = adminJs.slice(escStart, adminJs.indexOf('// Initialization', escStart));
+
+  assert.match(escBlock, /addEventListener\('keydown'/, 'Phải bắt sự kiện keydown');
+  assert.match(escBlock, /event\.key\s*!==\s*'Escape'/, 'Phải lọc đúng phím Esc');
+  assert.doesNotMatch(
+    escBlock,
+    /addEventListener\('keydown'[^)]*keyup/,
+    'Esc phải bắt trên keydown'
+  );
+
+  for (const closeFn of [
+    'closeJourneyModal',
+    'closeLogDetailModal',
+    'closeStudentActivityModal',
+    'closePurgeModal',
+    'closeAuthModal'
+  ]) {
+    assert.ok(escBlock.includes(`${closeFn}()`), `Esc chưa nối tới ${closeFn}()`);
+  }
+
+  // Cửa sổ xác thực khi bị chặn cố ý giấu nút đóng; Esc không được phá vỡ điều đó.
+  assert.match(
+    escBlock,
+    /btnCloseAuthModal\.style\.display\s*!==\s*'none'[\s\S]{0,80}closeAuthModal\(\)/,
+    'Esc ở modal xác thực chỉ được đóng khi nút đóng đang hiện'
+  );
+});
+
+/* ---- 1b. Tương phản chữ trên nền tint (đo lại bằng công thức WCAG) ---- */
+
+/** Đọc giá trị một biến CSS trong khối theme (`:root` hoặc `[data-theme="dark"]`). */
+function readToken(css, theme, name) {
+  // Dùng regex chứ không so chuỗi thẳng: file CSS trong repo dùng CRLF, nên
+  // mốc có \n cứng sẽ không khớp và test đỏ vì lý do sai.
+  const startRe = theme === 'dark' ? /\[data-theme="dark"\]\s*\{/ : /:root,\s*\[data-theme="light"\]\s*\{/;
+  const start = css.search(startRe);
+  assert.ok(start !== -1, `admin.css không tìm thấy khối theme ${theme}`);
+  const block = css.slice(start, css.indexOf('\n}', start));
+  const match = block.match(new RegExp(`${name}:\\s*([^;]+);`));
+  assert.ok(match, `admin.css thiếu token ${name} ở theme ${theme}`);
+  return match[1].trim();
+}
+
+/** Giải mã #RGB / #RRGGBB / rgb() / rgba() / var(--token) thành [r, g, b, a]. */
+function parseCssColor(value, css, theme, depth = 0) {
+  const raw = String(value).trim();
+  const ref = raw.match(/^var\((--[a-z-]+)\)$/i);
+  if (ref && depth < 5) return parseCssColor(readToken(css, theme, ref[1]), css, theme, depth + 1);
+
+  const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
+  }
+
+  const rgba = raw.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgba) {
+    const parts = rgba[1].split(',').map((p) => parseFloat(p));
+    return [parts[0], parts[1], parts[2], parts.length > 3 ? parts[3] : 1];
+  }
+
+  throw new Error(`Không đọc được màu "${raw}" (theme ${theme})`);
+}
+
+/** Pha một lớp nửa trong suốt lên nền đục bên dưới. */
+function composite(top, bottom) {
+  const a = top[3];
+  return [
+    top[0] * a + bottom[0] * (1 - a),
+    top[1] * a + bottom[1] * (1 - a),
+    top[2] * a + bottom[2] * (1 - a),
+    1
+  ];
+}
+
+/** Độ sáng tương đối theo WCAG 2.1. */
+function relativeLuminance([r, g, b]) {
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrastRatio(fg, bg) {
+  const l1 = relativeLuminance(fg);
+  const l2 = relativeLuminance(bg);
+  const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Nền thật của một huy hiệu: tint pha lên card, card pha lên nền trang. */
+function tintedBackground(css, theme, tintToken) {
+  const page = parseCssColor(readToken(css, theme, '--color-background'), css, theme);
+  const card = composite(parseCssColor(readToken(css, theme, '--color-card'), css, theme), page);
+  return composite(parseCssColor(readToken(css, theme, tintToken), css, theme), card);
+}
+
+check('chữ trên nền tint đạt >= 4.5:1 ở CẢ HAI theme (đo lại bằng công thức WCAG)', () => {
+  // Trước khi tách token, các cặp này chỉ đạt ~4.0-4.5:1 ở theme sáng
+  // (.journey-stat-value.error ~4.15:1, .journey-event-flag ~4.06:1).
+  const pairs = [
+    ['--color-success-text', '--tint-success', 'success'],
+    ['--color-warning-text', '--tint-warning', 'warning'],
+    ['--color-destructive-text', '--tint-danger', 'lỗi']
+  ];
+
+  for (const theme of ['light', 'dark']) {
+    for (const [textToken, tintToken, label] of pairs) {
+      const ratio = contrastRatio(
+        parseCssColor(readToken(adminCss, theme, textToken), adminCss, theme),
+        tintedBackground(adminCss, theme, tintToken)
+      );
+      assert.ok(
+        ratio >= 4.5,
+        `${textToken} trên ${tintToken} ở theme ${theme} chỉ đạt ${ratio.toFixed(2)}:1 (cần >= 4.5:1) — hãy đậm màu chữ hoặc bỏ tint, đừng hạ nền`
+      );
+      // Không cảnh báo im lặng: in số đo để người đọc thấy biên.
+      console.log(`    · theme ${theme} · ${label}: ${ratio.toFixed(2)}:1`);
+    }
+  }
+});
+
+check('không rule nào còn đặt màu chữ gốc lên nền tint', () => {
+  // Cấu trúc: mọi rule có nền tint-*-success/warning/danger phải lấy màu chữ
+  // ở bản "-text"; nếu không thì một rule mới thêm về sau sẽ lặp lại đúng lỗi
+  // đang sửa mà không ai để ý.
+  const toneTokens = {
+    success: { base: '--color-success', text: '--color-success-text' },
+    warning: { base: '--color-warning', text: '--color-warning-text' },
+    danger: { base: '--color-destructive', text: '--color-destructive-text' }
+  };
+  const rules = adminCss.replace(/\/\*[\s\S]*?\*\//g, '').split('}');
+
+  for (const block of rules) {
+    const tint = block.match(/background:\s*var\(--tint-(success|warning|danger)\)/);
+    if (!tint) continue;
+    const { base, text } = toneTokens[tint[1]];
+    // `(^|[^-])` để `border-color: var(...)` không bị tính nhầm là màu chữ.
+    // Rule chỉ đặt nền mà không đặt màu chữ (ví dụ .state-error) thì kế thừa
+    // --text-main vốn đã tương phản tốt, nên chỉ chặn đúng trường hợp nguy hiểm:
+    // tự đặt màu chữ tone gốc lên nền tint.
+    const usesBaseAsText = new RegExp(`(^|[^-])color:\\s*var\\(${base}\\)`).test(block);
+    assert.ok(
+      !usesBaseAsText,
+      `Còn rule đặt chữ ${base} lên nền tint-${tint[1]}; phải dùng ${text}:\n${block.trim()}\n}`
+    );
+    assert.ok(
+      !usesBaseAsText || block.includes(text),
+      `Rule có nền tint-${tint[1]} phải lấy màu chữ từ ${text}`
+    );
+  }
+
+  // Và ngược lại: các huy hiệu trạng thái vẫn phải còn lớp màu để nhìn nhanh,
+  // tức là token "-text" không được thay thế toàn bộ token gốc.
+  for (const tone of ['--color-success', '--color-warning', '--color-destructive']) {
+    assert.ok(
+      adminCss.includes(`${tone}: `),
+      `admin.css mất token gốc ${tone} (vẫn cần cho viền/nền đậm, không chỉ cho chữ)`
+    );
+  }
+});
+
+/* ---- 1c. Trạng thái bộ lọc không chỉ bằng màu ---- */
+
+check('pill mốc thời gian báo trạng thái bằng aria-pressed như chip Nhật ký', () => {
+  assert.match(
+    indexHtml,
+    /<div class="time-range-group" id="time-range-group"[^>]*role="group"/,
+    'Nhóm pill mốc thời gian phải là role="group" kèm aria-label'
+  );
+
+  const group = sliceBetween(indexHtml, 'id="time-range-group"', '</div>');
+  const pills = [...group.matchAll(/<button[^>]*class="range-pill[^"]*"[^>]*>/g)].map((m) => m[0]);
+  assert.equal(pills.length, 6, `Phải còn 6 pill mốc thời gian, thấy ${pills.length}`);
+
+  let pressed = 0;
+  for (const pill of pills) {
+    assert.match(pill, /aria-pressed="(true|false)"/, `Pill thiếu aria-pressed: ${pill}`);
+    if (pill.includes('aria-pressed="true"')) pressed += 1;
+  }
+  assert.equal(pressed, 1, 'Chỉ được có đúng một pill aria-pressed="true"');
+
+  // Mốc đang bật trong markup phải khớp .active (mặc định 24h như state).
+  const activePill = pills.find((p) => p.includes('aria-pressed="true"'));
+  assert.match(activePill, /data-range="24h"/, 'Mốc mặc định 24h phải là pill đang bật');
+  assert.match(activePill, /class="range-pill active"/, 'Pill 24h phải mang class .active');
+
+  // JS phải cập nhật lại khi bấm, nếu không aria-pressed sẽ kẹt ở giá trị cũ.
+  assert.match(
+    adminJs,
+    /function syncRangePillStates\(\)/,
+    'admin.js phải có hàm syncRangePillStates()'
+  );
+  const pillHandler = adminJs.slice(
+    adminJs.indexOf('dom.rangePills.forEach'),
+    adminJs.indexOf('dom.rangePills.forEach') + 600
+  );
+  assert.match(
+    pillHandler,
+    /syncRangePillStates\(\)/,
+    'Handler bấm pill phải gọi syncRangePillStates() để aria-pressed theo .active'
+  );
+});
+
+/* ---- 1d. Đồng bộ mốc thời gian và định dạng số giữa các tab ---- */
+
+check('modal Hành trình bám mốc thời gian ở topbar như modal Dấu vết API', () => {
+  assert.doesNotMatch(
+    adminJs,
+    /JOURNEY_TIME_RANGE/,
+    'Không được cố định mốc thời gian riêng cho hành trình (lệch với bộ lọc topbar)'
+  );
+  const openJourney = adminJs.slice(
+    adminJs.indexOf('async function openJourney'),
+    adminJs.indexOf('async function openJourney') + 2200
+  );
+  assert.match(
+    openJourney,
+    /journeyTimeRange\s*=\s*state\.timeRange/,
+    'openJourney phải lấy mốc thời gian từ state.timeRange'
+  );
+  assert.match(
+    openJourney,
+    /timeRange=\$\{encodeURIComponent\(journeyTimeRange\)\}/,
+    'Endpoint hành trình phải gửi mốc đang dùng, và encode để không vỡ URL'
+  );
+  // Mọi nhãn trong modal phải đọc mốc đã dùng, không đọc lại state lúc vẽ —
+  // không thì đổi mốc giữa chừng là nhãn lệch với dữ liệu đang hiện.
+  for (const fn of ['renderJourney', 'renderJourneyNotice']) {
+    const body = adminJs.slice(adminJs.indexOf(`function ${fn}`), adminJs.indexOf(`function ${fn}`) + 1500);
+    assert.doesNotMatch(
+      body,
+      /labelForTimeRange\(state\.timeRange\)/,
+      `${fn} phải dùng journeyTimeRange (mốc đã tải) thay vì state.timeRange`
+    );
+  }
+});
+
+check('không còn .toLocaleString() trần trong admin.js', () => {
+  // Một số mà tab này in "1,234" còn tab kia in "1.234" là kiểu lệch locale
+  // khó nhận ra nhất. Chỉ được phép gọi trong chính helper formatNumber,
+  // nên cắt riêng đoạn đó ra rồi đòi không còn gọi nào nữa.
+  const code = adminJs
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const helperStart = code.indexOf('function formatNumber');
+  const helperEnd = code.indexOf('function formatPercent');
+  const outsideHelper = code.slice(0, helperStart) + code.slice(helperEnd);
+  const bare = [...outsideHelper.matchAll(/[^.\w]toLocaleString\(\)/g)];
+  assert.equal(
+    bare.length,
+    0,
+    `Còn ${bare.length} chỗ gọi .toLocaleString() trần ngoài helper formatNumber — dùng formatNumber()/formatDateTime()`
+  );
+  // Ba chỗ dễ sót nhất trong bảng Nhật ký / bảng Sinh viên.
+  assert.ok(!code.includes('p.total.toLocaleString()'), 'renderLogs còn dùng toLocaleString trần');
+  assert.ok(!code.includes('pagination.total.toLocaleString()'), 'renderVisitedStudents còn dùng toLocaleString trần');
+  // Thời gian trong modal chi tiết phải qua helper chung, không phải locale máy.
+  assert.match(
+    adminJs,
+    /dom\.modalLogTime\.textContent\s*=\s*formatDateTime\(/,
+    'modal chi tiết nhật ký phải dùng formatDateTime()'
+  );
+});
+
+check('nhãn nhóm ở Insights dùng heading h3 thay div trơn', () => {
+  const start = adminJs.indexOf('function renderDevices');
+  const renderDevices = adminJs.slice(start, adminJs.indexOf('\nfunction ', start + 10));
+  assert.match(
+    renderDevices,
+    /<h3 class="breakdown-group-title">Hệ Điều Hành<\/h3>/,
+    'Nhóm Hệ Điều Hành phải là h3 (h2 tiêu đề khối -> h3 nhóm con)'
+  );
+  assert.match(
+    renderDevices,
+    /<h3 class="breakdown-group-title">Trình Duyệt<\/h3>/,
+    'Nhóm Trình Duyệt phải là h3'
+  );
+  assert.doesNotMatch(
+    renderDevices,
+    /<div class="breakdown-group-title">/,
+    'Không được còn div.breakdown-group-title'
+  );
+  // h3 có margin mặc định của trình duyệt; phải kẹp lại trong CSS.
+  const titleRule = adminCss.slice(
+    adminCss.indexOf('.breakdown-group-title {'),
+    adminCss.indexOf('.breakdown-group-title {') + 300
+  );
+  assert.match(titleRule, /margin:\s*0/, '.breakdown-group-title phải kẹp margin về 0');
+});
+
+/* ---- 1e. Chuyển động + tràn ngang ---- */
+
+check('prefers-reduced-motion tắt sạch chuyển động và hiệu ứng', () => {
+  const start = adminCss.indexOf('@media (prefers-reduced-motion: reduce)');
+  assert.ok(start !== -1, 'admin.css thiếu khối @media (prefers-reduced-motion: reduce)');
+  const block = adminCss.slice(start, adminCss.indexOf('\n}', adminCss.indexOf('}', start)) + 2);
+  assert.match(block, /animation-duration:\s*0\.001ms\s*!important/, 'Phải tắt animation');
+  assert.match(block, /transition-duration:\s*0\.001ms\s*!important/, 'Phải tắt transition');
+  assert.match(block, /scroll-behavior:\s*auto\s*!important/, 'Phải tắt cuộn mượt');
+  // Nút làm mới có vòng quay; nếu không tắt riêng thì vẫn quay dưới reduced-motion.
+  assert.ok(adminCss.includes('@keyframes'), 'admin.css có @keyframes — cần đảm bảo reduced-motion tắt được');
+});
+
+check('khung bảng cuộn riêng và trục chính bị kẹp (không tràn ngang cả trang)', () => {
+  const scrollRule = adminCss.slice(
+    adminCss.indexOf('.table-scroll,'),
+    adminCss.indexOf('.table-scroll,') + 300
+  );
+  assert.match(scrollRule, /overflow-x:\s*auto/, 'Khung bảng phải cuộn ngang trong chính nó');
+  assert.match(scrollRule, /width:\s*100%/, 'Khung bảng phải giữ width: 100%');
+
+  // min-width: 0 ở .admin-main-wrapper là thứ giữ cả trang không tràn ở 1024px.
+  assert.match(
+    adminCss,
+    /\.admin-main-wrapper\s*\{[^}]*min-width:\s*0/,
+    '.admin-main-wrapper phải có min-width: 0 (flex item mặc định min-width:auto làm tràn trang)'
+  );
+  // Lưới chứa bảng rộng phải kẹp cột bằng minmax(0, 1fr): nếu để `auto`, lưới
+  // bị nới theo phần tử rộng nhất và đẩy tràn ngang CẢ TRANG.
+  assert.match(
+    adminCss,
+    /\.insight-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    '.insight-stack phải kẹp cột bằng minmax(0, 1fr) (bảng số dự phòng rộng 900px)'
+  );
+  // Các lưới tự co (auto-fit + minmax) an toàn ở 375px vì tự xuống 1 cột khi
+  // bề rộng khung nhỏ hơn số nhỏ nhất của một ô — chỉ cần không đặt min rộng hơn
+  // bề rộng khung ở 375px (khung ~343px sau padding).
+  for (const grid of ['.kpi-grid', '.system-metrics-row', '.activity-summary-grid']) {
+    const at = adminCss.indexOf(`${grid} {`);
+    assert.ok(at !== -1, `admin.css thiếu lưới ${grid}`);
+    const rule = adminCss.slice(at, adminCss.indexOf('}', at));
+    const min = rule.match(/minmax\((\d+)px/);
+    assert.ok(min, `${grid} phải dùng minmax(Npx, 1fr) để tự xuống cột ở màn hẹp`);
+    assert.ok(
+      Number(min[1]) <= 260,
+      `${grid} đặt min ${min[1]}px — lớn hơn bề rộng khung ở 375px nên sẽ tràn ngang`
+    );
+  }
+});
+
 if (failed > 0) {
   console.log(`✗ Admin redesign UI foundation: ${failed} ca thất bại.`);
   process.exitCode = 1;
