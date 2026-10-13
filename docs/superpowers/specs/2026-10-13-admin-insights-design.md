@@ -1,8 +1,8 @@
-# Spec — Admin Insights: làm lại /admin và thêm phân tích hành vi người dùng
+# Spec — Làm lại toàn bộ `/admin` (light-first) kèm phân tích hành vi người dùng
 
 **Ngày:** 2026-10-13
 **Trạng thái:** chờ duyệt (chưa implement)
-**Phạm vi:** chỉ khu vực `/admin` (site tĩnh trong `public/admin/`) và các API đọc dữ liệu cho nó. Không đụng giao diện người dùng cuối (React `client/`).
+**Phạm vi:** **toàn bộ trang `/admin`** (site tĩnh trong `public/admin/`) — làm lại giao diện cả 5 màn cho thân thiện, dễ dùng hơn; và thêm các API đọc dữ liệu hành vi cho nó. Không đụng giao diện người dùng cuối (React `client/`).
 **Liên quan:** công tắc khoá dịch vụ per-group đã bàn trước đó **tạm gác**; taxonomy ở mục 5 sẽ được nó tái dùng sau (xem Phụ lục B).
 
 ---
@@ -11,9 +11,13 @@
 
 `/admin` hiện là "Traffic & Logs Dashboard": site tĩnh `public/admin/` (vanilla JS + Chart.js nhúng sẵn, không framework), đọc dữ liệu từ bảng Postgres `traffic_logs` do middleware `TrafficService.middleware()` (`src/services/traffic.service.js:252`) ghi cho **mọi request API và mọi lần tải trang HTML** (bỏ qua file tĩnh). Mỗi dòng log có: `method, path, route, status_code, response_time_ms, mssv, full_name, ip_address, user_agent, device_type, os, browser, referrer, created_at`.
 
-Chủ sở hữu đang định hướng **data science**: cần nhìn rõ người dùng quan tâm tính năng nào, dùng máy gì, khung giờ cao điểm, mức giữ chân, và một người cụ thể đã tương tác thế nào. Đồng thời muốn giao diện `/admin` trông "xịn xò" hơn.
+Chủ sở hữu đang định hướng **data science**: cần nhìn rõ người dùng quan tâm tính năng nào, dùng máy gì, khung giờ cao điểm, mức giữ chân, và một người cụ thể đã tương tác thế nào.
 
-**Điểm mấu chốt của khảo sát hiện trạng:** phần lớn dữ liệu cần đã có trong `traffic_logs`; thiếu sót chủ yếu là **cách gom/tổng hợp** và **cách trình bày**, cộng thêm giao diện còn emoji và mật độ thấp.
+**Hai mục tiêu của đợt này (theo thứ tự ưu tiên):**
+1. **Làm lại toàn bộ giao diện `/admin`** cho **thân thiện và dễ dùng hơn** — không chỉ đẹp: nhãn rõ, bố cục dễ quét, đủ trạng thái đang tải/rỗng/lỗi, mặc định **theme sáng**.
+2. **Thêm các phân tích hành vi** còn thiếu (tính năng hot, khung giờ cao điểm, hành trình một người, chất lượng, cohort/giữ chân).
+
+**Điểm mấu chốt của khảo sát hiện trạng:** phần lớn dữ liệu cần đã có trong `traffic_logs`; thiếu sót chủ yếu là **cách gom/tổng hợp** và **cách trình bày**, cộng thêm giao diện còn emoji, mật độ thấp, và mặc định tối.
 
 ---
 
@@ -21,10 +25,10 @@ Chủ sở hữu đang định hướng **data science**: cần nhìn rõ ngư�
 
 | | |
 | :--- | :--- |
-| **Kết quả** | `/admin` có thêm một tab **Insights** trả lời 5 câu hỏi: (1) tính năng nào được quan tâm nhất, (2) khung giờ cao điểm, (3) một sinh viên đã tương tác ra sao, (4) máy/OS/browser và chất lượng dịch vụ, (5) cohort & giữ chân. Giao diện được làm lại theo hướng data-dense, bỏ emoji làm icon. |
+| **Kết quả** | Toàn bộ `/admin` được làm lại (mặc định **theme sáng**) cho thân thiện, dễ dùng: 5 màn (Tổng quan, Insights, Nhật ký, Sinh viên, Hệ thống) dùng chung một bộ thành phần và trạng thái; icon SVG thay emoji. Thêm tab **Insights** trả lời 5 câu hỏi: (1) tính năng nào được quan tâm nhất, (2) khung giờ cao điểm, (3) một sinh viên đã tương tác ra sao, (4) máy/OS/browser và chất lượng dịch vụ, (5) cohort & giữ chân. |
 | **Ai dùng** | Chủ sở hữu/vận hành, qua `/admin`, sau khi đăng nhập (khoá admin hiện có). |
-| **Vì sao bây giờ** | Cần hiểu hành vi người dùng trước khi dựng lại server; dữ liệu 14 ngày nên phải gom lại trước khi hết. |
-| **Thành công** | Mở `/admin` → tab Insights: đổi mốc thời gian thấy xếp hạng tính năng, heatmap giờ×thứ, cohort/giữ chân, chất lượng cập nhật; từ danh sách sinh viên mở được **Hành trình** của một MSSV (timeline có thứ tự + phiên). Không thêm dependency runtime mới. |
+| **Vì sao bây giờ** | Cần hiểu hành vi người dùng trước khi dựng lại server; dữ liệu 14 ngày nên phải gom lại trước khi hết; và `/admin` hiện khó dùng nên cần làm lại một lần. |
+| **Thành công** | (a) Mọi màn `/admin` đọc được rõ ràng trên màn 375–1440, có trạng thái tải/rỗng/lỗi, thao tác bàn phím được, tương phản ≥ 4.5:1 ở cả sáng lẫn tối. (b) Tab Insights: đổi mốc thời gian thấy xếp hạng tính năng, heatmap giờ×thứ, cohort/giữ chân, chất lượng cập nhật. (c) Từ danh sách sinh viên mở được **Hành trình** của một MSSV (timeline có thứ tự + phiên). (d) Không thêm dependency runtime mới. |
 | **Ràng buộc** | Không sửa `src/routes/api.routes.js`; không thêm migration; không thêm thư viện (dùng Chart.js sẵn có + CSS grid cho heatmap); giữ thứ tự đăng ký route; route mới phải khai vào `scripts/verify-route-order.mjs`; test Node mới phải khai `scripts/test-manifest.mjs`; chạy test Node kèm env managed. |
 | **Ngoài phạm vi** | Tracking cấp click phía client; bản đồ địa lý; sửa giao diện người dùng cuối; công tắc khoá per-group (Phụ lục B); sửa schema `traffic_logs`. |
 
@@ -45,32 +49,45 @@ Nguồn: `traffic_logs` (Postgres, giữ 14 ngày, tự purge). Chuẩn hoá m�
 
 ---
 
-## 4. Hướng mỹ thuật `/admin`
+## 4. Làm lại toàn bộ giao diện `/admin`
 
-Style đích: **Data-Dense Dashboard** (nhiều widget, bảng dữ liệu, KPI card, padding tối thiểu, mật độ cao). Giữ "vỏ" dark glassmorphism hiện có để không phá vỡ nhận diện; nâng cấp:
+Định hướng: **light-first** (mặc định sáng), style **Data-Dense Dashboard**. Mục tiêu chính là **thân thiện và dễ dùng**, không chỉ đẹp. Làm lại cả 5 tab, sidebar, topbar, modal, bảng, form.
 
-- **Icon: bỏ emoji → inline SVG** (bộ Lucide-style tự nhúng trong `public/admin/admin.js`, không thêm dependency, không build step). Đây là thay đổi "xịn" rõ nhất.
-- **Thang typography chuẩn**: 12 / 14 / 16 / 18 / 24 / 32. Số liệu (KPI, bảng) dùng font mono (`--font-mono` đã có).
-- **Token màu**: giữ xanh dương chủ đạo và amber nhấn đang dùng; bổ sung token cho heatmap (dải cool→hot). Cả `[data-theme="light"]` và dark phải đạt tương phản chữ ≥ 4.5:1.
-- **Trạng thái tương tác**: hover + focus-visible rõ ràng, chuyển tiếp 150–300ms; con trỏ pointer cho mọi phần tử bấm được.
-- **Chuyển động**: tối thiểu, tôn trọng `prefers-reduced-motion` (không stagger trên bảng dữ liệu dày).
-- **Responsive**: kiểm ở 375 / 768 / 1024 / 1440; bảng dài cho cuộn ngang trong wrapper `.table-scroll`.
+### 4.1. Nguyên tắc dễ dùng (áp cho mọi màn)
 
-### 4.1. Cấu trúc tab sau khi làm lại
+- **Nhãn rõ nghĩa** bằng tiếng Việt; mỗi khối có tiêu đề + phụ đề nói khối đó trả lời câu hỏi gì (tránh bảng số liệu "trần" không ai hiểu).
+- **Phân cấp thị giác** nhất quán: KPI → xu hướng → chi tiết; mỗi trang một mục đích rõ.
+- **Đủ trạng thái** cho mọi khối: *đang tải* (skeleton), *rỗng* (lời nhắc), *lỗi* (nút thử lại). Không để khoảng trắng/lỗi câm.
+- **Bộ lọc nhất quán**: mốc thời gian + auto-refresh nằm ở topbar, giữ nguyên khi chuyển tab; bộ lọc riêng của bảng nằm ngay trên bảng đó.
+- **Bảng dễ dùng**: header dính, sắp xếp được bằng bàn phím (`aria-sort`), phân trang rõ, cuộn ngang trên mobile trong wrapper `.table-scroll`.
+- **Tương tác**: hover + focus-visible rõ, chuyển tiếp 150–300ms, `cursor: pointer` cho mọi thứ bấm được; **không dựa vào màu đơn thuần** để truyền nghĩa (luôn kèm số/nhãn/ký hiệu).
+- **Định dạng số thống nhất**: phân cách nghìn, phần trăm 1–2 chữ số, thời lượng `ms`, thời gian `dd/mm HH:mm`.
+- **Trợ năng**: heading tuần tự (h1→h2→h3), tương phản chữ ≥ 4.5:1 ở cả hai theme, thao tác được bằng bàn phím, tôn trọng `prefers-reduced-motion`.
+- **Responsive**: kiểm ở 375 / 768 / 1024 / 1440; sidebar thu gọn thành drawer dưới 900px (đã có, giữ và rà lại).
+
+### 4.2. Token & mỹ thuật
+
+- **Mặc định `[data-theme="light"]`**; giữ dark làm tùy chọn qua toggle sẵn có.
+- **Bảng màu light** (theo Data-Dense Dashboard): nền `#F8FAFC`, card `#FFFFFF`, chữ `#1E3A8A`, chữ phụ `#475569`, viền `#DBEAFE`, chủ đạo `#1E40AF`, phụ `#3B82F6`, nhấn `#D97706`, lỗi `#DC2626`, muted `#E9EEF6`. Dark giữ tông hiện tại nhưng đối chiếu lại cùng thang tương phản.
+- **Typography**: giữ cặp font hiện có (Plus Jakarta Sans + JetBrains Mono cho số) để không thêm phụ thuộc mạng; chuẩn hoá thang **12 / 14 / 16 / 18 / 24 / 32**.
+- **Icon**: bỏ emoji → **inline SVG** (Lucide-style) ở sidebar, KPI card, nút, tiêu đề khối.
+- Bo góc / bóng / viền nhất quán theo token; mật độ dày hợp dashboard.
+
+### 4.3. Cấu trúc tab sau khi làm lại
 
 | Tab | Nội dung |
 | :--- | :--- |
-| **Tổng quan** | 4 KPI (giữ) + timeline + preview xếp hạng tính năng (top 5) |
+| **Tổng quan** | 4 KPI + timeline + preview xếp hạng tính năng (top 5) |
 | **Insights** (mới) | Xếp hạng tính năng (đầy đủ), heatmap giờ×thứ, cohort/giữ chân, thiết bị + chất lượng |
-| **Nhật ký** | Bảng log + bộ lọc (giữ nguyên chức năng) |
-| **Sinh viên** | Danh sách đã truy cập (giữ) + nút mở **Hành trình** |
-| **Hệ thống** | VPS metrics + ranking-sync + service-lock (giữ nguyên) |
+| **Nhật ký** | Bảng log + bộ lọc (giữ chức năng, làm lại trình bày) |
+| **Sinh viên** | Danh sách đã truy cập + nút mở **Hành trình** |
+| **Hệ thống** | VPS metrics + ranking-sync + service-lock |
 
 Tab "Charts" cũ được gộp: timeline chi tiết + devices/OS/browser chuyển sang Insights; KPI/timeline preview ở Tổng quan.
 
-### 4.2. Icon
+### 4.4. Bộ thành phần dùng lại
 
-Một map `ICONS` trong `admin.js` trả về chuỗi SVG (24×24, `stroke="currentColor"`, `aria-hidden="true"` khi chỉ trang trí). Thay các emoji hiện có ở sidebar, KPI card, nút. Icon có nghĩa độc lập (không kèm text) phải có nhãn truy cập.
+Định nghĩa một lần trong CSS rồi dùng cho mọi tab (tránh mỗi tab một kiểu): sidebar nav, topbar, KPI card, panel card (tiêu đề + phụ đề + thân), bảng dữ liệu, chip lọc, modal, toast, switch, ô nhập, skeleton, empty state, error state. `admin.js` có bộ helper chung tương ứng (xem mục 7.1).
 
 ---
 
@@ -209,24 +226,31 @@ data: {
 
 ---
 
-## 7. Client `/admin` (site tĩnh)
+## 7. Client `/admin` (site tĩnh) — làm lại toàn bộ
+
+Làm lại cả 5 tab theo mục 4, dùng chung một bộ thành phần; tab Insights là phần mới thêm vào.
 
 ### 7.1. `public/admin/admin.js`
-- Thay emoji bằng map `ICONS` (SVG inline).
-- Thêm `state.insights = { features, hours, cohort, quality, journey }`, thêm vào `fetchAllData` một `Promise.all` cho 4 endpoint insights (features/hours/cohort/quality), mỗi cái `.catch(() => null)` để một endpoint lỗi không làm hỏng cả dashboard.
-- Hàm render: `renderFeatureRanking`, `renderHoursHeatmap` (dựng lưới `<div>` 7×24 qua CSS grid, mỗi ô có `title` + dữ liệu số; có bảng số đi kèm cho trợ năng), `renderCohort` (Chart.js line/bar), `renderQuality` (bảng + cột p95).
-- Modal **Hành trình**: `openJourney(mssv)` gọi `/api/admin/dashboard/insights/users/:mssv/journey`, render timeline theo phiên, đánh dấu sự kiện lỗi; tôn trọng `truncated`.
-- Giữ nguyên các helper an toàn: `escapeHtml`, `cssToken`, `safeNumber`; mọi dữ liệu chèn vào DOM tiếp tục đi qua `escapeHtml`.
-- Heatmap và bảng phải có **fallback dạng số** (không chỉ dựa vào màu).
+- **Icon**: thay toàn bộ emoji bằng map `ICONS` (SVG inline, `stroke="currentColor"`), dùng ở sidebar, KPI card, nút, tiêu đề khối.
+- **Helper chung** (chuẩn hoá cách hiển thị, dùng cho mọi tab):
+  - `formatNumber`, `formatPercent`, `formatDurationMs`, `formatDateTime` (thống nhất định dạng ở mục 4.1).
+  - `renderSkeleton`, `renderEmpty`, `renderError` cho trạng thái khối.
+  - helper dựng bảng sắp xếp được (đặt `aria-sort`, đổi thứ tự khi bấm tiêu đề, giữ header dính).
+- **Viết lại render của 5 tab** để dùng helper/thành phần chung (Tổng quan, Insights, Nhật ký, Sinh viên, Hệ thống) — giữ nguyên dữ liệu/nghiệp vụ, đổi cách trình bày.
+- **Insights**: thêm `state.insights = { features, hours, cohort, quality, journey }`; trong `fetchAllData` thêm một `Promise.all` cho 4 endpoint insights (features/hours/cohort/quality), mỗi cái `.catch(() => null)` để một endpoint lỗi không làm hỏng cả dashboard. Render: `renderFeatureRanking`, `renderHoursHeatmap` (lưới CSS 7×24, mỗi ô có `title` + số, kèm bảng số dự phòng), `renderCohort` (Chart.js line/bar), `renderQuality` (bảng + cột p95).
+- **Modal Hành trình**: `openJourney(mssv)` gọi `/api/admin/dashboard/insights/users/:mssv/journey`, render timeline theo phiên, đánh dấu sự kiện lỗi, tôn trọng `truncated`; dùng chung component modal mới.
+- **Giữ nguyên helper an toàn** `escapeHtml`, `cssToken`, `safeNumber`; mọi dữ liệu chèn vào DOM tiếp tục đi qua `escapeHtml` (test `test-admin-rendering-safety.js` ghim các idiom này).
 
 ### 7.2. `public/admin/index.html`
-- Sidebar: thêm nút tab `Insights` (icon SVG). Gộp tab `Charts` cũ vào Insights/Tổng quan.
-- Section `pane-insights` chứa: khối xếp hạng tính năng, khối heatmap, khối cohort, khối thiết bị + chất lượng.
-- Thêm modal `#modal-journey` và điểm mở từ bảng sinh viên.
+- Sidebar: icon SVG + thêm nút tab `Insights`; gộp tab `Charts` cũ vào Tổng quan/Insights.
+- Viết lại markup 5 `section.tab-pane` theo bộ thành phần chung (panel card có tiêu đề + phụ đề); thêm `pane-insights` với 4 khối (xếp hạng tính năng, heatmap, cohort, thiết bị + chất lượng).
+- Thêm modal `#modal-journey` và điểm mở từ bảng Sinh viên.
+- Thêm vùng trạng thái (skeleton/rỗng/lỗi) cho các khối dữ liệu.
 
 ### 7.3. `public/admin/admin.css`
-- Tinh chỉnh token; thêm class cho lưới heatmap (`.heatmap-grid`, `.heatmap-cell`, thang màu), cho khối Insights, cho timeline hành trình.
-- Đảm bảo focus-visible, hover, cuộn ngang bảng, và `@media (prefers-reduced-motion: reduce)`.
+- Viết lại token theo **light-first** (mục 4.2); `[data-theme="dark"]` là override. Rà lại tương phản cả hai theme.
+- Bổ sung class thành phần chung (panel, bảng, chip lọc, skeleton, empty/error state) và class cho lưới heatmap (`.heatmap-grid`, `.heatmap-cell`, thang màu cool→hot), timeline hành trình.
+- Đảm bảo focus-visible, hover, cuộn ngang bảng (`.table-scroll`), responsive và `@media (prefers-reduced-motion: reduce)`.
 
 ---
 
@@ -254,7 +278,7 @@ data: {
 | Chặng | Nội dung | Nghiệm thu |
 | :--- | :--- | :--- |
 | **A — Server** | `feature-groups.js`, `traffic-insights.service.js`, 5 method controller, 5 route, guards, test Node + cập nhật `architecture.md` | `curl` 5 endpoint trả dữ liệu đúng; các guard/test xanh |
-| **B — UI** | Redesign `public/admin/` (icon SVG, token, layout), tab Insights, modal Hành trình, test UI | Mở `/admin`, đổi mốc thời gian, xem 4 khối + mở Hành trình một MSSV; responsive 375/1024; light/dark đạt tương phản |
+| **B — UI** | Làm lại **toàn bộ** `public/admin/`: token light-first, bộ thành phần chung, icon SVG, cả 5 tab, thêm tab Insights, modal Hành trình, trạng thái tải/rỗng/lỗi, test UI | Mở `/admin`: 5 tab đọc rõ ở 375 và 1024, không lỗi câm; tab Insights có 4 khối + đổi mốc thời gian; mở Hành trình một MSSV; cả sáng lẫn tối đạt tương phản 4.5:1 |
 
 Chặng A phải xong và được nghiệm thu trước khi làm chặng B.
 
@@ -267,6 +291,8 @@ Chặng A phải xong và được nghiệm thu trước khi làm chặng B.
 - **Chi phí p95:** `percentile_cont` trên bảng lớn đắt; nhưng retention 14 ngày + luôn lọc `created_at` nên chấp nhận được. Nếu chậm, hạ mặc định `timeRange` cho `quality`.
 - **Hành trình dài:** giới hạn 200 sự kiện và đánh dấu `truncated`; không phân trang thêm trong đợt này.
 - **Sinh viên chỉ có IP (chưa đăng nhập):** cohort tính theo `mssv`, nên khách chưa đăng nhập không vào cohort — ngoài phạm vi.
+- **Đổi theme mặc định sang sáng:** người dùng hiện quen tối; phải rà tương phản và kiểm lại cả hai theme sau khi đổi token, tránh chữ mờ trên nền card trắng. Rủi ro thấp (admin nội bộ, có toggle).
+- **Phạm vi lớn (làm lại cả 5 tab):** dễ kéo dài; giảm thiểu bằng cách chia 2 chặng rõ ràng (mục 9) và dùng chung một bộ thành phần để không phải thiết kế lại từng màn.
 
 ---
 
