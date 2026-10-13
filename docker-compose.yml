@@ -33,6 +33,10 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      # Production BẮT BUỘC có biến này cho baseline/migrate (migrate-baseline.js
+      # từ chối chạy nếu thiếu). Trỏ cùng database, qua biến riêng để không lẫn
+      # với runtime của app. Để trống ở dev/local cũng được.
+      - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
       - DATABASE_SSL=false
       - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-10}
       - SYSTEM_OWNER_MSSV=${SYSTEM_OWNER_MSSV:-}
