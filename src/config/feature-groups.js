@@ -5,25 +5,37 @@
  * này) công tắc khoá dịch vụ theo nhóm đều phải nhìn cùng một danh mục. Nếu mỗi
  * nơi tự khai tiền tố riêng thì chỉ cần lệch một route là số liệu vỡ âm thầm.
  *
- * Khi làm công tắc khoá per-group sẽ tái dùng đúng bảng này và thêm cờ
- * `lockable` cho từng mục, thay vì tách bảng riêng (xem spec Phụ lục B).
+ * Khi làm công tắc khoá per-group, bảng này được tái dùng nguyên vẹn và bổ sung
+ * cờ `lockable` cho từng mục (xem spec Phụ lục B) thay vì tách bảng riêng. Nhờ
+ * vậy chỉ có MỘT nơi định nghĩa nhóm, tránh cảnh bảng khoá và bảng phân tích
+ * lệch nhau âm thầm.
  */
 
 // Mỗi tính năng: id (ổn định), label (hiển thị), apiPrefixes (so trên path API,
 // đã bỏ tiền tố /api), pagePrefixes (so trên đường dẫn trang SPA đã tải).
+// `lockable` cho biết nhóm có được phép bật khoá bảo trì hay không. Portal luôn
+// false: khoá portal sẽ chặn cả đăng nhập nên người dùng không còn cách tự thoát
+// khỏi màn bảo trì, buộc phải can thiệp DB/rollback.
 export const FEATURE_GROUPS = [
-  { id: 'portal', label: 'Cổng sinh viên', apiPrefixes: ['/profile', '/grades', '/schedule', '/rankings'], pagePrefixes: ['/gpa', '/info', '/schedule', '/leaderboard', '/enrollment'] },
-  { id: 'wordfmt', label: 'Word Formatting', apiPrefixes: ['/wordfmt'], pagePrefixes: ['/wordfmt'] },
-  { id: 'survey', label: 'Survey Automation', apiPrefixes: ['/survey', '/tool-runs'], pagePrefixes: ['/survey'] },
-  { id: 'training', label: 'Điểm rèn luyện', apiPrefixes: ['/training-score'], pagePrefixes: ['/training-score'] },
-  { id: 'english', label: 'English (Moodle)', apiPrefixes: ['/english'], pagePrefixes: ['/english'] },
-  { id: 'learning', label: 'Learning Hub', apiPrefixes: ['/learning'], pagePrefixes: ['/learning'] },
-  { id: 'community', label: 'Góc Tự Học Số', apiPrefixes: ['/community/posts', '/community/media'], pagePrefixes: ['/confession'] },
-  { id: 'clubs', label: 'CLB & Nhóm học tập', apiPrefixes: ['/community/clans', '/community/polls'], pagePrefixes: ['/clans'] },
-  { id: 'vocab', label: 'Luyện từ vựng', apiPrefixes: ['/vocab'], pagePrefixes: ['/vocab'] },
-  { id: 'grammar', label: 'Luyện ngữ pháp', apiPrefixes: ['/grammar'], pagePrefixes: ['/grammar'] },
-  { id: 'games', label: 'Giải trí (game)', apiPrefixes: ['/entertainment'], pagePrefixes: [] }
+  { id: 'portal', label: 'Cổng sinh viên', lockable: false, apiPrefixes: ['/profile', '/grades', '/schedule', '/rankings'], pagePrefixes: ['/gpa', '/info', '/schedule', '/leaderboard', '/enrollment'] },
+  { id: 'wordfmt', label: 'Word Formatting', lockable: true, apiPrefixes: ['/wordfmt'], pagePrefixes: ['/wordfmt'] },
+  { id: 'survey', label: 'Survey Automation', lockable: true, apiPrefixes: ['/survey', '/tool-runs'], pagePrefixes: ['/survey'] },
+  { id: 'training', label: 'Điểm rèn luyện', lockable: true, apiPrefixes: ['/training-score'], pagePrefixes: ['/training-score'] },
+  { id: 'english', label: 'English (Moodle)', lockable: true, apiPrefixes: ['/english'], pagePrefixes: ['/english'] },
+  { id: 'learning', label: 'Learning Hub', lockable: true, apiPrefixes: ['/learning'], pagePrefixes: ['/learning'] },
+  { id: 'community', label: 'Góc Tự Học Số', lockable: true, apiPrefixes: ['/community/posts', '/community/media'], pagePrefixes: ['/confession'] },
+  { id: 'clubs', label: 'CLB & Nhóm học tập', lockable: true, apiPrefixes: ['/community/clans', '/community/polls'], pagePrefixes: ['/clans'] },
+  { id: 'vocab', label: 'Luyện từ vựng', lockable: true, apiPrefixes: ['/vocab'], pagePrefixes: ['/vocab'] },
+  { id: 'grammar', label: 'Luyện ngữ pháp', lockable: true, apiPrefixes: ['/grammar'], pagePrefixes: ['/grammar'] },
+  { id: 'games', label: 'Giải trí (game)', lockable: true, apiPrefixes: ['/entertainment'], pagePrefixes: [] }
 ];
+
+// Danh sách id các nhóm được phép khoá, giữ đúng thứ tự khai báo trong
+// FEATURE_GROUPS. Suy ra từ chính bảng trên (thay vì khai tay) để bật/tắt
+// `lockable` một mục là danh sách này tự khớp, không có nguồn sự thật thứ hai.
+export const LOCKABLE_FEATURE_IDS = FEATURE_GROUPS
+  .filter((group) => group.lockable)
+  .map((group) => group.id);
 
 // Nhóm mặc định cho mọi path không khớp tính năng nào (đăng nhập, identity, thông
 // báo, admin, meta...). Vẫn được đếm trong tổng, chỉ không lên bảng xếp hạng.

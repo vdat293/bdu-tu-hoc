@@ -11,7 +11,7 @@
  */
 import assert from 'node:assert/strict';
 
-import { FEATURE_GROUPS, OTHER_FEATURE, featureForPath } from '../src/config/feature-groups.js';
+import { FEATURE_GROUPS, LOCKABLE_FEATURE_IDS, OTHER_FEATURE, featureForPath } from '../src/config/feature-groups.js';
 
 let failed = 0;
 
@@ -118,6 +118,41 @@ check('tiền tố không lồng nhau giữa các nhóm (giữ JS và SQL cùng 
       );
     }
   }
+});
+
+check('mọi nhóm đều khai cờ lockable kiểu boolean', () => {
+  // Vì sao kiểm kiểu: guard bảo trì (Task 3) chỉ chặn nhóm có lockable === true.
+  // Thiếu cờ hoặc khai bằng chuỗi 'true' sẽ khiến nhóm "im lặng" không bao giờ bị
+  // khoá dù admin đã bật, mà không có lỗi nào nổi lên.
+  assert.ok(FEATURE_GROUPS.every((group) => typeof group.lockable === 'boolean'));
+});
+
+check('đúng 10 nhóm lockable, giữ nguyên thứ tự khai báo', () => {
+  // Ghim cứng danh sách: đây là tập nhóm được phép bật khoá bảo trì; đổi thứ tự
+  // sẽ làm LOCKABLE_FEATURE_IDS lệch theo và đổi cả hợp đồng với tầng trên.
+  assert.deepEqual(
+    FEATURE_GROUPS.filter((group) => group.lockable).map((group) => group.id),
+    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+  );
+});
+
+check('portal KHÔNG lockable', () => {
+  // Vì sao: portal gồm đăng nhập/hồ sơ/điểm. Khoá nhầm portal sẽ khiến người dùng
+  // không thể đăng nhập lại để biết tình trạng bảo trì, phải rollback khẩn.
+  assert.equal(FEATURE_GROUPS.find((group) => group.id === 'portal').lockable, false);
+});
+
+check('LOCKABLE_FEATURE_IDS khớp đúng nhóm lockable theo thứ tự', () => {
+  // Vì sao so lại với FEATURE_GROUPS: export này là đầu vào cho ServiceLockService
+  // (Task 2) dựng map trạng thái; nếu nó lệch nguồn sự thật thì map thiếu/thừa khoá.
+  assert.deepEqual(
+    LOCKABLE_FEATURE_IDS,
+    FEATURE_GROUPS.filter((group) => group.lockable).map((group) => group.id)
+  );
+  assert.deepEqual(
+    LOCKABLE_FEATURE_IDS,
+    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+  );
 });
 
 if (failed > 0) {
