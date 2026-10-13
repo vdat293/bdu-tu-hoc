@@ -462,6 +462,20 @@ check('Esc đóng được cả 5 cửa sổ mà không đổi hành vi đóng h
     /btnCloseAuthModal\.style\.display\s*!==\s*'none'[\s\S]{0,80}closeAuthModal\(\)/,
     'Esc ở modal xác thực chỉ được đóng khi nút đóng đang hiện'
   );
+
+  // ... và nút đóng phải được giấu LẠI khi đóng. Không có dòng này thì sau một
+  // lần bấm "Đổi khóa" (handler bật nút đóng), mọi 401/403 sau đó sẽ để lại
+  // nút đang bật ⇒ Esc đóng được cửa sổ vốn không đóng được ⇒ người dùng
+  // bấm nhầm Esc một phát là rơi vào trang toàn lỗi mà không hiểu vì sao.
+  const closeAuth = adminJs.slice(
+    adminJs.indexOf('function closeAuthModal'),
+    adminJs.indexOf('function clearAuthForm')
+  );
+  assert.match(
+    closeAuth,
+    /dom\.btnCloseAuthModal\.style\.display\s*=\s*'none'/,
+    "closeAuthModal() phải giấu lại nút đóng (display = 'none') để gate bắt buộc không đóng được bằng Esc"
+  );
 });
 
 /* ---- 1b. Tương phản chữ trên nền tint (đo lại bằng công thức WCAG) ---- */
@@ -665,7 +679,9 @@ check('modal Hành trình bám mốc thời gian ở topbar như modal Dấu v�
   );
   // Mọi nhãn trong modal phải đọc mốc đã dùng, không đọc lại state lúc vẽ —
   // không thì đổi mốc giữa chừng là nhãn lệch với dữ liệu đang hiện.
-  for (const fn of ['renderJourney', 'renderJourneyNotice']) {
+  // renderJourneyTimeline cũng nằm trong danh sách: lời nhắc ở trạng thái
+  // rỗng nói đúng khoảng đang xem cũng là một "nhãn" như vậy.
+  for (const fn of ['renderJourney', 'renderJourneyNotice', 'renderJourneyTimeline']) {
     const body = adminJs.slice(adminJs.indexOf(`function ${fn}`), adminJs.indexOf(`function ${fn}`) + 1500);
     assert.doesNotMatch(
       body,
@@ -685,11 +701,14 @@ check('không còn .toLocaleString() trần trong admin.js', () => {
   const helperStart = code.indexOf('function formatNumber');
   const helperEnd = code.indexOf('function formatPercent');
   const outsideHelper = code.slice(0, helperStart) + code.slice(helperEnd);
-  const bare = [...outsideHelper.matchAll(/[^.\w]toLocaleString\(\)/g)];
-  assert.equal(
-    bare.length,
-    0,
-    `Còn ${bare.length} chỗ gọi .toLocaleString() trần ngoài helper formatNumber — dùng formatNumber()/formatDateTime()`
+  // So sánh chuỗi thẳng, KHÔNG dùng regex loại ký tự trước: `toLocaleString`
+  // không receiver là vô nghĩa nên mọi dạng thật đều có dấu `.` phía trước —
+  // regex kiểu `/[^.\w]toLocaleString\(\)/` loại chính dấu `.` nên lọt sạch mọi
+  // lời gọi `x.toLocaleString()`. Helper `formatNumber` gọi kèm tham số
+  // (`toLocaleString('vi-VN', {...})`) nên nằm ngoài chuỗi `toLocaleString()` này.
+  assert.ok(
+    !outsideHelper.includes('toLocaleString()'),
+    'admin.js còn gọi .toLocaleString() trần ngoài helper formatNumber — dùng formatNumber()/formatDateTime()'
   );
   // Ba chỗ dễ sót nhất trong bảng Nhật ký / bảng Sinh viên.
   assert.ok(!code.includes('p.total.toLocaleString()'), 'renderLogs còn dùng toLocaleString trần');
@@ -742,33 +761,38 @@ check('prefers-reduced-motion tắt sạch chuyển động và hiệu ứng', (
 });
 
 check('khung bảng cuộn riêng và trục chính bị kẹp (không tràn ngang cả trang)', () => {
-  const scrollRule = adminCss.slice(
-    adminCss.indexOf('.table-scroll,'),
-    adminCss.indexOf('.table-scroll,') + 300
-  );
+  // Bỏ comment TRƯỚC khi so. Nếu không, các chú thích tiếng Việt trong chính
+  // rule (viết để giải thích vì sao phải có) chứa đúng các chuỗi mà test tìm
+  // — xoá declaration thật thì comment vẫn khớp và test vẫn xanh, tức test
+  // không gìn được gì cả.
+  const rules = adminCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const scrollRule = rules.slice(rules.indexOf('.table-scroll,'), rules.indexOf('.table-scroll,') + 300);
+  assert.ok(scrollRule.length > 10, 'admin.css không còn khối .table-scroll');
   assert.match(scrollRule, /overflow-x:\s*auto/, 'Khung bảng phải cuộn ngang trong chính nó');
   assert.match(scrollRule, /width:\s*100%/, 'Khung bảng phải giữ width: 100%');
 
   // min-width: 0 ở .admin-main-wrapper là thứ giữ cả trang không tràn ở 1024px.
+  // Bắt buộc có dấu chấm phẩy để không khớp nhầm `min-width: 0px` hay comment.
   assert.match(
-    adminCss,
-    /\.admin-main-wrapper\s*\{[^}]*min-width:\s*0/,
+    rules,
+    /\.admin-main-wrapper\s*\{[^}]*min-width:\s*0\s*;/,
     '.admin-main-wrapper phải có min-width: 0 (flex item mặc định min-width:auto làm tràn trang)'
   );
   // Lưới chứa bảng rộng phải kẹp cột bằng minmax(0, 1fr): nếu để `auto`, lưới
   // bị nới theo phần tử rộng nhất và đẩy tràn ngang CẢ TRANG.
   assert.match(
-    adminCss,
-    /\.insight-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    rules,
+    /\.insight-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
     '.insight-stack phải kẹp cột bằng minmax(0, 1fr) (bảng số dự phòng rộng 900px)'
   );
   // Các lưới tự co (auto-fit + minmax) an toàn ở 375px vì tự xuống 1 cột khi
   // bề rộng khung nhỏ hơn số nhỏ nhất của một ô — chỉ cần không đặt min rộng hơn
   // bề rộng khung ở 375px (khung ~343px sau padding).
   for (const grid of ['.kpi-grid', '.system-metrics-row', '.activity-summary-grid']) {
-    const at = adminCss.indexOf(`${grid} {`);
+    const at = rules.indexOf(`${grid} {`);
     assert.ok(at !== -1, `admin.css thiếu lưới ${grid}`);
-    const rule = adminCss.slice(at, adminCss.indexOf('}', at));
+    const rule = rules.slice(at, rules.indexOf('}', at));
     const min = rule.match(/minmax\((\d+)px/);
     assert.ok(min, `${grid} phải dùng minmax(Npx, 1fr) để tự xuống cột ở màn hẹp`);
     assert.ok(

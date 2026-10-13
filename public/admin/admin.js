@@ -471,6 +471,12 @@ function openAuthModal() {
 function closeAuthModal() {
   dom.modalAuthGate.style.display = 'none';
   dom.authErrorMsg.style.display = 'none';
+  // Giấu lại nút đóng. Nút này CHỈ hiện khi người dùng tự bấm "Đổi khóa"
+  // (xem handler bên dưới) — cửa sổ xác thực bị chặn sau 401/403 thì không
+  // có lối thoát. Nếu không reset ở đây thì sau một lần bấm "Đổi khóa", mọi
+  // lần 401/403 về sau sẽ thừa hưởng nút đóng đang bật, và phím Esc sẽ
+  // đóng được cửa sổ vốn không đóng được → người dùng rơi vào trang toàn lỗi.
+  dom.btnCloseAuthModal.style.display = 'none';
 }
 
 function clearAuthForm() {
