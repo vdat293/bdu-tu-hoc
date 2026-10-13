@@ -380,6 +380,11 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  /* min-width: 0 là BẮT BUỘC: đây là flex item của .admin-layout. Mặc định
+     min-width: auto khiến nó không co nhỏ hơn min-content của con (topbar +
+     bảng Sinh viên 9 cột) nên ở 1024px nó phình ra và đẩy CẢ TRANG cuộn ngang
+     ~389px. Kẹp về 0 thì phần rộng chỉ cuộn trong khung .table-scroll riêng. */
+  min-width: 0;
 }
 
 /* Topbar */
@@ -602,6 +607,26 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* Thẻ KPI nhỏ của tab Sinh viên bọc nhãn/số/mô tả trong .kpi-content nhưng
+   trước đây KHÔNG có CSS nên chúng chảy inline và dính thành một dòng
+   ("ĐÃ VÀO WEB 2 Bảng students..."). Xếp dọc lại cho đúng phân cấp KPI. */
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kpi-trend {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.kpi-trend.positive { color: var(--color-success); }
+.kpi-trend.neutral { color: var(--text-muted); }
+.kpi-trend.negative { color: var(--color-destructive); }
 
 .kpi-value {
   font-size: 2.1rem;
@@ -983,6 +1008,9 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+  /* Cho phép từng khúc lọc co lại; nếu để min-width:auto thì một nhóm chip sẽ
+     đẩy cả toolbar (và cả trang) tràn ngang ở 375px. */
+  min-width: 0;
 }
 
 .search-box {
@@ -1025,6 +1053,11 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
+  /* Nhóm chip tự xuống dòng BÊN TRONG khung lọc. Trước đây nhóm này không wrap
+     nên ở 375px nó rộng 355px và đẩy tràn ngang ~15px (đúng lỗi review Task 7b
+     ghi nhận cho tab Nhật ký). */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .filter-label {
@@ -1335,6 +1368,15 @@ body {
 .btn-filter-student:hover {
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+/* Cột "Thao tác" của bảng Sinh viên giờ có 2 nút (Dấu vết API + Hành trình).
+   Xếp ngang, căn phải, và cho phép xuống dòng khi cột bị ép hẹp. */
+.student-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* Nhãn trạng thái sinh viên ở bảng "Sinh viên đã vào web". Trước đây màu nền/màu
@@ -1977,12 +2019,12 @@ body {
   }
 
   /* Vì sao phải canh thiệp: nhóm nút phía phải topbar có chiều rộng min-content
-     ~400px. Cột flex mặc định có min-width:auto nên nó đẩy cả .admin-main-wrapper
-     và toàn bộ trang cuộn ngang ở 375px (scrollWidth 399 > clientWidth 360) —
-     vi phạm mục tiêu "không cuộn ngang cả trang, chỉ bảng cuộn trong khung".
-     Cách sửa: cho phép topbar xuống dòng và buộc các khúc con co lại được
-     (min-width:0) thay vì ẩn nút bấm. */
-  .admin-main-wrapper,
+     ~400px. Cột flex mặc định có min-width:auto nên nó đẩy toàn bộ trang cuộn
+     ngang ở 375px (scrollWidth 399 > clientWidth 360) — vi phạm mục tiêu "không
+     cuộn ngang cả trang, chỉ bảng cuộn trong khung". Cách sửa: cho phép topbar
+     xuống dòng và buộc các khúc con co lại được (min-width:0) thay vì ẩn nút bấm.
+     (.admin-main-wrapper đã được kẹp min-width:0 ở khai báo gốc vì cùng bug xảy
+     ra cả ở 1024px.) */
   .admin-topbar,
   .topbar-left,
   .topbar-right,

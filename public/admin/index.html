@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
   <!-- Đổi version query khi đổi token/icon để trình duyệt không dùng CSS/JS cũ. -->
-  <link rel="stylesheet" href="/admin/admin.css?v=20261013-light2" />
+  <link rel="stylesheet" href="/admin/admin.css?v=20261013-light3" />
   <script src="/admin/chart.min.js"></script>
 </head>
 <body>
@@ -324,22 +324,25 @@
                 </button>
               </div>
 
-              <div class="filter-group">
+              <!-- Bộ lọc dùng thành phần .chip chung (spec mục 4.4); trạng thái
+                   chọn phơi qua aria-pressed để trình đọc màn hình đọc được,
+                   không chỉ dựa vào màu của .active. -->
+              <div class="filter-group" role="group" aria-label="Lọc theo mã HTTP">
                 <span class="filter-label">Mã HTTP:</span>
-                <button type="button" class="filter-btn active" data-status="all">Tất cả</button>
-                <button type="button" class="filter-btn" data-status="2xx">2xx</button>
-                <button type="button" class="filter-btn" data-status="3xx">3xx</button>
-                <button type="button" class="filter-btn" data-status="4xx">4xx</button>
-                <button type="button" class="filter-btn" data-status="5xx">5xx</button>
+                <button type="button" class="chip filter-btn active" aria-pressed="true" data-status="all">Tất cả</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-status="2xx">2xx</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-status="3xx">3xx</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-status="4xx">4xx</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-status="5xx">5xx</button>
               </div>
 
-              <div class="filter-group">
+              <div class="filter-group" role="group" aria-label="Lọc theo method">
                 <span class="filter-label">Method:</span>
-                <button type="button" class="filter-btn active" data-method="all">Tất cả</button>
-                <button type="button" class="filter-btn" data-method="GET">GET</button>
-                <button type="button" class="filter-btn" data-method="POST">POST</button>
-                <button type="button" class="filter-btn" data-method="PUT">PUT</button>
-                <button type="button" class="filter-btn" data-method="DELETE">DELETE</button>
+                <button type="button" class="chip filter-btn active" aria-pressed="true" data-method="all">Tất cả</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-method="GET">GET</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-method="POST">POST</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-method="PUT">PUT</button>
+                <button type="button" class="chip filter-btn" aria-pressed="false" data-method="DELETE">DELETE</button>
               </div>
 
               <div class="filter-group">
@@ -357,20 +360,22 @@
               </span>
             </div>
 
-            <!-- Logs Table -->
-            <div class="table-container">
+            <!-- Bảng bọc trong .table-scroll: bảng rộng hơn khung thì cuộn NGANG
+                 BÊN TRONG khung, không đẩy tràn cả trang ở 375px (spec mục 4.1). -->
+            <div class="table-scroll">
               <table class="admin-data-table">
+                <caption class="sr-only">Nhật ký yêu cầu HTTP, mới nhất ở trên cùng</caption>
                 <thead>
                   <tr>
-                    <th style="width: 140px;">Thời Gian</th>
-                    <th style="width: 80px;">Method</th>
-                    <th style="width: 230px;">API (Route)</th>
-                    <th>Đường Dẫn (Path)</th>
-                    <th style="width: 90px;">Mã HTTP</th>
-                    <th style="width: 90px;">Độ Trễ</th>
-                    <th style="width: 140px;">Sinh Viên</th>
-                    <th style="width: 140px;">IP / Thiết Bị</th>
-                    <th style="width: 70px; text-align: center;">Chi Tiết</th>
+                    <th scope="col" style="width: 140px;">Thời Gian</th>
+                    <th scope="col" style="width: 80px;">Method</th>
+                    <th scope="col" style="width: 230px;">API (Route)</th>
+                    <th scope="col">Đường Dẫn (Path)</th>
+                    <th scope="col" style="width: 90px;">Mã HTTP</th>
+                    <th scope="col" style="width: 90px;">Độ Trễ</th>
+                    <th scope="col" style="width: 140px;">Sinh Viên</th>
+                    <th scope="col" style="width: 140px;">IP / Thiết Bị</th>
+                    <th scope="col" style="width: 70px; text-align: center;">Chi Tiết</th>
                   </tr>
                 </thead>
                 <tbody id="logs-table-body">
@@ -480,19 +485,24 @@
               </div>
             </div>
 
-            <div class="table-container">
+            <!-- Bọc trong .table-scroll: bảng 9 cột rộng hơn khung nên cuộn ngang
+                 bên trong khung; đây là chỗ từng đẩy tràn cả trang ở 1024px.
+                 Sắp xếp do ô chọn phía trên điều khiển (server-side); aria-sort
+                 chỉ PHẢN ÁNH cột đang sắp — không thêm hành vi sắp xếp mới. -->
+            <div class="table-scroll">
               <table class="admin-data-table">
+                <caption class="sr-only">Danh sách sinh viên đã truy cập website</caption>
                 <thead>
                   <tr>
-                    <th style="width: 50px;">STT</th>
-                    <th style="min-width: 110px;">MSSV</th>
-                    <th style="min-width: 170px;">Họ & Tên</th>
-                    <th style="min-width: 110px;">Lớp / Khoa</th>
-                    <th style="min-width: 150px;">Lần Đầu Vào Web</th>
-                    <th style="min-width: 150px;">Lần Vào Gần Nhất</th>
-                    <th style="min-width: 100px; text-align: center;">Lượt Request</th>
-                    <th style="min-width: 100px; text-align: center;">Trạng Thái</th>
-                    <th style="text-align: right; min-width: 110px;">Thao Tác</th>
+                    <th scope="col" style="width: 50px;">STT</th>
+                    <th scope="col" data-sort-key="mssv" aria-sort="none" style="min-width: 110px;">MSSV</th>
+                    <th scope="col" data-sort-key="full_name" aria-sort="none" style="min-width: 170px;">Họ & Tên</th>
+                    <th scope="col" style="min-width: 110px;">Lớp / Khoa</th>
+                    <th scope="col" data-sort-key="first_login_at" aria-sort="none" style="min-width: 150px;">Lần Đầu Vào Web</th>
+                    <th scope="col" data-sort-key="last_login_at" aria-sort="descending" style="min-width: 150px;">Lần Vào Gần Nhất</th>
+                    <th scope="col" data-sort-key="total_requests" aria-sort="none" style="min-width: 100px; text-align: center;">Lượt Request</th>
+                    <th scope="col" style="min-width: 100px; text-align: center;">Trạng Thái</th>
+                    <th scope="col" style="text-align: right; min-width: 220px;">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody id="visited-students-table-body">
@@ -812,6 +822,6 @@
   <!-- Toast Notification Region -->
   <div class="admin-toast-container" id="admin-toast-container"></div>
 
-  <script type="module" src="/admin/admin.js?v=20261013-v4"></script>
+  <script type="module" src="/admin/admin.js?v=20261013-v5"></script>
 </body>
 </html>

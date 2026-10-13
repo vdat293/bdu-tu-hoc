@@ -303,6 +303,46 @@ check('admin.js không còn emoji nào (chỉ dùng inline SVG)', () => {
   assert.match(adminJs, /DEVICE_PRESENTATION\[name\]/, 'renderDevices phải tra DEVICE_PRESENTATION để lấy icon');
 });
 
+/* --------------------------------------------------------------------------
+   Task 8 — tab Nhật ký + Sinh viên.
+   Hai hợp đồng dễ vỡ nhất của hai tab này:
+     1. Bảng phải nằm trong khung cuộn riêng (.table-scroll) để bảng rộng 720px+
+        không đẩy tràn ngang CẢ TRANG ở 375/1024 (đúng lỗi tràn mà review Task 7b
+        đã ghi nhận: Nhật ký ~15px ở 375, Sinh viên ~389px ở 1024).
+     2. Nút "Hành trình" trong bảng Sinh viên phải gọi openJourney() (Task 10 nối
+        endpoint /insights/users/:mssv/journey). Task 8 chỉ dựng nút + khung hàm.
+   Vẫn khóa việc GIỮ các id cũ mà JS đổ dữ liệu vào — đổi id là bảng trắng câm.
+   -------------------------------------------------------------------------- */
+
+check('bảng Nhật ký và Sinh viên được bọc trong khung .table-scroll', () => {
+  const logsPane = sliceBetween(indexHtml, 'id="pane-logs"', '</section>');
+  assert.ok(
+    logsPane.includes('class="table-scroll"'),
+    'Vùng Nhật ký phải bọc bảng trong .table-scroll để bảng không đẩy tràn cả trang'
+  );
+  const usersPane = sliceBetween(indexHtml, 'id="pane-users"', '</section>');
+  assert.ok(
+    usersPane.includes('class="table-scroll"'),
+    'Vùng Sinh viên phải bọc bảng trong .table-scroll để bảng không đẩy tràn cả trang'
+  );
+});
+
+check('bảng Sinh viên có nút Hành trình gọi openJourney()', () => {
+  assert.match(adminJs, /openJourney\(/, 'admin.js phải có hàm/gọi openJourney()');
+  // Chỉ có hàm mà không nối nút thì hành trình không mở được từ giao diện.
+  assert.match(
+    adminJs,
+    /btn-view-student-journey/,
+    'admin.js phải dựng nút .btn-view-student-journey trong bảng Sinh viên'
+  );
+});
+
+check('id cũ của hai tab Nhật ký + Sinh viên vẫn được giữ', () => {
+  for (const id of ['logs-table-body', 'visited-students-table-body']) {
+    assert.ok(indexHtml.includes(`id="${id}"`), `index.html mất phần tử #${id}`);
+  }
+});
+
 if (failed > 0) {
   console.log(`✗ Admin redesign UI foundation: ${failed} ca thất bại.`);
   process.exitCode = 1;

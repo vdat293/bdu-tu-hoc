@@ -1705,6 +1705,17 @@ function labelForTimeRange(range) {
   }[range] || range;
 }
 
+/**
+ * Mở "Hành trình" của một sinh viên: dòng thời gian có thứ tự + tách phiên.
+ * KHUNG HÀM cho Task 10 — nơi đây sẽ gọi
+ * GET /api/admin/dashboard/insights/users/:mssv/journey rồi render timeline
+ * theo phiên vào modal #modal-journey. Task 8 chỉ dựng nút bấm nối tới hàm này
+ * để hành trình có chỗ mở; chưa gọi endpoint nên báo rõ thay vì im lặng.
+ */
+function openJourney(mssv) {
+  showToast(`Hành trình của ${mssv} sẽ mở khi có modal chi tiết.`, 'info');
+}
+
 async function openStudentActivity(mssv) {
   currentActivityMssv = mssv;
   dom.studentActivityTitle.textContent = `Dấu Vết API • ${mssv}`;
@@ -1798,10 +1809,19 @@ dom.btnClearSearch.addEventListener('click', () => {
   fetchAllData();
 });
 
+// Chip lọc chọn một trong nhóm: đổi .active (màu) ĐI KÈM aria-pressed (đọc được
+// bằng trình đọc màn hình). Spec mục 4.1: không truyền nghĩa chỉ bằng màu.
+function setChipGroupState(buttons, activeBtn) {
+  buttons.forEach((btn) => {
+    const isActive = btn === activeBtn;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
 dom.statusFilterBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
-    dom.statusFilterBtns.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
+    setChipGroupState(dom.statusFilterBtns, btn);
     state.logFilters.status = btn.getAttribute('data-status');
     state.logFilters.page = 1;
     fetchAllData();
@@ -1810,8 +1830,7 @@ dom.statusFilterBtns.forEach((btn) => {
 
 dom.methodFilterBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
-    dom.methodFilterBtns.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
+    setChipGroupState(dom.methodFilterBtns, btn);
     state.logFilters.method = btn.getAttribute('data-method');
     state.logFilters.page = 1;
     fetchAllData();
@@ -1858,6 +1877,22 @@ dom.selectLogLimit.addEventListener('change', (e) => {
   state.logFilters.page = 1;
   fetchAllData();
 });
+
+/**
+ * Phản ánh cột đang sắp xếp của bảng Sinh viên lên `aria-sort` để trình đọc màn
+ * hình đọc được thứ tự hiện tại. Nghiệp vụ sắp xếp vẫn do #select-visited-sort
+ * (server-side) quyết định — hàm này KHÔNG đổi thứ tự dữ liệu.
+ */
+function syncVisitedSortIndicators() {
+  if (!dom.visitedTableBody) return;
+  const table = dom.visitedTableBody.closest('table');
+  if (!table) return;
+  const { sortBy, sortDir } = state.visitedFilters;
+  table.querySelectorAll('th[data-sort-key]').forEach((th) => {
+    const isActive = th.getAttribute('data-sort-key') === sortBy;
+    th.setAttribute('aria-sort', isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
 
 // 6. Render Visited Students (Bảng students trên VPS)
 function renderVisitedStudents(res = {}) {
@@ -1932,9 +1967,12 @@ function renderVisitedStudents(res = {}) {
             </strong>
           </td>
           <td style="text-align: center;">${statusBadge}</td>
-          <td style="text-align: right;">
+          <td class="student-row-actions">
             <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${safeMssv}" title="Xem dấu vết API sinh viên này đã gọi">
               ${renderIcon('compass', 'svg-icon svg-icon--sm')}<span>Dấu vết API</span>
+            </button>
+            <button type="button" class="btn-filter-student btn-view-student-journey" data-mssv="${safeMssv}" title="Xem hành trình tương tác của sinh viên này">
+              ${renderIcon('route', 'svg-icon svg-icon--sm')}<span>Hành trình</span>
             </button>
           </td>
         </tr>
@@ -1947,7 +1985,19 @@ function renderVisitedStudents(res = {}) {
         openStudentActivity(mssv);
       });
     });
+
+    // Nút Hành trình (Task 8): nối tới openJourney để Task 10 chỉ việc thay thân
+    // hàm, không phải sửa lại phần render bảng.
+    dom.visitedTableBody.querySelectorAll('.btn-view-student-journey').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openJourney(btn.getAttribute('data-mssv'));
+      });
+    });
   }
+
+  // Đồng bộ aria-sort của header với cột đang sắp (ô chọn phía trên điều khiển).
+  // Chỉ PHẢN ÁNH trạng thái — không thêm hành vi sắp xếp mới.
+  syncVisitedSortIndicators();
 
   // Update Pagination
   if (dom.visitedPaginationInfo) {
