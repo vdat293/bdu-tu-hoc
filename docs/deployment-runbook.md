@@ -37,20 +37,28 @@ Muốn zero-downtime thì phải tách WebSocket ra service riêng + shared pub/
 
 ## 3. Bootstrap lần đầu (chỉ chạy một lần)
 
-Máy mới (sau `aws/infra.sh deploy`) chưa có code, `.env` hay dữ liệu. Chạy
-`deploy/bootstrap-server.sh` **một lần** trên EC2; script này:
+Máy mới (sau `aws/infra.sh deploy`) chưa có code, `.env` hay dữ liệu. Trình tự:
 
-1. Kiểm tra swap, Docker, Compose; từ chối chạy lại nếu DB đã có ledger.
-2. `git clone` repo vào `APP_DIR`, checkout đúng SHA.
-3. Kiểm `.env` có đủ nhóm biến bắt buộc (không in giá trị).
-4. `docker compose up -d postgres` rồi nạp dump `data/vps_sync_20260919.sql`
-   bằng `psql` trong container `postgres`.
-5. Chốt mốc migration bằng **fingerprint**: so `fingerprint(bdu_hub)` với
-   `fingerprint(bdu_fresh)` (DB rác migrate 001→056); dừng nếu lệch.
-6. `docker compose up -d --no-build` và kiểm `/api/health`.
+1. `git clone https://github.com/vdat293/bdu-tu-hoc.git /opt/bdu-tu-hoc` rồi
+   `git checkout --detach <sha>` (repo **public**, không cần deploy key).
+2. Tạo `/opt/bdu-tu-hoc/.env` (quyền 600) từ `.env.example`, điền các biến
+   trong spec mục 6.3.
+3. Copy file dump dữ liệu vào `data/` và **cert Cloudflare** vào `~/cloudflare/`
+   (`cert.pem` + `cert.key`).
+4. Chạy `deploy/bootstrap-server.sh` **một lần**. Script này:
 
-Mốc `BDU_MIGRATION_BASELINE_THROUGH_VERSION` thực tế đã dùng được ghi ở
-`aws/README.md`. Nguyên tắc: **chỉ migrate khi hai fingerprint trùng khít.**
+   - Kiểm tra Docker/Compose, `.env` đủ biến, có file dump; từ chối chạy lại nếu
+     ledger đã có bản ghi.
+   - `docker compose up -d postgres` rồi nạp dump bằng `psql` trong container.
+   - Tạo bảng ledger, đo fingerprint DB đích, **baseline** qua mốc đã kiểm chứng
+     (ghi ledger, KHÔNG chạy lại SQL cũ), rồi `db:migrate` phần còn lại.
+   - Tạo DB rác `bdu_fresh`, migrate 001→hết, so fingerprint — **phải trùng khít**
+     mới cho `up -d`.
+   - Đặt cert vào `deploy/caddy/certs/`, `up -d --no-build`, kiểm `/api/health`.
+
+Mốc `BDU_MIGRATION_BASELINE_THROUGH_VERSION` thực tế đã dùng **và fingerprint
+tương ứng** ghi ở `aws/README.md` (mục 6) — đó là nguồn duy nhất; tài liệu này
+không chép lại giá trị.
 
 ## 4. Deploy thủ công bằng `deploy.sh`
 
@@ -69,15 +77,16 @@ bash deploy/deploy.sh
 DEPLOY_SHA=<full-sha> bash deploy/deploy.sh
 ```
 
-Script làm theo đúng thứ tự:
+Script in log theo đúng 5 bước (khớp `deploy.sh`):
 
 1. **preflight** — `docker compose` OK, có `.env`, PostgreSQL phản hồi, git sạch.
-2. **kéo image** cho `DEPLOY_SHORT_SHA` từ GHCR (fail ⇒ dừng).
-3. **backup DB (bắt buộc)** — `npm run db:backup -- --pre-deploy`.
+   Sau bước này script **export `IMAGE_TAG=$DEPLOY_SHORT_SHA`** và ghi lại vào
+   `.env`, để backup/migrate/up dùng **cùng một image** với code đang deploy.
+2. **backup DB (bắt buộc)** — `npm run db:backup -- --pre-deploy`.
    Fail ⇒ dừng ngay, không migrate, không restart app.
-4. **migrate (đúng 1 lần)**. Fail ⇒ dừng, app cũ vẫn chạy.
-5. **pull + up** — `docker compose pull` rồi `up -d --no-build`.
-6. **healthcheck** — poll `http://127.0.0.1:3000/api/health` tối đa 90 giây,
+3. **migrate (đúng 1 lần)**. Fail ⇒ dừng, app cũ vẫn chạy.
+4. **pull + up** — `docker compose pull` rồi `up -d --no-build` (image từ GHCR).
+5. **healthcheck** — poll `http://127.0.0.1:3000/api/health` tối đa 90 giây,
    mỗi 3 giây. Fail ⇒ in hướng dẫn rollback rồi exit 1.
 
 ### Biến môi trường của `deploy.sh`

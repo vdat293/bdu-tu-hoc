@@ -457,10 +457,10 @@ cd /opt/bdu-tu-hoc && DEPLOY_SHA=$(git rev-parse HEAD) bash deploy/deploy.sh
 
 6 bước, dừng ngay khi một bước fail:
 
-1. **preflight** — `docker compose` có, `.env` tồn tại, PostgreSQL phản hồi, git sạch.
+1. **preflight** — `docker compose` OK, có `.env`, PostgreSQL phản hồi, git sạch.
 2. **backup DB** (bắt buộc) — `npm run db:backup -- --pre-deploy`. Fail ⇒ **dừng, không migrate**.
 3. **migrate** — đúng 1 lần. Fail ⇒ dừng, app cũ vẫn chạy, chưa restart.
-4. `docker compose pull` rồi `docker compose up -d --no-build` với `IMAGE_TAG` = 12 ký tự đầu của sha (image lấy từ GHCR; EC2 không build tại chỗ).
+4. **pull + up** — `docker compose pull` rồi `up -d --no-build` với `IMAGE_TAG` = 12 ký tự đầu của SHA.
 5. **healthcheck** — poll `/api/health` tối đa 90s; fail thì in hướng dẫn rollback cụ thể.
 6. In hướng dẫn rollback.
 

@@ -81,8 +81,8 @@ Actions nên EC2 không tốn thời gian/CPU để build.
 - **DLM snapshot không tự mất** khi xoá EC2; `cleanup.sh` xoá snapshot mang tag
   `Project=bdu-tu-hoc` trừ khi `SKIP_SNAPSHOTS=1`.
 - **Không còn tài nguyên nào thì `check` phải in 0 cho mọi loại.**
-- Baseline migration đã dùng cho DB production: ghi ở
-  `docs/deployment-runbook.md` (mục bootstrap) sau khi chạy.
+- Baseline migration đã dùng cho DB production: mốc + fingerprint ghi ở
+  `aws/README.md` (mục 6).
 
 ## 6. Kết quả nghiệm thu (2026-10-13)
 

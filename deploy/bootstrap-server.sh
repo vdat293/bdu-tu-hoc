@@ -174,12 +174,17 @@ ok "Migrate xong"
 log "Bước 9/11: đối chiếu với DB sạch ($FRESH_DB)"
 docker compose exec -T postgres sh -c \
   'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS '"$FRESH_DB"'" -c "CREATE DATABASE '"$FRESH_DB"'"' >/dev/null
-fresh_url="$(grep '^MIGRATION_DATABASE_URL=' .env | head -n1 | cut -d= -f2- | sed "s#/[^/]*\$#/$FRESH_DB#")"
-[[ "$fresh_url" == *"$FRESH_DB"* ]] || die "Không dựng được URL cho $FRESH_DB."
-docker compose run --rm --no-deps -e MIGRATION_DATABASE_URL="$fresh_url" bdu-hub \
-  npm run --silent db:migrate >/dev/null || die "Migrate DB sạch thất bại."
-fp_fresh="$(docker compose run --rm --no-deps -e MIGRATION_DATABASE_URL="$fresh_url" bdu-hub \
-  npm run --silent db:migration:fingerprint | tr -d '\r' | tail -n 1)"
+grep -q '^DATABASE_URL=.' .env || die "Thiếu DATABASE_URL trong .env."
+# Tạo DB rác bdu_fresh và migrate 001..hết để so fingerprint.
+# KHÔNG truyền MIGRATION_DATABASE_URL (có mật khẩu DB) thẳng trên dòng lệnh:
+# giá trị sẽ lộ trong `ps`/`docker inspect`. Thay vào đó truyền TÊN DB và ghép
+# URL ngay trong container từ DATABASE_URL sẵn có.
+fresh_url_db="$FRESH_DB"
+docker compose run --rm --no-deps -e MIGRATION_DB_NAME="$fresh_url_db" bdu-hub \
+  sh -c 'export MIGRATION_DATABASE_URL="$(printf "%s" "$DATABASE_URL" | sed "s#/[^/]*\$#/$MIGRATION_DB_NAME#")"; npm run --silent db:migrate' >/dev/null \
+  || die "Migrate DB sạch thất bại."
+fp_fresh="$(docker compose run --rm --no-deps -e MIGRATION_DB_NAME="$fresh_url_db" bdu-hub \
+  sh -c 'export MIGRATION_DATABASE_URL="$(printf "%s" "$DATABASE_URL" | sed "s#/[^/]*\$#/$MIGRATION_DB_NAME#")"; npm run --silent db:migration:fingerprint' | tr -d '\r' | tail -n 1)"
 # PHẢI đo lại fingerprint của DB đích SAU migrate: giá trị fp_target ở bước 6 là
 # trạng thái TRƯỚC migrate (dùng cho baseline), so nó với DB sạch là sai.
 fp_after="$(docker compose run --rm --no-deps bdu-hub \
