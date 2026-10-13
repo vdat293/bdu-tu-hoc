@@ -1,40 +1,39 @@
-// Cửa chặn bảo trì: middleware Express chặn mọi request khi công tắc khóa dịch vụ
-// đang bật, trừ danh sách miễn trừ (xem EXEMPT_PATHS/EXEMPT_PREFIXES bên dưới).
+// Cửa chặn bảo trì theo NHÓM tính năng: middleware Express chặn request khi
+// nhóm mà path thuộc về đang bị khoá bảo trì.
 //
 // Vì sao nhận getStatus qua tham số thay vì import ServiceLockService: giữ
 // middleware thuần, test được bằng hàm giả và tránh phụ thuộc vòng khi app.js
 // vừa import service vừa import guard.
 //
-// Vì sao tự chuẩn hoá path: Express CHỈ cắt tiền tố mount khỏi req.path khi
-// middleware được mount tại '/api'. Guard không được phép phụ thuộc vào chi tiết
-// đó, nên nó tự bỏ tiền tố '/api' trước khi so miễn trừ để đúng hợp đồng dù được
-// mount ở đâu (nhận cả '/health' lẫn '/api/health'). Nếu so sai, /api/health sẽ
-// bị chặn lúc đang khóa, deploy.sh tưởng app chết và tự rollback, còn admin
-// không đăng nhập lại được.
+// Vì sao KHÔNG còn danh sách miễn trừ cứng (EXEMPT_PATHS/EXEMPT_PREFIXES): trước
+// đây guard tự khai một danh sách path "không bao giờ chặn" (health/version/
+// status + vùng admin). Khi chuyển sang khoá theo nhóm, chính taxonomy
+// `feature-groups.js` đã mã hoá thông tin đó qua cờ `lockable`:
+//   - Portal (đăng nhập, /profile, /grades...) là nhóm `lockable:false` ⇒ không
+//     bao giờ bị chặn, người dùng luôn còn cách tự thoát khỏi màn bảo trì thay vì
+//     phải can thiệp DB/rollback.
+//   - Health/version/status và vùng admin không thuộc nhóm tính năng nào nên rơi
+//     vào OTHER_FEATURE ⇒ cũng không bị chặn.
+// Giữ hai nguồn sự thật (danh sách cứng cạnh taxonomy) sẽ lệch âm thầm mỗi khi
+// thêm route/nhóm mới, nên quy tắc nhóm `lockable` thay thế hoàn toàn.
+//
+// Vì sao tự tra nhóm bằng featureForPath: hàm này đã tự bỏ tiền tố '/api' và
+// query/hash, khớp tiền tố DÀI NHẤT (ví dụ /community/clans thuộc `clubs` chứ
+// không phải `community`), nên guard không cần tự chuẩn hoá path và luôn khớp
+// với cách phân tích traffic_logs dùng cùng taxonomy.
 
-// So trên path đã cắt tiền tố '/api' (theo Global Constraints của plan).
-const EXEMPT_PATHS = new Set(['/health', '/version', '/status']);
-
-// Miễn trừ theo tiền tố: toàn bộ khu vực quản trị phải vào được để còn tắt khóa.
-const EXEMPT_PREFIXES = ['/admin/dashboard'];
-
-function normalizePath(rawPath) {
-  const path = typeof rawPath === 'string' ? rawPath : '';
-  return path.startsWith('/api') ? path.slice(4) : path;
-}
-
-function isExemptPath(path) {
-  if (EXEMPT_PATHS.has(path)) return true;
-  return EXEMPT_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
-  );
-}
+import { featureForPath, OTHER_FEATURE } from '../config/feature-groups.js';
 
 export function createServiceLockGuard({ getStatus } = {}) {
   // Trả về Promise để tầng test có thể await; Express 4 bỏ qua giá trị trả về
   // của middleware nên việc này không ảnh hưởng luồng thật.
   return async function serviceLockGuard(req, res, next) {
-    if (isExemptPath(normalizePath(req && req.path))) {
+    const group = featureForPath(req && req.path);
+
+    // Nhóm "khác" (đăng nhập, identity, meta, admin...) và nhóm không cho khoá
+    // (portal) KHÔNG bao giờ bị chặn: quy tắc nhóm `lockable` thay thế danh sách
+    // miễn trừ cứng cũ, tránh lệch giữa hai nguồn sự thật.
+    if (group === OTHER_FEATURE || !group.lockable) {
       next();
       return;
     }
@@ -44,18 +43,22 @@ export function createServiceLockGuard({ getStatus } = {}) {
       status = await getStatus();
     } catch {
       // Fail-open: lỗi đọc trạng thái (DB hỏng, chưa cấu hình DATABASE_URL...)
-      // không được biến thành sự cố toàn site. Coi như không khóa.
+      // không được biến thành sự cố toàn site. Coi như không khoá.
       next();
       return;
     }
 
-    if (status && status.locked === true) {
+    // Chỉ chặn khi nhóm của path đang khoá thật (thiếu nhóm trong map cũng coi
+    // như mở để fail-open, tránh chặn oan khi map thiếu khoá).
+    const entry = status && status.groups ? status.groups[group.id] : null;
+    if (entry && entry.locked === true) {
       try {
         res.status(503).json({
           result: false,
           code: 'MAINTENANCE',
-          title: status.title,
-          message: status.message
+          group: group.id,
+          title: entry.title,
+          message: entry.message
         });
       } catch {
         // Phòng khi response không đủ API (shape lạ trong test): thà cho qua còn
