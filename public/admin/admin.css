@@ -1831,16 +1831,58 @@ body {
     display: inline-flex;
   }
 
+  /* Vì sao phải canh thiệp: nhóm nút phía phải topbar có chiều rộng min-content
+     ~400px. Cột flex mặc định có min-width:auto nên nó đẩy cả .admin-main-wrapper
+     và toàn bộ trang cuộn ngang ở 375px (scrollWidth 399 > clientWidth 360) —
+     vi phạm mục tiêu "không cuộn ngang cả trang, chỉ bảng cuộn trong khung".
+     Cách sửa: cho phép topbar xuống dòng và buộc các khúc con co lại được
+     (min-width:0) thay vì ẩn nút bấm. */
+  .admin-main-wrapper,
+  .admin-topbar,
+  .topbar-left,
+  .topbar-right,
+  .topbar-title-block {
+    min-width: 0;
+  }
+
   .admin-topbar {
-    padding: 0 16px;
+    height: auto;
+    min-height: 72px;
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: 10px;
+    padding: 10px 16px;
+  }
+
+  .topbar-right {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 10px;
   }
 
   .admin-content {
     padding: 16px;
   }
 
+  /* Mốc thời gian trước đây bị display:none trên máy nhỏ, khiến người dùng
+     không đổi được cửa sổ phân tích — mà đây lại là bộ lọc cấp dashboard
+     (spec mục 4.1). Giữ lại bằng dải pill tự cuộn ngang trong khung của nó:
+     vẫn dùng được trên 375px mà không làm trang cuộn ngang. */
   .time-range-group {
-    display: none;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 2px;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .range-pill {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    font-size: 0.72rem;
   }
 
   .modal-card-wide {
@@ -1853,6 +1895,20 @@ body {
 
   .route-code {
     max-width: 160px;
+  }
+}
+
+/* Ở điện thoại rất hẹp, dải mốc thời gian cần cả một hàng riêng. Nếu ép nó co
+   lại để nhường chỗ cho nhóm nút thì chỉ còn thấy 2 pill và phải cuộn ngang —
+   người dùng sẽ không biết còn mốc 7D/30D/ALL. Vì vậy cho nhóm nút xuống dòng. */
+@media (max-width: 600px) {
+  .time-range-group {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .refresh-selector {
+    flex: 0 1 auto;
   }
 }
 
@@ -2059,6 +2115,11 @@ body {
    ========================================================================== */
 .insight-stack {
   display: grid;
+  /* Bắt buộc kẹp cột: cột `auto` của lưới sẽ bị nới theo phần tử rộng nhất
+     (bảng số dự phòng min-width 900px) và đẩy tràn ngang CẢ TRANG ở 375/768px.
+     minmax(0, 1fr) giữ cột = bề rộng khung, phần rộng phải cuộn trong
+     .table-scroll của chính nó. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -2176,8 +2237,10 @@ body {
   overflow: hidden;
 }
 
+/* Ô rỗng: KHÔNG hạ opacity. Ô này vẫn in số "0" — tức là mang thông tin —
+   mà hạ 0.6 làm tương phản rơi còn ~2.7:1 (light) / ~3:1 (dark), dưới ngưỡng
+   4.5:1. Màu chữ đã là --heat-0-fg, tự nó đã đủ mờ để phân biệt ô có số. */
 .heatmap-cell--zero {
-  opacity: 0.6;
   font-weight: 500;
 }
 
@@ -2210,21 +2273,25 @@ body {
   padding: 6px 0;
 }
 
-.heatmap-numbers .admin-data-table {
+/* Selector KẾT HỢP, không phải hậu duệ: class `heatmap-numbers` nằm TRÊN cùng
+   thẻ <table class="admin-data-table heatmap-numbers">. Nếu viết dạng hậu duệ
+   (tức là con của .heatmap-numbers) thì không bao giờ khớp phần tử nào và bảng
+   số dự phòng rơi về kiểu bảng thường: chữ to, cột xô lệch. */
+.admin-data-table.heatmap-numbers {
   min-width: 900px;
   font-family: var(--font-mono);
   font-size: 0.68rem;
 }
 
-.heatmap-numbers .admin-data-table th,
-.heatmap-numbers .admin-data-table td {
+.admin-data-table.heatmap-numbers th,
+.admin-data-table.heatmap-numbers td {
   padding: 6px 5px;
   text-align: center;
   white-space: nowrap;
 }
 
-.heatmap-numbers .admin-data-table th:first-child,
-.heatmap-numbers .admin-data-table td:first-child {
+.admin-data-table.heatmap-numbers th:first-child,
+.admin-data-table.heatmap-numbers td:first-child {
   text-align: left;
   font-family: var(--font-main);
   font-size: 0.75rem;

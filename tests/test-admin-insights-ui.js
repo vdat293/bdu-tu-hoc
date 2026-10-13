@@ -128,6 +128,46 @@ check('mọi dữ liệu chèn DOM ở tab Insights đều qua escapeHtml', () =
   }
 });
 
+check('tab Insights không đẩy tràn ngang cả trang ở 375/768px', () => {
+  // Vì sao cần: khối chứa bảng số dự phòng có min-width 900px. Nếu cột của
+  // .insight-stack để `auto`, lưới sẽ bị nới theo bảng đó và
+  // documentElement.scrollWidth vượt viewport ở mọi màn hình.
+  assert.match(
+    adminCss,
+    /\.insight-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    '.insight-stack phải kẹp cột bằng minmax(0, 1fr), không được để cột auto'
+  );
+  // Phần rộng phải nằm trong khung cuộn riêng, không phải tràn ra ngoài.
+  assert.ok(indexHtml.includes('class="table-scroll"'), 'Bảng số dự phòng phải nằm trong khung .table-scroll');
+});
+
+check('bảng số dự phòng dùng selector kết hợp đúng (F2)', () => {
+  // Markup đặt CÙNG class trên một thẻ: <table class="admin-data-table heatmap-numbers">,
+  // nên selector hậu duệ (con của .heatmap-numbers) không bao giờ khớp. Bỏ comment
+  // trước khi so để chính chú thích giải thích cũng không làm test đỏ.
+  const rules = adminCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(
+    rules.includes('.admin-data-table.heatmap-numbers'),
+    'admin.css phải dùng selector kết hợp .admin-data-table.heatmap-numbers'
+  );
+  assert.ok(
+    !/\.heatmap-numbers\s+\.admin-data-table/.test(rules),
+    'admin.css vẫn còn selector chết dạng hậu duệ `.heatmap-numbers .admin-data-table`'
+  );
+});
+
+check('ô heatmap rỗng không bị hạ mờ mất tương phản (F3)', () => {
+  // Ô rỗng vẫn in số "0" ⇒ mang thông tin ⇒ không được hạ opacity (từng làm
+  // tương phản rơi còn ~2.7:1 ở theme sáng, dưới ngưỡng 4.5:1).
+  const start = adminCss.indexOf('.heatmap-cell--zero {');
+  assert.ok(start !== -1, 'admin.css thiếu khối .heatmap-cell--zero');
+  const block = adminCss.slice(start, adminCss.indexOf('}', start));
+  assert.ok(
+    !/opacity\s*:/.test(block),
+    `Khối .heatmap-cell--zero không được hạ opacity: ${block.trim()}`
+  );
+});
+
 if (failed > 0) {
   console.log(`✗ Admin insights UI: ${failed} ca thất bại.`);
   process.exitCode = 1;
