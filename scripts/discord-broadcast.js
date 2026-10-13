@@ -7,7 +7,7 @@
  *  - Bỏ trống nội dung để dùng mẫu cập nhật mặc định bên dưới.
  *  - occurrence-key mặc định: broadcast-<ISO timestamp> (mỗi lần chạy là một đợt).
  *
- * Trên VPS: docker compose exec -T bdu-hub node scripts/discord-broadcast.js
+ * Trên máy chủ production: docker compose exec -T bdu-hub node scripts/discord-broadcast.js
  */
 import { closeDatabase, isDatabaseConfigured } from '../src/db/database.js';
 import { BroadcastService, BROADCAST_MAX_TEXT } from '../src/services/broadcast.service.js';

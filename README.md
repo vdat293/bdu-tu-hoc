@@ -170,7 +170,7 @@ trong repository thành một container nguyên khối:
 
 ### Cách 1: Sử dụng Docker Compose (Khuyên dùng)
 
-Trên VPS cần cài Docker Engine và Docker Compose plugin trước. Sau đó:
+Trên máy chủ (EC2) cần cài Docker Engine và Docker Compose plugin trước. Sau đó:
 
 ```bash
 cp .env.example .env
@@ -202,31 +202,26 @@ Chrome báo `Invalid frame header`, socket mở nhưng không nhận `hello`/`au
 và UI realtime rơi về polling dự phòng nên trông như "phản hồi rất chậm" so với
 môi trường local. Ứng dụng Node đã tự gắn `Cache-Control: no-transform` và
 `X-Accel-Buffering: no` vào response 101 của `/ws/community`; cấu hình proxy mẫu
-([`deploy/caddy/Caddyfile.example`](deploy/caddy/Caddyfile.example) hoặc Nginx)
+([`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile))
 cũng nên lặp lại hai header này cho request Upgrade để fix không phụ thuộc một tầng.
 
-### Nginx + TLS/WSS trên VPS
+### Reverse proxy + TLS/WSS trên EC2
 
-Production React phải được build trong image (`docker compose up -d --build`) và
-được phục vụ cùng một HTTPS origin; client khi đó tự dùng
-`wss://<host>/ws/community`. Sao chép
-[`deploy/nginx/bdu-hub.conf.example`](deploy/nginx/bdu-hub.conf.example), thay
-`hub.example.edu.vn` và đường dẫn certificate, rồi kiểm tra/reload Nginx:
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
+Production React được build trong image ở CI (GitHub Actions → GHCR); EC2 chỉ
+`docker compose pull` rồi `up -d --no-build`. Caddy là điểm vào duy nhất: nhận
+80/443, trình chứng chỉ Cloudflare Origin và `reverse_proxy` toàn bộ về
+`bdu-hub:3000` (xem [`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile)); client
+khi đó tự dùng `wss://sv.bdu.io.vn/ws/community`.
 
 Giữ `WS_TRUST_PROXY=true` chỉ vì Compose bind Node tại `127.0.0.1`; không expose
-port 3000 ra Internet. Template bắt buộc HTTP/1.1 Upgrade, các header public
-host/proto, tắt buffering, và timeout 90 giây (heartbeat server là 30 giây).
-Nếu frontend nằm ở một origin khác, đặt `WS_ALLOWED_ORIGINS=https://frontend.example.edu.vn`;
-không dùng `*`.
+port 3000 ra Internet. Caddy tự chuyển tiếp HTTP/1.1 Upgrade và các header public
+host/proto. Nếu frontend nằm ở một origin khác, đặt
+`WS_ALLOWED_ORIGINS=https://frontend.example.edu.vn`; không dùng `*`.
 
 Sau deploy, xác nhận WSS qua proxy (thay token thật, không lưu token vào shell history):
 
 ```bash
-npx wscat -c wss://hub.example.edu.vn/ws/community -H 'Origin: https://hub.example.edu.vn'
+npx wscat -c wss://sv.bdu.io.vn/ws/community -H 'Origin: https://sv.bdu.io.vn'
 # rồi gửi: {"type":"auth","token":"<token>"}
 ```
 
@@ -282,7 +277,7 @@ Muốn build id cố định/đọc được thay vì timestamp, truyền lúc b
 ### Ảnh & Cloudflare R2
 
 Toàn bộ ảnh người dùng (avatar, ảnh bài viết, ảnh/GIF bình luận Confession) được
-lưu trên Cloudflare R2; server **không ghi file ảnh runtime xuống VPS** và
+lưu trên Cloudflare R2; server **không ghi file ảnh runtime xuống máy chủ** và
 database chỉ giữ URL/object key.
 
 Cấu hình trong `.env` (xem đầy đủ ở `.env.example`):
@@ -356,7 +351,7 @@ hoặc khi thắng ván, site phát hiệu ứng cinematic theo khung; danh hi�
 50) có hiệu ứng riêng — thêm danh hiệu mới chỉ cần khai báo ở
 `src/config/game-titles.js` và `public/games/js/identity.js`.
 
-Khi chạy production trên VPS:
+Khi chạy production trên EC2:
 
 1. Đặt `PUBLIC_APP_URL` là origin public đang map tới site games (ví dụ
    `https://hub.example.edu.vn` khi dùng `/games`, hoặc
@@ -382,7 +377,7 @@ hoặc PostgreSQL NOTIFY) trước khi scale ngang.
 ### Giới hạn topology WebSocket
 
 Gateway WebSocket hiện giữ membership room và broadcast trong bộ nhớ của một
-Node process. Vì vậy VPS Compose này **phải chạy đúng một `bdu-hub` replica**;
+Node process. Vì vậy Compose này **phải chạy đúng một `bdu-hub` replica**;
 không dùng `docker compose up --scale bdu-hub=...` hay nhiều worker Node cho đến
 khi có shared pub/sub adapter. Compose đã đặt `deploy.replicas: 1` và
 `container_name` để phản ánh ràng buộc đó. Sau deploy, kiểm tra chỉ có một app
@@ -407,8 +402,8 @@ công tắc trong `/admin`. Mỗi lần đồng bộ thành công chỉ giữ l�
 `RANKING_SNAPSHOT_RETENTION_RUNS` (mặc định 3) snapshot gần nhất để database
 không phình; các run bỏ dở quá 6 giờ được tự đánh dấu thất bại.
 
-Import dữ liệu ngữ pháp lên VPS (giống luyện từ vựng: local export SQL upsert
-rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên VPS):
+Import dữ liệu ngữ pháp lên máy chủ (giống luyện từ vựng: local export SQL upsert
+rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên máy chủ):
 
 ```bash
 # Trên máy local, sau khi đã crawl. grammar:import nạp cả dữ liệu crawl và
@@ -416,9 +411,9 @@ rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên VPS
 npm run db:migrate
 npm run grammar:import
 npm run grammar:export
-scp data/grammar-export.sql ubuntu@<vps>:~/bdu-tu-hoc/data/
+scp data/grammar-export.sql deploy@<EIP>:/opt/bdu-tu-hoc/data/
 
-# Trên VPS
+# Trên máy chủ
 cd ~/bdu-tu-hoc
 cat data/grammar-export.sql | docker compose exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
@@ -437,8 +432,8 @@ Hai workflow nằm trong `.github/workflows/`:
 
 | Workflow | Khi nào chạy | Việc làm |
 | :--- | :--- | :--- |
-| `ci.yml` | push hoặc PR lên `main` | Job `verify`: `npm run lint:frontend` → `npm run test:frontend` → `npm run test:node` → `npm run build:client`, rồi upload `dist/client` làm artifact (giữ 3 ngày). Job `docker`: build Docker image (`push: false`, `load: false`, cache GHA) để bắt lỗi Dockerfile trước khi đụng VPS. |
-| `deploy.yml` | push lên `main`, hoặc `workflow_dispatch` với input `ref` | Build image (không push) để chặn lỗi build, rồi SSH vào VPS chạy `deploy/deploy.sh` với `DEPLOY_SHA` tương ứng. Chỉ deploy khi ref thuộc lịch sử `main`. |
+| `ci.yml` | push hoặc PR lên `main` | Job `verify`: `npm run lint:frontend` → `npm run test:frontend` → `npm run test:node` → `npm run build:client`, rồi upload `dist/client` làm artifact (giữ 3 ngày). Job `docker`: build Docker image (`push: false`, `load: false`, cache GHA) để bắt lỗi Dockerfile trước khi triển khai. |
+| `deploy.yml` | push lên `main`, hoặc `workflow_dispatch` với input `ref` | Build và đẩy image lên GHCR (tag = 12 ký tự đầu của SHA), rồi SSH vào EC2 chạy `deploy/deploy.sh` với `DEPLOY_SHA` tương ứng. EC2 **kéo** image theo tag chứ không build tại chỗ. Chỉ deploy khi ref thuộc lịch sử `main`. |
 
 Chạy lại đúng chuỗi CI ở máy local:
 
@@ -448,13 +443,13 @@ npm run ci   # = lint:frontend && test:frontend && test:node && build:client
 
 Lưu ý: `scripts/run-command.mjs` cố ý **fail-closed trên Windows** (chỉ hỗ trợ POSIX process-group cleanup), nên CI chạy trên `ubuntu-latest`. Nếu muốn chạy `scripts/verify-controller-split.mjs` hoặc `scripts/verify-route-order.mjs` thì hai script này chạy được ở mọi OS.
 
-Secrets cho deploy: `VPS_HOST`, `VPS_USER`, `VPS_SSH_PRIVATE_KEY`, `VPS_APP_DIR`, `VPS_SSH_PORT` (tuỳ chọn). **File `.env` production không nằm trong secrets** — nó nằm trên VPS và chỉ được đọc bởi `deploy/deploy.sh` + `docker compose` tại chỗ.
+Secrets cho deploy: `AWS_HOST`, `AWS_USER`, `AWS_SSH_PRIVATE_KEY`, `AWS_APP_DIR`, `AWS_SSH_PORT` (tuỳ chọn). **File `.env` production không nằm trong secrets** — nó nằm trên EC2 và chỉ được đọc bởi `deploy/deploy.sh` + `docker compose` tại chỗ.
 
 ---
 
-## 🚀 Deploy lên VPS
+## 🚀 Deploy lên EC2 (AWS)
 
-Quy trình chuẩn là chạy `deploy/deploy.sh` trên VPS, không tự tay `docker compose up` (bước backup trước migrate là bắt buộc):
+Quy trình chuẩn là chạy `deploy/deploy.sh` trên EC2, không tự tay `docker compose up` (bước backup trước migrate là bắt buộc):
 
 ```bash
 cd /opt/bdu-tu-hoc && DEPLOY_SHA=$(git rev-parse HEAD) bash deploy/deploy.sh
@@ -465,7 +460,7 @@ cd /opt/bdu-tu-hoc && DEPLOY_SHA=$(git rev-parse HEAD) bash deploy/deploy.sh
 1. **preflight** — `docker compose` có, `.env` tồn tại, PostgreSQL phản hồi, git sạch.
 2. **backup DB** (bắt buộc) — `npm run db:backup -- --pre-deploy`. Fail ⇒ **dừng, không migrate**.
 3. **migrate** — đúng 1 lần. Fail ⇒ dừng, app cũ vẫn chạy, chưa restart.
-4. `docker compose up -d --build` với `BUILD_ID` = short sha.
+4. `docker compose pull` rồi `docker compose up -d --no-build` với `IMAGE_TAG` = 12 ký tự đầu của sha (image lấy từ GHCR; EC2 không build tại chỗ).
 5. **healthcheck** — poll `/api/health` tối đa 90s; fail thì in hướng dẫn rollback cụ thể.
 6. In hướng dẫn rollback.
 

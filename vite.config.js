@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Docker build context excludes .git, so the build id cannot be a git SHA.
-// A timestamp keeps each image distinct; CI/VPS can pin BUILD_ID explicitly.
+// A timestamp keeps each image distinct; CI/EC2 can pin BUILD_ID explicitly.
 const BUILD_ID = String(process.env.BUILD_ID || '').trim() || new Date().toISOString().replace(/\D/g, '').slice(0, 14);
 
 // Stamps the build id into the SPA document (meta + legacy stylesheet URLs) and

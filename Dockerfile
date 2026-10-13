@@ -39,7 +39,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY package*.json ./
 # postgresql-client cung cap pg_dump/pg_restore/createdb/dropdb cho he thong
 # backup DB (scripts/db-backup*.js). Image .NET runtime khong co san cac binary
-# nay nen phai cai them; thieu no thi `db:backup` fail ngay tren VPS.
+# nay nen phai cai them; thieu no thi `db:backup` fail ngay tren may chu.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends postgresql-client \
   && rm -rf /var/lib/apt/lists/*

@@ -332,7 +332,7 @@ body {
   gap: 10px;
 }
 
-.vps-status-pill {
+.server-status-pill {
   display: flex;
   align-items: center;
   gap: 8px;

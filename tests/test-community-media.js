@@ -57,7 +57,7 @@ assert.match(controller, /uploadCommunityMedia/, 'Controller phải xử lý upl
 assert.match(controller, /uploadMyAvatar/, 'Controller phải xử lý upload avatar cá nhân');
 assert.doesNotMatch(controller, /uploadAdminAvatar/, 'Controller không còn upload avatar admin');
 
-// 4. Avatar chỉ lưu trên R2, không ghi file runtime xuống VPS.
+// 4. Avatar chỉ lưu trên R2, không ghi file runtime xuống máy chủ.
 assert.match(avatarService, /MediaStorageService\.putObject/, 'Avatar phải upload lên R2');
 assert.doesNotMatch(avatarService, /fs\.writeFile|AVATAR_STORAGE_DIR/, 'Avatar không được ghi file xuống ổ đĩa');
 assert.doesNotMatch(serverJs, /'\/media\/avatars'/, 'Không còn mount ảnh avatar local');

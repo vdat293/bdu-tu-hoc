@@ -127,7 +127,7 @@ assert.equal(CommunityRealtime.rooms.size, 0, 'a late auth resolution must not a
 BduIdentityService.clear('delayed-auth-token');
 
 // Likewise, a slow room authorization must not add a closed socket after its
-// await resumes. This is the same race a DB stall can trigger on a VPS.
+// await resumes. This is the same race a DB stall can trigger on a server.
 BduIdentityService.register('delayed-subscribe-token', '24050003');
 const originalCanJoin = CommunityRealtime.canJoin;
 let resolveCanJoin;

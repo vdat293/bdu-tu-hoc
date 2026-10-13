@@ -76,7 +76,7 @@ export class CommunityRealtime {
         this.authenticated = true;
         this.hasAuthenticated = true;
         // A TCP open is not a healthy connection. Only a successful auth
-        // resets the retry budget after a VPS restart or proxy failure.
+        // resets the retry budget after a server restart or proxy failure.
         this.attempt = 0;
         this.recoveryPending = { reconnected };
         this.flushRooms();

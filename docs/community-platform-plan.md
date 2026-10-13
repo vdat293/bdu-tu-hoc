@@ -91,7 +91,7 @@ Quy tắc:
   dùng `students.avatar_url` từ API BDU.
 - Ảnh được chuẩn hóa WebP 512x512, lưu trên bucket R2 (`avatars/<mssv>/...`);
   database giữ object key + URL. Không ghi file runtime vào `src`, Docker image
-  hay volume VPS.
+  hay volume máy chủ.
 - Ảnh bài viết và ảnh/GIF bình luận Confession cũng nằm trên R2, gắn vào
   `community_posts.attachments` / `community_post_comments.attachments` (JSONB).
 

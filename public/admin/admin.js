@@ -158,7 +158,7 @@ const dom = {
   btnPageNext: document.getElementById('btn-page-next'),
   selectLogLimit: document.getElementById('select-log-limit'),
 
-  // Visited Students Elements (Bảng students trên VPS)
+  // Visited Students Elements (Bảng students trên máy chủ)
   badgeActiveStudents: document.getElementById('badge-active-students'),
   kpiVisitedActive: document.getElementById('kpi-visited-active'),
   kpiVisitedToday: document.getElementById('kpi-visited-today'),
@@ -571,7 +571,7 @@ const tabTitles = {
   insights: 'Phân Tích Hành Vi Người Dùng',
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
-  system: 'Sức Khỏe VPS & Hệ Thống'
+  system: 'Sức Khỏe Máy Chủ & Hệ Thống'
 };
 
 dom.navButtons.forEach((btn) => {
@@ -2284,7 +2284,7 @@ function syncVisitedSortIndicators() {
   });
 }
 
-// 6. Render Visited Students (Bảng students trên VPS)
+// 6. Render Visited Students (Bảng students trên máy chủ)
 function renderVisitedStudents(res = {}) {
   const data = res.data || res || {};
   const stats = data.stats || {};
@@ -2470,7 +2470,7 @@ if (dom.btnVisitedNext) {
   });
 }
 
-// 7. Render VPS System Health
+// 7. Render Server System Health
 function renderSystem(system = {}) {
   const s = system.server || {};
   const mem = system.memory || {};

@@ -79,7 +79,7 @@ function printUsage() {
   console.log('  R2_ENDPOINT/R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY');
   console.log('  BACKUP_LOCAL_DIR        Thư mục local tạm (mặc định: data).');
   console.log('');
-  console.log('Ví dụ trên VPS:');
+  console.log('Ví dụ trên máy chủ production:');
   console.log('  BACKUP_ALLOW_PRODUCTION=1 node scripts/db-backup.js --reason daily');
   console.log('======================================================');
 }

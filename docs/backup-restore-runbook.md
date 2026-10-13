@@ -84,7 +84,7 @@ Các biến **chỉ đọc được từ mã nguồn**, không có trong `.env.e
 `assertSafeMaintenanceTarget()` trong `scripts/postgres-utils.js` coi host nằm trong allowlist
 `127.0.0.1`, `::1`, `localhost`, `postgres`, `test-postgres` là **local**. Trong Compose mặc định, `BACKUP_DATABASE_URL` trỏ tới service `postgres`, tức là host `postgres` — **không cần** `--allow-production` và `BDU_MAINTENANCE_ALLOW_PRODUCTION=1` cho backup định kỳ.
 
-Chỉ cần cả hai khi `BACKUP_DATABASE_URL` trỏ tới host **ngoài** allowlist (PostgreSQL quản lý, host khác trong VPS). Khi đó:
+Chỉ cần cả hai khi `BACKUP_DATABASE_URL` trỏ tới host **ngoài** allowlist (PostgreSQL quản lý, host khác trong cùng máy chủ). Khi đó:
 
 ```bash
 # Nếu database production không local với container, cần cả hai:
@@ -333,7 +333,7 @@ Muốn drill cùng host với production thì dùng **PostgreSQL riêng cho main
 ### 7.1. Trước khi restore
 
 1. **Chọn đúng bản backup.** Repo **không có** lệnh CLI liệt kê object — hãy xem bucket `BACKUP_R2_BUCKET` trên Cloudflare Dashboard (hoặc một S3 client), lọc theo tiền tố `db/`, sắp theo thời gian giảm dần. `db-backup-verify.js` mặc định tự chọn bản mới nhất; cần bản cũ hơn thì truyền `--key`. Tìm bản có metadata `bdu-reason=pre-deploy` quanh thời điểm deploy.
-2. **Tải về VPS kèm manifest.** `db-restore.js` yêu cầu file `<đường_dẫn>` và `<đường dẫn>.manifest.json` cùng tồn tại.
+2. **Tải về máy chủ kèm manifest.** `db-restore.js` yêu cầu file `<đường_dẫn>` và `<đường dẫn>.manifest.json` cùng tồn tại.
 3. **Chạy drill với `--key` trước** trên database tạm, xác nhận `pass: true`. Đừng bỏ bước này.
 4. **Dừng app** để không có ghi trong lúc restore: `docker compose stop bdu-hub`.
 

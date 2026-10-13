@@ -8,7 +8,7 @@
  * Env:
  *   BACKUP_ENABLED=1            BẮT BUỘC = 1 mới chạy. Mặc định TẮT (an toàn ở local).
  *   BACKUP_CRON=03:17           Giờ chạy HH:MM (giờ máy). Cố tình lệch phút so với 03:00
- *                               để không dồn với job khác của VPS.
+ *                               để không dồn với job khác của máy chủ.
  *   BACKUP_ALLOW_PRODUCTION=1   Truyền --allow-production cho db-backup.js.
  *                               Vẫn cần BDU_MAINTENANCE_ALLOW_PRODUCTION=1 trong env.
  *   BACKUP_ALERT_AFTER=3        Số lần fail liên tiếp trước khi ghi cảnh báo.
@@ -229,7 +229,7 @@ async function main() {
   }
   if (!envFlag('BACKUP_ENABLED', false)) {
     logInfo(SCOPE, 'BACKUP_ENABLED không bằng 1 → scheduler KHÔNG chạy (mặc định tắt ở local).');
-    logInfo(SCOPE, 'Bật trên VPS bằng cách đặt BACKUP_ENABLED=1 trong env của container.');
+    logInfo(SCOPE, 'Bật trên máy chủ production bằng cách đặt BACKUP_ENABLED=1 trong env của container.');
     process.exit(0);
   }
   if (!envValue('BACKUP_DATABASE_URL')) {

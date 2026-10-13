@@ -111,7 +111,7 @@ function isAllowedOrigin(request) {
 function jsonSend(ws, payload) {
   if (!ws || ws.readyState !== WS_OPEN) return false;
   // A slow client can otherwise make each broadcast retain more memory until
-  // the VPS is killed. Its next reconnect will receive a recovery refetch.
+  // the server is killed. Its next reconnect will receive a recovery refetch.
   if (ws.bufferedAmount > maxBufferedBytes()) {
     try { ws.terminate(); } catch {}
     return false;

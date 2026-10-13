@@ -5,7 +5,7 @@
  *
  * Chạy: npm run grammar:import
  *  hoặc: node scripts/import-grammar.js ngu-phap-co-ban (chỉ 1 lộ trình)
- *  Trên VPS có thể trỏ nguồn dữ liệu qua GRAMMAR_CRAWL_ROOT.
+ *  Trên máy chủ production có thể trỏ nguồn dữ liệu qua GRAMMAR_CRAWL_ROOT.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';

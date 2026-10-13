@@ -56,7 +56,7 @@ export function createApp() {
   app.use(attachRequestContext);
   app.use(TrafficService.middleware());
   // Ảnh/avatar người dùng nằm trên Cloudflare R2 (không ghi file runtime xuống
-  // VPS). Khi bucket chưa gắn custom domain/r2.dev, route này stream object từ R2
+  // máy chủ). Khi bucket chưa gắn custom domain/r2.dev, route này stream object từ R2
   // và cache mạnh ở tầng CDN phía trước. Khi có R2_PUBLIC_BASE_URL, URL ảnh mới
   // sẽ trỏ thẳng CDN còn route này vẫn phục vụ các URL cũ đã lưu trong DB.
   app.get('/media/r2/*', async (req, res) => {
@@ -121,7 +121,7 @@ export function createApp() {
 
   // Giải trí is a separate site, not a portal sidebar route. The portal only
   // links to this entry point; the wildcard keeps room/challenge deep links
-  // working after a refresh on the VPS.
+  // working after a refresh on the server.
   const gamesSiteDir = path.join(ROOT_DIR, 'public', 'games');
   app.use('/games', express.static(gamesSiteDir, {
     index: false,

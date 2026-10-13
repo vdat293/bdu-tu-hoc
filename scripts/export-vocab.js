@@ -1,9 +1,9 @@
 /**
  * Xuất dữ liệu tham chiếu vocab (themes/sets/words) từ DB local ra file SQL upsert
- * để nạp lên VPS — KHÔNG bao gồm vocab_progress (tiến độ của user trên prod).
+ * để nạp lên máy chủ production — KHÔNG bao gồm vocab_progress (tiến độ của user trên prod).
  *
  * Chạy: node scripts/export-vocab.js [outPath=data/vocab-export.sql]
- * Nạp trên VPS:
+ * Nạp trên máy chủ production:
  *   cat data/vocab-export.sql | docker compose exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
  */
 import fs from 'node:fs/promises';

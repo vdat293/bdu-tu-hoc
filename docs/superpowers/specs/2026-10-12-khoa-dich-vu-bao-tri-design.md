@@ -288,6 +288,10 @@ Không có thay đổi nào trong `migrations/`.
 
 ## Phụ lục A — Đợt dựng server đang gác (quyết định đã chốt, không mất)
 
+> **Đợt dựng server đã được triển khai thành
+> [`2026-10-13-dung-server-aws-design.md`](2026-10-13-dung-server-aws-design.md)**
+> (kèm các điểm điều chỉnh so với phụ lục này).
+
 Ghi lại để spec của đợt đó không phải hỏi lại:
 
 - **2 tầng:** `fe` (Caddy 2-alpine: `file_server` cho `dist/client`, `reverse_proxy` `/api/*` và `/ws/*` → `bdu-hub:3000`, tự xin cert Let's Encrypt) + `db` (postgres:16-alpine + named volume). Giữ tên service `bdu-hub` cho tầng BE (tên này xuất hiện ở ~30 chỗ trong `deploy.sh`, 2 runbook, compose).

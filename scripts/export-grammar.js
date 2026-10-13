@@ -1,10 +1,10 @@
 /**
  * Xuất dữ liệu tham chiếu ngữ pháp (groups/paths/lessons/rules/exercises/reading)
- * từ DB local ra file SQL upsert để nạp lên VPS — không gồm grammar_progress và
+ * từ DB local ra file SQL upsert để nạp lên máy chủ production — không gồm grammar_progress và
  * grammar_extra_progress (tiến độ học của user trên prod).
  *
  * Chạy: npm run grammar:export (hoặc node scripts/export-grammar.js [outPath])
- * Nạp trên VPS:
+ * Nạp trên máy chủ production:
  *   cat data/grammar-export.sql | docker compose exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
  */
 import fs from 'node:fs/promises';

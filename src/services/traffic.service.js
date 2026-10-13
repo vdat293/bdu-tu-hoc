@@ -186,7 +186,7 @@ export const TrafficService = {
 
   enqueue(entry) {
     if (queue.length >= MAX_QUEUE_SIZE) {
-      // Drop oldest 100 entries to prevent memory leak on VPS
+      // Drop oldest 100 entries to prevent memory leak on the server
       queue.splice(0, 100);
     }
     queue.push(entry);

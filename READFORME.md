@@ -163,7 +163,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | **Cổng thông tin BDU** | `src/services/bdu.service.js`, `bdu-identity.service.js` | `BDU_BASE_URL = https://sv.bdu.edu.vn/public/api`. Crawler/proxy đóng giả trình duyệt, quản lý session cookie, parse JSON/HTML: bảng điểm, TKB theo tuần (`/public/api/sch/w-locdstkbtuanusertheohocky`), lý lịch, khảo sát giảng viên. Tài khoản dịch vụ chỉ đọc qua `CDS_USER`/`CDS_PASSWORD`. |
 | **Moodle** | `src/services/moodle.service.js`, `english-exercise.service.js` | `MOODLE_URL = https://bdu.vn247.org`. Đăng nhập, quét quiz theo Course ID, đối chiếu ngân hàng đáp án cục bộ. Mật khẩu Moodle chỉ nằm trong bộ nhớ phiên; câu hỏi **không** gửi sang dịch vụ AI bên ngoài. |
 | **WordFmt (.NET)** | `src/services/wordfmt.service.js` | `ROOT_DIR` = `path.resolve(__dirname, '../../')`; gọi `execFile('dotnet', [bin/wordfmt/wordfmt.dll, ...], { cwd: ROOT_DIR })`. |
-| **Cloudflare R2** | `media-storage.service.js`, `media-upload.service.js`, `avatar-override.service.js` | Ảnh/avatar lưu trên R2, **không ghi file runtime xuống VPS**. `/media/r2/*` stream object khi chưa có custom domain. |
+| **Cloudflare R2** | `media-storage.service.js`, `media-upload.service.js`, `avatar-override.service.js` | Ảnh/avatar lưu trên R2, **không ghi file runtime xuống máy chủ**. `/media/r2/*` stream object khi chưa có custom domain. |
 | **Facebook** | `src/services/facebook-import.service.js` | Facebook đã khai tử Groups API nên dùng Playwright đọc feed nhóm `bdu.confessions`. |
 | **Discord** | `discord-oauth.service.js`, `discord-link.service.js`, `scripts/discord-bot.js` | OAuth2 liên kết tài khoản + bot nhắc lịch/tag (service riêng `bdu-notifier-bot`). |
 
@@ -179,7 +179,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | **`scripts/verify-controller-split.mjs`, `verify-route-order.mjs`** | Script kiểm chứng tách | `verify-controller-split.mjs` đối chiếu tập method; `verify-route-order.mjs` so router stack với bản gốc trong git HEAD. |
 | **`scripts/postgres-utils.js`** | Hàng rào an toàn DB | Allowlist host local, chặn URL có query lạ, yêu cầu `BDU_MAINTENANCE_ALLOW_PRODUCTION=1` cho remote. |
 | **`scripts/`** | Import / export dữ liệu | `import-vocab.js`, `import-grammar*.js`, `export-*.js`, `fix-vocab-pos.js`, `migrate-avatars-to-r2.js`, `sync-rankings.js`, `fb-import-*.js`. |
-| **`deploy/deploy.sh`** | Deploy VPS | 6 bước: preflight → **backup DB (fail thì dừng)** → migrate 1 lần → `up -d --build` → healthcheck 90s → in hướng dẫn rollback. Kèm `deploy/caddy/Caddyfile.example` và `deploy/nginx/bdu-hub.conf.example`. |
+| **`deploy/deploy.sh`** | Deploy EC2 | 6 bước: preflight → **backup DB (fail thì dừng)** → migrate 1 lần → `docker compose pull` + `up -d --no-build` (image lấy từ GHCR) → healthcheck 90s → in hướng dẫn rollback. Kèm `deploy/caddy/Caddyfile` và `deploy/caddy/certs/` (Origin Certificate). |
 
 ---
 
@@ -247,7 +247,7 @@ Hợp đồng hành vi, danh sách route canonical và ranh giới legacy/React 
 | Tài liệu | Nội dung |
 | :--- | :--- |
 | [`docs/architecture.md`](docs/architecture.md) | Sơ đồ tầng, bảng 16 domain, **quy tắc bất di bất dịch** khi sửa `src/`, nợ kỹ thuật còn lại. |
-| [`docs/deployment-runbook.md`](docs/deployment-runbook.md) | Runbook deploy & rollback trên VPS. |
+| [`docs/deployment-runbook.md`](docs/deployment-runbook.md) | Runbook deploy & rollback trên EC2. |
 | [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md) | Runbook backup DB lên R2, retention, restore drill. |
 | [`docs/frontend-migration-baseline.md`](docs/frontend-migration-baseline.md) | Baseline hành vi frontend React. |
 | [`docs/local-test-services.md`](docs/local-test-services.md) | Dựng dịch vụ test local (PostgreSQL, R2 giả lập). |

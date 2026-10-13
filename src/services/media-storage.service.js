@@ -3,7 +3,7 @@
  *
  * Quy ước:
  * - Node nhận file từ multer (memory) rồi đẩy thẳng lên R2, KHÔNG ghi file
- *   runtime xuống ổ đĩa/VPS nữa.
+ *   runtime xuống ổ đĩa/máy chủ nữa.
  * - URL trả về cho client:
  *   + Có R2_PUBLIC_BASE_URL (custom domain hoặc r2.dev) -> URL CDN tuyệt đối.
  *   + Chưa cấu hình -> đường dẫn nội bộ `${R2_MEDIA_PROXY_PATH}/<key>` do

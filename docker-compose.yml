@@ -38,7 +38,7 @@ services:
       - SYSTEM_OWNER_MSSV=${SYSTEM_OWNER_MSSV:-}
       - ADMIN_DASHBOARD_KEY=${ADMIN_DASHBOARD_KEY:-}
       - AVATAR_MAX_SIZE_MB=${AVATAR_MAX_SIZE_MB:-3}
-      # Cloudflare R2: ảnh người dùng không lưu trên VPS.
+      # Cloudflare R2: ảnh người dùng không lưu trên máy chủ.
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
@@ -112,7 +112,7 @@ services:
       # writable layer của container, và `docker compose run --rm` xoá sạch
       # container sau khi chạy xong => mất backup đúng lúc deploy cần nó nhất.
       - BACKUP_LOCAL_DIR=${BACKUP_LOCAL_DIR:-/app/data/backups}
-      # Cờ chống ghi/xoá nhầm production; chỉ bật trên VPS, không bật ở dev/test.
+      # Cờ chống ghi/xoá nhầm production; chỉ bật trên máy chủ production, không bật ở dev/test.
       - BDU_MAINTENANCE_ALLOW_PRODUCTION=${BDU_MAINTENANCE_ALLOW_PRODUCTION:-}
     depends_on:
       postgres:

@@ -359,7 +359,7 @@ check('id cũ của hai tab Nhật ký + Sinh viên vẫn được giữ', () =>
 /* --------------------------------------------------------------------------
    Task 9 — tab Hệ thống.
    Hai hợp đồng dễ vỡ nhất khi làm lại tab này:
-     1. Panel VPS + ranking-sync + service-lock phải dùng bộ thành phần chung
+     1. Panel máy chủ + ranking-sync + service-lock phải dùng bộ thành phần chung
         (.panel-card/.system-metrics-row/.sys-card) và KHÔNG còn style inline
         rải rác — nếu không, đổi token là tab này lệch khỏi các tab còn lại.
      2. Logic service-lock/ranking-sync giữ nguyên: đúng endpoint, đúng
