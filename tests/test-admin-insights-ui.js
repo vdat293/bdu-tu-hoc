@@ -222,10 +222,44 @@ check('admin.js có gọi endpoint insights/users/:mssv/journey', () => {
 check('modal Hành trình tôn trọng cờ truncated', () => {
   const journey = sliceJourneySection();
   assert.match(journey, /truncated/, 'admin.js phải đọc cờ truncated của endpoint');
+  // HƯỚNG của câu nhắc phải khớp đúng SQL của endpoint:
+  // `ORDER BY created_at ASC LIMIT $2` ⇒ 200 dòng trả về là 200 sự kiện CŨ NHẤT,
+  // phần thiếu là đuôi MỚI HƠN. Ghi ngược thì người đọc tưởng vừa xem phần cuối
+  // hành trình và kết luận sai về người dùng.
   assert.match(
     journey,
+    /cũ nhất/,
+    'Nhắc khi truncated phải nói rõ danh sách là các sự kiện cũ nhất'
+  );
+  assert.match(journey, /đầu tiên/, 'Nhắc phải nêu lấy N sự kiện đầu tiên trong khung thời gian');
+  // Bỏ comment trước khi so phủ định: chính chú thích giải thích trong admin.js
+  // cũng trích nguyên câu sai để giải thích, không phải vì đang vi sai.
+  const journeyCode = journey.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    journeyCode,
     /sự kiện gần nhất/,
-    'Nhắc khi truncated phải nói rõ chỉ hiển thị bao nhiêu sự kiện gần nhất'
+    'Không được nói ngược thành "sự kiện gần nhất": backend đã cắt phần MỚI HƠN'
+  );
+});
+
+check('chip tính năng của phiên hiện nhãn tiếng Việt, không phải featureId', () => {
+  const journey = sliceJourneySection();
+  // `sessions[].features` là featureId (vocab, other...); dòng sự kiện hiện
+  // featureLabel tiếng Việt. Nếu chip in thẳng id thì cùng một tính năng hiện hai
+  // kiểu viết khác nhau trong cùng một khối.
+  assert.match(journey, /labels\.get\(id\)\s*\|\|\s*id/, 'Chip tính năng phải map featureId sang featureLabel');
+  assert.match(journey, /event\.featureLabel/, 'Phải lấy nhãn từ featureLabel của sự kiện trong phiên');
+});
+
+check('journeyClock không in giờ giả cho sự kiện thiếu mốc thời gian', () => {
+  const journey = sliceJourneySection();
+  // `new Date(null)` là epoch (01/01/1970) nên sẽ in ra một giờ TRÔNG HỢP LỆ
+  // (08:00 giờ VN) thay vì "--"; phải chặn null trước khi new Date.
+  const clockFn = journey.slice(journey.indexOf('function journeyClock('));
+  assert.match(
+    clockFn.slice(0, clockFn.indexOf('}')),
+    /if\s*\(\s*!value\s*\)\s*return\s*'--'/,
+    'journeyClock() phải trả "--" khi value rỗng/null trước khi new Date(value)'
   );
 });
 

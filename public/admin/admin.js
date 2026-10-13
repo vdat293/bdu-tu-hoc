@@ -1793,22 +1793,28 @@ function renderJourney(data = {}) {
     ].filter(Boolean).join(' • ')
     : `Không tìm thấy hồ sơ sinh viên — vẫn hiện dấu vết truy cập • ${labelForTimeRange(JOURNEY_TIME_RANGE)}`;
 
-  renderJourneySummary(events, sessions);
-  renderJourneyNotice(Boolean(data.truncated));
+  const truncated = Boolean(data.truncated);
+  renderJourneySummary(events, sessions, truncated);
+  renderJourneyNotice(truncated);
   renderJourneyTimeline(events, sessions);
   renderJourneyTransitions(transitions);
 }
 
 /** Tóm tắt 4 con số để không phải đọc timeline để biết hành trình to hay nhỏ. */
-function renderJourneySummary(events = [], sessions = []) {
+function renderJourneySummary(events = [], sessions = [], truncated = false) {
   const errorCount = events.filter((event) => isJourneyError(event)).length;
   const firstAt = events.length ? events[0].at : null;
   const lastAt = events.length ? events[events.length - 1].at : null;
+  // Dấu "…" nối mốc cuối khi bị cắt: mốc này là lượt CUỐI ĐÃ TẢI, chưa chắc là lượt
+  // cuối thật — không có dấu hiệu thì người đọc tưởng hành trình kết thúc ở đây.
+  const activity = events.length
+    ? `${formatDateTime(firstAt)} → ${formatDateTime(lastAt)}${truncated ? '…' : ''}`
+    : '--';
   const stats = [
     { label: 'Lượt truy cập', value: formatNumber(events.length) },
     { label: 'Số phiên', value: formatNumber(sessions.length) },
     { label: 'Lượt bị lỗi', value: formatNumber(errorCount), tone: errorCount > 0 ? ' error' : '' },
-    { label: 'Hoạt động', value: events.length ? `${formatDateTime(firstAt)} → ${formatDateTime(lastAt)}` : '--' }
+    { label: 'Hoạt động', value: activity }
   ];
   dom.journeySummary.innerHTML = stats.map((stat) => `
     <div class="journey-stat">
@@ -1820,8 +1826,12 @@ function renderJourneySummary(events = [], sessions = []) {
 
 /**
  * Nhắc khi endpoint báo `truncated` (số sự kiện chạm trần `limit`).
- * Không nhắc thì người đọc tưởng đã thấy TOÀN BỘ lịch sử và kết luận sai về
- * người dùng chỉ dùng trang trong khoảng ngắn đó.
+ *
+ * CỰC KỲ quan trọng — hướng của câu nhắc phải khớp đúng SQL. Backend đọc
+ * `ORDER BY created_at ASC LIMIT $2` (traffic-insights.service.js), tức danh
+ * sách là 200 sự kiện CŨ NHẤT trong khung thời gian; phần bị thiếu là đuôi MỚI
+ * HƠN. Nếu ghi ngược ("200 sự kiện gần nhất, phần cũ hơn bị bỏ") thì người đọc
+ * tưởng vừa xem phần cuối của hành trình và kết luận sai về người dùng.
  */
 function renderJourneyNotice(truncated) {
   if (!truncated) {
@@ -1829,7 +1839,7 @@ function renderJourneyNotice(truncated) {
     dom.journeyNotice.textContent = '';
     return;
   }
-  dom.journeyNotice.textContent = `Chuỗi truy cập dài hơn giới hạn: chỉ hiển thị ${formatNumber(JOURNEY_EVENT_LIMIT)} sự kiện gần nhất, phần cũ hơn không nằm trong danh sách này.`;
+  dom.journeyNotice.textContent = `Chuỗi truy cập dài hơn giới hạn: danh sách chỉ gồm ${formatNumber(JOURNEY_EVENT_LIMIT)} sự kiện đầu tiên (cũ nhất) trong ${labelForTimeRange(JOURNEY_TIME_RANGE)}; các lượt mới hơn không được tải — hãy thu hẹp khoảng thời gian.`;
   dom.journeyNotice.style.display = 'block';
 }
 
@@ -1882,8 +1892,18 @@ function renderJourneySession(group, index) {
   const events = group.events || [];
   const startAt = session.startAt ?? events[0]?.at;
   const endAt = session.endAt ?? events[events.length - 1]?.at;
-  const features = Array.isArray(session.features) ? session.features : [];
   const errorCount = events.filter((event) => isJourneyError(event)).length;
+
+  // `session.features` chỉ chứa featureId (vocab, other...) trong khi dòng sự kiện
+  // hiện nhãn tiếng Việt. Dựng map id → label từ chính các sự kiện của phiên để
+  // chip không lệch ngôn ngữ với phần bên dưới (thiếu map thì fallback về id).
+  const labels = new Map();
+  for (const event of events) {
+    if (event.featureId && !labels.has(event.featureId)) {
+      labels.set(event.featureId, event.featureLabel || event.featureId);
+    }
+  }
+  const features = (Array.isArray(session.features) ? session.features : []).map((id) => labels.get(id) || id);
 
   // Nhóm không khớp phiên nào (timestamp lệch) ghi rõ thay vì giả vờ có phiên.
   const title = session
@@ -1930,6 +1950,9 @@ function renderJourneyEvent(event = {}) {
 
 /** Giờ phút của một sự kiện; phiên đã có mốc giờ ở tiêu đề nên không lặp ngày. */
 function journeyClock(value) {
+  // Phải chặn null TRƯỚC khi new Date: `new Date(null)` là epoch (01/01/1970) và
+  // sẽ in ra một giờ hợp lệ trông như thật, chứ không phải "--" như mong đợi.
+  if (!value) return '--';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--';
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
