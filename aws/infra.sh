@@ -189,6 +189,12 @@ ensure_keypair() {
     return 0
   fi
 
+  # Key pair đã có trên AWS NHƯNG thiếu file private cục bộ: KHÔNG được im lặng
+  # sinh key mới (sẽ lệch với key pair của instance -> mất đường SSH).
+  if aws ec2 describe-key-pairs --key-names "$name" >/dev/null 2>&1 && [[ ! -f "$KEY_PATH" ]]; then
+    die "Key pair '$name' đã có trên AWS nhưng thiếu file private '$KEY_PATH'. Khôi phục file đó, HOẶC xoá key pair trên AWS rồi chạy lại (lưu ý: instance đang chạy dùng key cũ nên sẽ mất đường SSH tới nó)."
+  fi
+
   # Sinh key CỤC BỘ rồi import public key lên AWS. Cách này tránh phụ thuộc
   # định dạng private key mà CreateKeyPair trả về (RSA = PKCS#1, ed25519 =
   # OpenSSH) và luôn có .pub để nhét vào user-data.

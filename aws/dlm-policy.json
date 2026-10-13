@@ -2,6 +2,9 @@
   "Description": "Snapshot EBS hang ngay cho volume bdu-tu-hoc giu 7 ban gan nhat",
   "State": "ENABLED",
   "ExecutionRoleArn": "__DLM_ROLE_ARN__",
+  "Tags": {
+    "Project": "bdu-tu-hoc"
+  },
   "PolicyDetails": {
     "PolicyType": "EBS_SNAPSHOT_MANAGEMENT",
     "ResourceTypes": ["VOLUME"],

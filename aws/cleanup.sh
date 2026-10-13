@@ -90,7 +90,10 @@ del_instances() {
 # -----------------------------------------------------------------------------
 del_eips() {
   local allocs
-  allocs="$(aws ec2 describe-addresses --query 'Addresses[].AllocationId' --output text 2>/dev/null || true)"
+  # CHỈ release Elastic IP của dự án này (lọc theo tag) — không đụng EIP khác
+  # trong cùng account/region.
+  allocs="$(aws ec2 describe-addresses --filters "Name=tag:Project,Values=$P" \
+    --query 'Addresses[].AllocationId' --output text 2>/dev/null || true)"
   [[ -z "$allocs" || "$allocs" == "None" ]] && { log "Không còn Elastic IP."; return 0; }
   local id
   for id in $allocs; do
@@ -143,7 +146,10 @@ del_volumes() {
 # -----------------------------------------------------------------------------
 del_dlm() {
   local ids
-  ids="$(aws dlm get-lifecycle-policies --query 'Policies[].PolicyId' --output text 2>/dev/null || true)"
+  # CHỈ xoá policy của dự án: khớp theo tag Project HOẶC theo mô tả chứa tên
+  # dự án (policy tạo trước khi thêm Tags vẫn được dọn). Không đụng policy khác.
+  ids="$(aws dlm get-lifecycle-policies \
+    --query "Policies[?Tags.Project=='$P' || contains(Description,'$P')].PolicyId" --output text 2>/dev/null || true)"
   [[ -z "$ids" || "$ids" == "None" ]] && { log "Không còn DLM policy."; return 0; }
   local id
   for id in $ids; do

@@ -304,6 +304,19 @@ main() {
 
   preflight
   sync_code
+
+  # MỌI lệnh `docker compose` trong lượt deploy này (backup ở bước 2, migrate ở
+  # bước 3, up ở bước 4) phải dùng CÙNG image với code đang deploy. Nếu không
+  # export, `docker compose run` lấy `IMAGE_TAG` từ `.env` -> backup/migrate chạy
+  # image CŨ trong khi app lên image MỚI (migration mới không được áp).
+  export IMAGE_TAG="$DEPLOY_SHORT_SHA"
+  # Ghi lại vào .env để trạng thái "image đang chạy" khớp thực tế (dùng cho
+  # hướng dẫn rollback: đổi IMAGE_TAG về tag cũ).
+  if [ -f .env ] && grep -q '^IMAGE_TAG=' .env; then
+    sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$DEPLOY_SHORT_SHA|" .env
+    log "  IMAGE_TAG trong .env đặt thành $DEPLOY_SHORT_SHA"
+  fi
+
   ensure_image
 
   backup_database

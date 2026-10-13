@@ -18,17 +18,26 @@ services:
   # Ba service dùng CHUNG một image của ứng dụng, chỉ khác `command` khai ở
   # docker-compose.yml gốc. `pull_policy: always` để Compose luôn lấy image
   # khớp `IMAGE_TAG` thay vì tái dùng bản cũ đang nằm trên máy.
+  #
+  # `build: !reset null` XOÁ khối `build:` thừa hưởng từ docker-compose.yml.
+  # Bắt buộc: `docker compose run` KHÔNG có cờ `--no-build`, nên nếu còn `build:`
+  # thì khi tag không kéo được (image bị prune, mất mạng, tag gõ sai) Compose sẽ
+  # TỰ BUILD ngay trên máy 2 GB -> OOM. Sau khi reset, trường hợp đó báo lỗi
+  # "not found" rõ ràng thay vì âm thầm build.
   bdu-hub:
     image: ghcr.io/vdat293/bdu-tu-hoc:${IMAGE_TAG:?Set IMAGE_TAG in .env}
     pull_policy: always
+    build: !reset null
 
   bdu-notifier-bot:
     image: ghcr.io/vdat293/bdu-tu-hoc:${IMAGE_TAG:?Set IMAGE_TAG in .env}
     pull_policy: always
+    build: !reset null
 
   bdu-db-backup:
     image: ghcr.io/vdat293/bdu-tu-hoc:${IMAGE_TAG:?Set IMAGE_TAG in .env}
     pull_policy: always
+    build: !reset null
 
   caddy:
     image: caddy:2-alpine
