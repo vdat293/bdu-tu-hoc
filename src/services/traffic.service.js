@@ -135,7 +135,9 @@ let flushTimer = null;
 let purgeTimer = null;
 let isFlushing = false;
 
-function getTimeRangeInterval(timeRange) {
+// Export named để tầng phân tích (traffic-insights.service.js) dùng chung đúng
+// một định nghĩa mốc thời gian, tránh hai nơi tự khai interval rồi lệch nhau.
+export function getTimeRangeInterval(timeRange) {
   switch (timeRange) {
     case '1h': return "INTERVAL '1 hour'";
     case '6h': return "INTERVAL '6 hours'";
