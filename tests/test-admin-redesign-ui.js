@@ -22,6 +22,15 @@ const adminCss = fs.readFileSync(new URL('../public/admin/admin.css', import.met
 // vì chúng bị thay bằng inline SVG (spec mục 4.2: bỏ emoji, dùng Lucide-style SVG).
 const SHELL_SYMBOL_RE = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
 
+/**
+ * Emoji trong MÃ admin.js (không phải trong markup tĩnh).
+ * Cố ý KHÔNG bắt khoảng Geometric Shapes 25A0-25FF (▲ ▼ ■ ●) vì đó là ký hiệu
+ * xu hướng đi kèm số/chữ — spec mục 4.1 yêu cầu "không dựa vào màu đơn thuần,
+ * luôn kèm số/nhãn/ký hiệu" — và cũng không bắt General Punctuation (— – •).
+ * Các ký hiệu này là glyph văn bản, render giống nhau mọi máy.
+ */
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
+
 let failed = 0;
 
 function check(name, fn) {
@@ -209,6 +218,89 @@ check('preview top tính năng ở Tổng quan tái dùng renderFeatureRanking',
     /renderFeatureRanking\([^)]*endpoints-list-preview',\s*\{\s*limit:\s*5,\s*compact:\s*true\s*\}/,
     'admin.js phải tái dùng renderFeatureRanking cho preview xếp hạng tính năng của Tổng quan với { limit: 5, compact: true }'
   );
+});
+
+/* --------------------------------------------------------------------------
+   Task 7b — gộp tab Charts cũ vào Tổng quan/Insights.
+   Spec mục 4.3: "Tab Charts cũ được gộp: timeline chi tiết + devices/OS/browser
+   chuyển sang Insights; KPI/timeline preview ở Tổng quan." Nên tab `charts`, phần
+   <section id="pane-charts"> và mọi id cũ của nó (canvas timeline chi tiết,
+   lưới thiết bị, danh sách OS/trình duyệt) phải biến mất khỏi HTML và khỏi JS.
+   Rủi ro cần chặn: còn sót một id trong admin.js mà không có trong index.html thì
+   runtime chỉ ném lỗi câm (đã xảy ra với safeNumber), test tĩnh không thấy.
+   -------------------------------------------------------------------------- */
+
+check('tab Charts cũ đã bị gộp, không còn trong markup hay JS', () => {
+  assert.ok(!indexHtml.includes('data-tab="charts"'), 'index.html vẫn còn nút nav data-tab="charts"');
+  assert.ok(!indexHtml.includes('id="pane-charts"'), 'index.html vẫn còn <section id="pane-charts">');
+  // Id của tab cũ phải biến mất cùng nó — nếu còn thì hoặc là markup mồ côi,
+  // hoặc admin.js vẫn đang truy cập canvas không tồn tại.
+  for (const deadId of ['chart-timeline-detailed', 'devices-summary-grid', 'os-browser-summary']) {
+    assert.ok(!indexHtml.includes(`id="${deadId}"`), `index.html vẫn còn #${deadId} của tab Charts cũ`);
+    assert.ok(!adminJs.includes(deadId), `admin.js vẫn còn tham chiếu #${deadId} đã bị xoá`);
+  }
+  assert.doesNotMatch(adminJs, /renderDetailedChart/, 'admin.js vẫn còn hàm vẽ biểu đồ timeline chi tiết của tab Charts');
+  assert.doesNotMatch(adminJs, /charts:\s*'Biểu Đồ/, 'admin.js vẫn còn tiêu đề tab "Biểu Đồ & Xu Hướng"');
+  // Timeline nay chỉ còn MỘT bản đang hoạt động ở Tổng quan.
+  assert.equal(
+    (indexHtml.match(/<canvas[^>]*id="chart-timeline/g) || []).length,
+    1,
+    'Chỉ được còn đúng 1 canvas timeline (ở Tổng quan), không nhân bản 2 canvas'
+  );
+});
+
+check('khối Thiết Bị đã chuyển sang tab Insights với id mới', () => {
+  assert.ok(indexHtml.includes('id="insights-devices-grid"'), 'Insights thiếu lưới thiết bị #insights-devices-grid');
+  assert.ok(indexHtml.includes('id="insights-os-browser"'), 'Insights thiếu khối OS/trình duyệt #insights-os-browser');
+  // Id mới phải nằm trong section#pane-insights, không phải rơi lại ở Tổng quan.
+  const paneStart = indexHtml.indexOf('id="pane-insights"');
+  const paneEnd = indexHtml.indexOf('</section>', paneStart);
+  const insightsPane = indexHtml.slice(paneStart, paneEnd);
+  assert.ok(insightsPane.includes('id="insights-devices-grid"'), '#insights-devices-grid phải nằm trong pane-insights');
+  assert.ok(insightsPane.includes('id="insights-os-browser"'), '#insights-os-browser phải nằm trong pane-insights');
+  // renderDevices phải vẽ vào id mới, không trỏ lại id đã xoá.
+  const renderDevices = adminJs.slice(
+    adminJs.indexOf('function renderDevices('),
+    adminJs.indexOf('function renderDevices(') + 2500
+  );
+  assert.match(renderDevices, /dom\.insightsDevicesGrid/, 'renderDevices phải vẽ vào #insights-devices-grid');
+  assert.match(renderDevices, /dom\.insightsOsBrowser/, 'renderDevices phải vẽ vào #insights-os-browser');
+});
+
+check('mọi id mà admin.js truy cập đều tồn tại trong index.html', () => {
+  // Chặn lớp bug "id mồ côi": JS lấy getElementById/resolveElement mà HTML không
+  // có phần tử thì chỉ chết lúc chạy, và im lặng chứ không báo lỗi cho ai thấy.
+  const htmlIds = new Set([...indexHtml.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  const referenced = new Set();
+  for (const m of adminJs.matchAll(/getElementById\('([^']+)'\)/g)) referenced.add(m[1]);
+  for (const m of adminJs.matchAll(/resolveElement\('#([^']+)'\)/g)) referenced.add(m[1]);
+  for (const m of adminJs.matchAll(/renderSkeleton\('#([^']+)'/g)) referenced.add(m[1]);
+  for (const m of adminJs.matchAll(/renderEmpty\('#([^']+)'/g)) referenced.add(m[1]);
+  const missing = [...referenced].filter((id) => !htmlIds.has(id)).sort();
+  assert.deepEqual(missing, [], `admin.js tham chiếu id không tồn tại trong index.html: ${missing.join(', ')}`);
+  // Chiều ngược: canvas trong HTML phải được JS biết tới (tránh khối trống câm).
+  const canvases = [...indexHtml.matchAll(/<canvas[^>]*id="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(canvases.length > 0, 'index.html không còn canvas nào — biểu đồ đã bị xoá nhầm');
+});
+
+check('admin.js không còn emoji nào (chỉ dùng inline SVG)', () => {
+  // Bỏ comment trước khi so: dấu "→" trong chú thích tiếng Việt không phải icon.
+  const code = adminJs
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    code,
+    EMOJI_RE,
+    `admin.js còn emoji — thay bằng ICONS/renderIcon. Ký tự tìm thấy: ${(code.match(EMOJI_RE) || []).join(' ')}`
+  );
+  // Chặn đúng những emoji từng còn trong file (renderDevices 📱📟🤖💻, nút Chép 📋,
+  // nút xem 👁, cảnh báo ⚠, trạng thái sinh viên 🟢⚪, nút Dấu vết 🧭, dấu chép ✓).
+  for (const emoji of ['\u{1F4F1}', '\u{1F4DF}', '\u{1F916}', '\u{1F4BB}', '\u{1F4C1}', '\u{1F441}', '\u{26A0}', '\u{1F7E2}', '\u{26AA}', '\u{1F9ED}', '\u{2713}']) {
+    assert.ok(!adminJs.includes(emoji), `admin.js vẫn còn emoji ${emoji}`);
+  }
+  // renderDevices phải đi qua ICONS chứ không chọn emoji theo tên thiết bị.
+  assert.match(adminJs, /const DEVICE_PRESENTATION = \{/, 'admin.js phải khai bảng map tên thiết bị → icon SVG');
+  assert.match(adminJs, /DEVICE_PRESENTATION\[name\]/, 'renderDevices phải tra DEVICE_PRESENTATION để lấy icon');
 });
 
 if (failed > 0) {

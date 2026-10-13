@@ -29,7 +29,6 @@ const state = {
   },
   charts: {
     preview: null,
-    detailed: null,
     cohort: null
   },
   // 4 khối phân tích của tab Insights. Mỗi endpoint được bọc .catch(() => null)
@@ -121,9 +120,10 @@ const dom = {
 
   // Previews
   chartTimelinePreview: document.getElementById('chart-timeline-preview'),
-  chartTimelineDetailed: document.getElementById('chart-timeline-detailed'),
-  devicesSummaryGrid: document.getElementById('devices-summary-grid'),
-  osBrowserSummary: document.getElementById('os-browser-summary'),
+
+  // Khối "Thiết bị & nền tảng" của tab Insights (tới từ tab Charts cũ đã gộp).
+  insightsDevicesGrid: document.getElementById('insights-devices-grid'),
+  insightsOsBrowser: document.getElementById('insights-os-browser'),
 
   // Logs Elements
   inputLogSearch: document.getElementById('input-log-search'),
@@ -250,6 +250,8 @@ const ICONS = {
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+  checkCircle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="8 12 11 15 16 9"></polyline></svg>',
+  compass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polygon points="16.2 7.8 13.5 13.5 7.8 16.2 10.5 10.5"></polygon></svg>',
   arrowUp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
   arrowDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
@@ -536,10 +538,12 @@ function updateAuthDisplay() {
   }
 }
 
-// Tab Switching
+// Tab Switching.
+// Vì sao KHÔNG còn `charts`: spec mục 4.3 gộp tab "Biểu Đồ & Xu Hướng" cũ vào
+// Tổng quan (timeline) + Insights (thiết bị/nền tảng), nên không còn tab nào cần
+// nạp dữ liệu riêng lúc chuyển — mọi khối đã được vẽ sẵn bởi fetchAllData.
 const tabTitles = {
   overview: 'Tổng Quan Lưu Lượng',
-  charts: 'Biểu Đồ & Xu Hướng',
   insights: 'Phân Tích Hành Vi Người Dùng',
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
@@ -562,11 +566,6 @@ function switchTab(tabId) {
   // If mobile, close sidebar
   if (window.innerWidth <= 900) {
     dom.sidebar.classList.remove('open');
-  }
-
-  // Load tab-specific data if needed
-  if (tabId === 'charts') {
-    renderDetailedChart();
   }
 }
 
@@ -616,7 +615,6 @@ dom.btnThemeToggle.addEventListener('click', () => {
   renderThemeToggleIcon(next);
   // Re-render charts with new theme colors
   if (state.charts.preview) state.charts.preview.update();
-  if (state.charts.detailed) state.charts.detailed.update();
   // Biểu đồ cohort vẽ lại từ dữ liệu đang có: Chart.js đọc màu lúc vẽ nên
   // update() không đổi được màu trục/nhãn sang bảng màu của theme mới.
   if (state.insights && state.insights.cohort) renderCohort(state.insights.cohort);
@@ -635,7 +633,10 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
-      api(`/api/admin/dashboard/devices?timeRange=${state.timeRange}`),
+      // Khối thiết bị của tab Insights bọc .catch(() => null) giống 4 endpoint
+      // insights: endpoint này lỗi thì chỉ khối "Thiết bị" báo lỗi, cả dashboard
+      // vẫn vẽ. `null` khác `{}` — renderDevices hiển mỗi kiểu một trạng thái.
+      api(`/api/admin/dashboard/devices?timeRange=${state.timeRange}`).catch(() => null),
       api(`/api/admin/dashboard/logs?timeRange=${state.timeRange}&page=${state.logFilters.page}&limit=${state.logFilters.limit}&status=${state.logFilters.status}&method=${state.logFilters.method}&route=${encodeURIComponent(state.logFilters.route)}&search=${encodeURIComponent(state.logFilters.search)}&mssv=${encodeURIComponent(state.logFilters.mssv)}`),
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`),
@@ -736,11 +737,12 @@ function renderOverview(data = {}) {
   }
 }
 
-// 2. Render Timeline Charts
-let cachedTimeline = [];
+// 2. Render Timeline Chart (khối timeline DUY NHẤT của trang — nằm ở Tổng quan).
+// Vì sao không còn bản "chi tiết" riêng: spec mục 4.3 gộp tab Charts cũ vào Tổng
+// quan, và bản chi tiết vẽ đúng hai series (tổng + lỗi) trong khi biểu đồ này đã
+// có thêm đường độ trễ trung bình. Giữ cả hai chỉ tốn 1 canvas và làm người đọc
+// phải chọn giữa hai bản gần như trùng nhau.
 function renderTimelineChart(timeline = []) {
-  cachedTimeline = timeline;
-
   // Biểu đồ Chart.js không tự nói được "không có dữ liệu": với mảng rỗng nó chỉ
   // vẽ ra khung trống. Nên thông báo rỗng đặt ở #overview-timeline-state (dưới
   // canvas, không đè lên) để khối không bao giờ im lặng.
@@ -843,58 +845,6 @@ function renderTimelineChart(timeline = []) {
   }
 }
 
-function renderDetailedChart() {
-  if (typeof Chart === 'undefined' || !dom.chartTimelineDetailed || cachedTimeline.length === 0) return;
-  if (state.charts.detailed) {
-    state.charts.detailed.update();
-    return;
-  }
-
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const textColor = isDark ? '#94a3b8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
-
-  const labels = cachedTimeline.map((item) => {
-    const d = new Date(item.time);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ` (${d.getDate()}/${d.getMonth() + 1})`;
-  });
-
-  state.charts.detailed = new Chart(dom.chartTimelineDetailed, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Tổng Yêu Cầu',
-          data: cachedTimeline.map((i) => i.total),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.15)',
-          fill: true,
-          tension: 0.35,
-          yAxisID: 'yReq'
-        },
-        {
-          label: 'Phản Hồi Lỗi',
-          data: cachedTimeline.map((i) => i.error),
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.15)',
-          fill: true,
-          tension: 0.35,
-          yAxisID: 'yReq'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { ticks: { color: textColor }, grid: { color: gridColor } },
-        yReq: { ticks: { color: textColor }, grid: { color: gridColor } }
-      }
-    }
-  });
-}
-
 // 3. Trạng thái "đang tải" của tab Tổng quan
 // Vì sao cần: trước đây ô KPI/preview đứng "--" và biểu đồ trống trơn lúc mở
 // trang, người dùng không biết là đang tải hay đã hỏng. Skeleton giữ chiều cao
@@ -963,43 +913,83 @@ function renderEndpoints(endpoints = [], options = {}) {
   }).join('');
 }
 
-// 4. Render Devices & Platforms
-function renderDevices(data = {}) {
-  const devices = data.devices || [];
-  const os = data.os || [];
-  const browsers = data.browsers || [];
+/* ==========================================================================
+   KHỐI "THIẾT BỊ & NỀN TẢNG" (tab Insights)
+   --------------------------------------------------------------------------
+   Khối này tới từ tab "Biểu Đồ & Xu Hướng" cũ, đã bị gộp theo spec mục 4.3:
+   timeline chi tiết ở Tổng quan, còn "sinh viên xem trang bằng máy gì" thuộc
+   nhóm câu hỏi của Insights nên nằm cạnh xếp hạng tính năng/heatmap.
+   Icon là inline SVG (ICONS) chứ không phải emoji: emoji render khác nhau trên
+   từng hệ điều hành, không ăn theo màu theme và dễ vỡ cỡ chữ trên ô nhỏ.
+   ========================================================================== */
 
-  if (dom.devicesSummaryGrid) {
-    dom.devicesSummaryGrid.innerHTML = devices.map((d) => {
+/** Tên thiết bị server trả về → icon + nhãn tiếng Việt hiển thị. */
+const DEVICE_PRESENTATION = {
+  mobile: { icon: 'smartphone', label: 'Mobile' },
+  tablet: { icon: 'tablet', label: 'Tablet' },
+  bot: { icon: 'bot', label: 'Bot' },
+  desktop: { icon: 'monitor', label: 'Desktop' }
+};
+
+/**
+ * Vẽ khối thiết bị.
+ * `data === null` = endpoint devices lỗi (fetchAllData đã bọc .catch); `{}` =
+ * chạy được nhưng rỗng. Hai trường hợp phải hiện khác nhau, nếu không admin tưởng
+ * dữ liệu hỏng khi thực ra chỉ chưa có lượt truy cập nào.
+ */
+function renderDevices(data = {}) {
+  const gridEl = dom.insightsDevicesGrid;
+  const osEl = dom.insightsOsBrowser;
+  if (!gridEl || !osEl) return;
+
+  if (data === null) {
+    renderError(gridEl, 'Không tải được phân bố thiết bị.', { title: 'Lỗi dữ liệu thiết bị' });
+    renderError(osEl, 'Không tải được hệ điều hành và trình duyệt.');
+    return;
+  }
+
+  const devices = Array.isArray(data.devices) ? data.devices : [];
+  const os = Array.isArray(data.os) ? data.os : [];
+  const browsers = Array.isArray(data.browsers) ? data.browsers : [];
+
+  if (!devices.length) {
+    renderEmpty(gridEl, 'Chưa có lượt truy cập nào trong mốc thời gian đang chọn.', {
+      hint: 'Đổi mốc thời gian ở thanh trên (ví dụ 7D) hoặc chờ thêm dữ liệu.'
+    });
+  } else {
+    gridEl.innerHTML = devices.map((d) => {
       const name = String(d.name || '');
-      const icon = name === 'mobile' ? '📱' : name === 'tablet' ? '📟' : name === 'bot' ? '🤖' : '💻';
-      const label = name === 'mobile' ? 'Mobile' : name === 'tablet' ? 'Tablet' : name === 'bot' ? 'Bot' : 'Desktop';
+      // Tên lạ (thiết bị mới thêm sau này) vẫn hiện đúng chữ server trả về,
+      // chỉ mất phần icon quen thuộc — không gộp về "Desktop" rồi nói dối.
+      const meta = DEVICE_PRESENTATION[name] || { icon: 'monitor', label: name || 'Khác' };
       return `
         <div class="device-card">
-          <span class="icon">${icon}</span>
-          <span class="name">${label}</span>
-          <span class="val">${safeNumber(d.count).toLocaleString()}</span>
+          <span class="icon">${renderIcon(meta.icon, 'svg-icon svg-icon--lg')}</span>
+          <span class="name">${escapeHtml(meta.label)}</span>
+          <span class="val">${formatNumber(d.count)}</span>
         </div>
       `;
     }).join('');
   }
 
-  if (dom.osBrowserSummary) {
-    dom.osBrowserSummary.innerHTML = `
+  if (!os.length && !browsers.length) {
+    renderEmpty(osEl, 'Chưa có dữ liệu hệ điều hành hoặc trình duyệt.');
+    return;
+  }
+
+  const chip = (row) => `<div class="breakdown-chip"><span>${escapeHtml(row.name)}</span><span class="chip-val">${formatNumber(row.count)}</span></div>`;
+  osEl.innerHTML = `
+    ${os.length ? `
       <div class="breakdown-group">
         <div class="breakdown-group-title">Hệ Điều Hành</div>
-        <div class="pills-wrap">
-          ${os.map((o) => `<div class="breakdown-chip"><span>${escapeHtml(o.name)}</span><span class="chip-val">${safeNumber(o.count)}</span></div>`).join('')}
-        </div>
-      </div>
+        <div class="pills-wrap">${os.map(chip).join('')}</div>
+      </div>` : ''}
+    ${browsers.length ? `
       <div class="breakdown-group" style="margin-top: 10px;">
         <div class="breakdown-group-title">Trình Duyệt</div>
-        <div class="pills-wrap">
-          ${browsers.map((b) => `<div class="breakdown-chip"><span>${escapeHtml(b.name)}</span><span class="chip-val">${safeNumber(b.count)}</span></div>`).join('')}
-        </div>
-      </div>
-    `;
-  }
+        <div class="pills-wrap">${browsers.map(chip).join('')}</div>
+      </div>` : ''}
+  `;
 }
 
 /* ==========================================================================
@@ -1027,13 +1017,15 @@ function compactCount(value) {
   return `${formatNumber(count / 1000000, 1)}tr`;
 }
 
-/** Trạng thái "đang tải" cho 4 khối Insights, gọi một lần lúc mở trang. */
+/** Trạng thái "đang tải" cho các khối Insights, gọi một lần lúc mở trang. */
 function renderInsightsSkeleton() {
   renderSkeleton('#feature-ranking', 5);
   renderSkeleton('#hours-heatmap', 4);
   renderSkeleton('#hours-heatmap-table', 1);
   renderSkeleton('#cohort-chart', 4);
   renderSkeleton('#quality-table', 4);
+  renderSkeleton('#insights-devices-grid', 2);
+  renderSkeleton('#insights-os-browser', 2);
 }
 
 /** Vẽ cả 4 khối từ state.insights; khối nào không có dữ liệu thì báo riêng. */
@@ -1545,7 +1537,7 @@ function renderLogs(logsData = {}) {
         <td>
           <div class="path-wrap">
             <span class="path-code" title="${escapeHtml(log.path)}">${escapeHtml(log.path)}</span>
-            ${log.errorMessage ? `<span class="path-err" title="${escapeHtml(log.errorMessage)}">⚠ ${escapeHtml(log.errorMessage)}</span>` : ''}
+            ${log.errorMessage ? `<span class="path-err" title="${escapeHtml(log.errorMessage)}">${renderIcon('alert', 'svg-icon svg-icon--sm path-err-icon')}<span class="path-err-text">${escapeHtml(log.errorMessage)}</span></span>` : ''}
           </div>
         </td>
         <td><span class="status-badge ${statClass}">${statusCode}</span></td>
@@ -1558,7 +1550,7 @@ function renderLogs(logsData = {}) {
           <span class="client-dev-text">${escapeHtml(log.os || '')} ${log.browser ? `• ${escapeHtml(log.browser)}` : ''}</span>
         </td>
         <td style="text-align: center;">
-          <button type="button" class="btn-inspect" title="Xem chi tiết">👁</button>
+          <button type="button" class="btn-inspect" title="Xem chi tiết" aria-label="Xem chi tiết yêu cầu này">${renderIcon('eye', 'svg-icon svg-icon--sm')}</button>
         </td>
       </tr>
     `;
@@ -1574,6 +1566,12 @@ function renderLogs(logsData = {}) {
     });
   });
 }
+
+// Nút "Chép" trong modal chi tiết nhật ký. Tách ra hằng vì cần dùng cùng một
+// markup ở hai chỗ (route + path) và khôi phục lại sau 2 giây khi bấm — nếu dựng
+// bằng innerHTML rời rạc thì dễ quên mất lớp .svg-icon và icon vỡ cỡ.
+const COPY_ICON = `${renderIcon('copy', 'svg-icon svg-icon--sm')}<span>Chép</span>`;
+const COPIED_ICON = `${renderIcon('check', 'svg-icon svg-icon--sm')}<span>Đã chép</span>`;
 
 // Log Inspector Modal
 function openLogDetailModal(log) {
@@ -1598,7 +1596,7 @@ function openLogDetailModal(log) {
       <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">API đã gọi (Route pattern):</span>
       <div class="detail-code-box">
         <span>${escapeHtml(log.route || '(không khớp route — có thể 404)')}</span>
-        ${log.route ? `<button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.route)}">📋 Chép</button>` : ''}
+        ${log.route ? `<button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.route)}">${COPY_ICON}</button>` : ''}
       </div>
     </div>
 
@@ -1606,7 +1604,7 @@ function openLogDetailModal(log) {
       <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Đường dẫn đầy đủ (Path):</span>
       <div class="detail-code-box">
         <span>${escapeHtml(log.path)}</span>
-        <button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.path)}">📋 Chép</button>
+        <button type="button" class="btn-copy-code" data-copy="${escapeHtml(log.path)}">${COPY_ICON}</button>
       </div>
     </div>
 
@@ -1645,8 +1643,9 @@ function openLogDetailModal(log) {
       e.stopPropagation();
       const val = btn.getAttribute('data-copy');
       navigator.clipboard?.writeText(val);
-      btn.textContent = '✓ Đã chép';
-      setTimeout(() => btn.textContent = '📋 Chép', 2000);
+      // innerHTML chứ không textContent: nút có icon SVG, textContent sẽ xoá mất nó.
+      btn.innerHTML = COPIED_ICON;
+      setTimeout(() => { btn.innerHTML = COPY_ICON; }, 2000);
     });
   });
 
@@ -1909,9 +1908,11 @@ function renderVisitedStudents(res = {}) {
       const safeFullName = escapeHtml(s.full_name || 'Sinh viên BDU');
       const reqCount = safeNumber(s.total_requests);
 
+      // Trạng thái kích hoạt: icon SVG + CHỮ. Không dựa vào màu xanh/xám đơn thuần
+      // (spec mục 4.1) — người không phân biệt được màu vẫn đọc được "Đã vào web".
       const statusBadge = s.is_active
-        ? '<span class="status-pill status-2xx" style="padding: 2px 8px; font-size: 0.75rem;">🟢 Đã vào web</span>'
-        : '<span class="status-pill status-4xx" style="padding: 2px 8px; font-size: 0.75rem; background: rgba(148, 163, 184, 0.15); color: #94a3b8;">⚪ Chưa kích hoạt</span>';
+        ? `<span class="status-pill status-pill--active">${renderIcon('checkCircle', 'svg-icon svg-icon--sm')}<span>Đã vào web</span></span>`
+        : '<span class="status-pill status-pill--inactive"><span>Chưa kích hoạt</span></span>';
 
       return `
         <tr>
@@ -1933,7 +1934,7 @@ function renderVisitedStudents(res = {}) {
           <td style="text-align: center;">${statusBadge}</td>
           <td style="text-align: right;">
             <button type="button" class="btn-filter-student btn-view-student-logs" data-mssv="${safeMssv}" title="Xem dấu vết API sinh viên này đã gọi">
-              🧭 Dấu vết API
+              ${renderIcon('compass', 'svg-icon svg-icon--sm')}<span>Dấu vết API</span>
             </button>
           </td>
         </tr>

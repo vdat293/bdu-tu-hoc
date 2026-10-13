@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
   <!-- Đổi version query khi đổi token/icon để trình duyệt không dùng CSS/JS cũ. -->
-  <link rel="stylesheet" href="/admin/admin.css?v=20261013-light" />
+  <link rel="stylesheet" href="/admin/admin.css?v=20261013-light2" />
   <script src="/admin/chart.min.js"></script>
 </head>
 <body>
@@ -36,10 +36,6 @@
         <button type="button" class="nav-btn active" data-tab="overview">
           <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
           <span class="nav-label">Tổng Quan Lưu Lượng</span>
-        </button>
-        <button type="button" class="nav-btn" data-tab="charts">
-          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
-          <span class="nav-label">Biểu Đồ & Xu Hướng</span>
         </button>
         <button type="button" class="nav-btn" data-tab="insights">
           <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>
@@ -198,7 +194,7 @@
                Preview TÁI DÙNG renderFeatureRanking (chế độ compact, top 5) chứ
                không dựng renderer riêng — tránh tab Tổng quan và tab Insights
                lệch nhau về cách đọc cùng một con số. -->
-          <div class="charts-overview-row">
+          <div class="two-col-row">
             <div class="panel-card chart-card-large">
               <div class="card-header">
                 <div>
@@ -226,51 +222,10 @@
           </div>
         </section>
 
-        <!-- 2. Charts & Analytics Tab -->
-        <section class="tab-pane" id="pane-charts">
-          <div class="panel-card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <div>
-                <h2 class="card-title">Biểu Đồ Chi Tiết Lưu Lượng & Lỗi (Timeline)</h2>
-                <p class="card-subtitle">Phân tích chuỗi thời gian truy cập máy chủ</p>
-              </div>
-            </div>
-            <div class="chart-wrapper" style="height: 380px;">
-              <canvas id="chart-timeline-detailed"></canvas>
-            </div>
-          </div>
-
-          <div class="charts-overview-row">
-            <div class="panel-card">
-              <div class="card-header">
-                <div>
-                  <h2 class="card-title">Phân Bố Thiết Bị & Nền Tảng</h2>
-                  <p class="card-subtitle">Mobile vs Desktop vs Tablet</p>
-                </div>
-              </div>
-              <div class="devices-grid" id="devices-summary-grid">
-                <!-- Device cards dynamically inserted -->
-              </div>
-            </div>
-
-            <div class="panel-card">
-              <div class="card-header">
-                <div>
-                  <h2 class="card-title">Hệ Điều Hành & Trình Duyệt</h2>
-                  <p class="card-subtitle">Tỷ lệ môi trường khách truy cập</p>
-                </div>
-              </div>
-              <div class="os-browser-lists" id="os-browser-summary">
-                <!-- OS / Browser pills dynamically inserted -->
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 3. Insights Tab: phân tích hành vi người dùng (mọi mốc giờ đều theo Asia/Ho_Chi_Minh) -->
+        <!-- 2. Insights Tab: phân tích hành vi người dùng (mọi mốc giờ đều theo Asia/Ho_Chi_Minh) -->
         <section class="tab-pane" id="pane-insights">
           <div class="insight-stack">
-            <!-- 3.1. Xếp hạng tính năng: "sinh viên dùng gì nhiều nhất?" -->
+            <!-- 2.1. Xếp hạng tính năng: "sinh viên dùng gì nhiều nhất?" -->
             <div class="panel-card">
               <div class="card-header">
                 <div>
@@ -282,7 +237,7 @@
               <div id="feature-ranking"></div>
             </div>
 
-            <!-- 3.2. Heatmap giờ × thứ: "sinh viên hoạt động vào khung giờ nào?" -->
+            <!-- 2.2. Heatmap giờ × thứ: "sinh viên hoạt động vào khung giờ nào?" -->
             <div class="panel-card">
               <div class="card-header">
                 <div>
@@ -297,7 +252,7 @@
               </details>
             </div>
 
-            <!-- 3.3. Cohort / giữ chân: "người dùng có quay lại không?" -->
+            <!-- 2.3. Cohort / giữ chân: "người dùng có quay lại không?" -->
             <div class="panel-card">
               <div class="card-header">
                 <div>
@@ -309,7 +264,7 @@
               <div id="cohort-chart"></div>
             </div>
 
-            <!-- 3.4. Chất lượng dịch vụ: "tính năng nào chậm hoặc hay lỗi?" -->
+            <!-- 2.4. Chất lượng dịch vụ: "tính năng nào chậm hoặc hay lỗi?" -->
             <div class="panel-card">
               <div class="card-header">
                 <div>
@@ -320,10 +275,31 @@
               <!-- JS đổ dữ liệu vào đây (xem renderQuality). -->
               <div id="quality-table"></div>
             </div>
+
+            <!-- 2.5. Thiết bị & nền tảng: "sinh viên xem trang bằng máy gì?"
+                 Khối này tới từ tab "Biểu Đồ & Xu Hướng" cũ, đã bị gộp theo
+                 spec mục 4.3 (timeline chi tiết ở Tổng quan, còn "ai dùng máy
+                 gì" thuộc nhóm câu hỏi của Insights). Dùng id MỚI
+                 (#insights-devices-grid, #insights-os-browser) để không trùng
+                 với id của tab cũ đã bị xoá. -->
+            <div class="panel-card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Sinh Viên Xem Trang Bằng Máy Gì?</h2>
+                  <p class="card-subtitle">Thiết bị, hệ điều hành và trình duyệt trong mốc thời gian đang chọn ở thanh trên; dùng để biết nên ưu tiên bố cục nào.</p>
+                </div>
+              </div>
+              <div class="two-col-row">
+                <div>
+                  <div class="devices-grid" id="insights-devices-grid"></div>
+                </div>
+                <div class="os-browser-lists" id="insights-os-browser"></div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <!-- 4. Access Logs Tab -->
+        <!-- 3. Access Logs Tab -->
         <section class="tab-pane" id="pane-logs">
           <div class="panel-card">
             <div class="card-header">
@@ -419,7 +395,7 @@
           </div>
         </section>
 
-        <!-- 5. Quản Lý Sinh Viên Đã Vào Web (Bảng students trên VPS) -->
+        <!-- 4. Quản Lý Sinh Viên Đã Vào Web (Bảng students trên VPS) -->
         <section class="tab-pane" id="pane-users">
           <!-- Mini KPI Cards for Visitors -->
           <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
@@ -537,7 +513,7 @@
           </div>
         </section>
 
-        <!-- 6. VPS Health & Maintenance Tab -->
+        <!-- 5. VPS Health & Maintenance Tab -->
         <section class="tab-pane" id="pane-system">
           <div class="panel-card" style="margin-bottom: 20px;">
             <div class="card-header">
@@ -836,6 +812,6 @@
   <!-- Toast Notification Region -->
   <div class="admin-toast-container" id="admin-toast-container"></div>
 
-  <script type="module" src="/admin/admin.js?v=20260921-v3"></script>
+  <script type="module" src="/admin/admin.js?v=20261013-v4"></script>
 </body>
 </html>

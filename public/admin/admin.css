@@ -711,15 +711,24 @@ body {
   margin-top: 2px;
 }
 
-.charts-overview-row {
+/* Hàng 2 cột dùng chung (Tổng quan: biểu đồ + preview; Insights: thiết bị +
+   hệ điều hành). Tên cũ "charts-overview-row" đã bị bỏ vì tab Charts không còn. */
+.two-col-row {
   display: grid;
   grid-template-columns: 2fr 1.2fr;
   gap: 18px;
   margin-bottom: 24px;
 }
 
+/* Khi lồng bên trong một panel-card thì không cần khoảng đệm cuối (panel đã có
+   padding), và lưới thiết bị cũng vậy — nếu không hai cột lệch nhau. */
+.panel-card .two-col-row,
+.panel-card .two-col-row .devices-grid {
+  margin-bottom: 0;
+}
+
 @media (max-width: 1024px) {
-  .charts-overview-row { grid-template-columns: 1fr; }
+  .two-col-row { grid-template-columns: 1fr; }
 }
 
 .chart-wrapper {
@@ -1177,12 +1186,30 @@ body {
   white-space: nowrap;
 }
 
+/* Dòng thông báo lỗi của request. Icon cảnh báo là inline SVG (trước đây là
+   emoji ⚠ nên render khác nhau theo font của máy); ô chữ bọc trong span riêng để
+   cắt bằng ellipsis vẫn đúng khi thêm icon. */
 .path-err {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
   font-size: 0.72rem;
   color: var(--accent-red);
+}
+
+.path-err-text {
+  /* min-width: 0 là bắt buộc: mặc định flex item có min-width auto nên sẽ
+     không co lại được và text-overflow: ellipsis không bao giờ chạy. */
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.path-err-icon {
+  flex: 0 0 auto;
 }
 
 .status-badge {
@@ -1229,7 +1256,12 @@ body {
   color: var(--text-muted);
 }
 
+/* Nút icon-only "Xem chi tiết" của từng dòng nhật ký. Icon là inline SVG nên
+   căn giữa bằng flex; nhãn nằm ở aria-label (nút không có chữ để bảng gọn). */
 .btn-inspect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--bg-card-hover);
   border: 1px solid var(--border-color);
   color: var(--text-sub);
@@ -1295,11 +1327,38 @@ body {
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+  /* Nhãn nút không được xuống dòng: cột "Thao tác" hẹp, gãy "Dấu vết API" thành
+     3 dòng làm hàng bảng cao bất thường. */
+  white-space: nowrap;
 }
 
 .btn-filter-student:hover {
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+/* Nhãn trạng thái sinh viên ở bảng "Sinh viên đã vào web". Trước đây màu nền/màu
+   chữ nằm rải rác trong thuộc tính style của JS và có emoji 🟢/⚪; giờ chuyển hết
+   vào class để đổi theme một chỗ. Cả hai biến thể đều CÓ CHỮ, không chỉ màu. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pill--active {
+  background: var(--tint-success);
+  color: var(--color-success);
+}
+
+.status-pill--inactive {
+  background: var(--bg-card-hover);
+  color: var(--text-muted);
 }
 
 /* System Health Cards */
@@ -1609,7 +1668,12 @@ body {
   gap: 8px;
 }
 
+/* Nút chép trong modal chi tiết nhật ký: icon SVG + chữ nên cần flex để chúng
+   thẳng hàng (trước đây gộp emoji 📋 vào chuỗi text nên không căn được). */
 .btn-copy-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(255, 255, 255, 0.16);
   border: none;
   color: #FFFFFF;
@@ -2181,13 +2245,14 @@ body {
     padding: 12px;
   }
 
-  .charts-overview-row {
+  .two-col-row {
     gap: 12px;
   }
 }
 
 /* ==========================================================================
-   TAB INSIGHTS — xếp hạng tính năng, heatmap giờ × thứ, cohort, chất lượng
+   TAB INSIGHTS — xếp hạng tính năng, heatmap giờ × thứ, cohort, chất lượng,
+   thiết bị & nền tảng
    --------------------------------------------------------------------------
    Vì sao dùng lưới CSS chứ không vẽ heatmap bằng thư viện: 168 ô là dữ liệu
    tĩnh theo mốc thời gian, CSS grid rẻ hơn nhiều, in được số thật trong từng ô
