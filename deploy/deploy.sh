@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# BDU TỰ HỌC - DEPLOY TRÊN VPS
+# BDU TỰ HỌC - DEPLOY TRÊN EC2 (AWS)
 #
 # Thứ tự bắt buộc (đảo thứ tự là mất an toàn dữ liệu):
 #   1. preflight    : docker compose có, .env tồn tại, PostgreSQL reachable, git sạch
 #   2. backup DB    : FAIL -> dừng, KHÔNG migrate
 #   3. migrate      : đúng 1 lần, FAIL -> dừng, KHÔNG restart app
-#   4. up -d --build: BUILD_ID = short sha
+#   4. pull + up -d --no-build: IMAGE_TAG = short sha
 #   5. healthcheck  : poll /api/health tối đa 90s, FAIL -> in hướng dẫn rollback
 #   6. rollback hint: in lệnh quay lui cụ thể
 #
@@ -24,7 +24,7 @@
 #   DEPLOY_SHA                commit muốn deploy (mặc định: HEAD hiện tại)
 #   DEPLOY_SYNC=0|1           có fetch + checkout về DEPLOY_SHA không (mặc định 1)
 #   BACKUP_ARGS               đè cờ truyền cho `npm run db:backup` (mặc định tự dò)
-#   VPS_APP_DIR               thư mục app trên VPS (mặc định /opt/bdu-tu-hoc)
+#   APP_DIR                   thư mục app trên EC2 (mặc định /opt/bdu-tu-hoc)
 #   HEALTH_URL                endpoint kiểm tra (mặc định http://127.0.0.1:3000/api/health)
 #   HEALTH_TIMEOUT_SECONDS    tổng thời gian chờ (mặc định 90)
 #   HEALTH_INTERVAL_SECONDS   nhịp giữa hai lần poll (mặc định 3)
@@ -32,12 +32,12 @@
 
 set -euo pipefail
 
-APP_DIR="${VPS_APP_DIR:-/opt/bdu-tu-hoc}"
+APP_DIR="${APP_DIR:-/opt/bdu-tu-hoc}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 HEALTH_INTERVAL_SECONDS="${HEALTH_INTERVAL_SECONDS:-3}"
 DEPLOY_SYNC="${DEPLOY_SYNC:-1}"
-# Chỉ dùng khi phải probe từ trong container (VPS không có curl/wget).
+# Chỉ dùng khi phải probe từ trong container (máy EC2 không có curl/wget).
 HEALTH_URL_INTERNAL="http://127.0.0.1:${HEALTH_PORT_INTERNAL:-3000}/api/health"
 
 # Nhánh nguồn được deploy trước đó (dùng cho hướng dẫn rollback).
@@ -76,15 +76,16 @@ print_rollback_hint() {
   cat <<EOF
 
 ------------------------------------------------------------------
-HƯỚNG DẪN ROLLBACK (chạy trên VPS, từng lệnh một)
+HƯỚNG DẪN ROLLBACK (chạy trên EC2, từng lệnh một)
 ------------------------------------------------------------------
 1) Quay code về bản đang chạy tốt:
    cd "${APP_DIR}"
    git fetch --prune origin
    git checkout --detach ${target_sha}
 
-2) Dựng lại app (KHÔNG migrate, không cần nếu chỉ lỗi code):
-   docker compose up -d --build --remove-orphans
+2) Dựng lại app theo tag image cũ (KHÔNG migrate, KHÔNG build):
+   sửa IMAGE_TAG trong .env thành tag cũ rồi:
+   docker compose pull && docker compose up -d --no-build --remove-orphans
 
 3) Nếu migration đã chạy và dữ liệu sai, khôi phục DB từ file backup
    (bước 2 của deploy LUÔN tạo backup trước khi migrate; bản bền nằm ở
@@ -110,7 +111,7 @@ die() {
 preflight() {
   log "Bước 1/5: preflight"
 
-  command -v docker >/dev/null 2>&1 || die "Không tìm thấy lệnh 'docker' trên VPS."
+  command -v docker >/dev/null 2>&1 || die "Không tìm thấy lệnh 'docker' trên EC2."
   docker compose version >/dev/null 2>&1 \
     || die "Không có docker compose v2 (plugin). Cài Docker Compose v2 rồi chạy lại."
 
@@ -132,7 +133,7 @@ preflight() {
   fi
 }
 
-# Đồng bộ mã nguồn trên VPS về DEPLOY_SHA. Nằm trong bước 1 vì image phải được
+# Đồng bộ mã nguồn trên EC2 về DEPLOY_SHA. Nằm trong bước 1 vì image phải được
 # build từ đúng commit sẽ deploy, không phải từ code cũ đang nằm trên đĩa.
 sync_code() {
   PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -158,13 +159,14 @@ sync_code() {
 }
 
 # Lần deploy đầu tiên (hoặc sau khi xoá image) chưa có image để chạy
-# backup/migrate. Build trước ở đây, luôn theo code vừa checkout.
+# backup/migrate. Kéo image từ GHCR trước, luôn theo DEPLOY_SHORT_SHA.
+# KHÔNG build tại chỗ: t3a.small (2 GB) sẽ OOM với image có Chromium + .NET.
 ensure_image() {
-  if [ -n "$(docker compose images -q bdu-hub 2>/dev/null)" ]; then
-    return 0
-  fi
-  log "  Chưa có image bdu-hub - build trước (lần deploy đầu)."
-  docker compose build bdu-hub
+  local tag="${DEPLOY_SHORT_SHA:-}"
+  [ -n "$tag" ] || die "Thiếu DEPLOY_SHORT_SHA để chọn image cần kéo."
+  log "  Kéo image bdu-hub:${tag} từ GHCR (không build tại chỗ)."
+  IMAGE_TAG="$tag" docker compose pull --quiet bdu-hub \
+    || die "Không kéo được image ${tag} từ GHCR. Kiểm 'docker login ghcr.io' trên EC2 và image của commit này đã được build chưa."
 }
 
 # -----------------------------------------------------------------------------
@@ -234,8 +236,11 @@ migrate_database() {
 # Bước 4 - build + up
 # -----------------------------------------------------------------------------
 start_app() {
-  log "Bước 4/5: docker compose up -d --build (BUILD_ID=${DEPLOY_SHORT_SHA})"
-  BUILD_ID="$DEPLOY_SHORT_SHA" docker compose up -d --build --remove-orphans
+  log "Bước 4/5: docker compose pull + up -d (IMAGE_TAG=${DEPLOY_SHORT_SHA}, --no-build)"
+  # --no-build là BẮT BUỘC: docker-compose.yml gốc vẫn khai `build:`, thiếu cờ
+  # này thì Compose sẽ build image ~5 GB trên máy 2 GB => OOM.
+  IMAGE_TAG="$DEPLOY_SHORT_SHA" docker compose pull --quiet
+  IMAGE_TAG="$DEPLOY_SHORT_SHA" docker compose up -d --remove-orphans --no-build
 }
 
 # -----------------------------------------------------------------------------
@@ -253,7 +258,7 @@ probe_health() {
   elif docker compose exec -T bdu-hub node -e \
       "fetch('${HEALTH_URL_INTERNAL}').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" \
       >/dev/null 2>&1; then
-    # VPS không có curl/wget: image là Node nên hỏi Node trong container.
+    # EC2 không có curl/wget: image là Node nên hỏi Node trong container.
     status="200"
   fi
   printf '%s' "${status:-000}"
