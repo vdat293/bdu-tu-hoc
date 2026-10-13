@@ -5,11 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { MetaController } from '../src/modules/meta/meta.controller.js';
 import { ServiceLockService } from '../src/services/service-lock.service.js';
 
-// Test cho endpoint công khai GET /api/status (Task 3). Không cần DB: monkey-patch
+// Test cho endpoint công khai GET /api/status (Task 4). Không cần DB: monkey-patch
 // ServiceLockService.getStatus để kiểm shape trả về của MetaController.getServiceStatus,
 // đồng thời đọc source của meta.routes.js và app.js để chặn việc ai đó di chuyển
 // cửa chặn hoặc xoá route về sau. Mỗi ca in một dòng ✓/✗; cuối cùng đặt
 // exitCode=1 nếu có ca đỏ để fail-closed đúng cách.
+//
+// GET /api/status nay trả map trạng thái theo NHÓM `{ result:true, data:{ groups } }`
+// thay cho 3 khoá phẳng locked/title/message. Client (MaintenanceGate) tra nhóm của
+// trang hiện tại trong `groups` để biết trang nào bị bảo trì, nên payload chỉ được
+// chứa `groups`; metadata nội bộ (updated_at/updated_by) của bản ghi setting không
+// được rò ra endpoint công khai này.
 //
 // Import thẳng MetaController từ file domain thay vì barrel ApiController: barrel
 // kéo theo english-exercise.service.js, service này ném ENGLISH_TEST_ANSWER_PATH_REQUIRED
@@ -17,6 +23,21 @@ import { ServiceLockService } from '../src/services/service-lock.service.js';
 // mới tự cấp). getServiceStatus nằm trong MetaController nên import domain file là đủ.
 
 const originalGetStatus = ServiceLockService.getStatus;
+
+// Danh sách 10 nhóm khoá được, ghim cứng ở test để nếu taxonomy lỡ mất một nhóm
+// (hoặc controller trả thiếu khoá) thì endpoint bị coi là hỏng ngay tại đây.
+const EXPECTED_GROUP_IDS = [
+  'wordfmt',
+  'survey',
+  'training',
+  'english',
+  'learning',
+  'community',
+  'clubs',
+  'vocab',
+  'grammar',
+  'games'
+];
 
 const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const appSource = fs.readFileSync(path.join(srcRoot, 'app.js'), 'utf8');
@@ -52,33 +73,57 @@ function response() {
 }
 
 try {
-  await check('payload /api/status trả đúng 3 khoá locked/title/message', async () => {
+  await check('payload /api/status trả map nhóm đủ 10 khoá trong data.groups', async () => {
     ServiceLockService.getStatus = async () => ({
-      locked: true,
-      title: 'Bảo trì định kỳ',
-      message: 'Vui lòng quay lại sau ít phút.'
+      groups: {
+        vocab: { locked: true, title: 'Từ vựng bảo trì', message: 'Vui lòng quay lại sau.' },
+        community: { locked: false, title: 'T', message: 'M' }
+      }
     });
     const res = response();
     await MetaController.getServiceStatus({}, res);
     assert.equal(res.statusCode, 200, 'phải trả 200');
     assert.equal(res.body.result, true, 'result phải là true');
-    assert.equal(res.body.data.locked, true);
-    assert.equal(res.body.data.title, 'Bảo trì định kỳ');
-    assert.equal(res.body.data.message, 'Vui lòng quay lại sau ít phút.');
+
+    // getStatus() thật luôn trả đủ 10 nhóm; ở đây fake trả thiếu 8 nhóm để ghim
+    // rằng controller phải chuyển tiếp nguyên `status.groups` chứ không tự lọc/rút
+    // gọn — việc chuẩn hoá đủ 10 khoá là trách nhiệm của ServiceLockService.
     assert.deepEqual(
-      Object.keys(res.body.data).sort(),
-      ['locked', 'message', 'title'],
-      'data phải có đúng 3 khoá, không thừa không thiếu'
+      Object.keys(res.body.data.groups).sort(),
+      ['community', 'vocab'].sort(),
+      'controller phải chuyển tiếp nguyên map nhóm từ getStatus'
+    );
+    assert.equal(res.body.data.groups.vocab.locked, true);
+    assert.equal(res.body.data.groups.vocab.title, 'Từ vựng bảo trì');
+    assert.equal(res.body.data.groups.vocab.message, 'Vui lòng quay lại sau.');
+    assert.equal(res.body.data.groups.community.locked, false);
+  });
+
+  await check('payload đủ 10 nhóm khi getStatus trả đủ 10 khoá', async () => {
+    const fullGroups = {};
+    for (const id of EXPECTED_GROUP_IDS) {
+      fullGroups[id] = { locked: false, title: 'T', message: 'M' };
+    }
+    ServiceLockService.getStatus = async () => ({ groups: fullGroups });
+    const res = response();
+    await MetaController.getServiceStatus({}, res);
+    assert.deepEqual(
+      Object.keys(res.body.data.groups).sort(),
+      [...EXPECTED_GROUP_IDS].sort(),
+      'data.groups phải đủ đúng 10 nhóm khoá được'
+    );
+    assert.deepEqual(
+      Object.keys(res.body.data),
+      ['groups'],
+      'data chỉ được có khoá groups, không trả locked/title/message phẳng'
     );
   });
 
   await check('không lộ updated_by/updated_at ra payload công khai', async () => {
-    // getStatus thật chỉ trả 3 khoá, nhưng phòng khi service tương lai trả thêm
+    // getStatus thật chỉ trả { groups }, nhưng phòng khi service tương lai trả thêm
     // trường nội bộ thì controller phải tự lọc bỏ chứ không được trả nguyên vẹn.
     ServiceLockService.getStatus = async () => ({
-      locked: false,
-      title: 'T',
-      message: 'M',
+      groups: { vocab: { locked: false, title: 'T', message: 'M' } },
       updated_at: '2026-01-01T00:00:00.000Z',
       updated_by: 'ADMIN'
     });

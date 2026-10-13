@@ -43,18 +43,18 @@ export const MetaController = {
     return res.json({ result: true, build_id: resolveBuildId() });
   },
 
-  // 10b. System: trạng thái khóa dịch vụ bảo trì (endpoint công khai /api/status).
-  // Trả ĐÚNG 3 khoá locked/title/message; không trả updated_at/updated_by vì đó
-  // là thông tin nội bộ chỉ dành cho admin. getStatus fail-open (không bao giờ
-  // ném lỗi) nên endpoint này luôn trả 200 kể cả khi DB tạm hỏng.
+  // 10b. System: trạng thái khóa dịch vụ bảo trì theo nhóm (endpoint công khai /api/status).
+  // Trả map `groups` (mỗi nhóm { locked, title, message }) để client biết TRANG của
+  // nhóm nào đang bảo trì; không trả updated_at/updated_by vì đó là thông tin nội bộ
+  // chỉ dành cho admin. getStatus fail-open (không bao giờ ném lỗi) nên endpoint này
+  // luôn trả 200 kể cả khi DB tạm hỏng. Chuyển tiếp NGUYÊN `status.groups` (không tự
+  // lọc/rút gọn) vì việc chuẩn hoá đủ 10 nhóm là trách nhiệm của ServiceLockService.
   async getServiceStatus(req, res) {
     const status = await ServiceLockService.getStatus();
     return res.json({
       result: true,
       data: {
-        locked: status.locked,
-        title: status.title,
-        message: status.message
+        groups: status.groups
       }
     });
   },
