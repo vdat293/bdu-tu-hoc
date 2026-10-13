@@ -72,6 +72,7 @@ export const SAFE_NODE_TESTS = [
   'test-legacy-security-contract.js',
   'test-traffic-redaction.js',
   'test-admin-rendering-safety.js',
+  'test-feature-groups.js',
   'test-no-mock-data.js',
   'test-docx-caption-placeholders.js',
   'test-wordfmt-coursework-cover.js',
