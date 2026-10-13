@@ -100,7 +100,9 @@ log "Bước 4/11: kiểm ledger"
 # Chỉ từ chối khi ledger ĐÃ CÓ BẢN GHI (tức baseline/migrate đã chạy). Ledger
 # tồn tại nhưng rỗng (vừa tạo ở bước 5b của lần chạy lỗi trước) thì vẫn cho chạy
 # lại — nạp lại dump là idempotent và ledger vẫn rỗng.
-ledger_count="$(psql_q 'psql -tAc "select count(*) from public.schema_migrations" -U "$POSTGRES_USER" -d "$POSTGRES_DB" 2>/dev/null' | tr -d '[:space:]')"
+ledger_count="$(docker compose exec -T postgres sh -c \
+  'psql -tAc "select count(*) from public.schema_migrations" -U "$POSTGRES_USER" -d "$POSTGRES_DB" 2>/dev/null' \
+  2>/dev/null | tr -d '[:space:]' || true)"
 [ -z "$ledger_count" ] && ledger_count=0
 [ "$ledger_count" = "0" ] \
   || die "DB đã bootstrap rồi (ledger có $ledger_count bản ghi) — KHÔNG nạp lại dump."
