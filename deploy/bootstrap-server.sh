@@ -180,10 +180,15 @@ docker compose run --rm --no-deps -e MIGRATION_DATABASE_URL="$fresh_url" bdu-hub
   npm run --silent db:migrate >/dev/null || die "Migrate DB sạch thất bại."
 fp_fresh="$(docker compose run --rm --no-deps -e MIGRATION_DATABASE_URL="$fresh_url" bdu-hub \
   npm run --silent db:migration:fingerprint | tr -d '\r' | tail -n 1)"
+# PHẢI đo lại fingerprint của DB đích SAU migrate: giá trị fp_target ở bước 6 là
+# trạng thái TRƯỚC migrate (dùng cho baseline), so nó với DB sạch là sai.
+fp_after="$(docker compose run --rm --no-deps bdu-hub \
+  npm run --silent db:migration:fingerprint | tr -d '\r' | tail -n 1)"
 
-log "  fp_target=$fp_target"
-log "  fp_fresh =$fp_fresh"
-if [ "$fp_target" != "$fp_fresh" ]; then
+log "  fp_baseline (trước migrate) = $fp_target"
+log "  fp_after    (sau migrate)   = $fp_after"
+log "  fp_fresh    (001..056)      = $fp_fresh"
+if [ "$fp_after" != "$fp_fresh" ]; then
   warn "Fingerprint LỆCH. KHÔNG chạy 'up -d' toàn bộ."
   warn "Cách sửa: DROP DATABASE $POSTGRES_DB, tạo lại, nạp lại dump, thử BASELINE_VERSION khác (ví dụ 42 hoặc 44)."
   die "Dừng vì fingerprint lệch — cần người quyết định mốc baseline."
