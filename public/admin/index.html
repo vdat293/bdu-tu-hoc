@@ -194,7 +194,10 @@
             </div>
           </div>
 
-          <!-- Quick Charts Preview in Overview -->
+          <!-- Timeline + preview xếp hạng tính năng của Tổng quan.
+               Preview TÁI DÙNG renderFeatureRanking (chế độ compact, top 5) chứ
+               không dựng renderer riêng — tránh tab Tổng quan và tab Insights
+               lệch nhau về cách đọc cùng một con số. -->
           <div class="charts-overview-row">
             <div class="panel-card chart-card-large">
               <div class="card-header">
@@ -206,18 +209,19 @@
               <div class="chart-wrapper">
                 <canvas id="chart-timeline-preview"></canvas>
               </div>
+              <!-- Trạng thái rỗng/lỗi của biểu đồ nằm DƯỚI canvas (không đè lên)
+                   để Chart.js vẫn giữ nguyên tham chiếu DOM tới canvas. -->
+              <div id="overview-timeline-state" class="overview-timeline-state"></div>
             </div>
 
             <div class="panel-card chart-card-small">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">Top Tuyến Đường & API</h2>
-                  <p class="card-subtitle">Tính năng được sử dụng nhiều nhất</p>
+                  <h2 class="card-title">Top Tính Năng Được Quan Tâm</h2>
+                  <p class="card-subtitle">5 tính năng dẫn đầu theo số lượt trong mốc thời gian đang chọn; xếp hạng đầy đủ nằm ở tab Phân Tích Hành Vi.</p>
                 </div>
               </div>
-              <div class="endpoints-list" id="endpoints-list-preview">
-                <div class="loading-state">Đang tải dữ liệu...</div>
-              </div>
+              <div class="overview-preview" id="endpoints-list-preview"></div>
             </div>
           </div>
         </section>

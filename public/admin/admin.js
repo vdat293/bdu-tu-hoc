@@ -122,7 +122,6 @@ const dom = {
   // Previews
   chartTimelinePreview: document.getElementById('chart-timeline-preview'),
   chartTimelineDetailed: document.getElementById('chart-timeline-detailed'),
-  endpointsListPreview: document.getElementById('endpoints-list-preview'),
   devicesSummaryGrid: document.getElementById('devices-summary-grid'),
   osBrowserSummary: document.getElementById('os-browser-summary'),
 
@@ -628,6 +627,10 @@ async function fetchAllData(isBackground = false) {
   try {
     const rankingSyncRequestedAt = Date.now();
     const serviceLockRequestedAt = Date.now();
+    // Preview "top tính năng" của Tổng quan ưu tiên dữ liệu xếp hạng tính năng
+    // (đã gom + có nhãn). Danh sách endpoint thô vẫn lấy song song để làm đường
+    // hạ cấp: nếu riêng truy vấn xếp hạng lỗi (p95/delta nặng hơn) thì khối vẫn
+    // có gì đó để hiện thay vì trắng trơn.
     const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
@@ -649,7 +652,7 @@ async function fetchAllData(isBackground = false) {
 
     renderOverview(overview);
     renderTimelineChart(timeline);
-    renderEndpoints(endpoints);
+    renderOverviewFeaturePreview(insightFeatures, endpoints);
     renderDevices(devices);
     renderLogs(logsData);
     renderVisitedStudents(visitedData);
@@ -667,6 +670,11 @@ async function fetchAllData(isBackground = false) {
   } catch (err) {
     if (!isBackground) {
       console.error('[Admin] Lỗi nạp dữ liệu:', err.message);
+      // Không để Tổng quan lỗi câm: hai khối bạn nhìn thấy ngay (biểu đồ và
+      // preview) phải nói rõ hỏng và cho nút thử lại. Các khối dữ liệu độc lập
+      // khác (Insights/logs) tự bọc .catch nên vẫn tự lo trạng thái của chúng.
+      renderError('#overview-timeline-state', 'Không tải được biểu đồ lưu lượng.', { title: 'Lỗi biểu đồ lưu lượng' });
+      renderError('#endpoints-list-preview', 'Không tải được xếp hạng tính năng.', { title: 'Lỗi xếp hạng tính năng' });
     }
   }
 }
@@ -681,27 +689,29 @@ function renderOverview(data = {}) {
   const errorRate = data.errorRate || 0;
   const status = data.statusBreakdown || {};
 
-  dom.kpiTotalRequests.textContent = total.toLocaleString();
+  // Mọi số đi qua helper định dạng chung (spec mục 4.1) để Tổng quan và các tab
+  // khác hiện cùng một kiểu: phân cách nghìn, phần trăm 1 chữ số thập phân.
+  dom.kpiTotalRequests.textContent = formatNumber(total);
 
   if (growth > 0) {
-    dom.kpiGrowth.textContent = `▲ +${growth}%`;
+    dom.kpiGrowth.textContent = `▲ +${formatPercent(growth)}`;
     dom.kpiGrowth.className = 'kpi-growth trend-up';
   } else if (growth < 0) {
-    dom.kpiGrowth.textContent = `▼ ${growth}%`;
+    dom.kpiGrowth.textContent = `▼ ${formatPercent(growth)}`;
     dom.kpiGrowth.className = 'kpi-growth trend-down';
   } else {
     dom.kpiGrowth.textContent = '■ 0%';
     dom.kpiGrowth.className = 'kpi-growth trend-neutral';
   }
 
-  dom.kpi2xx.textContent = `2xx: ${(status['2xx'] || 0).toLocaleString()}`;
-  dom.kpi4xx.textContent = `4xx: ${(status['4xx'] || 0).toLocaleString()}`;
-  dom.kpi5xx.textContent = `5xx: ${(status['5xx'] || 0).toLocaleString()}`;
+  dom.kpi2xx.textContent = `2xx: ${formatNumber(status['2xx'])}`;
+  dom.kpi4xx.textContent = `4xx: ${formatNumber(status['4xx'])}`;
+  dom.kpi5xx.textContent = `5xx: ${formatNumber(status['5xx'])}`;
 
-  dom.kpiUniqueMssv.textContent = uniqueMssv.toLocaleString();
-  dom.kpiUniqueUsers.textContent = `${uniqueUsers.toLocaleString()} phiên`;
+  dom.kpiUniqueMssv.textContent = formatNumber(uniqueMssv);
+  dom.kpiUniqueUsers.textContent = `${formatNumber(uniqueUsers)} phiên`;
 
-  dom.kpiAvgLatency.textContent = `${avgLatency} ms`;
+  dom.kpiAvgLatency.textContent = `${formatNumber(avgLatency)} ms`;
   if (avgLatency < 150) {
     dom.kpiLatencyStatus.textContent = '● Tuyệt vời (<150ms)';
     dom.kpiLatencyStatus.className = 'latency-indicator latency-good';
@@ -713,7 +723,7 @@ function renderOverview(data = {}) {
     dom.kpiLatencyStatus.className = 'latency-indicator latency-slow';
   }
 
-  dom.kpiErrorRate.textContent = `${errorRate}%`;
+  dom.kpiErrorRate.textContent = formatPercent(errorRate);
   if (errorRate <= 2) {
     dom.kpiErrorStatus.textContent = 'Hệ thống ổn định';
     dom.kpiErrorStatus.className = 'error-status-badge trend-up';
@@ -730,6 +740,21 @@ function renderOverview(data = {}) {
 let cachedTimeline = [];
 function renderTimelineChart(timeline = []) {
   cachedTimeline = timeline;
+
+  // Biểu đồ Chart.js không tự nói được "không có dữ liệu": với mảng rỗng nó chỉ
+  // vẽ ra khung trống. Nên thông báo rỗng đặt ở #overview-timeline-state (dưới
+  // canvas, không đè lên) để khối không bao giờ im lặng.
+  const overviewTimelineState = resolveElement('#overview-timeline-state');
+  if (overviewTimelineState) {
+    if (timeline.length) {
+      overviewTimelineState.innerHTML = '';
+    } else {
+      renderEmpty(overviewTimelineState, 'Chưa có lưu lượng trong mốc thời gian đang chọn.', {
+        hint: 'Đổi mốc thời gian ở thanh trên (ví dụ 7D) hoặc chờ thêm dữ liệu.'
+      });
+    }
+  }
+
   if (typeof Chart === 'undefined') return;
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -865,15 +890,42 @@ function renderDetailedChart() {
   });
 }
 
-// 3. Render Top Endpoints
+// 3. Trạng thái "đang tải" của tab Tổng quan
+// Vì sao cần: trước đây ô KPI/preview đứng "--" và biểu đồ trống trơn lúc mở
+// trang, người dùng không biết là đang tải hay đã hỏng. Skeleton giữ chiều cao
+// sẵn nên nội dung thật thay vào không làm nhảy bố cục.
+function renderOverviewSkeleton() {
+  renderSkeleton('#endpoints-list-preview', 5);
+  renderSkeleton('#overview-timeline-state', 3);
+}
+
+// 3.1. Preview "top tính năng" của Tổng quan.
+// TÁI DÙNG renderFeatureRanking ở chế độ compact (top 5) thay vì dựng renderer
+// riêng: cùng nguồn dữ liệu và cùng cách đọc số với tab Phân Tích Hành Vi, nên
+// hai nơi không thể lệch nhau.
+// Hạ cấp (features lỗi nhưng endpoints còn): hiện danh sách endpoint thô để khối
+// không trắng — lỗi thật vẫn hiện nút "Thử lại" khi cả hai đều không có.
+function renderOverviewFeaturePreview(features, endpoints = []) {
+  if (features) {
+    renderFeatureRanking(features, '#endpoints-list-preview', { limit: 5, compact: true });
+  } else if (Array.isArray(endpoints) && endpoints.length) {
+    renderEndpoints(endpoints);
+  } else {
+    renderError('#endpoints-list-preview', 'Không tải được xếp hạng tính năng.', { title: 'Lỗi xếp hạng tính năng' });
+  }
+}
+
+// 3.2. Danh sách tuyến đường/API thô — đường hạ cấp của preview Tổng quan.
 function renderEndpoints(endpoints = []) {
+  const el = resolveElement('#endpoints-list-preview');
+  if (!el) return;
   if (!endpoints.length) {
-    dom.endpointsListPreview.innerHTML = '<div class="text-center-muted">Chưa có dữ liệu API</div>';
+    el.innerHTML = '<div class="text-center-muted">Chưa có dữ liệu API</div>';
     return;
   }
 
   const maxCount = Math.max(...endpoints.map((e) => safeNumber(e.count)), 1);
-  dom.endpointsListPreview.innerHTML = endpoints.slice(0, 7).map((ep) => {
+  el.innerHTML = endpoints.slice(0, 7).map((ep) => {
     const count = safeNumber(ep.count);
     const pct = Math.min(100, Math.round((count / maxCount) * 100));
     const method = String(ep.method || '').toUpperCase();
@@ -883,14 +935,14 @@ function renderEndpoints(endpoints = []) {
         <div class="endpoint-head">
           <span class="method-tag ${methodCls}">${escapeHtml(method)}</span>
           <span class="endpoint-path" title="${escapeHtml(ep.path)}">${escapeHtml(ep.path)}</span>
-          <span class="endpoint-count">${count.toLocaleString()} req</span>
+          <span class="endpoint-count">${formatNumber(count)} req</span>
         </div>
         <div class="endpoint-bar">
           <div class="endpoint-progress" style="width: ${pct}%"></div>
         </div>
         <div class="endpoint-foot">
-          <span>⏱ ${safeNumber(ep.avgLatency)} ms</span>
-          ${safeNumber(ep.errorCount) > 0 ? `<span class="err">⚠ ${safeNumber(ep.errorCount)} lỗi</span>` : ''}
+          <span>Độ trễ TB ${formatNumber(ep.avgLatency)} ms</span>
+          ${safeNumber(ep.errorCount) > 0 ? `<span class="err">${formatNumber(ep.errorCount)} lỗi</span>` : ''}
         </div>
       </div>
     `;
@@ -1006,7 +1058,7 @@ function renderInsights() {
  * Vì sao bảng chứ không phải biểu đồ tròn: cần so sánh CHÍNH XÁC giữa các nhóm
  * và đọc kèm số người dùng/tỷ lệ lỗi; tròn cắt mất chiều thứ ba.
  */
-function renderFeatureRanking(data = {}, target = '#feature-ranking') {
+function renderFeatureRanking(data = {}, target = '#feature-ranking', options = {}) {
   const el = resolveElement(target);
   if (!el) return;
   const items = Array.isArray(data.items) ? data.items : [];
@@ -1015,6 +1067,37 @@ function renderFeatureRanking(data = {}, target = '#feature-ranking') {
     renderEmpty(el, 'Chưa có lượt truy cập nào trong mốc thời gian đang chọn.', {
       hint: 'Đổi mốc thời gian ở thanh trên (ví dụ 7D) hoặc chờ thêm dữ liệu.'
     });
+    return;
+  }
+
+  // Tổng quan chỉ cần "top N" gọn trong panel hẹp; tab Insights cần bảng đầy
+  // đủ. Hai chế độ dùng CHUNG một hàm để cách đọc số không bao giờ lệch nhau.
+  const limit = Math.floor(safeNumber(options.limit));
+  const shownItems = limit > 0 ? items.slice(0, limit) : items;
+
+  if (options.compact === true) {
+    const maxRequests = Math.max(...shownItems.map((item) => safeNumber(item.requests)), 1);
+    const previewRows = shownItems.map((item, index) => {
+      const requests = safeNumber(item.requests);
+      const sharePct = totalRequests > 0 ? (requests / totalRequests) * 100 : 0;
+      const barPct = Math.min(100, Math.round((requests / maxRequests) * 100));
+      const label = String(item.label ?? item.id ?? '');
+      return `
+        <li class="feature-preview-item">
+          <span class="feature-preview-rank">${index + 1}</span>
+          <div class="feature-preview-main">
+            <div class="feature-preview-head">
+              <span class="feature-preview-name" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+              <span class="feature-preview-count text-mono">${formatNumber(requests)} lượt · ${formatPercent(sharePct)}</span>
+            </div>
+            <div class="rank-bar"><div class="rank-bar-fill" style="width: ${barPct}%"></div></div>
+          </div>
+        </li>`;
+    }).join('');
+
+    el.innerHTML = `
+      <ol class="feature-preview-list">${previewRows}</ol>
+      <p class="card-subtitle" style="margin-top: 10px;">Tổng ${formatNumber(totalRequests)} lượt trong ${escapeHtml(labelForTimeRange(state.timeRange))}. Xem xếp hạng đầy đủ ở tab Phân Tích Hành Vi.</p>`;
     return;
   }
 
@@ -1030,7 +1113,7 @@ function renderFeatureRanking(data = {}, target = '#feature-ranking') {
     return '<span class="rank-delta trend-neutral">■ 0%</span>';
   };
 
-  const rows = items.map((item, index) => {
+  const rows = shownItems.map((item, index) => {
     const requests = safeNumber(item.requests);
     const sharePct = totalRequests > 0 ? (requests / totalRequests) * 100 : 0;
     const label = String(item.label ?? item.id ?? '');
@@ -2164,7 +2247,9 @@ async function init() {
   // Icon của nút đổi theme phải khớp theme đang bật, nếu không lần đầu mở trang
   // sẽ hiện mặt trăng trong khi nền đang sáng (mâu thuẫn với chính nút đó).
   renderThemeToggleIcon(currentTheme());
-  // Tab Insights phải có trạng thái "đang tải" ngay từ đầu, không để trống.
+  // Tab Tổng quan và tab Insights phải có trạng thái "đang tải" ngay từ đầu,
+  // không để KPI đứng "--" hay khối trống trơn trong lúc chờ dữ liệu.
+  renderOverviewSkeleton();
   renderInsightsSkeleton();
   startAutoRefresh();
   await fetchAllData();

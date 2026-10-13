@@ -728,7 +728,87 @@ body {
   width: 100%;
 }
 
-/* Endpoints List */
+/* Trạng thái rỗng/lỗi của biểu đồ Tổng quan: nằm DƯỚI canvas nên không che mất
+   biểu đồ; :empty ẩn hẳn khi có dữ liệu để không chiếm khoảng trống thừa. */
+.overview-timeline-state {
+  margin-top: 12px;
+}
+
+.overview-timeline-state:empty {
+  display: none;
+}
+
+/* Preview "top tính năng" của Tổng quan: bản gọn của renderFeatureRanking, dùng
+   danh sách thay vì bảng 8 cột (panel hẹp nên bảng sẽ phải cuộn ngang). */
+.overview-preview {
+  /* Flex cột để cả danh sách tính năng lẫn danh sách endpoint hạ cấp đều có
+     khoảng cách đều giữa các hàng (container dùng chung cho cả hai chế độ). */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feature-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feature-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feature-preview-rank {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--tint-primary);
+  color: var(--color-primary);
+}
+
+.feature-preview-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.feature-preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feature-preview-name {
+  font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feature-preview-count {
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* Danh sách tuyến đường thô (đường hạ cấp của preview Tổng quan khi riêng truy
+   vấn xếp hạng tính năng lỗi). */
 .endpoints-list {
   display: flex;
   flex-direction: column;
@@ -751,6 +831,7 @@ body {
   gap: 8px;
 }
 
+/* Nhãn method dùng chung cho bảng Nhật ký / Sinh viên / chi tiết log. */
 .method-tag {
   font-size: 0.7rem;
   font-weight: 800;

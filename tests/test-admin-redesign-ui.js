@@ -170,6 +170,45 @@ check('class thành phần chung đã khai báo trong admin.css', () => {
   }
 });
 
+/* --------------------------------------------------------------------------
+   Task 7 — tab Tổng quan.
+   Hai hợp đồng dễ vỡ nhất khi làm lại Tổng quan: (1) KPI phải dùng bộ thành
+   phần chung (.kpi-card) chứ không quay lại kiểu riêng, và (2) preview "top
+   tính năng" phải TÁI DÙNG renderFeatureRanking thay vì dựng một renderer thứ
+   hai — nếu tách đôi, tab Insights và Tổng quan dễ lệch nhau về cách đọc số.
+   -------------------------------------------------------------------------- */
+
+check('tab Tổng quan dùng thành phần chung và giữ id KPI cũ', () => {
+  const overview = sliceBetween(indexHtml, 'id="pane-overview"', '</section>');
+  assert.match(overview, /class="kpi-card"/, 'Vùng Tổng quan phải dùng thành phần chung .kpi-card');
+  // renderOverview() ghi thẳng vào các id này. Đổi id là vỡ runtime (ô KPI đứng
+  // "--" mãi) mà test tĩnh không thấy ngay, nên chốt luôn danh sách id KPI cũ.
+  for (const id of [
+    'kpi-total-requests',
+    'kpi-growth',
+    'kpi-2xx',
+    'kpi-4xx',
+    'kpi-5xx',
+    'kpi-unique-mssv',
+    'kpi-unique-users',
+    'kpi-avg-latency',
+    'kpi-latency-status',
+    'kpi-error-rate',
+    'kpi-error-status'
+  ]) {
+    assert.ok(overview.includes(`id="${id}"`), `Vùng Tổng quan mất #${id}`);
+  }
+});
+
+check('preview top tính năng ở Tổng quan tái dùng renderFeatureRanking', () => {
+  assert.ok(indexHtml.includes('id="endpoints-list-preview"'), 'index.html phải giữ #endpoints-list-preview');
+  assert.match(
+    adminJs,
+    /renderFeatureRanking\([^)]*endpoints-list-preview/,
+    'admin.js phải tái dùng renderFeatureRanking cho preview xếp hạng tính năng của Tổng quan'
+  );
+});
+
 if (failed > 0) {
   console.log(`✗ Admin redesign UI foundation: ${failed} ca thất bại.`);
   process.exitCode = 1;
