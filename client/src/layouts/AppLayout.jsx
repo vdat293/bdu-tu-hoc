@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { navigation, findRouteMeta } from '../app/navigation.js';
 import { useAuth } from '../app/providers.jsx';
+import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
 
 const navGroups = [
@@ -295,7 +296,13 @@ export default function AppLayout() {
         {/* Scrollable Main Content */}
         <main id="main-content" ref={mainRef} tabIndex={-1} className={`dashboard-body${location.pathname === '/survey' ? ' dashboard-body-survey' : ''}`}>
           <AppErrorBoundary>
-            <Outlet />
+            {/* Màn bảo trì bọc quanh <Outlet/> (không phải quanh cả App) nên khi nhóm
+                của trang đang bị khoá thì chỉ vùng nội dung bị thay: sidebar và
+                topbar vẫn sống để người dùng chuyển sang nhóm khác, và màn hình lỗi
+                của trang vẫn được bắt bởi AppErrorBoundary. */}
+            <MaintenanceGate>
+              <Outlet />
+            </MaintenanceGate>
           </AppErrorBoundary>
         </main>
       </div>
