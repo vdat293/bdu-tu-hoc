@@ -23,7 +23,7 @@
 - Không commit secret: `.env`, `*.pem`, `aws/*.state`, `deploy/caddy/certs/**`.
 - Commit message theo Conventional Commits, tiếng Việt không dấu, như lịch sử repo (`feat(x): ...`, `docs(x): ...`).
 - Mọi lệnh AWS chạy bằng credentials của account; thao tác trên Windows dùng Git Bash (`bash`), thao tác remote dùng `ssh`/`scp`.
-- Trên Git Bash, khi truyền đường dẫn vào `docker -v`, đặt `MSYS_NO_PATHCONV=1` để tránh MSYS biến đổi đường dẫn.
+- Trên Git Bash, để `docker run -v` hiểu đúng đường dẫn: dùng `MSYS_NO_PATHCONV=1` **và** đường dẫn Windows từ `$(pwd -W)`, ví dụ `MSYS_NO_PATHCONV=1 docker run -v "$(pwd -W)/file:/container/file:ro" ...`.
 
 ## Review Focus
 
@@ -122,7 +122,7 @@ Trong `appleboy/ssh-action`: `host: ${{ secrets.AWS_HOST }}`, `username: ${{ sec
 - [ ] **Step 5: Kiểm workflow hợp lệ**
 
 ```bash
-docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest .github/workflows/deploy.yml
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:latest .github/workflows/deploy.yml
 ```
 
 Expected: không có dòng lỗi nào in ra.
