@@ -8,8 +8,9 @@ import { ServiceLockService } from '../src/services/service-lock.service.js';
 // Test cho phần WebSocket của công tắc khóa bảo trì:
 //   1. disconnectAllForMaintenance() đóng mọi client đang mở, chịu được client
 //      đã chết và không sập khi tập client rỗng.
-//   2. Cửa chặn 'upgrade' từ chối kết nối mới khi đang khóa, cho qua khi mở, và
-//      fail-open khi đọc trạng thái lỗi (dùng httpServer giả để chạy nhanh).
+//   2. Cửa chặn 'upgrade' chỉ từ chối kết nối mới khi nhóm `community` đang khóa
+//      (nhóm khác khóa vẫn cho qua), cho qua khi mở, và fail-open khi đọc trạng
+//      thái lỗi (dùng httpServer giả để chạy nhanh).
 //   3. Hồi quy thật: http server + client `ws` thật phải nhận HTTP 503 sạch chứ
 //      không phải lỗi mạng kiểu hang-up/ECONNRESET — bắt đúng lỗi khi ai đó quay
 //      lại dùng write()+destroy() thay vì end().
@@ -150,17 +151,18 @@ try {
   CommunityRealtime.wss.handleUpgrade = () => { upgradeCalls += 1; };
 
   try {
-    await check('từ chối upgrade khi đang khóa (503 ở tầng socket)', async () => {
+    await check('từ chối upgrade chỉ khi nhóm community khóa (503 ở tầng socket)', async () => {
       ServiceLockService.getStatus = async () => ({
-        locked: true,
-        title: 'Bảo trì định kỳ',
-        message: 'Quay lại sau.'
+        groups: {
+          community: { locked: true, title: 'Bảo trì định kỳ', message: 'Quay lại sau.' },
+          wordfmt: { locked: false, title: '', message: '' }
+        }
       });
       upgradeCalls = 0;
       const socket = makeSocket();
       fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
       await flush();
-      assert.equal(socket.ended, true, 'socket phải được end() khi đang khóa');
+      assert.equal(socket.ended, true, 'socket phải được end() khi community khóa');
       assert.ok(
         socket.written.some((line) => line.startsWith('HTTP/1.1 503')),
         'phải ghi phản hồi 503 ở tầng socket'
@@ -168,8 +170,30 @@ try {
       assert.equal(upgradeCalls, 0, 'không được handleUpgrade khi đã từ chối');
     });
 
+    await check('nhóm khác khóa (wordfmt) vẫn cho upgrade community', async () => {
+      // Vì sao cần ca này: realtime phục vụ Community, khóa nhóm khác không được
+      // chặn oan kết nối realtime của Community.
+      ServiceLockService.getStatus = async () => ({
+        groups: {
+          community: { locked: false, title: '', message: '' },
+          wordfmt: { locked: true, title: 'Wordfmt bảo trì', message: 'Thử lại sau.' }
+        }
+      });
+      upgradeCalls = 0;
+      const socket = makeSocket();
+      fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
+      await flush();
+      assert.equal(upgradeCalls, 1, 'khóa nhóm khác không được chặn realtime community');
+      assert.equal(socket.ended, false, 'không được end() socket khi community không khóa');
+    });
+
     await check('cho upgrade khi không khóa', async () => {
-      ServiceLockService.getStatus = async () => ({ locked: false });
+      ServiceLockService.getStatus = async () => ({
+        groups: {
+          community: { locked: false, title: '', message: '' },
+          wordfmt: { locked: false, title: '', message: '' }
+        }
+      });
       upgradeCalls = 0;
       const socket = makeSocket();
       fakeServer.emit('upgrade', upgradeRequest(), socket, Buffer.alloc(0));
@@ -206,9 +230,9 @@ try {
   try {
     await check('ws thật nhận HTTP 503 sạch, không phải hang-up/ECONNRESET', async () => {
       ServiceLockService.getStatus = async () => ({
-        locked: true,
-        title: 'Bảo trì',
-        message: 'Thử lại sau.'
+        groups: {
+          community: { locked: true, title: 'Bảo trì', message: 'Thử lại sau.' }
+        }
       });
       const result = await probeUpgrade(`ws://127.0.0.1:${port}/ws/community`);
       if (result.statusCode == null) {

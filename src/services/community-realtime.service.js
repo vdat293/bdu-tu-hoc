@@ -198,7 +198,9 @@ class CommunityRealtimeGateway {
           return;
         }
 
-        // Công tắc khóa dịch vụ: từ chối nâng cấp kết nối mới khi đang bảo trì.
+        // Công tắc khóa dịch vụ theo nhóm: chỉ từ chối nâng cấp kết nối mới khi
+        // nhóm `community` đang khóa. Nhóm khác (wordfmt, vocab...) khóa không
+        // được chặn oan realtime của Community.
         // Phải trả lời thô ở tầng socket vì handshake WebSocket không đi qua
         // Express nên không có `res`/middleware nào chặn sẵn; nếu chỉ ngồi im,
         // client sẽ treo ở trạng thái CONNECTING cho tới khi hết timeout. Mọi
@@ -207,7 +209,7 @@ class CommunityRealtimeGateway {
         let locked = false;
         try {
           const status = await ServiceLockService.getStatus();
-          locked = Boolean(status && status.locked === true);
+          locked = Boolean(status && status.groups && status.groups.community && status.groups.community.locked);
         } catch {
           // Fail-open giống cửa chặn HTTP: không đọc được trạng thái (DB hỏng...)
           // thì coi như KHÔNG khóa, thay vì tự khóa oan cả realtime.
