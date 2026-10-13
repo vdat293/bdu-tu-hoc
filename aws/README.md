@@ -83,3 +83,37 @@ Actions nên EC2 không tốn thời gian/CPU để build.
 - **Không còn tài nguyên nào thì `check` phải in 0 cho mọi loại.**
 - Baseline migration đã dùng cho DB production: ghi ở
   `docs/deployment-runbook.md` (mục bootstrap) sau khi chạy.
+
+## 6. Kết quả nghiệm thu (2026-10-13)
+
+**Mốc baseline migration:** `43` (`BDU_MIGRATION_BASELINE_THROUGH_VERSION=43`).
+Bằng chứng: `fp_after(sau migrate)` == `fp_fresh(001..056)` =
+`600389ca601e07ba369a1f81c5c5475208a1fd290c35df667205460b0d97d228`.
+
+| # | Tiêu chí | Kết quả |
+| --- | --- | --- |
+| 1 | 5 service running (`bdu-hub`, `postgres`, `caddy`, `bdu-notifier-bot`, `bdu-db-backup`) | ĐẠT |
+| 2 | `https://sv.bdu.io.vn/api/health` = 200; `/api/version` khớp `IMAGE_TAG` | ĐẠT |
+| 3 | `http://` → `https://` (308); TLS hợp lệ | ĐẠT |
+| 4 | WebSocket `wss://` kết nối, nhận `{"type":"hello",...}` | ĐẠT |
+| 5 | Đăng nhập BDU thật | **kiểm tay** |
+| 6 | `students=4956`; fingerprint DB = DB sạch | ĐẠT |
+| 7 | Ảnh cũ qua `/media/r2/*` (posts, avatars, comments) đều 200 | ĐẠT |
+| 8 | `db:backup` tạo dump local (9,1 MB + manifest); service backup chạy | ĐẠT |
+| 9 | Cổng 3000/5432 đóng từ Internet | ĐẠT |
+| 10 | Rollback: đổi `IMAGE_TAG` về tag cũ → healthy → quay lại tag hiện tại → healthy | ĐẠT |
+| 11 | Bot Discord online | ĐẠT |
+| 12 | `git grep -In -E '\bvps\b'` sạch ngoài hồ sơ lịch sử | ĐẠT |
+
+**Ghi chú vận hành tại thời điểm nghiệm thu:**
+
+- `IMAGE_TAG` đang chạy là `ee0756377a2a`, trong khi HEAD repo mới hơn
+  (`a499382`): **GitHub Actions bị khoá do vấn đề billing** nên không build được
+  image cho commit mới nhất; các commit sau `ee0756377a2a` chỉ đổi
+  script/tài liệu/compose, **không đổi code ứng dụng**. Sửa billing xong thì
+  push tiếp sẽ có image mới và `deploy.sh` kéo đúng tag mới.
+- Backup đang ở **chế độ local** (`data/backups/`, ~9,1 MB/dump) + **DLM snapshot
+  EBS hằng ngày**; chưa có `BACKUP_R2_BUCKET` nên chưa có bản off-site trên R2.
+- `BACKUP_CRON` dùng định dạng **`HH:MM`** (không phải cron 5 trường) — đặt sai
+  làm `bdu-db-backup` thoát lặp. Hiện đặt `17:30` (giờ UTC).
+- Dump local do container tạo thuộc `root`; dọn/rotate bằng tay có thể cần `sudo`.
