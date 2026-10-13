@@ -27,5 +27,15 @@ data/pos-report.json
 .agents/
 skills-lock.json
 
-# Scratch c?a quy tr�nh SDD (ledger, brief, review package) - kh�ng commit
+# Scratch c?a quy tr�nh SDD (ledger, brief, review package) - kh�ng commit
 .superpowers/
+
+# AWS Lab 01 scripts (Web 3-Tier) + state/evidence files generated at runtime.
+# Contains infra IDs, logs and a local report - never commit.
+aws-script/
+
+# AWS production (bdu-tu-hoc) - hạ tầng dựng bằng aws/infra.sh, key SSH và
+# chứng chỉ Cloudflare Origin. Sinh ra lúc chạy, KHÔNG commit.
+aws/*.state
+aws/*.pem
+deploy/caddy/certs/
