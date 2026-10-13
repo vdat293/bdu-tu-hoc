@@ -7,6 +7,7 @@ import { AcademicRankingService } from '../../services/academic-ranking.service.
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
 import { SystemSettingsService } from '../../services/system-settings.service.js';
 import { ServiceLockService } from '../../services/service-lock.service.js';
+import { TrafficInsightsService } from '../../services/traffic-insights.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { isDatabaseConfigured } from '../../db/database.js';
 
@@ -501,6 +502,110 @@ export const AdminDashboardController = {
         message: status < 500
           ? (err.message || 'Dữ liệu khóa dịch vụ không hợp lệ.')
           : 'Không thể lưu trạng thái khóa dịch vụ.'
+      });
+    }
+  },
+
+  /**
+   * 5 endpoint phân tích hành vi cho tab Insights (/admin).
+   *
+   * Vì sao bọc try/catch theo cùng một khuôn: service để lỗi DB nổi lên nên
+   * controller phải đổi mọi lỗi lạ thành 500 với chuỗi cố định, tránh lộ chi
+   * tiết SQL ra cho client; chỉ lỗi có `status` 4xx mới giữ message gốc.
+   */
+  async getInsightsFeatures(req, res) {
+    try {
+      const { timeRange } = req.query || {};
+      const data = await TrafficInsightsService.getFeatures({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInsightsFeatures:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Tham số phân tích tính năng không hợp lệ.')
+          : 'Không thể lấy dữ liệu phân tích tính năng.'
+      });
+    }
+  },
+
+  async getInsightsHours(req, res) {
+    try {
+      const { timeRange } = req.query || {};
+      const data = await TrafficInsightsService.getHourHeatmap({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInsightsHours:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Tham số khung giờ không hợp lệ.')
+          : 'Không thể lấy dữ liệu khung giờ truy cập.'
+      });
+    }
+  },
+
+  async getInsightsCohort(req, res) {
+    try {
+      const { timeRange } = req.query || {};
+      const data = await TrafficInsightsService.getCohort({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInsightsCohort:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Tham số cohort không hợp lệ.')
+          : 'Không thể lấy dữ liệu cohort người dùng.'
+      });
+    }
+  },
+
+  async getInsightsQuality(req, res) {
+    try {
+      const { timeRange } = req.query || {};
+      const data = await TrafficInsightsService.getQuality({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInsightsQuality:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Tham số chất lượng không hợp lệ.')
+          : 'Không thể lấy dữ liệu chất lượng dịch vụ.'
+      });
+    }
+  },
+
+  /**
+   * Hành trình một sinh viên. Vì sao luôn 200 khi thiếu student: tài khoản có
+   * thể đã bị xoá nhưng log còn, và spec coi "mssv lạ" là hành trình biên rỗng
+   * chứ không phải 404.
+   */
+  async getInsightsJourney(req, res) {
+    try {
+      const { timeRange, limit } = req.query || {};
+      // Chuẩn hoá MSSV ngay tại controller để service luôn nhận mã viết hoa,
+      // dù client gõ thường; service cũng tự chuẩn hoá lại nên gọi trực tiếp
+      // service vẫn đúng (lũy đẳng).
+      const data = await TrafficInsightsService.getUserJourney({
+        mssv: normalizeMssv(req.params?.mssv),
+        timeRange,
+        limit
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInsightsJourney:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Tham số hành trình không hợp lệ.')
+          : 'Không thể lấy hành trình người dùng.'
       });
     }
   }

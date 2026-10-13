@@ -105,7 +105,14 @@ const ROUTES_ADDED_AFTER_SPLIT = new Set([
   // Route admin cua Task 5 (cong tac khoa dich vu bao tri): bat/tat khoa qua
   // /admin; khong co trong ban goc api.routes.js.
   'GET /admin/dashboard/service-lock',
-  'PUT /admin/dashboard/service-lock'
+  'PUT /admin/dashboard/service-lock',
+  // Route admin cua Task 4 (tab Insights): 5 endpoint phan tich hanh vi. Dang
+  // ky sau PUT /admin/dashboard/service-lock, truoc POST /admin/dashboard/purge.
+  'GET /admin/dashboard/insights/features',
+  'GET /admin/dashboard/insights/hours',
+  'GET /admin/dashboard/insights/cohort',
+  'GET /admin/dashboard/insights/quality',
+  'GET /admin/dashboard/insights/users/:mssv/journey'
 ]);
 
 try {

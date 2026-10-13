@@ -26,5 +26,10 @@ export function registerAdminRoutes(router, deps = {}) {
   router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRankingSync);
   router.get('/admin/dashboard/service-lock', AdminDashboardController.getServiceLock);
   router.put('/admin/dashboard/service-lock', AdminDashboardController.setServiceLock);
+  router.get('/admin/dashboard/insights/features', AdminDashboardController.getInsightsFeatures);
+  router.get('/admin/dashboard/insights/hours', AdminDashboardController.getInsightsHours);
+  router.get('/admin/dashboard/insights/cohort', AdminDashboardController.getInsightsCohort);
+  router.get('/admin/dashboard/insights/quality', AdminDashboardController.getInsightsQuality);
+  router.get('/admin/dashboard/insights/users/:mssv/journey', AdminDashboardController.getInsightsJourney);
   router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 }

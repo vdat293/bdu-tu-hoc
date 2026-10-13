@@ -162,6 +162,16 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 - `/health` **không** được chặn vì script deploy dựa vào nó để biết app còn sống; chặn `/health` khi đang khóa sẽ khiến deploy tưởng app chết và tự rollback.
 - `/admin/dashboard/login` **không** được chặn vì nếu chặn cả khu quản trị thì sau khi khóa xong không ai đăng nhập lại được để tắt khóa.
 
+### 3.7. Endpoint phân tích `/admin/dashboard/insights/*` đọc qua taxonomy chung
+
+**Quy ước**: 5 endpoint `GET /admin/dashboard/insights/features|hours|cohort|quality` và `GET /admin/dashboard/insights/users/:mssv/journey` (đăng ký trong `src/routes/admin.routes.js`, sau `PUT /admin/dashboard/service-lock`) đều qua `TrafficInsightsService` trong `src/services/traffic-insights.service.js`, chỉ đọc hai bảng sẵn có `traffic_logs` + `students`, không thêm migration.
+
+**Vì sao**:
+
+- **Một taxonomy duy nhất**: mọi phép gom theo tính năng đều qua `featureForPath` trong `src/config/feature-groups.js` (endpoint lạ như đăng nhập/thông báo rơi vào nhóm `other` nhưng vẫn nằm trong tổng); giữ một chỗ tra cứu để server và tab Insights không lệch nhau khi thêm tính năng mới.
+- **Một múi giờ duy nhất**: `created_at` lưu UTC nên mọi cột thời gian tính toán đều bọc `(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')` qua hằng `ANALYTICS_TZ`; quên quy đổi thì heatmap và cohort lệch đúng 7 tiếng.
+- **Lỗi 5xx chuỗi cố định**: service để lỗi DB nổi lên, controller đổi thành thông báo cố định để không lộ chi tiết SQL; khi chưa cấu hình DB (`!isDatabaseConfigured()`) service trả cấu trúc rỗng để trang Insights hiện rỗng thay vì 500 trắng.
+
 ---
 
 ## 4. Nợ kỹ thuật còn lại
