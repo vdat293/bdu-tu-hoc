@@ -97,9 +97,14 @@ docker compose exec -T postgres sh -c 'pg_isready -q -U "$POSTGRES_USER" -d "$PO
 # 4. Từ chối nếu đã bootstrap
 # -----------------------------------------------------------------------------
 log "Bước 4/11: kiểm ledger"
-ledger="$(psql_q 'psql -tAc "select to_regclass('"'"'public.schema_migrations'"'"')" -U "$POSTGRES_USER" -d "$POSTGRES_DB"')"
-[ -z "$ledger" ] || die "DB đã có ledger ($ledger) — đã bootstrap rồi, KHÔNG nạp lại dump."
-ok "Ledger trống, chưa bootstrap"
+# Chỉ từ chối khi ledger ĐÃ CÓ BẢN GHI (tức baseline/migrate đã chạy). Ledger
+# tồn tại nhưng rỗng (vừa tạo ở bước 5b của lần chạy lỗi trước) thì vẫn cho chạy
+# lại — nạp lại dump là idempotent và ledger vẫn rỗng.
+ledger_count="$(psql_q 'psql -tAc "select count(*) from public.schema_migrations" -U "$POSTGRES_USER" -d "$POSTGRES_DB" 2>/dev/null' | tr -d '[:space:]')"
+[ -z "$ledger_count" ] && ledger_count=0
+[ "$ledger_count" = "0" ] \
+  || die "DB đã bootstrap rồi (ledger có $ledger_count bản ghi) — KHÔNG nạp lại dump."
+ok "Ledger rỗng, chưa bootstrap"
 
 # -----------------------------------------------------------------------------
 # 5. Nạp dump
@@ -109,6 +114,27 @@ docker compose exec -T postgres sh -c \
   'psql --single-transaction --set=ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$DUMP_FILE" >/dev/null
 rows="$(psql_q 'psql -tAc "select count(*) from public.students" -U "$POSTGRES_USER" -d "$POSTGRES_DB"')"
 ok "Nạp xong. students=$rows"
+
+# -----------------------------------------------------------------------------
+# 5b. Tạo bảng ledger TRƯỚC khi đo fingerprint
+# -----------------------------------------------------------------------------
+# runMigrations() gọi ensureLedger() (tạo public.schema_migrations) RỒI mới so
+# fingerprint. Vì vậy fingerprint dùng cho baseline phải được đo khi bảng ledger
+# ĐÃ tồn tại, nếu không sẽ luôn lệch (MIGRATION_BASELINE_FINGERPRINT_MISMATCH).
+# DDL dưới đây chép đúng từ scripts/migration-ledger.mjs::ensureLedger.
+log "Bước 5b/11: tạo bảng ledger (không ghi bản ghi nào)"
+docker compose exec -T postgres sh -c \
+  'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null <<'SQL'
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  version INTEGER PRIMARY KEY,
+  filename TEXT NOT NULL UNIQUE,
+  checksum_sha256 TEXT NOT NULL CHECK (checksum_sha256 ~ '^[0-9a-f]{64}$'),
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  execution_ms INTEGER NOT NULL CHECK (execution_ms >= 0),
+  applied_by TEXT NOT NULL DEFAULT CURRENT_USER
+);
+SQL
+ok "Ledger đã tồn tại (rỗng)"
 
 # -----------------------------------------------------------------------------
 # 6. Fingerprint DB đích (giá trị này baseline BẮT BUỘC khớp)
