@@ -110,12 +110,17 @@ export default function MaintenanceGate({ children }) {
   const entry = group ? groups[group] : null;
   const locked = entry?.locked === true;
 
-  // Chỉ khi trang hiện tại đang khoá mới poll; lúc bình thường không có request nền.
+  // Poll /api/status mỗi 30 giây khi route hiện tại thuộc một nhóm (kể cả lúc
+  // đang mở): endpoint công khai và rẻ, cần bắt khoá mới do admin bật trong lúc
+  // tab idle mà không phát sinh API call nào. Route ngoài bản đồ nhóm (null:
+  // portal, 404...) không bao giờ bị khoá nên không poll để tránh request nền.
+  // Lỗi mạng hoặc payload hỏng thì giữ nguyên trạng thái đang hiển thị (xem
+  // checkStatus); điều hướng đổi pathname thì `group` suy ra lại ngay.
   useEffect(() => {
-    if (!locked) return undefined;
+    if (!group) return undefined;
     const timer = window.setInterval(checkStatus, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [locked, checkStatus]);
+  }, [group, checkStatus]);
 
   if (!locked) return children;
 
@@ -143,9 +148,9 @@ export default function MaintenanceGate({ children }) {
         viewBox="0 0 24 24"
         fill="none"
         stroke="var(--color-amber)"
-        stroke-width="1.6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         style={{ marginBottom: '12px' }}
       >
         <circle cx="12" cy="12" r="9" />

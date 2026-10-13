@@ -489,11 +489,17 @@ export const AdminDashboardController = {
         CommunityRealtime.disconnectAllForMaintenance();
       }
 
+      // Hiển thị tên nhóm bằng label tiếng Việt từ catalog của
+      // getAdminStatus/setGroupStatus thay vì lộ id kỹ thuật (vd `vocab`);
+      // thiếu catalog (bản ghi cũ) thì rơi về id để message không rỗng.
+      const catalog = Array.isArray(data?.catalog) ? data.catalog : [];
+      const label = catalog.find((item) => item?.id === group)?.label || group;
+
       return res.json({
         result: true,
         message: locked
-          ? `Đã khóa nhóm ${group} để bảo trì.`
-          : `Đã mở khóa nhóm ${group}.`,
+          ? `Đã khóa nhóm ${label} để bảo trì.`
+          : `Đã mở khóa nhóm ${label}.`,
         data
       });
     } catch (err) {

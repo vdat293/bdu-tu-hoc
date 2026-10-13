@@ -191,7 +191,12 @@ export const ServiceLockService = {
       current.groups &&
       typeof current.groups === 'object'
     ) {
-      stored = { ...current.groups };
+      // Chỉ giữ key thuộc nhóm lockable: bản ghi cũ có thể lẫn key lạ (tay người
+      // sửa DB, deploy lệch) và merge giữ nguyên sẽ lan truyền rác đó mãi.
+      stored = {};
+      for (const [key, value] of Object.entries(current.groups)) {
+        if (LOCKABLE_GROUP_IDS.has(key)) stored[key] = value;
+      }
     } else if (current && typeof current === 'object' && current.locked === true) {
       stored = normalizeStatusMap(current);
     } else {
@@ -207,8 +212,11 @@ export const ServiceLockService = {
     );
 
     // Trả map đã chuẩn hoá đủ 10 nhóm để controller dùng ngay, không lộ cột key/value thô.
+    // Kèm catalog (cùng nguồn với getAdminStatus) để controller dựng message
+    // hiển thị bằng label tiếng Việt thay vì lộ id kỹ thuật.
     return {
       groups: normalizeStatusMap(value),
+      catalog: LOCKABLE_GROUPS.map((group) => ({ ...group })),
       updated_at: record && record.updated_at != null ? record.updated_at : null,
       updated_by: record && record.updated_by != null ? record.updated_by : null
     };

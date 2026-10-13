@@ -214,11 +214,32 @@ describe('MaintenanceGate theo nhóm', () => {
     expect(screen.queryByText('NỘI DUNG ỨNG DỤNG')).toBeNull();
   });
 
-  it('không poll khi nhóm của trang hiện tại không bị khoá', async () => {
+  it('tự hiện màn hình khi poll thấy nhóm của trang vừa bị khoá (tab idle, không cần event)', async () => {
     vi.useFakeTimers();
+    // Tab đang mở ở /vocab lúc nhóm còn mở, admin bật khoá sau đó mà tab không
+    // phát sinh API call nào: nhịp poll 30 giây phải tự bắt được.
     mocks.fetch.mockReturnValue(statusOf({ vocab: entryOf({ locked: false }) }));
 
     renderGate('/vocab');
+    await act(async () => {});
+    expect(screen.getByText('NỘI DUNG ỨNG DỤNG')).toBeInTheDocument();
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+
+    mocks.fetch.mockReturnValue(statusOf({
+      vocab: entryOf({ locked: true, title: 'Từ vựng bảo trì', message: 'Tạm khoá từ vựng.' })
+    }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+
+    expect(screen.getByText('Từ vựng bảo trì')).toBeInTheDocument();
+    expect(screen.queryByText('NỘI DUNG ỨNG DỤNG')).toBeNull();
+  });
+
+  it('không poll khi trang ngoài bản đồ nhóm', async () => {
+    vi.useFakeTimers();
+    // /login (portal) không bao giờ bị khoá nên không cần request nền.
+    mocks.fetch.mockReturnValue(statusOf({ vocab: entryOf({ locked: true }) }));
+
+    renderGate('/login');
     await act(async () => {});
     expect(screen.getByText('NỘI DUNG ỨNG DỤNG')).toBeInTheDocument();
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
@@ -239,9 +260,9 @@ describe('MaintenanceGate theo nhóm', () => {
     mocks.fetch.mockReturnValue(jsonResponse({ result: true, data: {} }));
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
 
-    // Payload không có `groups` bị bỏ qua, nhưng poll không chạy vì trang không bị
-    // khoá; chỉ assert fetch mount là đủ một lần và children vẫn hiện.
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    // Payload không có `groups` bị bỏ qua: poll vẫn chạy (route có nhóm) nên
+    // fetch tăng, nhưng children vẫn hiện vì trạng thái không đổi.
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(screen.getByText('NỘI DUNG ỨNG DỤNG')).toBeInTheDocument();
   });
 });

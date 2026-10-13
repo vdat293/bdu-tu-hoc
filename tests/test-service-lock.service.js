@@ -210,6 +210,26 @@ try {
     assert.equal(saved.groups.vocab.locked, true);
   });
 
+  await check('setGroupStatus loại key lạ khỏi bản ghi khi ghi', async () => {
+    resetCalls();
+    // Key rác có sẵn trong raw `groups` (do tay người sửa DB hoặc deploy lệch)
+    // không được lan truyền sang bản ghi mới: khi ghi chỉ giữ nhóm lockable.
+    stubGet({
+      groups: {
+        vocab: { locked: true, title: 'V', message: 'Vm' },
+        portal: { locked: true, title: 'P', message: 'Pm' },
+        xxx: { locked: true, title: 'X', message: 'Xm' }
+      }
+    });
+    stubSet({ value: {}, updated_at: null, updated_by: 'ADMIN' });
+    await ServiceLockService.setGroupStatus({ group: 'wordfmt', locked: true }, 'ADMIN');
+    const saved = setCalls[0][1];
+    assert.equal('portal' in saved.groups, false, 'key portal phải bị loại');
+    assert.equal('xxx' in saved.groups, false, 'key lạ phải bị loại');
+    assert.equal(saved.groups.vocab.locked, true, 'nhóm lockable khác phải giữ nguyên');
+    assert.equal(saved.groups.wordfmt.locked, true, 'nhóm vừa sửa phải được ghi');
+  });
+
   await check('setGroupStatus trên bản ghi legacy không mở oan nhóm khác', async () => {
     resetCalls();
     stubGet({ locked: true, title: 'T', message: 'M' });

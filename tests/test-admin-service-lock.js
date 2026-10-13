@@ -144,6 +144,40 @@ try {
     assert.equal(res.body.data.groups.vocab.locked, true);
   });
 
+  await check('PUT message dùng label tiếng Việt, thiếu catalog thì rơi về id', async () => {
+    // Catalog của getAdminStatus/setGroupStatus mang label hiển thị; message
+    // trả cho admin không được lộ id kỹ thuật như `vocab`.
+    const vocabLabel = LOCKABLE_GROUPS.find((item) => item.id === 'vocab').label;
+    stubSetGroupStatus({
+      groups: sampleGroups({ vocab: { locked: true, title: 'Bảo trì', message: 'Chờ chút' } }),
+      catalog: sampleCatalog(),
+      updated_at: null,
+      updated_by: 'TESTADMIN'
+    });
+    const locked = response();
+    await AdminDashboardController.setServiceLock(
+      { identityAdminMssv: 'TESTADMIN', body: { group: 'vocab', locked: true } },
+      locked
+    );
+    assert.equal(locked.body.message, `Đã khóa nhóm ${vocabLabel} để bảo trì.`);
+
+    const unlocked = response();
+    await AdminDashboardController.setServiceLock(
+      { identityAdminMssv: 'TESTADMIN', body: { group: 'vocab', locked: false } },
+      unlocked
+    );
+    assert.equal(unlocked.body.message, `Đã mở khóa nhóm ${vocabLabel}.`);
+
+    // Stub cũ không kèm catalog: rơi về id để message không rỗng.
+    stubSetGroupStatus({ groups: sampleGroups(), updated_at: null, updated_by: 'TESTADMIN' });
+    const fallback = response();
+    await AdminDashboardController.setServiceLock(
+      { identityAdminMssv: 'TESTADMIN', body: { group: 'vocab', locked: true } },
+      fallback
+    );
+    assert.equal(fallback.body.message, 'Đã khóa nhóm vocab để bảo trì.');
+  });
+
   await check('PUT không có identityAdminMssv dùng ADMIN_KEY', async () => {
     stubSetGroupStatus({ groups: sampleGroups(), updated_at: null, updated_by: 'ADMIN_KEY' });
     const res = response();
