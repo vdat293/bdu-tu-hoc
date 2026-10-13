@@ -191,19 +191,203 @@ function cssToken(value) {
   return String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'unknown';
 }
 
-function safeNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
+/* ==========================================================================
+   BỘ ICON SVG DÙNG CHUNG (thay emoji)
+   --------------------------------------------------------------------------
+   Vì sao bỏ emoji: emoji bị render khác nhau trên Windows/macOS/Linux, không
+   đổi được màu theo theme, và bị coi là chữ nên dễ vỡ cỡ chữ trên hàng bảng
+   dày. Inline SVG 24×24 với stroke="currentColor" thì ăn theo màu chữ của
+   thành phần đang chứa nó, sắc nét ở mọi kích thước, và không cần thêm
+   dependency ngoài Chart.js đã có.
+   Mỗi icon KHÔNG có sẵn class; renderIcon() sẽ chèn class để đổi cỡ.
+   ========================================================================== */
+const ICONS = {
+  crown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"></path><path d="M5 20h14"></path></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+  menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
+  zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
+  overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>',
+  users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+  server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>',
+  insights: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M5 3 3 5"></path><path d="M19 3l2 2"></path></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>',
+  gauge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14l4-4"></path><path d="M3.5 18a9 9 0 1 1 17 0"></path><circle cx="12" cy="14" r="1.5"></circle></svg>',
+  route: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"></circle><circle cx="18" cy="5" r="3"></circle><path d="M9 19h6a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6"></path></svg>',
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+  education: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"></path><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"></path></svg>',
+  filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+  arrowUp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
+  arrowDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+  emptyBox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><line x1="10" y1="12" x2="14" y2="12"></line></svg>',
+  smartphone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>',
+  tablet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>',
+  monitor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
+  bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="8.5" cy="16" r="1"></circle><circle cx="15.5" cy="16" r="1"></circle><path d="M12 8V4"></path><circle cx="12" cy="3" r="1"></circle></svg>'
+};
+
+/**
+ * Trả về chuỗi SVG kèm class CSS. Nội dung ICONS là chuỗi cố định do mình viết
+ * (không chứa dữ liệu người dùng) nên chèn trực tiếp được; mọi dữ liệu động
+ * vẫn tiếp tục đi qua escapeHtml.
+ */
+function renderIcon(name, className = 'svg-icon') {
+  const svg = ICONS[name];
+  if (!svg) return '';
+  return svg.replace('<svg ', `<svg class="${className}" `);
 }
 
+/* ==========================================================================
+   HELPER ĐỊNH DẠNG DÙNG CHUNG (spec mục 4.1: định dạng số thống nhất)
+   Phân cách nghìn, phần trăm 1-2 chữ số, thời lượng bằng ms, thời gian
+   dd/mm HH:mm. Dùng chung cho mọi tab để cùng một số hiện ra cùng một kiểu.
+   ========================================================================== */
+
+/** Số có phân cách nghìn. */
+function formatNumber(value, fractionDigits = 0) {
+  const number = safeNumber(value);
+  return number.toLocaleString('vi-VN', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  });
+}
+
+/** Phần trăm, mặc định 1 chữ số thập phân (spec: 1-2 chữ số). */
+function formatPercent(value, fractionDigits = 1) {
+  return `${formatNumber(value, fractionDigits)}%`;
+}
+
+/** Thời lượng: ms khi ngắn, giây ở tầng dưới 1 phút, phút khi dài hơn. */
+function formatDurationMs(value) {
+  const ms = safeNumber(value);
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60000) {
+    const seconds = ms / 1000;
+    return `${formatNumber(seconds, seconds < 10 ? 2 : 1)} s`;
+  }
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.round((ms % 60000) / 1000);
+  return `${minutes} phút ${seconds} s`;
+}
+
+/** Thời gian chuẩn dd/mm HH:mm (giờ địa phương của trình duyệt). */
 function formatDateTime(value) {
   if (!value) return '--';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Biến thể có giây — dùng khi cần phân biệt hai sự kiện rất gần nhau. */
+function formatDateTimeSeconds(value) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/* ==========================================================================
+   TRẠNG THÁI KHỐI DỮ LIỆU DÙNG CHUNG (spec mục 4.1)
+   Mọi khối dữ liệu phải có đủ 3 trạng thái: đang tải (skeleton), rỗng (lời
+   nhắc) và lỗi (kèm nút thử lại) — KHÔNG để khoảng trắng hoặc lỗi câm.
+   Các helper nhận id hoặc element để dùng được ở mọi tab.
+   ========================================================================== */
+
+function resolveElement(target) {
+  if (!target) return null;
+  if (typeof target === 'string') {
+    return document.getElementById(target)
+      || document.querySelector(target.startsWith('.') ? target : null);
+  }
+  return target;
+}
+
+/**
+ * Trạng thái "đang tải": vạch xám nhấp nháy, giữ chiều cao tối thiểu để nội
+ * dung thật thay thế không làm nhảy bố cục.
+ */
+function renderSkeleton(target, rows = 3) {
+  const el = resolveElement(target);
+  if (!el) return;
+  const safeRows = Math.min(6, Math.max(1, safeNumber(rows) || 3));
+  el.innerHTML = `
+    <div class="state-block stack-skeleton" role="status" aria-live="polite" aria-busy="true">
+      <span class="sr-only">Đang tải dữ liệu...</span>
+      ${Array.from({ length: safeRows }, () => '<div class="skeleton-row"><span class="skeleton-bar"></span></div>').join('')}
+    </div>
+  `;
+}
+
+/** Trạng thái "rỗng": nói rõ lý do và (nếu có) gợi ý bước tiếp theo. */
+function renderEmpty(target, message = 'Chưa có dữ liệu trong khoảng thời gian này.', options = {}) {
+  const el = resolveElement(target);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="state-block state-empty">
+      <span class="state-icon" aria-hidden="true">${renderIcon('emptyBox', 'svg-icon svg-icon--lg')}</span>
+      <p class="state-title">${escapeHtml(options.title || 'Không có dữ liệu')}</p>
+      <p class="state-message">${escapeHtml(message)}</p>
+      ${options.hint ? `<p class="state-hint">${escapeHtml(options.hint)}</p>` : ''}
+    </div>
+  `;
+}
+
+/**
+ * Trạng thái "lỗi": hiện nguyên nhân và nút thử lại (mặc định nạp lại toàn bộ
+ * dashboard). role="alert" để trình đọc màn hình đọc được lỗi, thay vì chỉ báo
+ * bằng màu đỏ.
+ */
+function renderError(target, message = 'Không tải được dữ liệu.', options = {}) {
+  const el = resolveElement(target);
+  if (!el) return;
+  const retry = typeof options.onRetry === 'function' ? options.onRetry : () => fetchAllData();
+  el.innerHTML = `
+    <div class="state-block state-error" role="alert">
+      <span class="state-icon" aria-hidden="true">${renderIcon('alert', 'svg-icon svg-icon--lg')}</span>
+      <p class="state-title">${escapeHtml(options.title || 'Không tải được dữ liệu')}</p>
+      <p class="state-message">${escapeHtml(message)}</p>
+      <button type="button" class="btn-retry">
+        ${renderIcon('refresh', 'svg-icon svg-icon--sm')}<span>Thử lại</span>
+      </button>
+    </div>
+  `;
+  const retryBtn = el.querySelector('.btn-retry');
+  if (retryBtn) retryBtn.addEventListener('click', retry);
+}
+
+/* ==========================================================================
+   THEME — mặc định SÁNG
+   Vì sao fallback là 'light': /admin phải mở ra ở theme sáng. Nếu thuộc tính
+   data-theme rỗng hoặc bị xoá thì vẫn về sáng chứ không nhào về tối.
+   ========================================================================== */
+const DEFAULT_THEME = 'light';
+
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
+}
+
+function renderThemeToggleIcon(theme) {
+  if (!dom.btnThemeToggle) return;
+  dom.btnThemeToggle.innerHTML = renderIcon(theme === 'dark' ? 'sun' : 'moon');
+  dom.btnThemeToggle.setAttribute(
+    'aria-label',
+    theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
+  );
 }
 
 // Notification Toast
@@ -332,7 +516,8 @@ dom.btnCloseAuthModal.addEventListener('click', closeAuthModal);
 
 function updateAuthDisplay() {
   if (state.adminKey || state.studentToken) {
-    dom.displayAuthStatus.textContent = `👑 ${state.adminLabel || 'Quản trị viên'}`;
+    // Icon vương miện là SVG nên phải chèn bằng innerHTML chứ không dùng textContent.
+    dom.displayAuthStatus.innerHTML = `${renderIcon('crown', 'svg-icon svg-icon--sm')}<span>${escapeHtml(state.adminLabel || 'Quản trị viên')}</span>`;
   } else {
     dom.displayAuthStatus.textContent = 'Chưa xác thực';
   }
@@ -411,10 +596,10 @@ dom.btnToggleSidebar.addEventListener('click', () => {
 
 // Theme Toggle
 dom.btnThemeToggle.addEventListener('click', () => {
-  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const current = currentTheme();
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  dom.btnThemeToggle.textContent = next === 'dark' ? '🌙' : '☀️';
+  renderThemeToggleIcon(next);
   // Re-render charts with new theme colors
   if (state.charts.preview) state.charts.preview.update();
   if (state.charts.detailed) state.charts.detailed.update();
@@ -875,8 +1060,10 @@ function openLogDetailModal(log) {
   });
 
   if (log.mssv) {
-    dom.btnFilterThisStudent.style.display = 'inline-block';
-    dom.btnFilterThisStudent.textContent = `🔍 Lọc tất cả log của ${log.mssv}`;
+    dom.btnFilterThisStudent.style.display = 'inline-flex';
+    // Giữ icon SVG: nút gốc trong markup đã có sẵn SVG nên chỉ thay phần chữ.
+    dom.btnFilterThisStudent.innerHTML =
+      `${renderIcon('search', 'svg-icon svg-icon--sm')}<span>Lọc tất cả log của ${escapeHtml(log.mssv)}</span>`;
   } else {
     dom.btnFilterThisStudent.style.display = 'none';
   }
@@ -1480,6 +1667,9 @@ dom.btnConfirmPurge.addEventListener('click', async () => {
 // Initialization
 async function init() {
   updateAuthDisplay();
+  // Icon của nút đổi theme phải khớp theme đang bật, nếu không lần đầu mở trang
+  // sẽ hiện mặt trăng trong khi nền đang sáng (mâu thuẫn với chính nút đó).
+  renderThemeToggleIcon(currentTheme());
   startAutoRefresh();
   await fetchAllData();
   fetchRoutes();

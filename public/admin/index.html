@@ -1,17 +1,18 @@
 <!DOCTYPE html>
-<html lang="vi" data-theme="dark">
+<html lang="vi" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#090d16" />
+  <meta name="theme-color" content="#F8FAFC" />
   <meta name="description" content="BDU Admin Dashboard · Hệ thống giám sát lưu lượng và phân tích nhật ký máy chủ AWS VPS" />
   <title>BDU OPS Dashboard · Lưu Lượng & Giám Sát VPS</title>
-  
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  
-  <link rel="stylesheet" href="/admin/admin.css?v=20260921-v3" />
+
+  <!-- Đổi version query khi đổi token/icon để trình duyệt không dùng CSS/JS cũ. -->
+  <link rel="stylesheet" href="/admin/admin.css?v=20261013-light" />
   <script src="/admin/chart.min.js"></script>
 </head>
 <body>
@@ -19,35 +20,39 @@
     <!-- Sidebar Navigation -->
     <aside class="admin-sidebar" id="admin-sidebar">
       <div class="sidebar-brand">
-        <div class="brand-badge">⚡</div>
+        <!-- Icon dạng inline SVG (thay emoji): ăn theo màu chữ, không phụ thuộc
+             font emoji của từng máy, và luôn sắc nét ở mọi kích thước. -->
+        <div class="brand-badge">
+          <svg class="svg-icon svg-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        </div>
         <div class="brand-text">
           <span class="brand-title">BDU OPS</span>
           <span class="brand-sub">Traffic & VPS Monitor</span>
         </div>
       </div>
 
-      <nav class="sidebar-menu">
+      <nav class="sidebar-menu" aria-label="Điều hướng bảng điều khiển">
         <div class="menu-label">QUẢN TRỊ HỆ THỐNG</div>
         <button type="button" class="nav-btn active" data-tab="overview">
-          <span class="nav-icon">📊</span>
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
           <span class="nav-label">Tổng Quan Lưu Lượng</span>
         </button>
         <button type="button" class="nav-btn" data-tab="charts">
-          <span class="nav-icon">📈</span>
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
           <span class="nav-label">Biểu Đồ & Xu Hướng</span>
         </button>
         <button type="button" class="nav-btn" data-tab="logs">
-          <span class="nav-icon">📜</span>
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
           <span class="nav-label">Nhật Ký Truy Cập</span>
           <span class="badge-pill" id="badge-total-logs">0</span>
         </button>
         <button type="button" class="nav-btn" data-tab="users">
-          <span class="nav-icon">👥</span>
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           <span class="nav-label">Sinh Viên Đã Vào Web</span>
           <span class="badge-pill" id="badge-active-students">--</span>
         </button>
         <button type="button" class="nav-btn" data-tab="system">
-          <span class="nav-icon">🖥️</span>
+          <svg class="svg-icon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           <span class="nav-label">Sức Khỏe VPS & RAM</span>
         </button>
       </nav>
@@ -69,8 +74,8 @@
       <!-- Topbar Header -->
       <header class="admin-topbar">
         <div class="topbar-left">
-          <button type="button" class="btn-sidebar-toggle" id="btn-toggle-sidebar" aria-label="Menu">
-            ☰
+          <button type="button" class="icon-btn btn-sidebar-toggle" id="btn-toggle-sidebar" aria-label="Mở menu điều hướng">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
           <div class="topbar-title-block">
             <h1 class="page-title" id="page-title">Tổng Quan Lưu Lượng</h1>
@@ -102,13 +107,15 @@
           </div>
 
           <!-- Manual Refresh -->
-          <button type="button" class="btn-refresh" id="btn-manual-refresh" title="Làm mới tức thì">
-            ↻ Làm Mới
+          <button type="button" class="icon-btn btn-refresh" id="btn-manual-refresh" title="Làm mới tức thì">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            <span>Làm Mới</span>
           </button>
 
-          <!-- Theme Toggle -->
-          <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Đổi giao diện Sáng/Tối">
-            🌙
+          <!-- Theme Toggle: mặc định theme SÁNG nên icon hiện mặt trăng (hành động
+               sẽ đổi sang tối). Admin.js thay icon khi bấm. -->
+          <button type="button" class="icon-btn btn-theme-toggle" id="btn-theme-toggle" title="Đổi giao diện Sáng/Tối" aria-label="Đổi giao diện sáng hoặc tối">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
           </button>
         </div>
       </header>
@@ -122,7 +129,9 @@
             <div class="kpi-card">
               <div class="kpi-top">
                 <span class="kpi-label">Tổng Lượt Yêu Cầu</span>
-                <span class="kpi-icon icon-blue">⚡</span>
+                <span class="kpi-icon icon-blue">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                </span>
               </div>
               <div class="kpi-value" id="kpi-total-requests">--</div>
               <div class="kpi-sub">
@@ -139,7 +148,9 @@
             <div class="kpi-card">
               <div class="kpi-top">
                 <span class="kpi-label">Sinh Viên Hoạt Động</span>
-                <span class="kpi-icon icon-purple">👥</span>
+                <span class="kpi-icon icon-purple">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </span>
               </div>
               <div class="kpi-value" id="kpi-unique-mssv">--</div>
               <div class="kpi-sub">
@@ -152,7 +163,9 @@
             <div class="kpi-card">
               <div class="kpi-top">
                 <span class="kpi-label">Độ Trễ Phản Hồi TB</span>
-                <span class="kpi-icon icon-green">⏱</span>
+                <span class="kpi-icon icon-green">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M5 3 3 5"></path><path d="M19 3l2 2"></path></svg>
+                </span>
               </div>
               <div class="kpi-value" id="kpi-avg-latency">-- ms</div>
               <div class="kpi-sub">
@@ -164,7 +177,9 @@
             <div class="kpi-card">
               <div class="kpi-top">
                 <span class="kpi-label">Tỷ Lệ Yêu Cầu Lỗi</span>
-                <span class="kpi-icon icon-amber">🛡</span>
+                <span class="kpi-icon icon-amber">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>
+                </span>
               </div>
               <div class="kpi-value" id="kpi-error-rate">-- %</div>
               <div class="kpi-sub">
@@ -260,9 +275,13 @@
             <!-- Filter Toolbar -->
             <div class="logs-filter-toolbar">
               <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="input-log-search" placeholder="Tìm theo đường dẫn, MSSV, IP hoặc thông báo lỗi..." />
-                <button type="button" id="btn-clear-search" class="btn-clear" style="display: none;">✕</button>
+                <span class="search-icon">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </span>
+                <input type="text" id="input-log-search" aria-label="Tìm trong nhật ký theo đường dẫn, MSSV, IP hoặc thông báo lỗi" placeholder="Tìm theo đường dẫn, MSSV, IP hoặc thông báo lỗi..." />
+                <button type="button" id="btn-clear-search" class="btn-clear" style="display: none;" aria-label="Xóa từ khóa tìm kiếm">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
               </div>
 
               <div class="filter-group">
@@ -341,7 +360,9 @@
           <!-- Mini KPI Cards for Visitors -->
           <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
             <div class="kpi-card">
-              <div class="kpi-icon-wrap" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">👥</div>
+              <div class="kpi-icon-wrap" style="background: var(--tint-success); color: var(--color-success);">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </div>
               <div class="kpi-content">
                 <span class="kpi-label">Đã Vào Web (Kích Hoạt)</span>
                 <span class="kpi-value" id="kpi-visited-active">--</span>
@@ -350,7 +371,9 @@
             </div>
 
             <div class="kpi-card">
-              <div class="kpi-icon-wrap" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">📅</div>
+              <div class="kpi-icon-wrap" style="background: var(--tint-primary); color: var(--color-primary);">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              </div>
               <div class="kpi-content">
                 <span class="kpi-label">Đăng Nhập Hôm Nay</span>
                 <span class="kpi-value" id="kpi-visited-today">--</span>
@@ -359,7 +382,9 @@
             </div>
 
             <div class="kpi-card">
-              <div class="kpi-icon-wrap" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">📈</div>
+              <div class="kpi-icon-wrap" style="background: var(--tint-warning); color: var(--color-warning);">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+              </div>
               <div class="kpi-content">
                 <span class="kpi-label">Đăng Nhập 7 Ngày Qua</span>
                 <span class="kpi-value" id="kpi-visited-7days">--</span>
@@ -368,7 +393,9 @@
             </div>
 
             <div class="kpi-card">
-              <div class="kpi-icon-wrap" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">🎓</div>
+              <div class="kpi-icon-wrap" style="background: rgba(124, 58, 237, 0.12); color: var(--accent-purple);">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"></path><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"></path></svg>
+              </div>
               <div class="kpi-content">
                 <span class="kpi-label">Tổng Sinh Viên Trong CSDL</span>
                 <span class="kpi-value" id="kpi-visited-total">--</span>
@@ -387,8 +414,10 @@
               <!-- Visitor Filter Controls -->
               <div class="table-filter-bar" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <div class="search-input-wrapper">
-                  <span class="search-icon">🔍</span>
-                  <input type="text" id="input-visited-search" class="admin-input" placeholder="Tìm theo MSSV, Tên hoặc Lớp..." style="min-width: 240px;" />
+                  <span class="search-icon">
+                    <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  </span>
+                  <input type="text" id="input-visited-search" class="admin-input" aria-label="Tìm sinh viên theo MSSV, tên hoặc lớp" placeholder="Tìm theo MSSV, Tên hoặc Lớp..." style="min-width: 240px;" />
                 </div>
 
                 <select id="select-visited-filter" class="admin-select">
@@ -404,7 +433,10 @@
                   <option value="mssv:asc">MSSV tăng dần</option>
                 </select>
 
-                <button type="button" class="btn-refresh" id="btn-refresh-visited" title="Làm mới dữ liệu">🔄 Làm Mới</button>
+                <button type="button" class="icon-btn btn-refresh" id="btn-refresh-visited" title="Làm mới dữ liệu">
+                  <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                  <span>Làm Mới</span>
+                </button>
               </div>
             </div>
 
@@ -450,7 +482,8 @@
                 <p class="card-subtitle">Node.js runtime, bộ nhớ đệm và kết nối WebSocket</p>
               </div>
               <button type="button" class="btn-purge-trigger" id="btn-open-purge-modal">
-                🧹 Dọn Dẹp Log Cũ
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                <span>Dọn Dẹp Log Cũ</span>
               </button>
             </div>
 
@@ -577,13 +610,18 @@
           <h3 class="modal-title" id="modal-log-title">Chi Tiết Nhật Ký Yêu Cầu</h3>
           <span class="modal-sub" id="modal-log-time">--</span>
         </div>
-        <button type="button" class="btn-close-modal" id="btn-close-log-modal">✕</button>
+        <button type="button" class="btn-close-modal" id="btn-close-log-modal" aria-label="Đóng cửa sổ chi tiết nhật ký">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div class="modal-body" id="modal-log-body">
         <!-- Log details dynamically injected -->
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-action-outline" id="btn-filter-this-student">🔍 Lọc tất cả log của sinh viên này</button>
+        <button type="button" class="btn-action-outline" id="btn-filter-this-student">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Lọc tất cả log của sinh viên này</span>
+        </button>
         <button type="button" class="btn-action-primary" id="btn-modal-dismiss">Đóng</button>
       </div>
     </div>
@@ -594,10 +632,15 @@
     <div class="modal-card modal-card-auth">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">🔐 Xác Thực Quản Trị Viên</h3>
+          <h3 class="modal-title" id="modal-log-title">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>Xác Thực Quản Trị Viên</span>
+          </h3>
           <span class="modal-sub">Truy cập Admin Dashboard trên AWS VPS</span>
         </div>
-        <button type="button" class="btn-close-modal" id="btn-close-auth-modal" style="display: none;">✕</button>
+        <button type="button" class="btn-close-modal" id="btn-close-auth-modal" style="display: none;" aria-label="Đóng cửa sổ xác thực">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div class="modal-body">
         <p class="auth-desc">Đăng nhập bằng tài khoản BDU có quyền quản trị, hoặc bằng mã khóa kỹ thuật do quản trị hệ thống cấu hình trên server.</p>
@@ -629,10 +672,15 @@
     <div class="modal-card">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">🧹 Dọn Dẹp Bản Ghi Log Cũ</h3>
+          <h3 class="modal-title" id="modal-purge-title">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+            <span>Dọn Dẹp Bản Ghi Log Cũ</span>
+          </h3>
           <span class="modal-sub">Giải phóng dung lượng database trên AWS VPS</span>
         </div>
-        <button type="button" class="btn-close-modal" id="btn-close-purge-modal">✕</button>
+        <button type="button" class="btn-close-modal" id="btn-close-purge-modal" aria-label="Đóng cửa sổ dọn dẹp">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div class="modal-body">
         <p>Chọn mốc thời gian để xóa các bản ghi log cũ hơn:</p>
@@ -676,7 +724,9 @@
           <h3 class="modal-title" id="student-activity-title">Dấu Vết API Theo Sinh Viên</h3>
           <span class="modal-sub" id="student-activity-sub">--</span>
         </div>
-        <button type="button" class="btn-close-modal" id="btn-close-student-activity">✕</button>
+        <button type="button" class="btn-close-modal" id="btn-close-student-activity" aria-label="Đóng cửa sổ dấu vết sinh viên">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div class="modal-body">
         <div class="activity-summary-grid" id="student-activity-summary">
@@ -710,7 +760,10 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-action-outline" id="btn-activity-filter-logs">🔍 Lọc trong Nhật Ký</button>
+        <button type="button" class="btn-action-outline" id="btn-activity-filter-logs">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Lọc trong Nhật Ký</span>
+        </button>
         <button type="button" class="btn-action-primary" id="btn-activity-dismiss">Đóng</button>
       </div>
     </div>

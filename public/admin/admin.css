@@ -2,47 +2,134 @@
    BDU OPS ADMIN DASHBOARD - STANDALONE SITE CSS
    ========================================================================== */
 
-:root {
+/* ==========================================================================
+   TOKEN MÀU — LIGHT-FIRST (spec mục 4.2)
+   --------------------------------------------------------------------------
+   Vì sao bộ token sáng nằm ngay trong :root thay vì chỉ trong [data-theme="light"]:
+   /admin mặc định phải SÁNG. Nếu <html> chưa kịp gán data-theme (hoặc JS lỗi,
+   hoặc bị chặn) trang vẫn dùng bộ màu sáng chứ không nhào về tối. Dark là
+   tùy chọn bật thêm, chỉ cần ghi đè phần lệch trong [data-theme="dark"].
+   Mọi rule bên dướu đọc token chứ không hardcode hex, nên đổi theme không
+   làm lệch tương phản giữa hai bộ.
+   Bảng màu light: nền #F8FAFC, card #FFFFFF, chữ #1E3A8A, chữ phụ #475569,
+   viền #DBEAFE, chủ đạo #1E40AF, phụ #3B82F6, nhấn #D97706, lỗi #DC2626,
+   muted #E9EEF6.
+   ========================================================================== */
+:root,
+[data-theme="light"] {
   --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  /* Dark Theme Palette (Default) */
-  --bg-app: #090d16;
-  --bg-sidebar: #0d1322;
-  --bg-card: rgba(15, 23, 42, 0.75);
-  --bg-card-hover: rgba(30, 41, 59, 0.6);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.04);
+  /* Màu nền & chữ */
+  --color-background: #F8FAFC;
+  --color-foreground: #1E3A8A;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #1E3A8A;
+  --color-muted: #E9EEF6;
+  --color-muted-foreground: #475569; /* chữ phụ: 7.5:1 trên nền trắng */
+  --color-border: #DBEAFE;
 
-  --text-main: #f8fafc;
-  --text-sub: #94a3b8;
-  --text-muted: #64748b;
+  /* Màu hành động & trạng thái — đã chọn độ đậm để đủ tương phản 4.5:1
+     trên nền sáng (chữ nhỏ 0.72-0.85rem vẫn đọc được). */
+  --color-primary: #1E40AF;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #3B82F6;
+  --color-info: #1D4ED8;
+  --color-accent: #D97706;
+  --color-success: #15803D;
+  --color-warning: #B45309;
+  --color-destructive: #DC2626;
+  --color-ring: #1E40AF;
 
-  --accent-blue: #3b82f6;
-  --accent-purple: #a855f7;
-  --accent-green: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-red: #ef4444;
+  /* Nền mờ cho huy hiệu trạng thái; dùng alpha thấp nên cả hai theme đều ổn. */
+  --tint-primary: rgba(59, 130, 246, 0.12);
+  --tint-secondary: rgba(59, 130, 246, 0.18);
+  --tint-success: rgba(16, 185, 129, 0.12);
+  --tint-warning: rgba(217, 119, 6, 0.14);
+  --tint-danger: rgba(220, 38, 38, 0.12);
+  --tint-neutral: rgba(71, 85, 105, 0.1);
+
+  /* Khối mã/kỹ thuật giữ NỀN TỐI ở cả hai theme (chữ mã cần nền trung tính
+     và đậm; nền sáng sẽ làm chữ mã mất tương phản). Tương phản ~12:1. */
+  --color-code-bg: #0F172A;
+  --color-code-fg: #BFDBFE;
+
+  /* Nền header bảng khi cuộn: phải đục, nếu không hàng bảng lộ qua chữ tiêu đề. */
+  --color-table-head-bg: #FFFFFF;
+
+  --color-toast-bg: #0F172A;
+  --color-toast-fg: #F8FAFC;
+
+  /* Bo góc / bóng / mờ lưng — một chỗ cho mọi thành phần. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --modal-backdrop: rgba(15, 23, 42, 0.45);
+
+  /* Alias ngắn dùng bởi toàn bộ rule có sẵn. Giữ tên cũ để không phải sửa
+     hàng trăm dòng CSS, nhưng mọi giá trị đều bắt nguồn từ token ở trên. */
+  --bg-app: var(--color-background);
+  --bg-sidebar: var(--color-card);
+  --bg-card: var(--color-card);
+  --bg-card-hover: var(--color-muted);
+  --border-color: var(--color-border);
+  --border-subtle: var(--color-muted);
+
+  --text-main: var(--color-foreground);
+  --text-sub: var(--color-muted-foreground);
+  /* Chữ mờ nhất cũng dùng #475569 (không dùng xám nhạt hơn) để giữ >= 4.5:1
+     trên cả nền #F8FAFC và #FFFFFF. Phân cấp thị giác dựa vào cỡ chữ và
+     trọng lượng thay vì làm màu nhạt dần. */
+  --text-muted: var(--color-muted-foreground);
+
+  --accent-blue: var(--color-primary);
+  --accent-purple: #7C3AED;
+  --accent-green: var(--color-success);
+  --accent-amber: var(--color-warning);
+  --accent-red: var(--color-destructive);
+}
+
+/* ==========================================================================
+   THEME TỐI — chỉ là override
+   Giữ tông gần đen + xanh dương đậm như cũ nhưng nâng các mức chữ phụ lên
+   (trước đây --text-muted #64748b chỉ đạt ~4.1:1 trên #090d16) và bỏ hẳn
+   viền trắng mờ để viền rõ nhưng không rỗ.
+   ========================================================================== */
+[data-theme="dark"] {
+  --color-background: #090d16;
+  --color-foreground: #F8FAFC;
+  --color-card: rgba(15, 23, 42, 0.75);
+  --color-card-foreground: #F8FAFC;
+  --color-muted: rgba(148, 163, 184, 0.14);
+  --color-muted-foreground: #94A3B8;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-primary: #93C5FD;
+  --color-on-primary: #0B1220;
+  --color-secondary: #60A5FA;
+  --color-info: #93C5FD;
+  --color-accent: #FBBF24;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-destructive: #F87171;
+  --color-ring: #93C5FD;
+
+  --tint-primary: rgba(96, 165, 250, 0.16);
+  --tint-secondary: rgba(96, 165, 250, 0.24);
+  --tint-success: rgba(16, 185, 129, 0.16);
+  --tint-warning: rgba(245, 158, 11, 0.16);
+  --tint-danger: rgba(239, 68, 68, 0.16);
+  --tint-neutral: rgba(148, 163, 184, 0.16);
 
   --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   --modal-backdrop: rgba(0, 0, 0, 0.75);
-}
 
-[data-theme="light"] {
-  --bg-app: #f1f5f9;
-  --bg-sidebar: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  --border-color: #e2e8f0;
-  --border-subtle: #f1f5f9;
-
-  --text-main: #0f172a;
-  --text-sub: #475569;
-  --text-muted: #94a3b8;
-
-  --accent-blue: #2563eb;
-  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-  --modal-backdrop: rgba(15, 23, 42, 0.6);
+  /* Alias lệch so với light trong theme tối. */
+  --color-table-head-bg: #0F172A;
+  --bg-sidebar: #0d1322;
+  --bg-card-hover: rgba(30, 41, 59, 0.6);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --accent-purple: #a855f7;
 }
 
 * {
@@ -94,13 +181,12 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6, #a855f7);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
 }
 
 .brand-text {
@@ -162,13 +248,29 @@ body {
 }
 
 .nav-btn.active {
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(168, 85, 247, 0.15));
-  color: var(--accent-blue);
-  border-left: 3px solid var(--accent-blue);
+  background: var(--tint-primary);
+  color: var(--color-primary);
+  border-left: 3px solid var(--color-primary);
 }
 
-.nav-icon {
-  font-size: 1.1rem;
+/* Icon inline SVG dùng chung (thay emoji). Kích thước cố định để sidebar
+   không nhảy chữ khi đổi nhãn; currentColor nên ăn theo màu chữ của nút. */
+.nav-icon,
+.svg-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.svg-icon--sm {
+  width: 16px;
+  height: 16px;
+}
+
+.svg-icon--lg {
+  width: 24px;
+  height: 24px;
 }
 
 .nav-label {
@@ -178,7 +280,8 @@ body {
 .badge-pill {
   font-size: 0.72rem;
   font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-muted);
+  color: var(--text-sub);
   padding: 2px 7px;
   border-radius: 10px;
 }
@@ -217,8 +320,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* Nhãn trạng thái xác thực có icon SVG nên cần flex + gap thẳng hàng với nút "Đổi khóa". */
+#display-auth-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Nút chứa icon SVG (dùng lại ở nhiều chỗ) phải là inline-flex để icon và chữ
+   luôn cùng trục, đặt biệt khi JS chèn lại nội dung bằng innerHTML. */
+.btn-action-outline,
+.btn-purge-trigger,
+.btn-filter-student {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .btn-change-key {
@@ -264,9 +386,10 @@ body {
   display: none;
   background: transparent;
   border: none;
-  font-size: 1.4rem;
   color: var(--text-main);
   cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .page-title {
@@ -313,9 +436,9 @@ body {
 }
 
 .range-pill.active {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.25);
 }
 
 .refresh-selector {
@@ -349,7 +472,7 @@ body {
 }
 
 .btn-refresh:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-muted);
   transform: translateY(-1px);
 }
 
@@ -363,7 +486,7 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1rem;
+  color: var(--text-main);
 }
 
 /* Content Pane */
@@ -435,13 +558,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
 }
 
-.icon-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.icon-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
-.icon-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-.icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+/* Huy hiệu KPI: nền mờ + màu token để đủ tương phản ở cả hai theme
+   (trước đây light dùng #60a5fa chỉ đạt ~2.6:1 trên nền trắng). */
+.icon-blue { background: var(--tint-primary); color: var(--color-primary); }
+.icon-purple { background: rgba(124, 58, 237, 0.12); color: var(--accent-purple); }
+.icon-green { background: var(--tint-success); color: var(--color-success); }
+.icon-amber { background: var(--tint-warning); color: var(--color-warning); }
+
+/* Biến thể .kpi-icon-wrap mà markup cũ đang dùng: ép cùng khuôn hình với
+   .kpi-icon để icon SVG không phình theo kích thước mặc định của <svg>. */
+.kpi-icon-wrap {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .kpi-value {
   font-size: 2.1rem;
@@ -465,10 +601,11 @@ body {
   border-radius: 4px;
 }
 
-.trend-up { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.trend-down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.trend-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.trend-neutral { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+/* Xu hướng: luôn kèm ký hiệu ▲/▼ và số, KHÔNG chỉ dựa vào màu (spec mục 4.1). */
+.trend-up { background: var(--tint-success); color: var(--color-success); }
+.trend-down { background: var(--tint-danger); color: var(--color-destructive); }
+.trend-warning { background: var(--tint-warning); color: var(--color-warning); }
+.trend-neutral { background: var(--tint-neutral); color: var(--text-sub); }
 
 .kpi-highlight {
   font-weight: 700;
@@ -496,9 +633,9 @@ body {
   font-family: var(--font-mono);
 }
 
-.badge-2xx { background: rgba(16, 185, 129, 0.12); color: #10b981; }
-.badge-4xx { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
-.badge-5xx { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.badge-2xx { background: var(--tint-success); color: var(--color-success); }
+.badge-4xx { background: var(--tint-warning); color: var(--color-warning); }
+.badge-5xx { background: var(--tint-danger); color: var(--color-destructive); }
 
 .kpi-footer-note {
   font-size: 0.75rem;
@@ -598,10 +735,11 @@ body {
   border-radius: 4px;
 }
 
-.method-get { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.method-post { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-.method-put { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-.method-delete { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+/* Nhãn method: màu token + chữ in đậm để phân biệt được mà không cần nhìn màu. */
+.method-get { background: var(--tint-success); color: var(--color-success); }
+.method-post { background: var(--tint-secondary); color: var(--color-info); }
+.method-put { background: var(--tint-warning); color: var(--color-warning); }
+.method-delete { background: var(--tint-danger); color: var(--color-destructive); }
 
 .endpoint-path {
   font-family: var(--font-mono);
@@ -629,7 +767,7 @@ body {
 
 .endpoint-progress {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), #60a5fa);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
   border-radius: 2px;
 }
 
@@ -665,7 +803,16 @@ body {
 }
 
 .device-card .icon {
-  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+}
+
+.device-card .icon .svg-icon,
+.device-card .icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .device-card .name {
@@ -773,22 +920,41 @@ body {
   margin-right: 2px;
 }
 
+/* ==========================================================================
+   CHIP LỌC DÙNG CHUNG (spec mục 4.4)
+   .filter-btn đang là alias của .chip để Task 8 đổi markup sang .chip mà
+   không nhảy giao diện. Chip phải là <button> và phơi trạng thái bằng
+   aria-pressed, KHÔNG dùng div bất được — bàn phím và trình đọc màn hình
+   mới hoạt động đúng.
+   ========================================================================== */
+.chip,
 .filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 999px;
   background: var(--bg-card-hover);
   border: 1px solid var(--border-color);
   color: var(--text-sub);
-  padding: 4px 10px;
-  border-radius: 6px;
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+.chip:hover,
+.filter-btn:hover {
+  color: var(--text-main);
+}
+
+.chip[aria-pressed="true"],
+.chip.active,
 .filter-btn.active {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
 }
 
 .active-tag-row {
@@ -799,26 +965,40 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: var(--tint-primary);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 0.8rem;
 }
 
 .tag-pill button {
   background: transparent;
   border: none;
-  color: #93c5fd;
+  color: var(--color-primary);
   font-weight: 700;
   cursor: pointer;
 }
 
-/* Data Tables */
+/* ==========================================================================
+   BẢNG DỮ LIỆU DÙNG CHUNG (spec mục 4.4)
+   .table-scroll là tên chung; .table-container giữ làm alias để Task 8 đổi
+   markup không nhảy giao diện. Header dính giúp luôn biết mình đang đọc cột
+   nào khi cuộn; cuộn ngang chỉ xảy ra BÊN TRONG khung nên cả trang không
+   tràn ngang ở 375px.
+   ========================================================================== */
+.table-scroll,
 .table-container {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.table-scroll .admin-data-table,
+.table-container .admin-data-table {
+  min-width: 720px;
 }
 
 .admin-data-table {
@@ -831,11 +1011,17 @@ body {
 .admin-data-table th {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-color);
-  color: var(--text-muted);
+  color: var(--text-sub);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  /* Header dính: phải là màu ĐẬM (không trong suốt) nếu không hàng bảng sẽ
+     lộ qua chữ tiêu đề khi cuộn. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-table-head-bg);
 }
 
 .admin-data-table td {
@@ -902,10 +1088,10 @@ body {
   border-radius: 4px;
 }
 
-.stat-2xx { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.stat-3xx { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-.stat-4xx { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.stat-5xx { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.stat-2xx { background: var(--tint-success); color: var(--color-success); }
+.stat-3xx { background: var(--tint-secondary); color: var(--color-info); }
+.stat-4xx { background: var(--tint-warning); color: var(--color-warning); }
+.stat-5xx { background: var(--tint-danger); color: var(--color-destructive); }
 
 .latency-badge {
   font-size: 0.75rem;
@@ -939,17 +1125,17 @@ body {
 }
 
 .btn-inspect {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: var(--text-main);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-sub);
   border-radius: 6px;
   padding: 4px 8px;
   cursor: pointer;
 }
 
 .btn-inspect:hover {
-  background: var(--accent-blue);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 /* Pagination */
@@ -996,19 +1182,19 @@ body {
 }
 
 .btn-filter-student {
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: var(--tint-primary);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .btn-filter-student:hover {
-  background: var(--accent-blue);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 /* System Health Cards */
@@ -1199,6 +1385,9 @@ body {
 }
 
 .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--text-main);
@@ -1236,8 +1425,8 @@ body {
 }
 
 .btn-action-primary {
-  background: var(--accent-blue);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border: none;
   padding: 8px 16px;
   border-radius: 8px;
@@ -1256,13 +1445,25 @@ body {
 }
 
 .btn-action-danger {
-  background: var(--accent-red);
-  color: #fff;
+  background: var(--color-destructive);
+  color: var(--color-on-destructive, #FFFFFF);
   border: none;
   padding: 8px 16px;
   border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Nút đóng modal chỉ có icon nên phải có aria-label ở markup (trợ năng). */
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
 }
 
 /* Detail Modal Details */
@@ -1288,14 +1489,15 @@ body {
   font-size: 0.75rem;
 }
 
+/* Khung mã/kỹ thuật giữ nền tối ở cả hai theme (xem giải thích ở token). */
 .detail-code-box {
-  background: #000;
+  background: var(--color-code-bg);
   padding: 10px 14px;
   border-radius: 8px;
   font-family: var(--font-mono);
   font-size: 0.82rem;
   word-break: break-all;
-  color: #93c5fd;
+  color: var(--color-code-fg);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1303,9 +1505,9 @@ body {
 }
 
 .btn-copy-code {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.16);
   border: none;
-  color: #fff;
+  color: #FFFFFF;
   padding: 3px 8px;
   border-radius: 5px;
   font-size: 0.72rem;
@@ -1314,9 +1516,9 @@ body {
 }
 
 .detail-error-box {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: var(--tint-danger);
+  border: 1px solid var(--color-destructive);
+  color: var(--color-destructive);
   padding: 10px 14px;
   border-radius: 8px;
   font-family: var(--font-mono);
@@ -1337,13 +1539,13 @@ body {
 
 .detail-query-box {
   margin: 6px 0 0;
-  background: #000;
+  background: var(--color-code-bg);
   padding: 10px 14px;
   border-radius: 8px;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
-  color: #86efac;
+  color: var(--color-code-fg);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 220px;
@@ -1495,8 +1697,8 @@ body {
 .btn-auth-submit {
   width: 100%;
   padding: 11px;
-  background: var(--accent-blue);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   font-weight: 800;
@@ -1506,8 +1708,8 @@ body {
 }
 
 .auth-error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--tint-danger);
+  color: var(--color-destructive);
   padding: 8px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -1549,8 +1751,8 @@ body {
   font-size: 0.82rem;
   font-weight: 600;
   text-align: center;
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--accent-green);
+  background: var(--tint-success);
+  color: var(--color-success);
 }
 
 /* Toast Container */
@@ -1565,12 +1767,12 @@ body {
 }
 
 .admin-toast {
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-toast-bg);
+  border: 1px solid var(--color-toast-fg);
+  color: var(--color-toast-fg);
   padding: 10px 18px;
   border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
   font-size: 0.85rem;
   font-weight: 600;
   animation: toastIn 0.25s ease;
@@ -1627,5 +1829,215 @@ body {
 
   .route-code {
     max-width: 160px;
+  }
+}
+
+/* ==========================================================================
+   THÀNH PHẦN DÙNG CHUNG (spec mục 4.4) — định nghĩa một lần, dùng cho mọi tab
+   ========================================================================== */
+
+/* Chỉ đọc được cho trình đọc màn hình (dùng cho nhãn trạng thái đang tải). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus visible cho MỌI phần tử tương tác. Không được bỏ outline mà không
+   thay thế — người dùng bàn phím sẽ mất dấu hiệu vị trí. */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Nút chỉ có icon: giữ khuôn hình tối thiểu để bấm đúng chỗ trên điện thoại,
+   và bắt buộc markup kèm aria-label (xem index.html). */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: var(--color-muted);
+  color: var(--color-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Trạng thái khối dữ liệu: đang tải / rỗng / lỗi.
+   Mỗi trạng thái giữ CHIỀU CAO TỐI THIỂU để nội dung thay thế không làm
+   nhảy bố cục (tránh Cumulative Layout Shift).
+   -------------------------------------------------------------------------- */
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 132px;
+  padding: 20px 16px;
+  text-align: center;
+  border-radius: var(--radius-md);
+  background: var(--bg-card-hover);
+  border: 1px dashed var(--border-color);
+}
+
+.state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub);
+}
+
+.state-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.state-message {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  max-width: 52ch;
+}
+
+.state-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.state-empty .state-icon {
+  color: var(--color-info);
+}
+
+.state-error {
+  border-style: solid;
+  border-color: var(--color-destructive);
+  background: var(--tint-danger);
+}
+
+.state-error .state-icon {
+  color: var(--color-destructive);
+}
+
+/* Nút "Thử lại" trong trạng thái lỗi: luôn cho đường thoái thay vì chỉ báo lỗi. */
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-destructive);
+  background: transparent;
+  color: var(--color-destructive);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-retry:hover {
+  background: var(--color-destructive);
+  color: #FFFFFF;
+}
+
+/* Skeleton: vạch xám nhấp nháy, KHÔNG dùng chữ "Đang tải..." trần. */
+.stack-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 12px;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-muted) 25%, var(--tint-primary) 50%, var(--color-muted) 75%);
+  background-size: 240% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-row:nth-child(2) .skeleton-bar { width: 82%; }
+.skeleton-row:nth-child(3) .skeleton-bar { width: 64%; }
+.skeleton-row:nth-child(4) .skeleton-bar { width: 74%; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Thang chữ chuẩn hoá 12/14/16/18/24/32 (spec mục 4.2) */
+.text-xs { font-size: 0.75rem; }
+.text-sm { font-size: 0.875rem; }
+.text-base { font-size: 1rem; }
+.text-lg { font-size: 1.125rem; }
+.text-xl { font-size: 1.5rem; }
+.text-2xl { font-size: 2rem; }
+
+.text-mono { font-family: var(--font-mono); }
+
+/* KPI tại 375px: một cột, giảm cỡ số để không tràn ngang. */
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .kpi-value {
+    font-size: 1.6rem;
+  }
+
+  .admin-content {
+    padding: 12px;
+  }
+
+  .charts-overview-row {
+    gap: 12px;
+  }
+}
+
+/* Tôn trọng prefers-reduced-motion: tắt toàn bộ chuyển động/hiệu ứng
+   không thiết, chỉ giữ thay đổi trạng thái tức thì. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .status-dot {
+    animation: none;
   }
 }
