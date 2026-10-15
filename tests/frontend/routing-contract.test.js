@@ -3,9 +3,9 @@ import { navigation, findRouteMeta } from '../../client/src/app/navigation.js';
 
 describe('student route contract', () => {
   it('has one canonical route for every student navigation item', () => {
-    expect(navigation).toHaveLength(15);
-    expect(new Set(navigation.map((item) => item.path)).size).toBe(15);
-    expect(navigation.map((item) => item.path)).toEqual(expect.arrayContaining(['/gpa', '/info', '/schedule', '/leaderboard', '/learning', '/vocab', '/grammar', '/clans', '/confession', '/training-score', '/ttcds']));
+    expect(navigation).toHaveLength(16);
+    expect(new Set(navigation.map((item) => item.path)).size).toBe(16);
+    expect(navigation.map((item) => item.path)).toEqual(expect.arrayContaining(['/gpa', '/info', '/schedule', '/leaderboard', '/learning', '/vocab', '/grammar', '/clans', '/confession', '/training-score', '/ttcds', '/ttcds/sinh-vien-cua-toi']));
     expect(navigation.map((item) => item.path)).not.toContain('/entertainment');
   });
 

@@ -7,9 +7,10 @@ import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
 
 const navGroupsFor = (items) => [
-  { title: 'CỔNG SINH VIÊN', items: items.slice(0, 4) },
-  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: items.slice(4, 9) },
-  { title: 'GÓC TỰ HỌC SỐ', items: items.slice(9) }
+  { title: 'CỔNG SINH VIÊN', items: items.filter((i) => i.section !== 'ttcds').slice(0, 4) },
+  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: items.filter((i) => i.section !== 'ttcds').slice(4, 9) },
+  { title: 'GÓC TỰ HỌC SỐ', items: items.filter((i) => i.section !== 'ttcds').slice(9) },
+  { title: 'TRUNG TÂM CHUYỂN ĐỔI SỐ', items: items.filter((i) => i.section === 'ttcds' && !i.hideInSidebar) }
 ];
 
 const badges = {
@@ -19,7 +20,8 @@ const badges = {
   '/english': ['Moodle', 'badge-pill-emerald'],
   '/enrollment': ['Soon', 'badge-pill-amber'],
   '/clans': ['Guild', 'badge-pill-emerald'],
-  '/confession': ['CFS', 'badge-pill-purple']
+  '/confession': ['CFS', 'badge-pill-purple'],
+  '/ttcds': ['TTCDS', 'badge-pill-emerald']
 };
 
 function getInitials(name) {
@@ -173,7 +175,7 @@ export default function AppLayout() {
         </div>
 
         <nav id="primary-navigation" className="sidebar-nav">
-          {navGroups.map((group) => (
+          {navGroups.filter((group) => group.items.length > 0).map((group) => (
             <div className="nav-group" key={group.title}>
               <div className="nav-group-title">{group.title}</div>
               {group.items.map((item, index) => {

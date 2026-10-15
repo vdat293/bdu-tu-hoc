@@ -27,6 +27,7 @@ const GrammarLessonPage = lazy(() => import('../features/grammar/GrammarLessonPa
 const ClubDirectoryPage = lazy(() => import('../features/clubs/pages/ClubDirectoryPage.jsx'));
 const ClubDetailPage = lazy(() => import('../features/clubs/pages/ClubDetailPage.jsx'));
 const TtcdsPage = lazy(() => import('../features/ttcds/TtcdsPage.jsx'));
+const TtcdsHubPage = lazy(() => import('../features/ttcds/TtcdsHubPage.jsx'));
 const TtcdsGroupPage = lazy(() => import('../features/ttcds/TtcdsGroupPage.jsx'));
 const TtcdsStudentPage = lazy(() => import('../features/ttcds/TtcdsStudentPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
@@ -64,7 +65,8 @@ export default function AppRoutes() {
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
-      <Route path="ttcds" element={<Lazy><TtcdsPage /></Lazy>} />
+      <Route path="ttcds" element={<Lazy><TtcdsHubPage /></Lazy>} />
+      <Route path="ttcds/sinh-vien-cua-toi" element={<Lazy><TtcdsPage /></Lazy>} />
       <Route path="ttcds/groups/:id" element={<Lazy><TtcdsGroupPage /></Lazy>} />
       <Route path="ttcds/students/:mssv" element={<Lazy><TtcdsStudentPage /></Lazy>} />
     </Route>

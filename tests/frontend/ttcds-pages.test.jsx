@@ -27,6 +27,7 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
 }));
 
 import TtcdsPage from '../../client/src/features/ttcds/TtcdsPage.jsx';
+import TtcdsHubPage from '../../client/src/features/ttcds/TtcdsHubPage.jsx';
 import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
 import { summarizeTtcdsStudent } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import { navigation, filterNavigation } from '../../client/src/app/navigation.js';
@@ -62,7 +63,7 @@ describe('TTCDS frontend', () => {
   it('shows a 403 notice without access and hides the nav item', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: false, level: null });
     mocks.getTtcdsGroups.mockResolvedValue([]);
-    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
 
     expect(await screen.findByText('Bạn không thuộc Trung tâm Chuyển đổi số.')).toBeInTheDocument();
 
@@ -75,7 +76,7 @@ describe('TTCDS frontend', () => {
   it('hides the create button for view-level users', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
-    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
 
     await screen.findByText('K29 Tân sinh viên');
     expect(screen.queryByRole('button', { name: /Tạo nhóm/i })).not.toBeInTheDocument();
@@ -84,7 +85,7 @@ describe('TTCDS frontend', () => {
   it('shows the create button for create-level users', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
     mocks.getTtcdsGroups.mockResolvedValue([]);
-    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
 
     expect(await screen.findByRole('button', { name: /Tạo nhóm/i })).toBeInTheDocument();
   });
@@ -112,7 +113,7 @@ describe('TTCDS frontend', () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsGroups.mockResolvedValue([]);
     mocks.getTtcdsPermissions.mockRejectedValue(new Error('Chỉ quản trị viên hệ thống mới được thực hiện thao tác này.'));
-    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
 
     await screen.findByText('Chưa có nhóm nào');
     await waitFor(() => expect(mocks.getTtcdsPermissions).toHaveBeenCalled());
@@ -128,11 +129,27 @@ describe('TTCDS frontend', () => {
     mocks.getTtcdsAudit.mockResolvedValue([
       { id: 1, actor_mssv: 'SYS', action: 'group.create', target_group_id: null, target_mssv: null, created_at: '2026-10-15' }
     ]);
-    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
 
     expect(await screen.findByText('Quản trị phân quyền')).toBeInTheDocument();
     expect(screen.getByText('22050006')).toBeInTheDocument();
     expect(screen.getByText('group.create')).toBeInTheDocument();
+  });
+
+  it('hub renders the Sinh vien cua toi service card with the right link', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    renderAt('/ttcds', '/ttcds', <TtcdsHubPage />);
+
+    const link = await screen.findByRole('link', { name: 'Sinh viên của tôi' });
+    expect(link.getAttribute('href')).toBe('/ttcds/sinh-vien-cua-toi');
+    expect(screen.getByText('Sắp ra mắt')).toBeInTheDocument();
+  });
+
+  it('hub shows a 403 notice without access', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: false, level: null });
+    renderAt('/ttcds', '/ttcds', <TtcdsHubPage />);
+
+    expect(await screen.findByText('Bạn không thuộc Trung tâm Chuyển đổi số.')).toBeInTheDocument();
   });
 
   it('parses a pasted MSSV list on commas, spaces and semicolons', () => {
