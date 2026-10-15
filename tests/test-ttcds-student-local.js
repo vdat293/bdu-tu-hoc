@@ -13,6 +13,7 @@ const OTHER_MSSV = 99000002;
 const MISSING_MSSV = '99999999';
 const TKB_IDS = [80000001, 80000002];
 const EVENT_IDS = [90000001, 90000002];
+const TEST_COURSE = 'TST0873'; // mã môn riêng của test để không đụng dữ liệu thật trong odp_mon_hoc
 
 async function cleanup() {
   await query('DELETE FROM odp_sinh_vien WHERE mssv IN ($1, $2)', [MAIN_MSSV, OTHER_MSSV]);
@@ -22,6 +23,7 @@ async function cleanup() {
   await query('DELETE FROM odp_ren_luyen WHERE mssv IN ($1, $2)', [MAIN_MSSV, OTHER_MSSV]);
   await query('DELETE FROM odp_thoi_khoa_bieu WHERE id = ANY($1::bigint[])', [TKB_IDS]);
   await query('DELETE FROM odp_su_kien WHERE id = ANY($1::bigint[])', [EVENT_IDS]);
+  await query('DELETE FROM odp_mon_hoc WHERE ma_mon_hoc = $1', [TEST_COURSE]);
 }
 
 async function seed() {
@@ -52,11 +54,17 @@ async function seed() {
   );
 
   // Bảng điểm: 1 môn; mã môn suy từ tiền tố ma_nhom (odp_bang_diem không có ma_mon_hoc).
+  // `tin_chi` của odp_bang_diem để NULL → phải lấy từ odp_mon_hoc qua LEFT JOIN.
   await query(
     `INSERT INTO odp_bang_diem
        (mssv, nkhk, ma_nhom, ten_mon_hoc, diem_hp, diem_hp_4, diem_chu_hp, diem_chu_hp_4, dat_hp)
-     VALUES ($1, 25262, 'INF0873_25262_01', 'Nhập môn kỹ thuật phần mềm', 7.2, 3.0, 'B', 'B', TRUE)`,
-    [MAIN_MSSV]
+     VALUES ($1, 25262, $2, 'Nhập môn kỹ thuật phần mềm', 7.2, 3.0, 'B', 'B', TRUE)`,
+    [MAIN_MSSV, `${TEST_COURSE}_25262_01`]
+  );
+  await query(
+    `INSERT INTO odp_mon_hoc (ma_mon_hoc, ten_mon_hoc, tin_chi, ma_khoa, loai_mon)
+     VALUES ($1, 'Nhập môn kỹ thuật phần mềm', 3, 'TH', 'Chuyên ngành')`,
+    [TEST_COURSE]
   );
 
   // Điểm danh kỳ 25262: 1 buổi Có + 1 buổi Vắng + 1 buổi chưa chấm (NULL) + 1 dòng SV khác.
@@ -135,25 +143,28 @@ async function run() {
     assert.equal(Number(detail.gpa_hoc_ky[1].dtb_tich_luy_he_4), 3.2);
     console.log('PASSED: ho_so + GPA đúng, có nhãn học kỳ.');
 
-    console.log('--- [Test 2] bang_diem: mã môn suy từ ma_nhom + field frontend đọc ---');
+    console.log('--- [Test 2] bang_diem: mã môn suy từ ma_nhom + tín chỉ lấy từ odp_mon_hoc ---');
     assert.equal(detail.bang_diem.length, 1);
-    assert.equal(detail.bang_diem[0].ma_mon_hoc, 'INF0873');
+    assert.equal(detail.bang_diem[0].ma_mon_hoc, TEST_COURSE);
     assert.equal(detail.bang_diem[0].ten_mon, 'Nhập môn kỹ thuật phần mềm');
     assert.equal(Number(detail.bang_diem[0].diem_he_4), 3.0);
     assert.equal(detail.bang_diem[0].diem_chu, 'B');
-    assert.equal(detail.bang_diem[0].ma_nhom, 'INF0873_25262_01');
+    assert.equal(detail.bang_diem[0].ma_nhom, `${TEST_COURSE}_25262_01`);
+    // odp_bang_diem.tin_chi NULL → COALESCE lấy odp_mon_hoc.tin_chi = 3.
+    assert.equal(Number(detail.bang_diem[0].tin_chi), 3, 'tin_chi phải điền từ odp_mon_hoc');
+    assert.equal(Number(detail.bang_diem[0].so_tin_chi), 3, 'so_tin_chi phải điền từ odp_mon_hoc');
     assert.match(detail.bang_diem[0].ten_hoc_ky, /Học kỳ 2/);
-    console.log('PASSED: bang_diem map đúng shape frontend + khoá gốc.');
+    console.log('PASSED: bang_diem map đúng shape frontend + tín chỉ từ odp_mon_hoc.');
 
-    console.log('--- [Test 3] diem_danh theo kỳ: Vắng KHÔNG tính vào di_hoc ---');
+    console.log('--- [Test 3] diem_danh theo kỳ: Vắng KHÔNG tính vào di_hoc, đếm đúng chưa chấm ---');
     const term = detail.diem_danh.find((row) => row.nkhk === 25262);
     assert.ok(term, 'phải có dòng điểm danh kỳ 25262');
     assert.equal(term.di_hoc, 1, 'chỉ buổi Có được tính có mặt');
     assert.equal(term.vang, 1);
-    assert.equal(term.chua, null);
-    assert.equal(term.di_hoc + term.vang, 2, 'buổi NULL không nằm trong di_hoc/vang');
+    assert.equal(term.chua, 1, '1 buổi chưa chấm (diem_danh NULL)');
+    assert.equal(term.di_hoc + term.vang + term.chua, 3, 'so_buoi = di_hoc + vang + chua');
     assert.match(term.ten_hoc_ky, /Học kỳ 2/);
-    console.log('PASSED: Vắng tách riêng, không lọt vào di_hoc.');
+    console.log('PASSED: Vắng tách riêng, chưa chấm đếm thật.');
 
     console.log('--- [Test 4] diem_danh_mon: đếm theo (nkhk, ma_mon_hoc) ---');
     const mon = detail.diem_danh_mon.find((row) => row.ma_mon_hoc === 'INF0873');
@@ -161,8 +172,10 @@ async function run() {
     assert.equal(mon.so_buoi, 3);
     assert.equal(mon.di_hoc, 1);
     assert.equal(mon.vang, 1);
+    assert.equal(mon.chua, 1);
+    assert.equal(mon.di_hoc + mon.vang + mon.chua, mon.so_buoi, 'so_buoi = di_hoc + vang + chua');
     assert.equal(mon.ten_mon_hoc, 'Nhập môn kỹ thuật phần mềm');
-    console.log('PASSED: diem_danh_mon đếm đúng, tách Vắng.');
+    console.log('PASSED: diem_danh_mon đếm đúng, tách Vắng + chưa chấm.');
 
     console.log('--- [Test 5] ren_luyen + su_kien (chỉ sự kiện chứa MSSV) ---');
     assert.equal(Number(detail.ren_luyen[0].diem_ren_luyen), 85);

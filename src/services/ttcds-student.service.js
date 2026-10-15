@@ -114,16 +114,22 @@ async function buildStudentDetail(key) {
       [key]
     ),
     query(
-      `SELECT nkhk, ma_nhom, ten_mon_hoc, diem_hp, diem_hp_4, diem_chu_hp, dat_hp, tin_chi
-       FROM odp_bang_diem
-       WHERE ${MSSV_MATCH}
-       ORDER BY nkhk, ma_nhom`,
+      // `odp_bang_diem.tin_chi` luôn NULL (nguồn không có cột) → lấy từ `odp_mon_hoc`
+      // theo mã môn suy từ prefix `ma_nhom` (cùng quy tắc `courseCode()` của
+      // academic-ranking.service.js: phần trước dấu `_` đầu tiên).
+      `SELECT d.nkhk, d.ma_nhom, d.ten_mon_hoc, d.diem_hp, d.diem_hp_4, d.diem_chu_hp, d.dat_hp,
+              COALESCE(d.tin_chi, m.tin_chi) AS tin_chi
+       FROM odp_bang_diem d
+       LEFT JOIN odp_mon_hoc m ON m.ma_mon_hoc = split_part(d.ma_nhom, '_', 1)
+       WHERE d.mssv::text = $1
+       ORDER BY d.nkhk, d.ma_nhom`,
       [key]
     ),
     query(
       `SELECT nkhk,
               COUNT(*) FILTER (WHERE diem_danh IN (${DI_HOC_SQL_LIST}))::int AS di_hoc,
-              COUNT(*) FILTER (WHERE diem_danh = '${VANG_STATUS}')::int AS vang
+              COUNT(*) FILTER (WHERE diem_danh = '${VANG_STATUS}')::int AS vang,
+              COUNT(*) FILTER (WHERE diem_danh IS NULL)::int AS chua
        FROM odp_diem_danh
        WHERE ${MSSV_MATCH}
        GROUP BY nkhk
@@ -135,6 +141,7 @@ async function buildStudentDetail(key) {
               COUNT(*)::int AS so_buoi,
               COUNT(*) FILTER (WHERE diem_danh IN (${DI_HOC_SQL_LIST}))::int AS di_hoc,
               COUNT(*) FILTER (WHERE diem_danh = '${VANG_STATUS}')::int AS vang,
+              COUNT(*) FILTER (WHERE diem_danh IS NULL)::int AS chua,
               MAX(ten_mon_hoc) AS ten_mon_hoc
        FROM odp_diem_danh
        WHERE ${MSSV_MATCH}
@@ -205,7 +212,7 @@ async function buildStudentDetail(key) {
       nkhk: row.nkhk,
       di_hoc: row.di_hoc,
       vang: row.vang,
-      chua: null
+      chua: row.chua
     })),
     diem_danh_mon: diemDanhMon.rows.map((row) => withTermLabel({
       nkhk: row.nkhk,
@@ -213,7 +220,7 @@ async function buildStudentDetail(key) {
       so_buoi: row.so_buoi,
       di_hoc: row.di_hoc,
       vang: row.vang,
-      chua: null,
+      chua: row.chua,
       ten_mon_hoc: row.ten_mon_hoc
     })),
     thoi_khoa_bieu: thoiKhoaBieu.rows
