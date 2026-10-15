@@ -42,9 +42,10 @@ export default function TtcdsPage() {
       setDraft({ name: '', nien_khoa: '', description: '' });
       setNameInvalid(false);
       setShowCreateModal(false);
+      refreshGroups();
       notify('Đã tạo nhóm mới.', 'success');
       // Tạo xong vào thẳng nhóm vừa tạo để thêm SV ngay; `justCreated` cho
-      // TtcdsGroupPage biết cần focus ô tìm kiếm sinh viên.
+      // TtcdsGroupPage biết cần mở popup thêm sinh viên.
       if (group?.id != null) navigate(`/ttcds/groups/${group.id}`, { state: { justCreated: true } });
     },
     onError: (error) => notify(error.message, 'error')
