@@ -28,7 +28,7 @@ import TtcdsPage from '../../client/src/features/ttcds/TtcdsPage.jsx';
 import TtcdsGroupPage from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import TtcdsHubPage from '../../client/src/features/ttcds/TtcdsHubPage.jsx';
 import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
-import { summarizeTtcdsStudent } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
+import { summarizeTtcdsStudent, searchMinLength } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import { navigation, filterNavigation, findRouteMeta } from '../../client/src/app/navigation.js';
 import { parseMssvList } from '../../client/src/api/ttcds.js';
 
@@ -355,6 +355,10 @@ describe('TTCDS frontend', () => {
     mocks.addTtcdsGroupMember.mockResolvedValue({});
     renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
 
+    // Ô thêm SV nằm trong POPUP, chỉ mở khi bấm nút.
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm sinh viên' }));
+
     const input = await screen.findByRole('combobox', { name: /Thêm sinh viên theo tên hoặc MSSV/i });
     fireEvent.change(input, { target: { value: 'nguyen' } });
 
@@ -372,7 +376,32 @@ describe('TTCDS frontend', () => {
       'g1',
       expect.objectContaining({ mssv: '24050126' })
     ));
-    expect(input.value).toBe('');
+  });
+
+  it('waits for 4 digits before searching by MSSV but 2 letters for a name', async () => {
+    expect(searchMinLength('nguyen')).toBe(2);
+    expect(searchMinLength('24')).toBe(4);
+    expect(searchMinLength('240')).toBe(4);
+    expect(searchMinLength('2405')).toBe(4);
+    expect(searchMinLength('nguyen 24')).toBe(2);
+
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([]);
+    mocks.searchTtcdsStudents.mockResolvedValue({ ket_qua: [] });
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm sinh viên' }));
+    const input = await screen.findByRole('combobox', { name: /Thêm sinh viên theo tên hoặc MSSV/i });
+
+    fireEvent.change(input, { target: { value: '240' } });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(mocks.searchTtcdsStudents).not.toHaveBeenCalled();
+    expect(screen.getByText(/Nhập ít nhất 4 số/)).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: '2405' } });
+    await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
+    expect(mocks.searchTtcdsStudents.mock.calls[0][1]).toBe('2405');
   });
 
   it('does not mark the name field invalid before the first submit', async () => {

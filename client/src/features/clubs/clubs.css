@@ -238,19 +238,27 @@
 .ttcds-groups-table td:first-child a { color: var(--club-accent); font-weight: 650; text-decoration: none; }
 .ttcds-groups-table td:first-child a:hover { text-decoration: underline; }
 
-/* Ô thêm sinh viên kiểu autocomplete (gõ ≥2 ký tự → gợi ý). */
-.ttcds-student-search { display: grid; gap: 6px; }
-.ttcds-student-search > label { color: var(--club-muted); font-size: .8rem; font-weight: 650; }
-.ttcds-student-search__control { position: relative; }
-.ttcds-student-search__list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--club-line); border-radius: 10px; background: var(--bg-card); box-shadow: 0 12px 28px rgba(0, 0, 0, .18); }
-.ttcds-student-search__option button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; text-align: left; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: inherit; }
+/* Ô thêm sinh viên trong popup, kiểu khung mời của Google: input nằm trên,
+   gợi ý nằm TRONG cùng khung viền (không phải dropdown nổi đè lên chữ). */
+.ttcds-invite { width: min(720px, 100%); }
+.ttcds-invite .ttcds-student-search { display: grid; gap: 8px; margin-top: 4px; }
+.ttcds-invite .ttcds-student-search > label { color: var(--club-muted); font-size: .8rem; font-weight: 650; }
+.ttcds-invite .ttcds-student-search__control { border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); overflow: hidden; }
+.ttcds-invite .ttcds-student-search__control .form-input { border: 0; border-radius: 0; background: transparent; }
+.ttcds-invite .ttcds-student-search__control .form-input:focus { outline: none; }
+
+.ttcds-student-search__list { max-height: 300px; min-height: 180px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border-top: 1px solid var(--club-line); }
+.ttcds-student-search__option button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; border: 0; border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
 .ttcds-student-search__option.is-active button,
 .ttcds-student-search__option button:hover { background: color-mix(in srgb, var(--club-accent) 12%, transparent); }
-.ttcds-student-search__name { color: var(--club-ink); font-size: .88rem; font-weight: 650; }
-.ttcds-student-search__meta { color: var(--club-muted); font-size: .76rem; }
-.ttcds-student-search__empty { display: flex; align-items: center; gap: 8px; padding: 10px; color: var(--club-muted); font-size: .82rem; }
-.ttcds-student-search__hint { margin: 0; color: var(--club-muted); font-size: .76rem; }
+.ttcds-student-search__avatar { display: grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--club-accent) 18%, transparent); color: var(--club-accent); font-size: 1rem; font-weight: 700; }
+.ttcds-student-search__text { display: grid; gap: 2px; min-width: 0; }
+.ttcds-student-search__name { color: var(--club-ink); font-size: .92rem; font-weight: 650; }
+.ttcds-student-search__meta { color: var(--club-muted); font-size: .78rem; }
+.ttcds-student-search__empty { display: flex; align-items: center; gap: 8px; padding: 12px; color: var(--club-muted); font-size: .84rem; }
+.ttcds-student-search__hint { margin: 0; color: var(--club-muted); font-size: .78rem; }
+.ttcds-invite .ttcds-add-student__paste { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--club-line); }
 
-/* Form thêm SV trong nhóm: khối card có viền bao quanh rõ ràng. */
+/* Ô thêm SV trong nhóm: khối card có viền bao quanh rõ ràng. */
 .ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
 .ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }

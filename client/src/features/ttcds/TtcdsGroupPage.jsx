@@ -4,6 +4,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { addTtcdsGroupMember, getTtcdsGroupMembers, getTtcdsGroups, getTtcdsStudent, parseMssvList, removeTtcdsGroupMember, searchTtcdsStudents } from '../../api/ttcds.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
 import '../clubs/clubs.css';
@@ -41,7 +42,19 @@ export function summarizeTtcdsStudent(detail) {
 }
 
 const SEARCH_MIN_LENGTH = 2;
+const MSSV_MIN_DIGITS = 4;
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * Ngưỡng ký tự tối thiểu trước khi gọi search:
+ * - gõ toàn số (đang tra MSSV) → cần ≥4 số, tránh nã API bằng 2-3 số vô nghĩa;
+ * - còn lại (tra theo tên) → ≥2 ký tự.
+ */
+export function searchMinLength(query) {
+  const value = String(query ?? '').trim();
+  if (/^\d+$/.test(value)) return MSSV_MIN_DIGITS;
+  return SEARCH_MIN_LENGTH;
+}
 
 /**
  * Chuẩn hoá payload search sinh viên của Dashboard về dòng gợi ý
@@ -71,8 +84,9 @@ export function normalizeTtcdsSearchResults(payload) {
 }
 
 /**
- * Ô thêm sinh viên kiểu autocomplete: gõ ≥2 ký tự → debounce → search → gợi ý
- * tên + MSSV + lớp. Chọn gợi ý (Enter/click) = thêm ngay vào nhóm qua `onPick`.
+ * Ô thêm sinh viên kiểu autocomplete: gõ đủ ngưỡng (tên ≥2 ký tự, MSSV ≥4 số)
+ * → debounce → search → gợi ý tên + MSSV + lớp. Chọn gợi ý (Enter/click) =
+ * thêm ngay vào nhóm qua `onPick`.
  */
 function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onType }) {
   const listId = useId();
@@ -82,9 +96,13 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const minLength = searchMinLength(query);
+  const trimmedQuery = query.trim();
+  const ready = trimmedQuery.length >= minLength;
+
   useEffect(() => {
     const q = query.trim();
-    if (q.length < SEARCH_MIN_LENGTH) {
+    if (q.length < searchMinLength(q)) {
       setDebounced('');
       return undefined;
     }
@@ -95,15 +113,14 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
   const searchQuery = useQuery({
     queryKey: ['ttcds-student-search', debounced],
     queryFn: ({ signal }) => searchTtcdsStudents(token, debounced, { limit: 8, signal }),
-    enabled: Boolean(token && debounced.length >= SEARCH_MIN_LENGTH),
+    enabled: Boolean(token && debounced && debounced.length >= searchMinLength(debounced)),
     staleTime: 60 * 1000,
     retry: false
   });
   const results = useMemo(() => normalizeTtcdsSearchResults(searchQuery.data), [searchQuery.data]);
 
-  const trimmed = query.trim();
-  const pendingSearch = trimmed !== debounced;
-  const showList = open && trimmed.length >= SEARCH_MIN_LENGTH;
+  const pendingSearch = trimmedQuery !== debounced;
+  const showList = open && ready;
 
   useEffect(() => { setActiveIndex(0); }, [debounced]);
   useEffect(() => {
@@ -162,10 +179,10 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
           onChange={(event) => {
             const value = event.target.value;
             setQuery(value);
-            setOpen(value.trim().length >= SEARCH_MIN_LENGTH);
+            setOpen(value.trim().length >= searchMinLength(value));
             onType?.();
           }}
-          onFocus={() => { if (trimmed.length >= SEARCH_MIN_LENGTH) setOpen(true); }}
+          onFocus={() => { if (ready) setOpen(true); }}
           onBlur={() => setOpen(false)}
           onKeyDown={handleKeyDown}
         />
@@ -180,7 +197,7 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
                 </button>
               </li>
             )}
-            {showEmpty && <li className="ttcds-student-search__empty" aria-disabled="true">Không tìm thấy, thử MSSV chính xác.</li>}
+            {showEmpty && <li className="ttcds-student-search__empty" aria-disabled="true">Không tìm thấy sinh viên phù hợp.</li>}
             {!loading && results.map((student, index) => {
               const isActive = index === activeIndex;
               return (
@@ -199,8 +216,11 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => pick(student)}
                   >
-                    <span className="ttcds-student-search__name">{student.name}</span>
-                    <span className="ttcds-student-search__meta">{student.mssv} · {student.className}</span>
+                    <span className="ttcds-student-search__avatar" aria-hidden="true">{(student.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    <span className="ttcds-student-search__text">
+                      <span className="ttcds-student-search__name">{student.name}</span>
+                      <span className="ttcds-student-search__meta">{student.mssv} · {student.className}</span>
+                    </span>
                   </button>
                 </li>
               );
@@ -208,7 +228,11 @@ function StudentSearchBox({ token, disabled, errorMessage, inputRef, onPick, onT
           </ul>
         )}
       </div>
-      <p id="ttcds-add-student-hint" className="ttcds-student-search__hint">Chọn gợi ý để thêm ngay. Cần thêm hàng loạt thì dán danh sách MSSV ở ô bên dưới.</p>
+      <p id="ttcds-add-student-hint" className="ttcds-student-search__hint">
+        {ready
+          ? 'Chọn một gợi ý để thêm ngay vào nhóm.'
+          : `Nhập ít nhất ${minLength} ${/^\d+$/.test(trimmedQuery) ? 'số' : 'ký tự'} để tìm sinh viên.`}
+      </p>
       {errorMessage && <p className="club-field-error" role="alert">{errorMessage}</p>}
     </div>
   );
@@ -224,19 +248,31 @@ export default function TtcdsGroupPage() {
   const [paste, setPaste] = useState('');
   const [addErrors, setAddErrors] = useState([]);
   const [searchAddError, setSearchAddError] = useState(null);
-  const pasteRef = useRef(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const addDialogRef = useRef(null);
+  const addCloseRef = useRef(null);
+  const addOpenerRef = useRef(null);
   const searchRef = useRef(null);
-  const focusSearch = () => searchRef.current?.focus();
+  const pasteRef = useRef(null);
+  useViewportDialog(showAddModal, () => setShowAddModal(false), addDialogRef, searchRef, addOpenerRef);
 
   const caps = useTtcdsCapabilities();
   const canAccess = Boolean(caps.data?.can_access);
   const canCreate = canAccess && caps.data?.level === 'create';
   const justCreated = Boolean(location.state?.justCreated);
 
-  // Vừa tạo nhóm xong (navigate từ list kèm state) → focus sẵn ô thêm SV.
+  // Vừa tạo nhóm xong (navigate từ list kèm state) → mở luôn popup thêm SV.
   useEffect(() => {
-    if (justCreated && canCreate) searchRef.current?.focus();
+    if (justCreated && canCreate) setShowAddModal(true);
   }, [justCreated, canCreate]);
+
+  const openAddModal = (event) => {
+    if (!canCreate) return;
+    addOpenerRef.current = event?.currentTarget || null;
+    setAddErrors([]);
+    setSearchAddError(null);
+    setShowAddModal(true);
+  };
 
   const groupsQuery = useQuery({
     queryKey: ['ttcds-groups'],
@@ -301,6 +337,7 @@ export default function TtcdsGroupPage() {
         setPaste('');
         setSearchAddError(null);
         notify('Đã thêm sinh viên vào nhóm.', 'success');
+        setShowAddModal(false);
       } else {
         // Lỗi khi thêm từ ô tìm kiếm (1 MSSV) hiện ngay cạnh input; thêm hàng loạt thì liệt kê.
         setSearchAddError(fromSearch ? errors[0].message : null);
@@ -356,39 +393,19 @@ export default function TtcdsGroupPage() {
       <header className="club-directory-hero">
         <div className="club-directory-hero__copy">
           <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
-          <h1>{group?.name || 'Nhóm sinh viên'}</h1>
+          <h1>{group?.name || (groupsQuery.isLoading ? 'Đang tải nhóm…' : 'Nhóm sinh viên')}</h1>
           <p>{group?.nien_khoa || '—'} · {members.length} sinh viên</p>
         </div>
         <div className="club-directory-hero__action">
+          {canCreate && (
+            <button type="button" className="btn btn-primary club-primary-action" onClick={openAddModal}>
+              Thêm sinh viên
+            </button>
+          )}
           <button type="button" className="btn btn-secondary" onClick={reloadDetails}>Tải lại</button>
         </div>
       </header>
 
-      {canCreate && (
-        <div className="ttcds-add-student">
-          <StudentSearchBox
-            token={auth.token}
-            disabled={add.isPending}
-            errorMessage={searchAddError}
-            inputRef={searchRef}
-            onType={() => setSearchAddError(null)}
-            onPick={(mssv) => { setSearchAddError(null); add.mutate({ mssvList: [mssv] }); }}
-          />
-          <form className="ttcds-add-student__paste" onSubmit={submitPaste}>
-            <label htmlFor="ttcds-add-mssv">Hoặc dán danh sách MSSV (cách nhau bởi phẩy / khoảng trắng / chấm phẩy)
-              <textarea id="ttcds-add-mssv" ref={pasteRef} className="form-input" rows={3} value={paste} onChange={(event) => setPaste(event.target.value)} placeholder="24050126, 24050006; 22050006" />
-            </label>
-            {addErrors.length > 0 && (
-              <ul role="alert" className="club-field-error">
-                {addErrors.map((entry) => <li key={entry.mssv}>{entry.mssv}: {entry.message}</li>)}
-              </ul>
-            )}
-            <div className="club-modal__footer">
-              <button type="submit" className="btn btn-primary" disabled={add.isPending}>{add.isPending ? 'Đang thêm…' : 'Thêm vào nhóm'}</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {membersQuery.isLoading ? (
         <div className="club-directory-grid" aria-label="Đang tải thành viên">
@@ -403,9 +420,9 @@ export default function TtcdsGroupPage() {
       ) : members.length === 0 ? (
         <EmptyState
           title="Nhóm chưa có sinh viên"
-          hint={canCreate ? 'Tìm sinh viên ở ô phía trên hoặc dán danh sách MSSV để thêm.' : 'Nhờ quản trị viên giao sinh viên vào nhóm này.'}
+          hint={canCreate ? 'Bấm "Thêm sinh viên" để tìm theo tên/MSSV hoặc dán danh sách.' : 'Nhờ quản trị viên giao sinh viên vào nhóm này.'}
           action={canCreate ? (
-            <button type="button" className="btn btn-primary" onClick={focusSearch}>
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
               Thêm sinh viên đầu tiên
             </button>
           ) : undefined}
@@ -443,6 +460,52 @@ export default function TtcdsGroupPage() {
             );
           })}
         </div>
+      )}
+
+      {canCreate && showAddModal && (
+        <ViewportModal
+          id="modal-add-ttcds-student"
+          title="Thêm sinh viên vào nhóm"
+          onClose={() => setShowAddModal(false)}
+          dialogRef={addDialogRef}
+          className="club-modal ttcds-invite"
+        >
+          <div className="club-modal__header">
+            <div>
+              <span className="club-eyebrow">NHÓM {group?.name ? group.name.toUpperCase() : ''}</span>
+              <h2>Thêm sinh viên vào nhóm</h2>
+            </div>
+            <button ref={addCloseRef} type="button" className="club-icon-button" onClick={() => setShowAddModal(false)} aria-label="Đóng hộp thoại">×</button>
+          </div>
+
+          <p className="club-modal__intro">
+            Tìm theo họ tên, hoặc nhập ít nhất 4 số trong MSSV. Chọn một gợi ý để thêm ngay vào nhóm.
+          </p>
+
+          <StudentSearchBox
+            token={auth.token}
+            disabled={add.isPending}
+            errorMessage={searchAddError}
+            inputRef={searchRef}
+            onType={() => setSearchAddError(null)}
+            onPick={(mssv) => { setSearchAddError(null); add.mutate({ mssvList: [mssv] }); }}
+          />
+
+          <form className="ttcds-add-student__paste" onSubmit={submitPaste}>
+            <label htmlFor="ttcds-add-mssv">Hoặc dán danh sách MSSV (cách nhau bởi phẩy / khoảng trắng / chấm phẩy)
+              <textarea id="ttcds-add-mssv" ref={pasteRef} className="form-input" rows={3} value={paste} onChange={(event) => setPaste(event.target.value)} placeholder="24050126, 24050006; 22050006" />
+            </label>
+            {addErrors.length > 0 && (
+              <ul role="alert" className="club-field-error">
+                {addErrors.map((entry) => <li key={entry.mssv}>{entry.mssv}: {entry.message}</li>)}
+              </ul>
+            )}
+            <div className="club-modal__footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={add.isPending}>{add.isPending ? 'Đang thêm…' : 'Thêm vào nhóm'}</button>
+            </div>
+          </form>
+        </ViewportModal>
       )}
 
       {confirmUI}
