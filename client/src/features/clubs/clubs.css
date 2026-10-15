@@ -262,3 +262,11 @@
 /* Ô thêm SV trong nhóm: khối card có viền bao quanh rõ ràng. */
 .ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
 .ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }
+
+/* Bảng điểm chi tiết SV: ttcds-groups-table mới chỉ có hover — thêm nền xen kẽ cho
+   dễ dò hàng; :not(:hover) để hiệu ứng hover vẫn thắng trên dòng chẵn. */
+.ttcds-grades-table tbody tr:nth-child(even):not(:hover) { background: color-mix(in srgb, var(--club-accent) 5%, transparent); }
+
+/* Caption trong stat-card mặc định nowrap (style.css) sẽ tràn thẻ ở mobile —
+   cho phép xuống dòng riêng trong khối tổng quan SV. */
+.ttcds-student-overview .stat-rank-caption { white-space: normal; }

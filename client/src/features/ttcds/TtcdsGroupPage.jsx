@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { addTtcdsGroupMember, getTtcdsGroupMembers, getTtcdsGroups, getTtcdsStudent, parseMssvList, removeTtcdsGroupMember, searchTtcdsStudents } from '../../api/ttcds.js';
@@ -394,7 +394,7 @@ export default function TtcdsGroupPage() {
         <div className="club-directory-hero__copy">
           <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
           <h1>{group?.name || (groupsQuery.isLoading ? 'Đang tải nhóm…' : 'Nhóm sinh viên')}</h1>
-          <p>{group?.nien_khoa || '—'} · {members.length} sinh viên</p>
+          <p>Mentor: {group?.mentor || '—'} · {members.length} sinh viên</p>
         </div>
         <div className="club-directory-hero__action">
           {canCreate && (
@@ -428,37 +428,61 @@ export default function TtcdsGroupPage() {
           ) : undefined}
         />
       ) : (
-        <div className="club-directory-grid">
-          {members.map((member, index) => {
-            const summary = summaries[member.mssv];
-            const loading = details[index]?.isLoading;
-            return (
-              <article className="club-card" key={member.mssv}>
-                <h2><Link to={`/ttcds/students/${member.mssv}`}>{summary ? summary.name : member.mssv}</Link></h2>
-                <p>{member.mssv} · {summary ? summary.className : '—'}</p>
-                {loading ? (
-                  <p>Đang tải tóm tắt…</p>
-                ) : summary ? (
-                  <ul>
-                    <li>GPA tích lũy: {summary.gpa}</li>
-                    <li>Chuyên cần kỳ này: {summary.attendance}</li>
-                    <li>Rèn luyện: {summary.renLuyen} · {summary.renLuyenRank}</li>
-                    <li>Sự kiện kỳ này: {summary.eventCount}</li>
-                  </ul>
-                ) : (
-                  <p>Chưa tải được tóm tắt.</p>
-                )}
-                <div className="club-modal__footer">
-                  <Link className="btn btn-secondary" aria-label={`Chi tiết sinh viên ${summary ? summary.name : member.mssv}`} to={`/ttcds/students/${member.mssv}`}>Chi tiết</Link>
-                  {canCreate && (
-                    <button type="button" className="btn btn-secondary" aria-label={`Xóa sinh viên ${summary ? summary.name : member.mssv}`} disabled={remove.isPending} onClick={() => confirmRemoveMember(member)}>
-                      Xóa
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <div className="table-scroll">
+          <table className="ttcds-groups-table">
+            <caption className="sr-only">Danh sách sinh viên trong nhóm {group?.name || ''}</caption>
+            <thead>
+              <tr>
+                <th scope="col">MSSV</th>
+                <th scope="col">Họ tên</th>
+                <th scope="col">Lớp</th>
+                <th scope="col" style={{ textAlign: 'right' }}>GPA tích lũy</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Chuyên cần kỳ này</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Rèn luyện</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Sự kiện</th>
+                <th scope="col">Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member, index) => {
+                const summary = summaries[member.mssv];
+                const loading = details[index]?.isLoading;
+                const cell = (value) => (summary ? value : (loading ? '…' : '—'));
+                const renLuyen = summary && (summary.renLuyen !== '—' || summary.renLuyenRank !== '—')
+                  ? `${summary.renLuyen} · ${summary.renLuyenRank}`
+                  : cell('—');
+                const name = summary ? summary.name : member.mssv;
+                return (
+                  <Fragment key={member.mssv}>
+                    <tr>
+                      <td>{member.mssv}</td>
+                      <td><Link to={`/ttcds/students/${member.mssv}`}>{name}</Link></td>
+                      <td>{cell(summary?.className)}</td>
+                      <td style={{ textAlign: 'right' }}>{cell(summary?.gpa)}</td>
+                      <td style={{ textAlign: 'right' }}>{cell(summary?.attendance)}</td>
+                      <td style={{ textAlign: 'right' }}>{loading ? '…' : renLuyen}</td>
+                      <td style={{ textAlign: 'right' }}>{cell(summary?.eventCount)}</td>
+                      <td>
+                        <div className="club-member__actions">
+                          <Link className="btn btn-secondary" aria-label={`Chi tiết sinh viên ${name}`} to={`/ttcds/students/${member.mssv}`}>Chi tiết</Link>
+                          {canCreate && (
+                            <button type="button" className="btn btn-secondary" aria-label={`Xóa sinh viên ${name}`} disabled={remove.isPending} onClick={() => confirmRemoveMember(member)}>
+                              Xóa
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {!loading && !summary && (
+                      <tr>
+                        <td colSpan={8} className="club-muted">Chưa tải được tóm tắt.</td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

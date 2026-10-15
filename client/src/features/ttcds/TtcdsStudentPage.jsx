@@ -40,35 +40,43 @@ function OverviewTab({ detail }) {
   const total = present + absent;
 
   return (
-    <div className="card glass-panel" style={{ padding: '16px' }}>
+    <div className="card glass-panel ttcds-student-overview" style={{ padding: '16px' }}>
       <h2>Tổng quan kỳ gần nhất</h2>
-      <dl>
-        <div>
-          <dt>ĐTB tích lũy</dt>
-          <dd>{lastGpa ? `${fmt(lastGpa.dtb_tich_luy_he_4)} · ${termName(lastGpa)}` : '—'}</dd>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-info">
+            <span className="stat-title">ĐTB tích lũy</span>
+            <span className="stat-value">{lastGpa ? fmt(lastGpa.dtb_tich_luy_he_4) : '—'}</span>
+            <span className="stat-rank-caption">{lastGpa ? termName(lastGpa) : '—'}</span>
+          </div>
         </div>
-        <div>
-          <dt>Chuyên cần</dt>
-          <dd>
-            {lastAttendance
-              ? `${present} có mặt · ${absent} vắng · ${total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—'} · ${termName(lastAttendance)}`
-              : '—'}
-          </dd>
+        <div className="stat-card">
+          <div className="stat-info">
+            <span className="stat-title">Chuyên cần</span>
+            <span className="stat-value">{lastAttendance ? (total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—') : '—'}</span>
+            <span className="stat-rank-caption">
+              {lastAttendance ? `${present} có mặt · ${absent} vắng · ${termName(lastAttendance)}` : '—'}
+            </span>
+          </div>
         </div>
-        <div>
-          <dt>Rèn luyện</dt>
-          <dd>
-            {lastRenLuyen?.diem_ren_luyen != null
-              ? `${lastRenLuyen.diem_ren_luyen} · ${lastRenLuyen.xep_loai || '—'} · kỳ ${lastRenLuyen.nkhk ?? '—'}`
-              : '—'}
-          </dd>
+        <div className="stat-card">
+          <div className="stat-info">
+            <span className="stat-title">Rèn luyện</span>
+            <span className="stat-value">
+              {lastRenLuyen?.diem_ren_luyen != null ? `${lastRenLuyen.diem_ren_luyen} · ${lastRenLuyen.xep_loai || '—'}` : '—'}
+            </span>
+            <span className="stat-rank-caption">{lastRenLuyen ? termName(lastRenLuyen) : '—'}</span>
+          </div>
         </div>
-        <div>
-          <dt>Sự kiện</dt>
-          <dd>{latestNkhk != null ? `${eventCount} sự kiện · kỳ ${latestNkhk}` : '—'}</dd>
+        <div className="stat-card">
+          <div className="stat-info">
+            <span className="stat-title">Sự kiện</span>
+            <span className="stat-value">{latestNkhk != null ? String(eventCount) : '—'}</span>
+            <span className="stat-rank-caption">{latestNkhk != null ? termName({ nkhk: latestNkhk }) : '—'}</span>
+          </div>
         </div>
-      </dl>
-      <p className="club-permission-note">Điểm rèn luyện thường về trễ một nhịp so với điểm số và điểm danh.</p>
+      </div>
+      <p className="club-muted" style={{ margin: '12px 0 0' }}>Điểm rèn luyện thường về trễ một nhịp so với điểm số và điểm danh.</p>
     </div>
   );
 }
@@ -133,16 +141,16 @@ function GradesTab({ detail }) {
         <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
           <h2>Học kỳ {nkhk} · {rows.length} môn</h2>
           <div className="table-scroll">
-            <table>
-              <thead><tr><th scope="col">Mã môn</th><th scope="col">Tên môn</th><th scope="col">Tín chỉ</th><th scope="col">Điểm</th><th scope="col">Thang 4</th><th scope="col">Chữ</th></tr></thead>
+            <table className="ttcds-groups-table ttcds-grades-table">
+              <thead><tr><th scope="col">Mã môn</th><th scope="col">Tên môn</th><th scope="col" style={{ textAlign: 'right' }}>Tín chỉ</th><th scope="col" style={{ textAlign: 'right' }}>Điểm</th><th scope="col" style={{ textAlign: 'right' }}>Thang 4</th><th scope="col">Chữ</th></tr></thead>
               <tbody>
                 {rows.map((row, index) => (
                   <tr key={`${row.ma_mon_hoc}-${index}`}>
                     <td>{row.ma_mon_hoc ?? '—'}</td>
                     <td>{row.ten_mon ?? '—'}</td>
-                    <td>{row.so_tin_chi ?? '—'}</td>
-                    <td>{row.diem ?? '—'}</td>
-                    <td>{row.diem_he_4 ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{row.so_tin_chi ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{row.diem ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{row.diem_he_4 ?? '—'}</td>
                     <td>{row.diem_chu ?? '—'}</td>
                   </tr>
                 ))}
@@ -238,19 +246,20 @@ export default function TtcdsStudentPage() {
 
   const data = detail.data || {};
   const profile = data.ho_so || {};
-  const gpaTerms = Array.isArray(data.gpa_hoc_ky) ? data.gpa_hoc_ky : [];
-  const lastGpa = gpaTerms[gpaTerms.length - 1];
 
   return (
     <section id="tab-ttcds-student" className="tab-pane club-experience">
       <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
-      <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
-        <h2>{profile.ten_day_du || '—'} <span>{profile.mssv || mssv}</span></h2>
-        <p>Lớp {profile.ma_lop ?? '—'} · {profile.ten_khoa ?? '—'} · Niên khóa {profile.nien_khoa ?? '—'}</p>
-        <p>ĐTB tích lũy {lastGpa ? fmt(lastGpa.dtb_tich_luy_he_4) : '—'} · Tín chỉ tích lũy {lastGpa?.so_tin_chi_dat_tich_luy ?? '—'}</p>
+      <div className="profile-hero-card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
+        <h2>{profile.ten_day_du || '—'} <span className="club-muted">{profile.mssv || mssv}</span></h2>
+        <div className="hero-tags">
+          <span className="club-chip">Lớp {profile.ma_lop ?? '—'}</span>
+          <span className="club-chip">{profile.ten_khoa ?? '—'}</span>
+          <span className="club-chip">Niên khóa {profile.nien_khoa ?? '—'}</span>
+        </div>
       </div>
 
-      <div className="nav-tab" role="tablist" onKeyDown={onTablistKeyDown}>
+      <div className="club-tabs" role="tablist" aria-label="Chi tiết sinh viên" onKeyDown={onTablistKeyDown}>
         {TABS.map((entry) => (
           <button
             key={entry.id}
@@ -261,7 +270,6 @@ export default function TtcdsStudentPage() {
             aria-selected={tab === entry.id}
             aria-controls={`panel-${entry.id}`}
             tabIndex={tab === entry.id ? 0 : -1}
-            className={`tab${tab === entry.id ? ' active' : ''}`}
             onClick={() => setTab(entry.id)}
           >
             {entry.label}

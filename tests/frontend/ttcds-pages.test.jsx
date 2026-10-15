@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -170,16 +170,49 @@ describe('TTCDS frontend', () => {
     expect(screen.queryByRole('button', { name: 'Thêm sinh viên đầu tiên' })).not.toBeInTheDocument();
   });
 
-  it('renders the snapshot card with the latest 4 numbers', async () => {
+  it('group page lists members in a table with the eight required columns', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', mentor: 'Thầy TTCDS', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    expect(await screen.findByText(/Mentor:/)).toBeInTheDocument();
+    const table = await screen.findByRole('table');
+    expect(table.parentElement).toHaveClass('table-scroll');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.map((cell) => cell.textContent)).toEqual(
+      ['MSSV', 'Họ tên', 'Lớp', 'GPA tích lũy', 'Chuyên cần kỳ này', 'Rèn luyện', 'Sự kiện', 'Hành động']
+    );
+    expect(headers.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+    const nameLink = screen.getByRole('link', { name: 'Nguyễn Văn A' });
+    expect(nameLink.getAttribute('href')).toBe('/ttcds/students/24050126');
+    expect(screen.getByRole('link', { name: 'Chi tiết sinh viên Nguyễn Văn A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xóa sinh viên Nguyễn Văn A' })).toBeInTheDocument();
+  });
+
+  it('renders the latest snapshot as four stat cards without a description list', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
     expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
-    expect(screen.getByText('3.20 · Học kỳ 1')).toBeInTheDocument();
-    expect(screen.getByText('18 có mặt · 2 vắng · 90.0% · Học kỳ 1')).toBeInTheDocument();
-    expect(screen.getByText('85 · Tốt · kỳ 1')).toBeInTheDocument();
-    expect(screen.getByText('1 sự kiện · kỳ 1')).toBeInTheDocument();
+    expect(document.querySelector('.profile-hero-card')).not.toBeNull();
+    expect(document.querySelector('.hero-tags')).not.toBeNull();
+    expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    expect(document.querySelectorAll('.stats-grid .stat-card').length).toBe(4);
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(panel.getByText('ĐTB tích lũy')).toBeInTheDocument();
+    expect(panel.getByText('3.20')).toBeInTheDocument();
+    expect(panel.getByText('Chuyên cần')).toBeInTheDocument();
+    expect(panel.getByText('90.0%')).toBeInTheDocument();
+    expect(panel.getByText('18 có mặt · 2 vắng · Học kỳ 1')).toBeInTheDocument();
+    expect(panel.getByText('Rèn luyện')).toBeInTheDocument();
+    expect(panel.getByText('85 · Tốt')).toBeInTheDocument();
+    expect(panel.getByText('Sự kiện')).toBeInTheDocument();
+    expect(panel.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByRole('term')).not.toBeInTheDocument();
+    expect(screen.queryByRole('definition')).not.toBeInTheDocument();
     // No per-term history tables in the overview tab anymore.
     expect(screen.queryByText('Điểm theo học kỳ')).not.toBeInTheDocument();
     expect(screen.queryByText('Điểm danh theo học kỳ')).not.toBeInTheDocument();
