@@ -100,6 +100,7 @@ export const QUARANTINED_TESTS = new Map([
   ['test-traffic-logging.js', 'Có optional DB block và hiện đang củng cố raw-secret behavior; phải rewrite trước.'],
   ['test-admin-ranking-toggle.js', 'Ghi/xóa system_settings toàn cục; cần disposable test DB.'],
   ['test-ranking-integration.js', 'Dùng TRUNCATE; chỉ chạy qua explicit integration wrapper.'],
+  ['test-ranking-from-odp.js', 'Seed/xóa bảng odp_* + academic_rankings; chỉ chạy trên disposable test DB.'],
   ['test-confession-delete-hierarchy.js', 'Integration DB có nguy cơ xóa owner thật; cần fixture owner test riêng.'],
   ['test-academic-snapshot.js', 'Ghi/xóa student snapshot DB; chỉ chạy trên disposable test DB.'],
   ['test-community-mention-anonymity.js', 'Ghi/xóa notification/mention DB; chỉ chạy trên disposable test DB.'],
