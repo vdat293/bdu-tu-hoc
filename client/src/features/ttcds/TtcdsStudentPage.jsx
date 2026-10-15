@@ -18,9 +18,62 @@ function fmt(value, digits = 2) {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
 }
 
-function termName(row) {
-  if (row?.ten_hoc_ky || row?.ten_nkhk) return row.ten_hoc_ky || row.ten_nkhk;
-  return row?.nkhk != null ? `Học kỳ ${row.nkhk}` : '—';
+/**
+ * Mã kỳ dạng số của Dashboard (`25262` → học kỳ 2, năm 2025): 2 ký tự đầu là
+ * năm (2000 + yy), ký tự thứ 5 là học kỳ — cùng công thức với `hocKyLabel`
+ * của backend (`odp-sync.service.js`), viết lại cho frontend hiển thị.
+ */
+function parseTermCode(nkhk) {
+  const text = String(nkhk ?? '').trim();
+  if (text.length < 5) return null;
+  const year = Number(text.slice(0, 2));
+  const hk = Number(text.charAt(4));
+  if (!Number.isInteger(year) || year <= 0) return null;
+  if (!Number.isInteger(hk) || hk < 1 || hk > 3) return { year: 2000 + year, hk: null };
+  return { year: 2000 + year, hk };
+}
+
+/**
+ * Caption kỳ NHẤT QUÁN cho cả 4 ô số: `["Học kỳ 2 · 2025-2026", "mã 25262"]`.
+ * Ưu tiên `hoc_ky`/`nien_khoa` API đã gộp sẵn, thiếu thì suy từ mã `nkhk`,
+ * mã lạ thì giữ đúng 1 dòng theo nhãn cũ để không vỡ dữ liệu.
+ */
+function termCaption(source) {
+  const nkhk = source?.nkhk;
+  const hasCode = nkhk !== null && nkhk !== undefined && String(nkhk).trim() !== '';
+  let hk = Number(source?.hoc_ky);
+  if (!Number.isInteger(hk) || hk < 1 || hk > 3) hk = null;
+  let year = Number(source?.nien_khoa);
+  if (!Number.isInteger(year) || year <= 0) year = null;
+  if ((hk === null || year === null) && hasCode) {
+    const parsed = parseTermCode(nkhk);
+    if (parsed) {
+      if (hk === null) hk = parsed.hk;
+      if (year === null) year = parsed.year;
+    }
+  }
+  if (hk !== null && year !== null) return [`Học kỳ ${hk} · ${year}-${year + 1}`, `mã ${nkhk}`];
+  if (source?.ten_hoc_ky || source?.ten_nkhk) return [source.ten_hoc_ky || source.ten_nkhk];
+  return [hasCode ? `Học kỳ ${nkhk}` : '—'];
+}
+
+function TermCaption({ source }) {
+  const lines = termCaption(source);
+  return (
+    <>
+      {lines.map((line) => <span key={line} className="ttcds-stat__meta">{line}</span>)}
+    </>
+  );
+}
+
+function TermCell({ source }) {
+  const [line, code] = termCaption(source);
+  return (
+    <>
+      <span className="ttcds-term-main">{line}</span>
+      {code && <span className="ttcds-term-code">{code}</span>}
+    </>
+  );
 }
 
 function OverviewTab({ detail }) {
@@ -39,59 +92,46 @@ function OverviewTab({ detail }) {
   const absent = Number(lastAttendance?.vang) || 0;
   const total = present + absent;
 
+  const tiles = [
+    { label: 'ĐTB tích lũy', value: lastGpa ? fmt(lastGpa.dtb_tich_luy_he_4) : '—', detail: null, term: lastGpa ?? null },
+    {
+      label: 'Chuyên cần',
+      value: lastAttendance ? (total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—') : '—',
+      detail: lastAttendance ? `${present} có mặt · ${absent} vắng` : null,
+      term: lastAttendance ?? null
+    },
+    {
+      label: 'Rèn luyện',
+      value: lastRenLuyen?.diem_ren_luyen != null ? `${lastRenLuyen.diem_ren_luyen} · ${lastRenLuyen.xep_loai || '—'}` : '—',
+      detail: null,
+      term: lastRenLuyen ?? null
+    },
+    {
+      label: 'Sự kiện',
+      value: latestNkhk != null ? String(eventCount) : '—',
+      detail: null,
+      term: latestNkhk != null ? { nkhk: latestNkhk } : null
+    }
+  ];
+
   return (
     <div className="card glass-panel ttcds-student-overview" style={{ padding: '16px' }}>
-      <h2>Tổng quan kỳ gần nhất</h2>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-info">
-            <span className="stat-title">ĐTB tích lũy</span>
-            <span className="stat-value">{lastGpa ? fmt(lastGpa.dtb_tich_luy_he_4) : '—'}</span>
-            <span className="stat-rank-caption">{lastGpa ? termName(lastGpa) : '—'}</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <span className="stat-title">Chuyên cần</span>
-            <span className="stat-value">{lastAttendance ? (total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—') : '—'}</span>
-            <span className="stat-rank-caption">
-              {lastAttendance ? `${present} có mặt · ${absent} vắng · ${termName(lastAttendance)}` : '—'}
-            </span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <span className="stat-title">Rèn luyện</span>
-            <span className="stat-value">
-              {lastRenLuyen?.diem_ren_luyen != null ? `${lastRenLuyen.diem_ren_luyen} · ${lastRenLuyen.xep_loai || '—'}` : '—'}
-            </span>
-            <span className="stat-rank-caption">{lastRenLuyen ? termName(lastRenLuyen) : '—'}</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <span className="stat-title">Sự kiện</span>
-            <span className="stat-value">{latestNkhk != null ? String(eventCount) : '—'}</span>
-            <span className="stat-rank-caption">{latestNkhk != null ? termName({ nkhk: latestNkhk }) : '—'}</span>
-          </div>
-        </div>
+      <div className="ttcds-panel-head">
+        <h2>Tổng quan kỳ gần nhất</h2>
+        <p className="ttcds-panel-sub">Số liệu mới nhất, rèn luyện có thể trễ một nhịp</p>
       </div>
-      <p className="club-muted" style={{ margin: '12px 0 0' }}>Điểm rèn luyện thường về trễ một nhịp so với điểm số và điểm danh.</p>
+      <div className="ttcds-stats">
+        {tiles.map((tile) => (
+          <div key={tile.label} className="ttcds-stat" data-testid="ttcds-stat">
+            <span className="ttcds-stat__label">{tile.label}</span>
+            <span className="ttcds-stat__value">{tile.value}</span>
+            {tile.detail && <span className="ttcds-stat__meta">{tile.detail}</span>}
+            {tile.term ? <TermCaption source={tile.term} /> : <span className="ttcds-stat__meta">—</span>}
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
-
-function groupBy(items, termKey, dayKey) {
-  const map = new Map();
-  for (const item of items) {
-    const term = termKey(item);
-    if (!map.has(term)) map.set(term, new Map());
-    const byDay = map.get(term);
-    const day = dayKey(item);
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(item);
-  }
-  return [...map.entries()].map(([term, byDay]) => [term, [...byDay.entries()]]);
 }
 
 function groupRows(items, termKey) {
@@ -106,27 +146,38 @@ function groupRows(items, termKey) {
 
 function TimetableTab({ detail }) {
   const sessions = Array.isArray(detail?.thoi_khoa_bieu) ? detail.thoi_khoa_bieu : [];
-  const byTerm = groupBy(sessions, (session) => session?.nkhk ?? '?', (session) => session?.ngay_hoc || session?.thu || '—');
   if (sessions.length === 0) return <p>Chưa có dữ liệu</p>;
+  const byTerm = groupRows(sessions, (session) => session?.nkhk ?? '?');
   return (
     <>
-      {byTerm.map(([nkhk, byDay]) => (
-        <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
-          <h2>Học kỳ {nkhk}</h2>
-          {[...byDay.entries()].map(([day, items]) => (
-            <div key={day}>
-              <h3>{day}</h3>
-              <ul>
-                {items.map((item, index) => (
-                  <li key={`${item.ma_mon_hoc}-${item.ma_nhom}-${index}`}>
-                    {item.ten_mon || item.ma_mon_hoc || '—'} · Tiết {item.tiet_bat_dau ?? '—'} · {item.phong ?? '—'} · {item.giang_vien ?? '—'}
-                  </li>
-                ))}
-              </ul>
+      {byTerm.map(([nkhk, rows]) => {
+        const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
+        return (
+          <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+            <div className="ttcds-panel-head">
+              <h2>{termLine}</h2>
+              <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} buổi học</p>
             </div>
-          ))}
-        </div>
-      ))}
+            <div className="table-scroll">
+              <table className="ttcds-groups-table">
+                <thead><tr><th scope="col">Ngày</th><th scope="col">Thứ</th><th scope="col">Môn</th><th scope="col" style={{ textAlign: 'right' }}>Tiết</th><th scope="col">Phòng</th><th scope="col">Giảng viên</th></tr></thead>
+                <tbody>
+                  {rows.map((item, index) => (
+                    <tr key={`${item.ma_mon_hoc}-${item.ma_nhom}-${index}`}>
+                      <td>{item.ngay_hoc ?? '—'}</td>
+                      <td>{item.thu ?? '—'}</td>
+                      <td>{item.ten_mon || item.ma_mon_hoc || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{item.tiet_bat_dau ?? '—'}</td>
+                      <td>{item.phong ?? '—'}</td>
+                      <td>{item.giang_vien ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -137,11 +188,16 @@ function GradesTab({ detail }) {
   if (grades.length === 0) return <p>Chưa có dữ liệu</p>;
   return (
     <>
-      {byTerm.map(([nkhk, rows]) => (
-        <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
-          <h2>Học kỳ {nkhk} · {rows.length} môn</h2>
-          <div className="table-scroll">
-            <table className="ttcds-groups-table ttcds-grades-table">
+      {byTerm.map(([nkhk, rows]) => {
+        const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
+        return (
+          <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+            <div className="ttcds-panel-head">
+              <h2>{termLine}</h2>
+              <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} môn</p>
+            </div>
+            <div className="table-scroll">
+              <table className="ttcds-groups-table ttcds-grades-table">
               <thead><tr><th scope="col">Mã môn</th><th scope="col">Tên môn</th><th scope="col" style={{ textAlign: 'right' }}>Tín chỉ</th><th scope="col" style={{ textAlign: 'right' }}>Điểm</th><th scope="col" style={{ textAlign: 'right' }}>Thang 4</th><th scope="col">Chữ</th></tr></thead>
               <tbody>
                 {rows.map((row, index) => (
@@ -157,8 +213,9 @@ function GradesTab({ detail }) {
               </tbody>
             </table>
           </div>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -168,14 +225,25 @@ function EventsTab({ detail }) {
   if (events.length === 0) return <p>Chưa tham gia sự kiện nào</p>;
   return (
     <div className="card glass-panel" style={{ padding: '16px' }}>
-      <h2>Sự kiện · {events.length} sự kiện đã tham gia</h2>
-      <ul>
-        {events.map((event, index) => (
-          <li key={`${event.ten_su_kien}-${index}`}>
-            {event.ngay ?? '—'} · {event.ten_su_kien ?? '—'} · {event.loai ?? event.the_loai ?? '—'}
-          </li>
-        ))}
-      </ul>
+      <div className="ttcds-panel-head">
+        <h2>Sự kiện · {events.length} sự kiện đã tham gia</h2>
+        <p className="ttcds-panel-sub">Hoạt động đã ghi nhận theo từng học kỳ</p>
+      </div>
+      <div className="table-scroll">
+        <table className="ttcds-groups-table">
+          <thead><tr><th scope="col">Ngày</th><th scope="col">Sự kiện</th><th scope="col">Loại</th><th scope="col">Học kỳ</th></tr></thead>
+          <tbody>
+            {events.map((event, index) => (
+              <tr key={`${event.ten_su_kien}-${index}`}>
+                <td>{event.ngay ?? '—'}</td>
+                <td>{event.ten_su_kien ?? '—'}</td>
+                <td>{event.loai ?? event.the_loai ?? '—'}</td>
+                <td><TermCell source={event} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

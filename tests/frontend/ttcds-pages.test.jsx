@@ -191,7 +191,7 @@ describe('TTCDS frontend', () => {
     expect(screen.getByRole('button', { name: 'Xóa sinh viên Nguyễn Văn A' })).toBeInTheDocument();
   });
 
-  it('renders the latest snapshot as four stat cards without a description list', async () => {
+  it('renders the latest snapshot as four ttcds stat tiles without legacy classes', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
@@ -200,13 +200,17 @@ describe('TTCDS frontend', () => {
     expect(document.querySelector('.profile-hero-card')).not.toBeNull();
     expect(document.querySelector('.hero-tags')).not.toBeNull();
     expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
-    expect(document.querySelectorAll('.stats-grid .stat-card').length).toBe(4);
+    // Lớp riêng của TTCDS thay cho .stats-grid/.stat-card legacy (tránh rule nth-child loang màu).
+    expect(document.querySelectorAll('.ttcds-stat').length).toBe(4);
+    expect(document.querySelectorAll('[data-testid="ttcds-stat"]').length).toBe(4);
+    expect(document.querySelector('.ttcds-student-overview .stats-grid')).toBeNull();
+    expect(document.querySelector('.ttcds-student-overview .stat-card')).toBeNull();
     const panel = within(screen.getByRole('tabpanel'));
     expect(panel.getByText('ĐTB tích lũy')).toBeInTheDocument();
     expect(panel.getByText('3.20')).toBeInTheDocument();
     expect(panel.getByText('Chuyên cần')).toBeInTheDocument();
     expect(panel.getByText('90.0%')).toBeInTheDocument();
-    expect(panel.getByText('18 có mặt · 2 vắng · Học kỳ 1')).toBeInTheDocument();
+    expect(panel.getByText('18 có mặt · 2 vắng')).toBeInTheDocument();
     expect(panel.getByText('Rèn luyện')).toBeInTheDocument();
     expect(panel.getByText('85 · Tốt')).toBeInTheDocument();
     expect(panel.getByText('Sự kiện')).toBeInTheDocument();
@@ -217,6 +221,25 @@ describe('TTCDS frontend', () => {
     expect(screen.queryByText('Điểm theo học kỳ')).not.toBeInTheDocument();
     expect(screen.queryByText('Điểm danh theo học kỳ')).not.toBeInTheDocument();
     expect(screen.queryByText('Điểm rèn luyện')).not.toBeInTheDocument();
+  });
+
+  it('shows a uniform two-line term caption on all four stat tiles', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    const coded = {
+      ...detailFixture,
+      gpa_hoc_ky: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, dtb_tich_luy_he_4: 3.4 }],
+      diem_danh: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, di_hoc: 18, vang: 2 }],
+      ren_luyen: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, diem_ren_luyen: 85, xep_loai: 'Tốt' }],
+      su_kien: [{ nkhk: 25262, ten_su_kien: 'Chào tân SV', ngay: '2026-09-05', loai: 'Chào đón' }]
+    };
+    mocks.getTtcdsStudent.mockResolvedValue(coded);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    await screen.findByText('Tổng quan kỳ gần nhất');
+    const panel = within(screen.getByRole('tabpanel'));
+    // Cả 4 ô cùng định dạng: dòng 1 "Học kỳ 2 · 2025-2026", dòng 2 "mã 25262".
+    expect(panel.getAllByText('Học kỳ 2 · 2025-2026').length).toBe(4);
+    expect(panel.getAllByText('mã 25262').length).toBe(4);
   });
 
   it("renders '—' for ren luyen when the field is missing", async () => {
@@ -304,6 +327,31 @@ describe('TTCDS frontend', () => {
     const headers = screen.getAllByRole('columnheader');
     expect(headers.length).toBeGreaterThan(0);
     expect(headers.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+  });
+
+  it('renders the timetable and events tabs as scrollable tables with column scopes', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    await screen.findByText('Tổng quan kỳ gần nhất');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Thời khóa biểu' }));
+    const tkbPanel = within(screen.getByRole('tabpanel'));
+    const tkbTable = tkbPanel.getByRole('table');
+    expect(tkbTable.parentElement).toHaveClass('table-scroll');
+    expect(tkbPanel.getByText('Nhập môn')).toBeInTheDocument();
+    const tkbHeaders = within(tkbTable).getAllByRole('columnheader');
+    expect(tkbHeaders.length).toBeGreaterThan(0);
+    expect(tkbHeaders.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sự kiện' }));
+    const eventPanel = within(screen.getByRole('tabpanel'));
+    const eventTable = eventPanel.getByRole('table');
+    expect(eventTable.parentElement).toHaveClass('table-scroll');
+    expect(eventPanel.getByText('Chào tân SV')).toBeInTheDocument();
+    const eventHeaders = within(eventTable).getAllByRole('columnheader');
+    expect(eventHeaders.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
   });
 
   it('turns a 404 student load into a back link plus a list action', async () => {
@@ -481,11 +529,12 @@ describe('TTCDS frontend', () => {
     renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
     await screen.findByText('Nhóm A');
-    const strip = document.querySelector('.stats-grid');
+    const strip = document.querySelector('.ttcds-stats');
     expect(strip).not.toBeNull();
+    expect(document.querySelector('#tab-ttcds .stats-grid')).toBeNull();
     expect(strip.textContent).toContain('Số nhóm');
     expect(strip.textContent).toContain('Tổng sinh viên');
-    const values = [...strip.querySelectorAll('.stat-value')].map((node) => node.textContent);
+    const values = [...strip.querySelectorAll('.ttcds-stat__value')].map((node) => node.textContent);
     expect(values).toEqual(['2', '5']);
     expect(screen.getByRole('columnheader', { name: 'Số SV' }).style.textAlign).toBe('right');
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);

@@ -263,10 +263,31 @@
 .ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
 .ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }
 
-/* Bảng điểm chi tiết SV: ttcds-groups-table mới chỉ có hover — thêm nền xen kẽ cho
-   dễ dò hàng; :not(:hover) để hiệu ứng hover vẫn thắng trên dòng chẵn. */
-.ttcds-grades-table tbody tr:nth-child(even):not(:hover) { background: color-mix(in srgb, var(--club-accent) 5%, transparent); }
+/* Ô số TTCDS (lớp riêng, không dùng .stats-grid/.stat-card legacy để tránh rule
+   nth-child loang màu): nhãn nhỏ IN HOA trên, số to, caption mờ bên dưới. */
+.ttcds-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.ttcds-stat { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); align-content: start; }
+.ttcds-stat__label { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--club-muted); }
+.ttcds-stat__value { font-size: 1.6rem; font-weight: 800; color: var(--club-ink); line-height: 1.15; }
+.ttcds-stat__meta { font-size: .74rem; color: var(--club-muted); }
 
-/* Caption trong stat-card mặc định nowrap (style.css) sẽ tràn thẻ ở mobile —
-   cho phép xuống dòng riêng trong khối tổng quan SV. */
-.ttcds-student-overview .stat-rank-caption { white-space: normal; }
+/* Tiêu đề khối + dòng phụ mờ (học từ Dashboard, giữ theme tối). */
+.ttcds-panel-head { display: grid; gap: 4px; margin-bottom: 12px; }
+.ttcds-panel-head h2 { margin: 0; color: var(--club-ink); font-size: 1rem; line-height: 1.4; }
+.ttcds-panel-sub { margin: 0; color: var(--club-muted); font-size: .84rem; line-height: 1.5; }
+
+/* Ô học kỳ 2 dòng trong bảng (dòng mã nhỏ hơn bên dưới). */
+.ttcds-term-main { display: block; }
+.ttcds-term-code { display: block; color: var(--club-muted); font-size: .72rem; }
+
+/* Bảng TTCDS: thead nền nhạt phân biệt + dòng zebra + hover (giữ .table-scroll). */
+.ttcds-groups-table thead th { background: color-mix(in srgb, var(--club-accent) 9%, var(--club-surface)); }
+.ttcds-groups-table tbody tr:nth-child(even):not(:hover) { background: color-mix(in srgb, var(--club-accent) 5%, transparent); }
+
+/* Thẻ hồ sơ SV: bỏ dải màu legacy trên đỉnh (::before của style.css), chỉ giữ
+   viền mảnh + bo góc như .glass-panel để hợp theme tối. */
+.club-experience .profile-hero-card::before { display: none; }
+.club-experience .profile-hero-card { border: 1px solid var(--club-line); border-radius: 12px; }
+
+/* Tab TTCDS giữ pattern hiện tại, chỉ gọn khoảng cách. */
+#tab-ttcds .club-tabs, #tab-ttcds-group .club-tabs, #tab-ttcds-student .club-tabs { gap: 6px; }

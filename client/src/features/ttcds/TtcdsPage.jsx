@@ -139,18 +139,16 @@ export default function TtcdsPage() {
         />
       ) : (
         <>
-          <div className="stats-grid" aria-label="Tổng quan nhóm">
-            <div className="stat-card">
-              <div className="stat-info">
-                <span className="stat-title">Số nhóm</span>
-                <span className="stat-value">{list.length}</span>
-              </div>
+          <div className="ttcds-stats" aria-label="Tổng quan nhóm">
+            <div className="ttcds-stat" data-testid="ttcds-stat">
+              <span className="ttcds-stat__label">Số nhóm</span>
+              <span className="ttcds-stat__value">{list.length}</span>
+              <span className="ttcds-stat__meta">Nhóm được phân công cho bạn</span>
             </div>
-            <div className="stat-card">
-              <div className="stat-info">
-                <span className="stat-title">Tổng sinh viên</span>
-                <span className="stat-value">{list.reduce((sum, group) => sum + (group.member_count ?? 0), 0)}</span>
-              </div>
+            <div className="ttcds-stat" data-testid="ttcds-stat">
+              <span className="ttcds-stat__label">Tổng sinh viên</span>
+              <span className="ttcds-stat__value">{list.reduce((sum, group) => sum + (group.member_count ?? 0), 0)}</span>
+              <span className="ttcds-stat__meta">Sinh viên đang theo dõi</span>
             </div>
           </div>
           <div className="table-scroll">
