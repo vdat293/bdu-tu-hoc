@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { closeDatabase, query } from '../src/db/database.js';
 import { TtcdsService, normalizeTtcdsMssv } from '../src/services/ttcds.service.js';
+import { PermissionService, TITLE_CAPABILITIES_MAP } from '../src/services/permission.service.js';
 
 if (!process.env.DATABASE_URL) {
   console.log('Skipping test: DATABASE_URL not configured.');
@@ -10,6 +11,8 @@ if (!process.env.DATABASE_URL) {
 const OWNER_MSSV = 'TEST_TTCDS_OWNER';
 const OTHER_OWNER_MSSV = 'TEST_TTCDS_OTHER';
 const LEVEL_MSSV = 'TEST_TTCDS_LEVEL';
+const GATE_MSSV = 'TEST_TTCDS_GATE';
+const REGULAR_MSSV = 'TEST_TTCDS_REGULAR';
 const MEMBER_A = '22050006';
 const MEMBER_B = '24050126';
 
@@ -18,6 +21,7 @@ async function cleanupTestData() {
   await query("DELETE FROM ttcds_groups WHERE owner_mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM ttcds_permissions WHERE mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM ttcds_audit_logs WHERE actor_mssv LIKE 'TEST_TTCDS%' OR target_mssv LIKE 'TEST_TTCDS%'");
+  await query("DELETE FROM identity_entitlement_grants WHERE mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM students WHERE mssv LIKE 'TEST_TTCDS%'");
 }
 
@@ -147,6 +151,69 @@ async function runTtcdsGroupsTest() {
     assert.equal(orphans.rows[0].count, 0, 'Xoá group phải xoá hết thành viên của group');
     assert.deepEqual(await TtcdsService.listMembers(group.id), []);
     console.log('✅ PASSED: cascade dọn sạch thành viên khi xoá group.');
+
+    console.log('--- [Test 7] Gating ttcds:access + nấc view/create ---');
+    // Map dự phòng phải phủ cả 3 id danh hiệu (title hiện tại + alias achievement/legacy).
+    for (const titleId of ['title:ttcds', 'achievement:ttcds', 'ttcds']) {
+      assert.ok(
+        TITLE_CAPABILITIES_MAP[titleId]?.includes('ttcds:access'),
+        `${titleId} phải map tới ttcds:access`
+      );
+    }
+
+    // Cấp nametag #TTCDS cho GATE_MSSV (theo mẫu grant của tests/test-permission-rbac.js).
+    // Metadata cố tình chỉ có clan:create để chứng minh map dự phòng cấp thêm ttcds:access.
+    await query(`
+      INSERT INTO identity_items (id, item_type, label, description, rarity, asset_key, display_policy, metadata)
+      VALUES ('title:ttcds', 'title', '#TTCDS', 'Trung tâm Chuyển đổi số', 'vip', 'ttcds', 'auto_equip', '{"capabilities":["clan:create"]}')
+      ON CONFLICT (id) DO UPDATE SET metadata = EXCLUDED.metadata, is_active = TRUE;
+    `);
+    await query(`
+      INSERT INTO identity_entitlement_grants (mssv, item_id, source, reason)
+      VALUES ($1, 'title:ttcds', 'manual', 'gating test grant')
+      ON CONFLICT DO NOTHING;
+    `, [GATE_MSSV]);
+
+    assert.equal(await PermissionService.can(GATE_MSSV, 'ttcds:access'), true, 'Có #TTCDS phải có ttcds:access');
+    assert.equal(await PermissionService.can(GATE_MSSV, 'clan:create'), true, 'Có #TTCDS vẫn giữ clan:create');
+    const ungrantedCanAccess = await PermissionService.can(REGULAR_MSSV, 'ttcds:access');
+    assert.equal(ungrantedCanAccess, false, 'Không có nametag thì KHÔNG có ttcds:access');
+
+    // requireAccess: thiếu nametag -> 403; còn nametag -> pass.
+    await assert.rejects(
+      () => TtcdsService.requireAccess(REGULAR_MSSV),
+      (err) => {
+        assert.equal(err.status, 403);
+        assert.match(err.message, /Trung tâm Chuyển đổi số/);
+        return true;
+      }
+    );
+    assert.equal(await TtcdsService.requireAccess(GATE_MSSV), true);
+
+    // requireCreate: mặc định 'view' -> 403; sau setLevel 'create' -> pass.
+    assert.equal(await TtcdsService.getLevel(GATE_MSSV), 'view', 'GATE user mặc định view trước khi cấp');
+    await assert.rejects(
+      () => TtcdsService.requireCreate(GATE_MSSV),
+      (err) => {
+        assert.equal(err.status, 403);
+        assert.match(err.message, /không có quyền tạo nhóm/);
+        return true;
+      }
+    );
+
+    await TtcdsService.setLevel({ mssv: GATE_MSSV, level: 'create', grantedBy: OWNER_MSSV, note: 'gating test' });
+    assert.equal(await TtcdsService.requireCreate(GATE_MSSV), true);
+
+    // Thiếu nametag thì requireCreate phải chặn ngay từ cổng access (403).
+    await assert.rejects(
+      () => TtcdsService.requireCreate(REGULAR_MSSV),
+      (err) => {
+        assert.equal(err.status, 403);
+        assert.match(err.message, /Trung tâm Chuyển đổi số/);
+        return true;
+      }
+    );
+    console.log('✅ PASSED: ttcds:access + nấc view/create chặn đúng 403.');
 
     console.log('\n========================================================================');
     console.log('🎉 TẤT CẢ BÀI KIỂM THỬ TTCDS GROUPS ĐÃ ĐẠT!');

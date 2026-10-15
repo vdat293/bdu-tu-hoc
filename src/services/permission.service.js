@@ -94,9 +94,9 @@ export const CLAN_ROLE_CAPABILITIES = {
  * (Ngay cả khi metadata trong DB chưa kịp đồng bộ)
  */
 export const TITLE_CAPABILITIES_MAP = {
-  'title:ttcds': ['clan:create', 'clan:verified_tag'],
-  'ttcds': ['clan:create', 'clan:verified_tag'],
-  'achievement:ttcds': ['clan:create', 'clan:verified_tag']
+  'title:ttcds': ['clan:create', 'clan:verified_tag', 'ttcds:access'],
+  'ttcds': ['clan:create', 'clan:verified_tag', 'ttcds:access'],
+  'achievement:ttcds': ['clan:create', 'clan:verified_tag', 'ttcds:access']
 };
 
 /**

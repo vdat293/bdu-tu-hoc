@@ -1,4 +1,5 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
+import { PermissionService } from './permission.service.js';
 
 /**
  * MSSV người dùng dán vào ô "add" có thể kèm space/xuống dòng và chữ thường.
@@ -7,6 +8,13 @@ import { isDatabaseConfigured, query, transaction } from '../db/database.js';
  */
 export function normalizeTtcdsMssv(value) {
   return String(value ?? '').trim().toUpperCase();
+}
+
+/** Lỗi HTTP mang `status` (cùng pattern `httpError` của permission.service.js). */
+function httpError(message, status = 403) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
 }
 
 /**
@@ -154,5 +162,31 @@ export const TtcdsService = {
     ]);
 
     return result.rows[0] || null;
+  },
+
+  /**
+   * Cổng 1: phải còn nametag #TTCDS (capability `ttcds:access`) mới được vào Trung tâm.
+   * Mất nametag = mất cả Trung tâm (spec §3), nên ném 403 thay vì trả boolean.
+   */
+  async requireAccess(mssv) {
+    const allowed = await PermissionService.can(mssv, 'ttcds:access');
+    if (!allowed) {
+      throw httpError('Bạn không thuộc Trung tâm Chuyển đổi số.', 403);
+    }
+    return true;
+  },
+
+  /**
+   * Cổng 2: phải có nấc `create` mới được tạo group/add thành viên (view 403).
+   * Chỉ đọc — không ghi DB.
+   */
+  async requireCreate(mssv) {
+    await this.requireAccess(mssv);
+
+    const level = await this.getLevel(mssv);
+    if (level !== 'create') {
+      throw httpError('Bạn không có quyền tạo nhóm. Vui lòng liên hệ admin.', 403);
+    }
+    return true;
   }
 };
