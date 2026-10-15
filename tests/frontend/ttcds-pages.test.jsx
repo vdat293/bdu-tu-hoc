@@ -214,7 +214,19 @@ describe('TTCDS frontend', () => {
 
     expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
     expect(document.querySelector('.profile-hero-card')).not.toBeNull();
-    expect(document.querySelector('.hero-tags')).not.toBeNull();
+    // Task 6 "phân ô": chip .hero-tags cũ thành lưới ô con có viền.
+    expect(document.querySelector('.profile-hero-card .hero-tags')).toBeNull();
+    expect(document.querySelector('.profile-hero-card .ttcds-cell-grid')).not.toBeNull();
+    expect(document.querySelectorAll('.profile-hero-card .ttcds-cell').length).toBe(5);
+    expect(screen.getByText('Lớp')).toBeInTheDocument();
+    expect(screen.getByText('Khoa')).toBeInTheDocument();
+    expect(screen.getByText('Niên khóa')).toBeInTheDocument();
+    expect(screen.getByText('Học kỳ đang học')).toBeInTheDocument();
+    expect(screen.getByText('Trạng thái')).toBeInTheDocument();
+    expect(screen.getByText('K29A')).toBeInTheDocument();
+    expect(screen.getByText('CNTT')).toBeInTheDocument();
+    expect(screen.getByText('Đang học')).toBeInTheDocument();
+    expect(document.querySelector('.ttcds-student-overview.ttcds-panel')).not.toBeNull();
     expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
     // Lớp riêng của TTCDS thay cho .stats-grid/.stat-card legacy (tránh rule nth-child loang màu).
     expect(document.querySelectorAll('.ttcds-stat').length).toBe(4);
@@ -256,6 +268,84 @@ describe('TTCDS frontend', () => {
     // Cả 4 ô cùng định dạng: dòng 1 "Học kỳ 2 · 2025-2026", dòng 2 "mã 25262".
     expect(panel.getAllByText('Học kỳ 2 · 2025-2026').length).toBe(4);
     expect(panel.getAllByText('mã 25262').length).toBe(4);
+  });
+
+  it('shows the profile cells with the latest term and a status fallback', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    const coded = {
+      ...detailFixture,
+      gpa_hoc_ky: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, dtb_tich_luy_he_4: 3.4 }],
+      diem_danh: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, di_hoc: 18, vang: 2 }],
+      ren_luyen: [{ nkhk: 25262, hoc_ky: 2, nien_khoa: 2025, diem_ren_luyen: 85, xep_loai: 'Tốt' }],
+      su_kien: [{ nkhk: 25262, ten_su_kien: 'Chào tân SV', ngay: '2026-09-05', loai: 'Chào đón' }]
+    };
+    mocks.getTtcdsStudent.mockResolvedValue(coded);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    await screen.findByText('Học kỳ đang học');
+    const card = document.querySelector('.profile-hero-card');
+    expect(card).not.toBeNull();
+    expect(within(card).getByText('Học kỳ 2 · 2025-2026')).toBeInTheDocument();
+    expect(within(card).getByText('mã 25262')).toBeInTheDocument();
+    expect(within(card).getByText('Đang học')).toBeInTheDocument();
+  });
+
+  it("shows '—' for missing profile fields", async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue({
+      ...detailFixture,
+      ho_so: { mssv: '24050126' },
+      gpa_hoc_ky: [],
+      diem_danh: [],
+      ren_luyen: []
+    });
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    await screen.findByText('Học kỳ đang học');
+    const card = document.querySelector('.profile-hero-card');
+    expect(card).not.toBeNull();
+    expect(within(card).getAllByText('—').length).toBeGreaterThanOrEqual(4);
+    expect(within(card).getByText('Đang học')).toBeInTheDocument();
+  });
+
+  it('wraps every student tab block in its own bordered ttcds-panel', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    await screen.findByText('Tổng quan kỳ gần nhất');
+    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Thời khóa biểu' }));
+    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Bảng điểm chi tiết' }));
+    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sự kiện' }));
+    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+  });
+
+  it('gives the group list table its own bordered panel', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', mentor: 'Thầy TTCDS', member_count: 2 }]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    await screen.findByText('K29 Tân sinh viên');
+    expect(document.querySelector('#tab-ttcds .ttcds-panel')).not.toBeNull();
+    expect(document.querySelector('#tab-ttcds .ttcds-panel .table-scroll')).not.toBeNull();
+  });
+
+  it('gives the group member table its own bordered panel', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    await screen.findByRole('table');
+    expect(document.querySelector('#tab-ttcds-group .ttcds-panel')).not.toBeNull();
+    expect(document.querySelector('#tab-ttcds-group .ttcds-panel .table-scroll')).not.toBeNull();
   });
 
   it("renders '—' for ren luyen when the field is missing", async () => {

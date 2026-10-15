@@ -76,6 +76,52 @@ function TermCell({ source }) {
   );
 }
 
+/**
+ * Kỳ mới nhất của SV cho ô "Học kỳ đang học" trong thẻ hồ sơ: bản ghi cuối
+ * (mới nhất) của điểm danh → GPA → rèn luyện → TKB → bảng điểm → sự kiện.
+ */
+function latestTermSource(detail) {
+  const pick = (items) => (Array.isArray(items) && items.length > 0 ? items[items.length - 1] : null);
+  return (
+    pick(detail?.diem_danh) ??
+    pick(detail?.gpa_hoc_ky) ??
+    pick(detail?.ren_luyen) ??
+    pick(detail?.thoi_khoa_bieu) ??
+    pick(detail?.bang_diem) ??
+    pick(detail?.su_kien)
+  );
+}
+
+/**
+ * Thẻ hồ sơ SV kiểu Dashboard: một khối có viền, bên trong là lưới các ô con
+ * CÓ VIỀN (Lớp / Khoa / Niên khóa / Học kỳ đang học / Trạng thái) — mỗi ô gồm
+ * nhãn nhỏ + giá trị lớn + caption mờ. Thiếu dữ liệu → '—'.
+ */
+function ProfileCard({ profile, mssv, termSource }) {
+  const [termLine, termCode] = termCaption(termSource);
+  const cells = [
+    { label: 'Lớp', value: profile.ma_lop ?? '—', meta: profile.ten_lop || null },
+    { label: 'Khoa', value: profile.ten_khoa ?? '—', meta: null },
+    { label: 'Niên khóa', value: profile.nien_khoa ?? '—', meta: null },
+    { label: 'Học kỳ đang học', value: termLine, meta: termCode || null },
+    { label: 'Trạng thái', value: profile.hien_dien ?? 'Đang học', meta: null }
+  ];
+  return (
+    <div className="profile-hero-card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }}>
+      <h2>{profile.ten_day_du || '—'} <span className="club-muted">{profile.mssv || mssv}</span></h2>
+      <div className="ttcds-cell-grid">
+        {cells.map((cell) => (
+          <div key={cell.label} className="ttcds-cell">
+            <span className="ttcds-cell__label">{cell.label}</span>
+            <span className="ttcds-cell__value">{cell.value}</span>
+            {cell.meta && <span className="ttcds-cell__meta">{cell.meta}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({ detail }) {
   const gpa = Array.isArray(detail?.gpa_hoc_ky) ? detail.gpa_hoc_ky : [];
   const attendance = Array.isArray(detail?.diem_danh) ? detail.diem_danh : [];
@@ -115,7 +161,7 @@ function OverviewTab({ detail }) {
   ];
 
   return (
-    <div className="card glass-panel ttcds-student-overview" style={{ padding: '16px' }}>
+    <div className="card glass-panel ttcds-panel ttcds-student-overview" style={{ padding: '16px' }}>
       <div className="ttcds-panel-head">
         <h2>Tổng quan kỳ gần nhất</h2>
         <p className="ttcds-panel-sub">Số liệu mới nhất, rèn luyện có thể trễ một nhịp</p>
@@ -153,7 +199,7 @@ function TimetableTab({ detail }) {
       {byTerm.map(([nkhk, rows]) => {
         const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
         return (
-          <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+          <div className="card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
             <div className="ttcds-panel-head">
               <h2>{termLine}</h2>
               <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} buổi học</p>
@@ -191,7 +237,7 @@ function GradesTab({ detail }) {
       {byTerm.map(([nkhk, rows]) => {
         const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
         return (
-          <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+          <div className="card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
             <div className="ttcds-panel-head">
               <h2>{termLine}</h2>
               <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} môn</p>
@@ -224,7 +270,7 @@ function EventsTab({ detail }) {
   const events = Array.isArray(detail?.su_kien) ? detail.su_kien : [];
   if (events.length === 0) return <p>Chưa tham gia sự kiện nào</p>;
   return (
-    <div className="card glass-panel" style={{ padding: '16px' }}>
+    <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
       <div className="ttcds-panel-head">
         <h2>Sự kiện · {events.length} sự kiện đã tham gia</h2>
         <p className="ttcds-panel-sub">Hoạt động đã ghi nhận theo từng học kỳ</p>
@@ -318,14 +364,7 @@ export default function TtcdsStudentPage() {
   return (
     <section id="tab-ttcds-student" className="tab-pane club-experience">
       <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
-      <div className="profile-hero-card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
-        <h2>{profile.ten_day_du || '—'} <span className="club-muted">{profile.mssv || mssv}</span></h2>
-        <div className="hero-tags">
-          <span className="club-chip">Lớp {profile.ma_lop ?? '—'}</span>
-          <span className="club-chip">{profile.ten_khoa ?? '—'}</span>
-          <span className="club-chip">Niên khóa {profile.nien_khoa ?? '—'}</span>
-        </div>
-      </div>
+      <ProfileCard profile={profile} mssv={mssv} termSource={latestTermSource(data)} />
 
       <div className="club-tabs" role="tablist" aria-label="Chi tiết sinh viên" onKeyDown={onTablistKeyDown}>
         {TABS.map((entry) => (

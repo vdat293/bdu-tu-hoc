@@ -100,6 +100,7 @@ export default function TtcdsPage() {
   }
 
   const list = Array.isArray(groups.data) ? groups.data : [];
+  const totalMembers = list.reduce((sum, group) => sum + (group.member_count ?? 0), 0);
 
   return (
     <section id="tab-ttcds" className="tab-pane club-experience">
@@ -147,11 +148,16 @@ export default function TtcdsPage() {
             </div>
             <div className="ttcds-stat" data-testid="ttcds-stat">
               <span className="ttcds-stat__label">Tổng sinh viên</span>
-              <span className="ttcds-stat__value">{list.reduce((sum, group) => sum + (group.member_count ?? 0), 0)}</span>
+              <span className="ttcds-stat__value">{totalMembers}</span>
               <span className="ttcds-stat__meta">Sinh viên đang theo dõi</span>
             </div>
           </div>
-          <div className="table-scroll">
+          <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
+            <div className="ttcds-panel-head">
+              <h2>Danh sách nhóm</h2>
+              <p className="ttcds-panel-sub">{list.length} nhóm · {totalMembers} sinh viên đang theo dõi</p>
+            </div>
+            <div className="table-scroll">
             <table className="ttcds-groups-table">
               <thead>
                 <tr>
@@ -178,6 +184,7 @@ export default function TtcdsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

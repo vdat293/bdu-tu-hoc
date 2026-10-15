@@ -428,7 +428,12 @@ export default function TtcdsGroupPage() {
           ) : undefined}
         />
       ) : (
-        <div className="table-scroll">
+        <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
+          <div className="ttcds-panel-head">
+            <h2>Danh sách sinh viên</h2>
+            <p className="ttcds-panel-sub">{members.length} sinh viên{group?.name ? ` · ${group.name}` : ''}</p>
+          </div>
+          <div className="table-scroll">
           <table className="ttcds-groups-table">
             <caption className="sr-only">Danh sách sinh viên trong nhóm {group?.name || ''}</caption>
             <thead>
@@ -483,6 +488,7 @@ export default function TtcdsGroupPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

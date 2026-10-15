@@ -263,13 +263,25 @@
 .ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
 .ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }
 
-/* Ô số TTCDS (lớp riêng, không dùng .stats-grid/.stat-card legacy để tránh rule
-   nth-child loang màu): nhãn nhỏ IN HOA trên, số to, caption mờ bên dưới. */
-.ttcds-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.ttcds-stat { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); align-content: start; }
-.ttcds-stat__label { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--club-muted); }
-.ttcds-stat__value { font-size: 1.6rem; font-weight: 800; color: var(--club-ink); line-height: 1.15; }
-.ttcds-stat__meta { font-size: .74rem; color: var(--club-muted); }
+/* Hệ ô TTCDS dùng chung ("phân ô" theo Dashboard): `.ttcds-cell*` (thẻ hồ sơ) và
+   `.ttcds-stat*` (4 ô số) trông y hệt nhau để không lệch tông — nhãn nhỏ IN HOA
+   trên, giá trị lớn màu nhấn, caption mờ bên dưới. */
+.ttcds-stats, .ttcds-cell-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.ttcds-cell, .ttcds-stat { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--club-line); border-radius: 10px; background: var(--bg-card); align-content: start; }
+.ttcds-cell__label, .ttcds-stat__label { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--club-muted); }
+.ttcds-cell__value, .ttcds-stat__value { font-size: 1.45rem; font-weight: 800; color: var(--club-accent); line-height: 1.15; overflow-wrap: anywhere; }
+.ttcds-cell__meta, .ttcds-stat__meta { font-size: .74rem; color: var(--club-muted); }
+
+/* Mọi khối nội dung TTCDS là một ô có viền riêng. Scoped tại đây, KHÔNG sửa
+   `.glass-panel` dùng chung nơi khác. */
+.ttcds-panel { border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
+
+/* Tab TTCDS nằm giữa thẻ hồ sơ và các khối nội dung, khoảng cách gọn. */
+#tab-ttcds-student .club-tabs { margin-bottom: 2px; }
+
+@media (max-width: 480px) {
+  .ttcds-stats, .ttcds-cell-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+}
 
 /* Tiêu đề khối + dòng phụ mờ (học từ Dashboard, giữ theme tối). */
 .ttcds-panel-head { display: grid; gap: 4px; margin-bottom: 12px; }
