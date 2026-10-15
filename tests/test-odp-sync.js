@@ -48,7 +48,11 @@ function emit() {
       (handlers[event] || []).forEach((handler) => handler(...args));
       return this;
     },
-    destroy() {}
+    // Giống ClientRequest thật: destroy(err) phát 'error'.
+    destroy(error) {
+      if (error) this.emit('error', error);
+      return this;
+    }
   };
 }
 
@@ -66,6 +70,7 @@ function installHttpMock() {
     requestLog.push(requestUrl);
     setImmediate(() => {
       const outcome = routeResolver(requestUrl);
+      if (outcome === null) return; // 'stall': không bao giờ trả lời
       if (outcome.error) {
         request.emit('error', new Error(outcome.error));
         return;
@@ -174,6 +179,12 @@ const DIEM_DANH_ROW = {
   gio_co_mat: null
 };
 
+/**
+ * Cùng khoá đầy đủ với DIEM_DANH_ROW nhưng trạng thái RỖNG, đứng SAU trong nguồn.
+ * Khi gộp dòng trùng khoá phải giữ dòng có `diem_danh` non-null.
+ */
+const DIEM_DANH_DUPLICATE_EMPTY = { ...DIEM_DANH_ROW, diem_danh: null, gio_co_mat: null };
+
 const THOI_KHOA_BIEU_ROW = {
   id: 1,
   nkhk: '24251',
@@ -234,7 +245,7 @@ const OK_TABLE_ROWS = {
   fact_ho_so_sinh_vien_odp: [SINH_VIEN_ROW],
   fact_bang_diem_tbhk_odp: [TBHK_ROW],
   dim_bang_diem_odp: [BANG_DIEM_ROW],
-  dim_danh_sach_diem_danh_odp: [DIEM_DANH_ROW],
+  dim_danh_sach_diem_danh_odp: [DIEM_DANH_ROW, DIEM_DANH_DUPLICATE_EMPTY],
   dim_thoi_khoa_bieu_odp: [THOI_KHOA_BIEU_ROW],
   dim_diem_ren_luyen_odp: [REN_LUYEN_ROW],
   dim_su_kien_odp: [SU_KIEN_ROW],
@@ -252,17 +263,31 @@ function rowsFor(table, offset, limit, overrides = {}) {
 /**
  * `ignoreLimit`: nguồn trả nguyên bảng bất kể `limit` (hành vi THẬT của cds.bdu.edu.vn).
  * `ignoreOffset`: nguồn tôn trọng `limit` nhưng luôn trả trang đầu.
+ * `pageSizeFactor`: nguồn âm thầm cắt trang còn `floor(limit * factor)` dòng (số, hoặc map theo endpoint).
+ * `stall`: nguồn không bao giờ trả lời (để test hạn cứng theo bảng).
  */
-function scenarioResponder({ failing = [], ignoreLimit = [], ignoreOffset = [], overrides = {} } = {}) {
+function scenarioResponder({
+  failing = [],
+  ignoreLimit = [],
+  ignoreOffset = [],
+  pageSizeFactor = 1,
+  stall = [],
+  overrides = {}
+} = {}) {
   return (url) => {
     const table = tableOf(url);
+    if (stall.includes(table)) return null;
     if (failing.includes(table)) return { status: 500, body: 'boom' };
     if (ignoreLimit.includes(table)) {
       const rows = rowsFor(table, 0, Number.MAX_SAFE_INTEGER, overrides);
       return { status: 200, body: rows };
     }
+    const factor = typeof pageSizeFactor === 'number'
+      ? pageSizeFactor
+      : (pageSizeFactor[table] ?? 1);
+    const limit = Math.max(1, Math.floor(limitOf(url) * factor));
     const offset = ignoreOffset.includes(table) ? 0 : offsetOf(url);
-    return { status: 200, body: rowsFor(table, offset, limitOf(url), overrides) };
+    return { status: 200, body: rowsFor(table, offset, limit, overrides) };
   };
 }
 
@@ -295,11 +320,16 @@ async function runDbTests() {
   assert.equal(sinhVien.rows[0].hien_dien, 'Đang học');
 
   const diemDanh = await query('SELECT nkhk, ngay::text AS ngay, buoi, diem_danh FROM odp_diem_danh WHERE mssv = 24050126');
-  assert.equal(diemDanh.rows.length, 1);
+  assert.equal(diemDanh.rows.length, 1, '2 dòng trùng khoá phải gộp còn 1');
   assert.equal(diemDanh.rows[0].nkhk, 24251, 'nkhk phải suy từ ma_nhom');
   assert.equal(diemDanh.rows[0].ngay, '2024-09-14');
   assert.equal(Number(diemDanh.rows[0].buoi), 1);
-  assert.equal(diemDanh.rows[0].diem_danh, 'Vắng');
+  assert.equal(
+    diemDanh.rows[0].diem_danh,
+    'Vắng',
+    'gộp dòng trùng khoá phải giữ dòng có diem_danh non-null (dòng rỗng đứng sau)'
+  );
+  assert.equal(all.counts.diem_danh, 1, 'nguồn 2 dòng trùng khoá → đếm 1 sau khi gộp');
 
   const renLuyen = await query('SELECT xep_loai, diem_ren_luyen FROM odp_ren_luyen WHERE mssv = 24050126');
   assert.equal(renLuyen.rows[0].xep_loai, 'Tốt', 'text nguồn phải được trim');
@@ -393,7 +423,8 @@ async function runDbTests() {
   );
   console.log('✅ PASSED: nguồn bỏ qua limit không gây lặp vô hạn.');
 
-  console.log('🧪 [ODP] 7c. Nguồn bỏ qua `offset` (trả lại trang cũ) → dừng, không nhân đôi dữ liệu...');
+  console.log('🧪 [ODP] 7c. Nguồn bỏ qua `offset` (trả lại trang cũ) → LỖI bảng, giữ dữ liệu cũ...');
+  await query("INSERT INTO odp_mon_hoc (ma_mon_hoc, ten_mon_hoc, tin_chi) VALUES ('SENTINEL_KEEP', 'Giữ lại', 1)");
   routeResolver = scenarioResponder({ ignoreOffset: ['dim_mon_hoc_odp'] });
   requestLog.length = 0;
   process.env.ODP_SYNC_PAGE_SIZE = '2';
@@ -403,13 +434,101 @@ async function runDbTests() {
   } finally {
     delete process.env.ODP_SYNC_PAGE_SIZE;
   }
-  assert.equal(pagedRepeat.counts.mon_hoc, 2, 'trang trùng phải bị bỏ, không nhân đôi dữ liệu');
-  assert.equal(
-    requestLog.filter((url) => tableOf(url) === 'dim_mon_hoc_odp').length,
-    2,
-    'phải dừng ngay khi phát hiện trang trùng'
+  assert.deepEqual(
+    pagedRepeat.errors.map((entry) => entry.key),
+    ['mon_hoc'],
+    'trang trùng phải là LỖI của bảng, không được nhận dữ liệu thiếu'
   );
-  console.log('✅ PASSED: nguồn bỏ qua offset dừng đúng, không nhân đôi.');
+  assert.equal(pagedRepeat.counts.mon_hoc, undefined, 'bảng lỗi không được tính là thành công');
+  const sentinelAfterRepeat = await query("SELECT count(*)::int AS count FROM odp_mon_hoc WHERE ma_mon_hoc = 'SENTINEL_KEEP'");
+  assert.equal(sentinelAfterRepeat.rows[0].count, 1, 'bảng lỗi phải GIỮ dữ liệu cũ');
+  const repeatRun = await query('SELECT status, error FROM odp_sync_runs WHERE id = $1', [pagedRepeat.runId]);
+  assert.equal(repeatRun.rows[0].status, 'success', 'mon_hoc không bắt buộc → run vẫn success');
+  assert.match(String(repeatRun.rows[0].error), /mon_hoc/);
+  assert.match(String(repeatRun.rows[0].error), /cùng một trang/, 'error phải nói rõ trùng trang');
+  console.log('✅ PASSED: nguồn bỏ qua offset bị coi là lỗi bảng, dữ liệu cũ được giữ.');
+
+  console.log('🧪 [ODP] 7d. Nguồn khoẻ: bảng có số dòng ĐÚNG BỘI số trang → không bị phạt...');
+  routeResolver = scenarioResponder({ overrides: { dim_mon_hoc_odp: MON_HOC_ROWS } });
+  requestLog.length = 0;
+  process.env.ODP_SYNC_PAGE_SIZE = '2';
+  let pagedExact;
+  try {
+    pagedExact = await OdpSyncService.sync({ triggerSource: 'scheduler' });
+  } finally {
+    delete process.env.ODP_SYNC_PAGE_SIZE;
+  }
+  assert.equal(pagedExact.errors.length, 0, JSON.stringify(pagedExact.errors));
+  assert.equal(pagedExact.counts.mon_hoc, 2, 'bảng 2 dòng với limit 2 phải nạp đủ 2 dòng');
+  assert.deepEqual(
+    requestLog.filter((url) => tableOf(url) === 'dim_mon_hoc_odp').map(offsetOf),
+    [0, 2],
+    'trang 2 trả 0 dòng là kết thúc bình thường'
+  );
+  console.log('✅ PASSED: bảng đúng bội số số trang không bị coi là lỗi.');
+
+  console.log('🧪 [ODP] 7e. Nguồn âm thầm cắt cỡ trang → LỖI bảng (không nhận dữ liệu thiếu)...');
+  const monHocBeforeCap = await query('SELECT ma_mon_hoc FROM odp_mon_hoc ORDER BY ma_mon_hoc');
+  routeResolver = scenarioResponder({
+    pageSizeFactor: { dim_mon_hoc_odp: 0.5 },
+    overrides: { dim_mon_hoc_odp: MON_HOC_ROWS }
+  });
+  process.env.ODP_SYNC_PAGE_SIZE = '3';
+  let capped;
+  try {
+    capped = await OdpSyncService.sync({ triggerSource: 'scheduler' });
+  } finally {
+    delete process.env.ODP_SYNC_PAGE_SIZE;
+  }
+  assert.deepEqual(capped.errors.map((entry) => entry.key), ['mon_hoc']);
+  assert.match(String(capped.errors[0].message), /giới hạn cỡ trang/);
+  const monHocAfterCap = await query('SELECT ma_mon_hoc FROM odp_mon_hoc ORDER BY ma_mon_hoc');
+  assert.deepEqual(
+    monHocAfterCap.rows,
+    monHocBeforeCap.rows,
+    'phải giữ nguyên dữ liệu cũ khi nguồn cắt cỡ trang'
+  );
+  console.log('✅ PASSED: nguồn cắt cỡ trang bị coi là lỗi bảng, dữ liệu cũ nguyên vẹn.');
+
+  console.log('🧪 [ODP] 7f. Nguồn treo (không bao giờ trả lời) → hạn cứng theo bảng, không treo lock...');
+  const suKienBefore = await query('SELECT count(*)::int AS count FROM odp_su_kien');
+  routeResolver = scenarioResponder({ stall: ['dim_su_kien_odp'] });
+  process.env.ODP_SYNC_TIMEOUT_MS = '40';
+  const startedStall = Date.now();
+  let stalled;
+  try {
+    stalled = await OdpSyncService.sync({ triggerSource: 'scheduler' });
+  } finally {
+    delete process.env.ODP_SYNC_TIMEOUT_MS;
+  }
+  const stallElapsed = Date.now() - startedStall;
+  assert.deepEqual(stalled.errors.map((entry) => entry.key), ['su_kien']);
+  assert.match(String(stalled.errors[0].message), /Quá hạn|Hết thời gian/);
+  assert.ok(stallElapsed < 15000, 'phải bỏ cuộc nhờ hạn cứng, không treo');
+  assert.equal(stalled.status, 'success', 'su_kien không bắt buộc → run vẫn success');
+  const sentinelSuKien = await query('SELECT count(*)::int AS count FROM odp_su_kien');
+  assert.equal(sentinelSuKien.rows[0].count, suKienBefore.rows[0].count, 'bảng treo phải giữ nguyên dữ liệu cũ');
+  console.log(`✅ PASSED: nguồn treo bị cắt sau ${stallElapsed}ms, giữ dữ liệu cũ.`);
+
+  console.log('🧪 [ODP] 7g. Vượt trần số dòng (ODP_SYNC_MAX_ROWS) → LỖI bảng, không OOM...');
+  const monHocBeforeOverflow = await query('SELECT ma_mon_hoc FROM odp_mon_hoc ORDER BY ma_mon_hoc');
+  routeResolver = scenarioResponder({ overrides: { dim_mon_hoc_odp: MON_HOC_PAGED_ROWS } });
+  process.env.ODP_SYNC_MAX_ROWS = '2';
+  let overflow;
+  try {
+    overflow = await OdpSyncService.sync({ triggerSource: 'scheduler' });
+  } finally {
+    delete process.env.ODP_SYNC_MAX_ROWS;
+  }
+  assert.deepEqual(overflow.errors.map((entry) => entry.key), ['mon_hoc']);
+  assert.match(String(overflow.errors[0].message), /vượt quá 2 dòng/);
+  const monHocAfterOverflow = await query('SELECT ma_mon_hoc FROM odp_mon_hoc ORDER BY ma_mon_hoc');
+  assert.deepEqual(
+    monHocAfterOverflow.rows,
+    monHocBeforeOverflow.rows,
+    'phải giữ nguyên dữ liệu cũ khi vượt trần số dòng'
+  );
+  console.log('✅ PASSED: vượt trần số dòng bị coi là lỗi bảng.');
 
   console.log('🧪 [ODP] 8. Advisory lock: instance thứ hai không ghi chồng...');
   const lockClient = await getPool().connect();
@@ -460,32 +579,61 @@ async function runDbTests() {
     assert.ok(!odpTables.has(banned), `Không được tạo bảng ${banned}`);
   }
   console.log('✅ PASSED: isReady + kho ODP không có cột PII.');
+
+  console.log('🧪 [ODP] 11. triggerSource lạ phải báo lỗi rõ ràng, không để pg CHECK nổ...');
+  const runsBefore = await query('SELECT count(*)::int AS count FROM odp_sync_runs');
+  await assert.rejects(
+    () => OdpSyncService.sync({ triggerSource: 'cron' }),
+    /triggerSource không hợp lệ/
+  );
+  await assert.rejects(() => OdpSyncService.sync({ triggerSource: null }), /triggerSource không hợp lệ/);
+  const runsAfter = await query('SELECT count(*)::int AS count FROM odp_sync_runs');
+  assert.equal(
+    runsAfter.rows[0].count,
+    runsBefore.rows[0].count,
+    'triggerSource sai không được tạo run row'
+  );
+  console.log('✅ PASSED: triggerSource được kiểm tra trước khi tạo run.');
 }
 
 async function main() {
   console.log('🧪 Bắt đầu kiểm thử ODP ingest (migration 059 + odp-sync.service.js)...');
 
-  console.log('🧪 [ODP] 1. validDiemDanh() chỉ nhận đúng 5 mã...');
+  console.log('🧪 [ODP] 1. validDiemDanh() chỉ nhận đúng 5 mã (gộp hoa/thường)...');
   for (const code of ['Có', 'Sớm', 'Trễ', 'Phép', 'Vắng']) {
     assert.equal(validDiemDanh(code), code);
     assert.equal(validDiemDanh(`  ${code}  `), code);
   }
-  for (const junk of ['26TH01', '7', '9.5', '', '   ', null, undefined, 'Có mặt', 'có', 'trễ', 0, 26]) {
+  // Dữ liệu thật có 17 dòng lệch hoa/thường → phải trả về mã chuẩn.
+  assert.equal(validDiemDanh('trễ'), 'Trễ');
+  assert.equal(validDiemDanh(' có '), 'Có');
+  assert.equal(validDiemDanh('VẮNG'), 'Vắng');
+  assert.equal(validDiemDanh('sớm'), 'Sớm');
+  for (const junk of ['26TH01', '7', '9.5', '', '   ', null, undefined, 'Có mặt', 'Có mặt ', 0, 26, 'vắng mặt']) {
     assert.equal(validDiemDanh(junk), null, `Giá trị rác ${JSON.stringify(junk)} phải thành NULL`);
   }
-  console.log('✅ PASSED: chỉ 5 mã điểm danh hợp lệ, rác → NULL.');
+  console.log('✅ PASSED: chỉ 5 mã điểm danh hợp lệ (gộp hoa/thường), rác → NULL.');
 
   console.log('🧪 [ODP] 2. hocKyLabel() suy từ nkhk...');
-  assert.deepEqual(hocKyLabel(24251), { hoc_ky: 1, nien_khoa: 2024, ten_hoc_ky: 'Học kỳ 1, năm học 2024-2025' });
-  assert.deepEqual(hocKyLabel('24252'), { hoc_ky: 2, nien_khoa: 2024, ten_hoc_ky: 'Học kỳ 2, năm học 2024-2025' });
-  assert.deepEqual(hocKyLabel(24253), { hoc_ky: 3, nien_khoa: 2024, ten_hoc_ky: 'Học kỳ 3, năm học 2024-2025' });
-  assert.deepEqual(hocKyLabel(21221), { hoc_ky: 1, nien_khoa: 2021, ten_hoc_ky: 'Học kỳ 1, năm học 2021-2022' });
-  assert.deepEqual(hocKyLabel(26271), { hoc_ky: 1, nien_khoa: 2026, ten_hoc_ky: 'Học kỳ 1, năm học 2026-2027' });
-  assert.deepEqual(hocKyLabel(26272), { hoc_ky: 2, nien_khoa: 2026, ten_hoc_ky: 'Học kỳ 2, năm học 2026-2027' });
-  assert.deepEqual(hocKyLabel(null), { hoc_ky: null, nien_khoa: null, ten_hoc_ky: null });
+  const label = (hoc_ky, nien_khoa) => ({
+    hoc_ky,
+    nien_khoa,
+    ten_nien_khoa: nien_khoa === null ? null : `năm học ${nien_khoa}-${nien_khoa + 1}`,
+    ten_hoc_ky: hoc_ky === null ? null : `Học kỳ ${hoc_ky}, năm học ${nien_khoa}-${nien_khoa + 1}`
+  });
+  assert.deepEqual(hocKyLabel(24251), label(1, 2024));
+  assert.deepEqual(hocKyLabel('24252'), label(2, 2024));
+  assert.deepEqual(hocKyLabel(24253), label(3, 2024));
+  assert.deepEqual(hocKyLabel(21221), label(1, 2021));
+  assert.deepEqual(hocKyLabel(26271), label(1, 2026));
+  assert.deepEqual(hocKyLabel(26272), label(2, 2026));
+  // Mã học kỳ lạ (hè/hk 4) vẫn giữ được niên khóa, chỉ mất nhãn học kỳ.
+  assert.deepEqual(hocKyLabel(24254), { hoc_ky: null, nien_khoa: 2024, ten_nien_khoa: 'năm học 2024-2025', ten_hoc_ky: null });
+  assert.deepEqual(hocKyLabel(null), { hoc_ky: null, nien_khoa: null, ten_nien_khoa: null, ten_hoc_ky: null });
+  assert.deepEqual(hocKyLabel('abc'), { hoc_ky: null, nien_khoa: null, ten_nien_khoa: null, ten_hoc_ky: null });
   console.log('✅ PASSED: nhãn học kỳ đúng công thức (hk = ký tự thứ 5).');
 
-  console.log('🧪 [ODP] 3. normalizeOdpRows() coerce + loại dòng thiếu mssv...');
+  console.log('🧪 [ODP] 3. normalizeOdpRows() coerce + loại dòng thiếu cột khoá bắt buộc...');
   const diemDanh = normalizeOdpRows('diem_danh', [
     { mssv: '', ma_nhom: 'INF0873_24251_01', ngay_origin: '2024-09-14', buoi: '1', diem_danh: 'Có' },
     { mssv: null, ma_nhom: 'INF0873_24251_01', ngay_origin: '2024-09-14', buoi: '1', diem_danh: 'Có' },
@@ -494,9 +642,13 @@ async function main() {
     { mssv: '24050128', ma_nhom: 'INF0873_24251_01', ngay_origin: '2024-09-14', buoi: '3', diem_danh: '9.5' },
     { mssv: '24050129', ma_nhom: 'INF0873_24251_01', ngay_origin: '2024-09-14', buoi: '4', diem_danh: '' },
     { mssv: '24050130', ma_nhom: 'INF0873_24251_01', ngay_origin: '2024-09-14', buoi: '5', diem_danh: 'Vắng' },
-    { mssv: '24050131', ma_nhom: 'LAP1234_26271_01', buoi: '6', diem_danh: 'Có' }
+    { mssv: '24050131', ma_nhom: 'LAP1234_26271_01', buoi: '6', diem_danh: 'Có' },
+    // Hoa/thường phải về mã chuẩn (17 dòng thật).
+    { mssv: '24050132', ma_nhom: 'LAP1234_26271_01', buoi: '7', diem_danh: 'trễ' },
+    // `diem_danh` chỉ NOT NULL ở mssv: thiếu ngày/vẫn phải GIỮ (không bịa, không bỏ).
+    { mssv: '24050133', buoi: '8', diem_danh: 'có' }
   ]);
-  assert.equal(diemDanh.length, 6, '2 dòng thiếu mssv phải bị loại');
+  assert.equal(diemDanh.length, 8, '2 dòng thiếu mssv phải bị loại, dòng thiếu ngày phải giữ');
   assert.equal(diemDanh[0].mssv, 24050126, 'mssv phải là số nguyên');
   assert.equal(diemDanh[0].diem_danh, null, "'26TH01' là rác → NULL");
   assert.equal(diemDanh[1].diem_danh, null, "'7' là rác → NULL");
@@ -504,10 +656,30 @@ async function main() {
   assert.equal(diemDanh[3].diem_danh, null, "'' là rác → NULL");
   assert.equal(diemDanh[4].diem_danh, 'Vắng', "'Vắng' phải giữ nguyên");
   assert.equal(diemDanh[5].nkhk, 26271, 'nkhk phải suy từ ma_nhom');
+  assert.equal(diemDanh[5].ngay, null, 'nguồn thiếu ngày → NULL (không bịa)');
+  assert.equal(diemDanh[6].diem_danh, 'Trễ', "'trễ' → 'Trễ'");
+  assert.equal(diemDanh[7].diem_danh, 'Có', "'có' → 'Có'");
+  assert.equal(diemDanh[7].ngay, null);
   assert.equal(diemDanh[1].buoi, 2);
   assert.equal(diemDanh[1].ngay, '2024-09-14');
-  assert.equal(diemDanh[5].ngay, null, 'nguồn thiếu ngày → NULL (không bịa)');
   assert.ok(!Object.keys(diemDanh[0]).includes('ngay_origin'), 'không được lưu cột phụ của nguồn');
+
+  // Cột khoá NOT NULL (nkhk/ma_nhom của tbhk/bang_diem/ren_luyen): 1 dòng hỏng không
+  // được làm abort cả bảng → phải bị loại tại tầng chuẩn hoá.
+  const tbhk = normalizeOdpRows('tbhk', [
+    { mssv: '24050126', nkhk: '24251', dtb_tich_luy_he_4: '3.05' },
+    { mssv: '24050127', nkhk: null, dtb_tich_luy_he_4: '3.10' },
+    { mssv: '24050128', nkhk: '', dtb_tich_luy_he_4: '3.20' },
+    { mssv: null, nkhk: '24251', dtb_tich_luy_he_4: '3.30' }
+  ]);
+  assert.equal(tbhk.length, 1, 'dòng thiếu nkhk hoặc mssv phải bị loại khỏi odp_tbhk');
+
+  const bangDiemNullNhom = normalizeOdpRows('bang_diem', [
+    { mssv: '24050126', nkhk: '24251', ma_nhom: null, diem_hp: '7.2' },
+    { mssv: '24050126', nkhk: '24251', ma_nhom: 'INF0873_24251_01', diem_hp: '7.2' }
+  ]);
+  assert.equal(bangDiemNullNhom.length, 1, 'dòng thiếu ma_nhom phải bị loại khỏi odp_bang_diem');
+  assert.equal(bangDiemNullNhom[0].ma_nhom, 'INF0873_24251_01');
 
   const monHoc = normalizeOdpRows('mon_hoc', [
     { ma_mon_hoc: 'INF0873', ten_mon_hoc: 'X', tin_chi: '3', ma_khoa: 'TH', type: 'Chuyên ngành' },

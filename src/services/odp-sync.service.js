@@ -21,14 +21,50 @@ const DEFAULT_PAGE_SIZE = 15000;
 const DEFAULT_TIMEOUT_MS = 180000;
 const DEFAULT_RETRY_ATTEMPTS = 5;
 const DEFAULT_RETRY_BASE_MS = 500;
+const DEFAULT_MAX_ROWS = 600000;
 const INSERT_BATCH_SIZE = 1000;
 const STALE_RUN_HOURS = 6;
+
+/** Hạn cứng cho TRỌN một bảng = bội số của timeout idle, tránh treo vô hạn giữ advisory lock. */
+const TABLE_DEADLINE_MULTIPLIER = 10;
+
+const TRIGGER_SOURCES = new Set(['scheduler', 'manual']);
 
 /** Bảng bắt buộc: lỗi các bảng này → cả run là `failed`. */
 const ODP_REQUIRED_KEYS = new Set(['sinh_vien', 'tbhk']);
 
+/**
+ * Cột khoá KHÔNG được null/empty (khớp NOT NULL/PK trong migration 059). Dòng vi phạm
+ * bị loại để một dòng hỏng không abort cả bảng. `diem_danh` chỉ NOT NULL ở `mssv`
+ * (ngay/nkhk/ma_nhom của nó cho phép NULL theo thiết kế nguồn).
+ */
+const ROW_REQUIRED_KEYS = {
+  sinh_vien: ['mssv'],
+  tbhk: ['mssv', 'nkhk'],
+  bang_diem: ['mssv', 'nkhk', 'ma_nhom'],
+  diem_danh: ['mssv'],
+  thoi_khoa_bieu: ['id'],
+  ren_luyen: ['mssv', 'nkhk'],
+  su_kien: ['id'],
+  mon_hoc: ['ma_mon_hoc']
+};
+
+/** Khi 2 dòng trùng khoá bị gộp, ưu tiên dòng có nhiều cột này non-null hơn. */
+const DEDUPE_PREFERRED_COLUMNS = {
+  diem_danh: ['diem_danh', 'gio_co_mat']
+};
+
 /** Chỉ 5 mã điểm danh đã chấm hợp lệ; mọi giá trị khác ("26TH01", "7", "9.5", "") → NULL. */
 const VALID_DIEM_DANH = new Set(['Có', 'Sớm', 'Trễ', 'Phép', 'Vắng']);
+
+/** Đối chiếu không phân biệt hoa/thường nhưng trả về mã chuẩn ('trễ' → 'Trễ'). */
+const CANONICAL_DIEM_DANH = new Map(
+  [...VALID_DIEM_DANH].map((code) => [code.toLocaleLowerCase('vi'), code])
+);
+
+function isBlank(value) {
+  return value === null || value === undefined || value === '';
+}
 
 function envBool(name, fallback = false) {
   const value = process.env[name];
@@ -89,26 +125,35 @@ function toBool(value) {
   return Number.isFinite(number) ? number !== 0 : null;
 }
 
-/** @returns {string|null} mã điểm danh hợp lệ, hoặc null nếu là rác. */
+/** @returns {string|null} mã điểm danh chuẩn hoá hoa/thường, hoặc null nếu là rác. */
 export function validDiemDanh(value) {
   if (value === null || value === undefined) return null;
   const text = String(value).normalize('NFC').trim();
-  return VALID_DIEM_DANH.has(text) ? text : null;
+  return CANONICAL_DIEM_DANH.get(text.toLocaleLowerCase('vi')) || null;
 }
 
-/** Nhãn học kỳ suy trực tiếp từ `nkhk`: hk = ký tự thứ 5, niên khóa = 2000 + 2 ký tự đầu. */
+/**
+ * Nhãn học kỳ suy trực tiếp từ `nkhk`: hk = ký tự thứ 5, niên khóa = 2000 + 2 ký tự đầu.
+ * Mã học kỳ lạ (vd `24254` → hk 4) vẫn giữ được `nien_khoa`/`ten_nien_khoa`; chỉ
+ * `hoc_ky`/`ten_hoc_ky` là null khi không nhận diện được học kỳ.
+ */
 export function hocKyLabel(nkhk) {
+  const empty = { hoc_ky: null, nien_khoa: null, ten_nien_khoa: null, ten_hoc_ky: null };
   const term = toInt(nkhk);
   const text = term === null ? '' : String(term);
-  if (text.length < 5) return { hoc_ky: null, nien_khoa: null, ten_hoc_ky: null };
-  const nien_khoa = 2000 + Number(text.slice(0, 2));
+  if (text.length < 5) return { ...empty };
+  const year = Number(text.slice(0, 2));
+  if (!Number.isInteger(year) || year <= 0) return { ...empty };
+  const nien_khoa = 2000 + year;
+  const ten_nien_khoa = `năm học ${nien_khoa}-${nien_khoa + 1}`;
   const hoc_ky = Number(text.charAt(4));
-  if (!Number.isInteger(nien_khoa) || !Number.isInteger(hoc_ky) || hoc_ky < 1 || hoc_ky > 3) {
-    return { hoc_ky: null, nien_khoa: null, ten_hoc_ky: null };
+  if (!Number.isInteger(hoc_ky) || hoc_ky < 1 || hoc_ky > 3) {
+    return { hoc_ky: null, nien_khoa, ten_nien_khoa, ten_hoc_ky: null };
   }
   return {
     hoc_ky,
     nien_khoa,
+    ten_nien_khoa,
     ten_hoc_ky: `Học kỳ ${hoc_ky}, năm học ${nien_khoa}-${nien_khoa + 1}`
   };
 }
@@ -270,14 +315,16 @@ function readSource(row, source) {
 }
 
 /**
- * Chuẩn hoá thuần: coerce kiểu, map cột, bỏ dòng thiếu khoá (mssv/id/ma_mon_hoc).
+ * Chuẩn hoá thuần: coerce kiểu, map cột, bỏ dòng thiếu cột khoá bắt buộc
+ * (mssv/nkhk/ma_nhom/id/ma_mon_hoc tuỳ bảng — xem ROW_REQUIRED_KEYS) để một dòng
+ * hỏng không làm abort cả bảng khi INSERT.
  * @returns {Array<object>} chỉ gồm các cột đích của bảng.
  */
 export function normalizeOdpRows(key, rows) {
   const table = TABLE_BY_KEY.get(key);
   if (!table) throw new Error(`Bảng ODP không hợp lệ: ${key}`);
   const fields = TABLE_FIELDS[key];
-  const identity = table.pk[0];
+  const requiredKeys = ROW_REQUIRED_KEYS[key] || [table.pk[0]];
   const normalized = [];
   for (const row of rows || []) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
@@ -285,7 +332,7 @@ export function normalizeOdpRows(key, rows) {
     for (const [name, kind, source] of fields) {
       record[name] = COERCERS[kind](readSource(row, source || name));
     }
-    if (record[identity] === null || record[identity] === undefined) continue;
+    if (requiredKeys.some((column) => isBlank(record[column]))) continue;
     normalized.push(record);
   }
   return normalized;
@@ -315,8 +362,19 @@ function httpError(message, status = null) {
   return error;
 }
 
-function requestJson(url, { user, password, timeout, rejectUnauthorized }) {
+function requestJson(url, { user, password, timeout, rejectUnauthorized, deadline }) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let deadlineTimer = null;
+    const settle = (callback) => (value) => {
+      if (settled) return;
+      settled = true;
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      callback(value);
+    };
+    const resolveOnce = settle(resolve);
+    const rejectOnce = settle(reject);
+
     const request = https.get(url, {
       headers: {
         Authorization: `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`,
@@ -329,25 +387,39 @@ function requestJson(url, { user, password, timeout, rejectUnauthorized }) {
       let body = '';
       response.setEncoding('utf8');
       response.on('data', (chunk) => { body += chunk; });
+      // Stream đứt/abort giữa chừng phải reject, nếu không promise treo mãi.
+      response.on('error', (error) => {
+        rejectOnce(httpError(`Lỗi đọc dữ liệu từ ${url}: ${error.message}`, null));
+      });
       response.on('end', () => {
         if (response.statusCode === 401) {
-          return reject(httpError('Sai tài khoản hoặc mật khẩu CDS.', 401));
+          return rejectOnce(httpError('Sai tài khoản hoặc mật khẩu CDS.', 401));
         }
         if (!response.statusCode || response.statusCode >= 400) {
-          return reject(httpError(`CDS trả HTTP ${response.statusCode} cho ${url}.`, response.statusCode));
+          return rejectOnce(httpError(`CDS trả HTTP ${response.statusCode} cho ${url}.`, response.statusCode));
         }
         try {
           const payload = JSON.parse(body);
           const rows = Array.isArray(payload) ? payload : payload?.data;
           if (!Array.isArray(rows)) throw new Error('Nguồn không trả về danh sách JSON.');
-          resolve(rows.filter((row) => row && typeof row === 'object' && !Array.isArray(row)));
+          resolveOnce(rows.filter((row) => row && typeof row === 'object' && !Array.isArray(row)));
         } catch (error) {
-          reject(httpError(`JSON không hợp lệ từ ${url}: ${error.message}`, null));
+          rejectOnce(httpError(`JSON không hợp lệ từ ${url}: ${error.message}`, null));
         }
       });
     });
+
+    // Hạn cứng cho trọn một bảng: dù response nhỏ giọt hay không bao giờ kết thúc thì
+    // promise vẫn settle, không giữ advisory lock vô hạn.
+    const remaining = Number(deadline) - Date.now();
+    if (Number.isFinite(remaining)) {
+      deadlineTimer = setTimeout(() => {
+        request.destroy(httpError(`Quá hạn đồng bộ bảng khi tải ${url}.`, null));
+      }, Math.max(0, remaining));
+    }
+
     request.on('timeout', () => request.destroy(httpError(`Hết thời gian tải ${url}.`, null)));
-    request.on('error', reject);
+    request.on('error', rejectOnce);
   });
 }
 
@@ -374,50 +446,96 @@ function rowIdentity(table, row) {
  * Kéo trọn một bảng ODP.
  *
  * Nguồn thật (`cds.bdu.edu.vn/data`) HIỆN BỎ QUA cả `limit` lẫn `offset`: mỗi request
- * trả về nguyên bảng dưới dạng một mảng JSON. Vì vậy ngoài luật phân trang chuẩn
- * ("trang < limit thì dừng"), hàm còn có 2 chốt an toàn để không bao giờ lặp vô hạn
- * hoặc nhân đôi dữ liệu nếu server đổi hành vi:
- *   1. `batch.length > limit` → server bỏ qua `limit` ⇒ 1 response đã là trọn bảng, dừng.
- *   2. Trang sau trùng chữ ký với trang trước (cùng số dòng + cùng dòng đầu/cuối)
- *      → server bỏ qua `offset` ⇒ dừng.
+ * trả về nguyên bảng dưới dạng một mảng JSON. Luật phân trang chuẩn ("trang < limit thì
+ * dừng") vì thế không đủ, nên có thêm các chốt an toàn — mọi bất thường đều là LỖI CỦA
+ * BẢNG (throw) để bảng giữ nguyên dữ liệu cũ, tuyệt đối không ghi dữ liệu thiếu:
+ *   1. `batch.length > limit` → nguồn bỏ qua `limit` ⇒ 1 response đã là trọn bảng, dừng.
+ *   2. Trang sau trùng chữ ký với trang trước → nguồn bỏ qua `offset` ⇒ dừng bằng lỗi.
+ *   3. Trang đầu ngắn bất thường (`0 < length < limit`) → probe 1 lần với `limit * 2`;
+ *      probe trả nhiều hơn ⇒ nguồn giới hạn cỡ trang ⇒ lỗi.
+ *   4. Tổng số dòng vượt `ODP_SYNC_MAX_ROWS` ⇒ lỗi (chặn OOM).
  */
 async function fetchTable(table, options) {
   const limit = Math.max(1, envInt('ODP_SYNC_PAGE_SIZE', DEFAULT_PAGE_SIZE));
   const maxPages = Math.max(1, envInt('ODP_SYNC_MAX_PAGES', 1000));
+  const maxRows = Math.max(1, envInt('ODP_SYNC_MAX_ROWS', DEFAULT_MAX_ROWS));
+  const tableOptions = { ...options, deadline: Date.now() + options.timeout * TABLE_DEADLINE_MULTIPLIER };
   const rows = [];
   let offset = 0;
   let previousSignature = null;
   for (let page = 0; page < maxPages; page += 1) {
-    const batch = await fetchPage(`${options.base}/${table.endpoint}?limit=${limit}&offset=${offset}`, options);
+    const batch = await fetchPage(`${options.base}/${table.endpoint}?limit=${limit}&offset=${offset}`, tableOptions);
     const signature = `${batch.length}|${rowIdentity(table, batch[0])}|${rowIdentity(table, batch[batch.length - 1])}`;
     if (previousSignature !== null && signature === previousSignature) {
-      console.warn(`[odp-sync] ${table.key}: nguồn trả lại cùng một trang ở offset=${offset} — nguồn bỏ qua offset, dừng phân trang.`);
-      return rows;
+      throw new Error(
+        `Nguồn trả lại cùng một trang ở offset=${offset} (bỏ qua offset) — không xác định được toàn bộ bảng.`
+      );
     }
     for (const row of batch) rows.push(row);
-    if (batch.length !== limit) return rows;
+    if (rows.length > maxRows) {
+      throw new Error(`Bảng ${table.key} vượt quá ${maxRows} dòng — nghi nguồn trả lặp, giữ nguyên dữ liệu cũ.`);
+    }
+    if (batch.length !== limit) {
+      // Trang đầu NGẮN (`0 < length < limit`): có thể là bảng nhỏ thật, hoặc nguồn
+      // âm thầm cắt cỡ trang → probe 1 lần với `limit * 2` để phân biệt.
+      if (offset === 0 && batch.length > 0 && batch.length < limit) {
+        const probe = await fetchPage(
+          `${options.base}/${table.endpoint}?limit=${limit * 2}&offset=0`,
+          tableOptions
+        );
+        if (probe.length > batch.length) {
+          throw new Error(
+            `Nguồn giới hạn cỡ trang: limit=${limit} trả ${batch.length} dòng nhưng `
+            + `limit=${limit * 2} trả ${probe.length} dòng — giữ nguyên dữ liệu cũ.`
+          );
+        }
+      }
+      return rows;
+    }
     previousSignature = signature;
     offset += limit;
   }
   throw new Error(`Phân trang ${table.endpoint} vượt quá ${maxPages} trang.`);
 }
 
-/** Giữ 1 dòng cho mỗi khoá (dòng sau ghi đè) để TRUNCATE+INSERT không vỡ vì khoá trùng. */
-function dedupeRows(rows, pk) {
-  if (!pk || pk.length === 0) return rows;
-  const unique = new Map();
+function preferenceScore(row, columns) {
+  return columns.reduce((score, column) => score + (isBlank(row[column]) ? 0 : 1), 0);
+}
+
+/**
+ * Gộp dòng trùng khoá để TRUNCATE+INSERT không vỡ vì khoá trùng.
+ * - Dòng có bất kỳ thành phần khoá nào null/empty KHÔNG bị gộp (không dồn vào '\u0000'),
+ *   vì các khoá đó cho phép NULL ở tầng DB (vd `odp_diem_danh.ngay`).
+ * - Khi gộp, ưu tiên dòng có nhiều cột `DEDUPE_PREFERRED_COLUMNS` non-null hơn.
+ */
+function dedupeRows(table, rows) {
+  const pk = table.pk || [];
+  const preferred = DEDUPE_PREFERRED_COLUMNS[table.key] || [];
+  const indexByKey = new Map();
+  const output = [];
   for (const row of rows) {
-    const key = pk
-      .map((column) => (row[column] === null || row[column] === undefined ? '\u0000' : String(row[column])))
-      .join('\u0001');
-    unique.set(key, row);
+    const components = pk.map((column) => row[column]);
+    if (pk.length === 0 || components.some(isBlank)) {
+      output.push(row);
+      continue;
+    }
+    const key = components.join('\u0001');
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, output.length);
+      output.push(row);
+      continue;
+    }
+    const index = indexByKey.get(key);
+    if (preferenceScore(row, preferred) >= preferenceScore(output[index], preferred)) {
+      output[index] = row;
+    }
   }
-  return [...unique.values()];
+  return output;
 }
 
 /** TRUNCATE + INSERT theo batch — PHẢI được gọi trong transaction của caller. */
 async function replaceTable(client, table, rows) {
-  const records = dedupeRows(rows, table.pk);
+  const records = dedupeRows(table, rows);
   await client.query(`TRUNCATE TABLE ${table.table}`);
   const columns = table.columns.join(', ');
   for (let index = 0; index < records.length; index += INSERT_BATCH_SIZE) {
@@ -498,7 +616,12 @@ async function runSync(client, triggerSource) {
         inserted = await replaceTable(client, table, normalized);
         await client.query('COMMIT');
       } catch (error) {
-        await client.query('ROLLBACK');
+        // ROLLBACK lỗi không được che lỗi gốc.
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error(`[odp-sync] ROLLBACK thất bại cho ${table.key}: ${rollbackError.message}`);
+        }
         throw error;
       }
       counts[table.key] = inserted;
@@ -531,6 +654,11 @@ export const OdpSyncService = {
    * @returns {Promise<{ skipped: boolean, runId: number|null, counts: object, errors: Array<{key:string,message:string}>, status?: string }>}
    */
   async sync({ triggerSource = 'scheduler' } = {}) {
+    if (!TRIGGER_SOURCES.has(triggerSource)) {
+      throw new Error(
+        `triggerSource không hợp lệ: ${JSON.stringify(triggerSource)} (chỉ nhận "scheduler" hoặc "manual").`
+      );
+    }
     if (!isDatabaseConfigured()) throw new Error('Chưa cấu hình DATABASE_URL.');
     const result = await withAdvisoryLock(ODP_SYNC_LOCK_ID, (client) => runSync(client, triggerSource));
     if (!result.acquired) {
