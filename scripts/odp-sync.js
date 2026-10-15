@@ -18,7 +18,7 @@ try {
     if (ingest.skipped) {
       console.log('ODP sync skipped: another instance is already running.');
     } else {
-      if (ingest.errors.length > 0) {
+      if (ingest.errors?.length) {
         console.warn(`ODP sync run ${ingest.runId} có ${ingest.errors.length} bảng lỗi (giữ dữ liệu cũ):`);
         for (const entry of ingest.errors) {
           console.warn(`  - ${entry.key}: ${entry.message}`);

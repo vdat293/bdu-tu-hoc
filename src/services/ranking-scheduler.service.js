@@ -53,7 +53,8 @@ async function isEnabled() {
  * KHÔNG được chặn ranking: ranking đọc kho của ngày hôm trước nên vẫn có kết quả.
  * Vì vậy hàm này KHÔNG bao giờ ném ra ngoài — mọi lỗi chỉ được ghi log.
  *
- * Export để test gọi trực tiếp mà không phải chờ tới 03:00.
+ * Export để test gọi trực tiếp mà không phải chờ tới 03:00. KHÔNG được gọi
+ * song song với nhịp timer (`runTimerTick`) — dùng chung cờ `running`.
  */
 export async function runScheduledSync() {
   if (!(await isEnabled())) {
@@ -104,6 +105,26 @@ export async function runScheduledSync() {
   return { enabled: true, odp: odpResult, ranking: rankingResult };
 }
 
+/**
+ * Một nhịp của lịch 03:00. Bọc `runScheduledSync()` để chuỗi lịch KHÔNG BAO GIỜ
+ * đứt: kể cả khi `runScheduledSync()` ném lỗi bất ngờ thì vẫn phải `scheduleNext()`.
+ * Export để test gọi trực tiếp (tham số `runSync` chỉ là seam cho test).
+ * @param {() => Promise<unknown>} [runSync]
+ */
+export async function runTimerTick(runSync = runScheduledSync) {
+  if (!running) {
+    running = true;
+    try {
+      await runSync();
+    } catch (error) {
+      console.error('[ranking-sync] Lỗi không mong đợi khi chạy lịch:', error.message);
+    } finally {
+      running = false;
+    }
+  }
+  scheduleNext();
+}
+
 function scheduleNext() {
   const hour = configuredHour();
   const delay = millisecondsUntilNextRun(Date.now(), hour);
@@ -113,17 +134,7 @@ function scheduleNext() {
     `[ranking-sync] Lần chạy tiếp theo: ${nextAt.toISOString()} `
     + `(${String(hour).padStart(2, '0')}:00 Asia/Ho_Chi_Minh)`
   );
-  timer = setTimeout(async () => {
-    if (!running) {
-      running = true;
-      try {
-        await runScheduledSync();
-      } finally {
-        running = false;
-      }
-    }
-    scheduleNext();
-  }, delay);
+  timer = setTimeout(runTimerTick, delay);
   timer.unref?.();
 }
 

@@ -18,7 +18,8 @@ import { SystemSettingsService } from '../src/services/system-settings.service.j
 import {
   millisecondsUntilNextRun,
   RankingSchedulerService,
-  runScheduledSync
+  runScheduledSync,
+  runTimerTick
 } from '../src/services/ranking-scheduler.service.js';
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,7 @@ async function main() {
   RankingSchedulerService.stop();
   assert.ok(calls.includes('odp:stale'), 'start() phải dọn run treo của ingest');
   assert.ok(calls.includes('ranking:stale'), 'start() phải dọn run treo của ranking');
+  console.log('✅ PASSED: chỉ ingest ready → vẫn bật lịch và dọn treo cả hai.');
 
   console.log('🧪 [ODP sched] 7. start() khi CẢ HAI chưa ready → tắt như cũ...');
   installMocks({
@@ -158,7 +160,24 @@ async function main() {
   RankingSchedulerService.stop();
   console.log('✅ PASSED: cả hai chưa ready → tắt.');
 
-  console.log('🧪 [ODP sched] 8. millisecondsUntilNextRun() giữ nguyên hành vi...');
+  console.log('🧪 [ODP sched] 8. runScheduledSync ném lỗi bất ngờ → scheduleNext VẪN chạy (chuỗi lịch không đứt)...');
+  RankingSchedulerService.stop();
+  await runTimerTick(async () => {
+    throw new Error('lỗi bất ngờ ngoài dự kiến');
+  });
+  assert.equal(
+    RankingSchedulerService.isStarted(),
+    true,
+    'lỗi bất ngờ vẫn phải đặt lại timer cho lần chạy kế tiếp'
+  );
+  assert.ok(
+    RankingSchedulerService.getNextRunAt(),
+    'lần chạy kế tiếp vẫn phải được lên lịch sau lỗi bất ngờ'
+  );
+  RankingSchedulerService.stop();
+  console.log('✅ PASSED: lỗi bất ngờ không làm đứt chuỗi lịch 03:00.');
+
+  console.log('🧪 [ODP sched] 9. millisecondsUntilNextRun() giữ nguyên hành vi...');
   const beforeThree = Date.UTC(2026, 8, 1, 19, 30, 0);
   assert.equal(millisecondsUntilNextRun(beforeThree), 30 * 60 * 1000);
   const exactlyThree = Date.UTC(2026, 8, 1, 20, 0, 0);
