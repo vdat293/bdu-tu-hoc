@@ -54,7 +54,7 @@ Cột "Controller" là file export object literal; cột "Route" là file chứa
 | **clubs** | `src/modules/clubs/clubs.controller.js` (289) | `src/routes/clubs.routes.js` | `clan-quiz.service.js`, `clan-role.service.js`, `permission.service.js`, `student.service.js`, `bdu-identity.service.js` |
 | **vocab** | `src/modules/vocab/vocab.controller.js` (150) | `src/routes/vocab.routes.js` | `vocab.service.js`, `bdu-identity.service.js` |
 | **grammar** | `src/modules/grammar/grammar.controller.js` (128) | `src/routes/grammar.routes.js` | `grammar.service.js`, `bdu-identity.service.js` |
-| **admin** (tách riêng) | `src/modules/admin/admin-dashboard.controller.js` (436) | `src/routes/admin.routes.js` | `traffic.service.js`, `system-settings.service.js`, `identity-admin.service.js`, `academic-ranking.service.js`, `ranking-scheduler.service.js`, `bdu.service.js`, `bdu-identity.service.js` |
+| **admin** (tách riêng) | `src/modules/admin/admin-dashboard.controller.js` (436) | `src/routes/admin.routes.js` | `traffic.service.js`, `system-settings.service.js`, `identity-admin.service.js`, `academic-ranking.service.js`, `odp-sync.service.js`, `ranking-scheduler.service.js`, `bdu.service.js`, `bdu-identity.service.js` |
 
 Hai điểm cần lưu ý về bảng này:
 
@@ -175,6 +175,17 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 - **Một taxonomy duy nhất**: mọi phép gom theo tính năng đều qua `featureForPath` trong `src/config/feature-groups.js` (endpoint lạ như đăng nhập/thông báo rơi vào nhóm `other` nhưng vẫn nằm trong tổng); giữ một chỗ tra cứu để server và tab Insights không lệch nhau khi thêm tính năng mới.
 - **Một múi giờ duy nhất**: `created_at` lưu UTC nên mọi cột thời gian tính toán đều bọc `(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')` qua hằng `ANALYTICS_TZ`; quên quy đổi thì heatmap và cohort lệch đúng 7 tiếng.
 - **Lỗi 5xx chuỗi cố định**: service để lỗi DB nổi lên, controller đổi thành thông báo cố định để không lộ chi tiết SQL; khi chưa cấu hình DB (`!isDatabaseConfigured()`) service trả cấu trúc rỗng để trang Insights hiện rỗng thay vì 500 trắng.
+
+### 3.8. Kho ODP là nguồn duy nhất cho TTCDS + ranking, và lần chạy 03:00 có thứ tự bắt buộc
+
+**Quy ước**: `src/services/odp-sync.service.js` (migration `059_odp_ingest.sql`) kéo 8 bảng `odp_*` từ `cds.bdu.edu.vn/data` (`CDS_BASE_URL`, Basic auth `CDS_USER`/`CDS_PASSWORD`, `ODP_SYNC_TIMEOUT_MS`, `ODP_SYNC_MAX_ROWS`) rồi ghi lại **từng bảng một**: fetch trọn bảng trước, sau đó `TRUNCATE + INSERT` trong một transaction. `RankingSchedulerService` (lịch `RANKING_SYNC_HOUR`, mặc định 03:00) chạy `OdpSyncService.sync()` **trước** rồi mới `AcademicRankingService.sync()`. TTCDS (`ttcds-student.service.js`) và ranking (`academic-ranking.service.js`) đều chỉ đọc kho `odp_*` local — không còn proxy Dashboard BE, không còn `DASHBOARD_*`.
+
+**Vì sao**:
+
+- **Thứ tự ingest → ranking**: ranking đọc `odp_tbhk`/`odp_sinh_vien`/`odp_bang_diem` để tính điểm. Nếu ranking chạy trước ingest thì nó đọc kho cũ (dữ liệu đúng nhưng trễ một nhịp) — đổi thứ tự là đổi kết quả xếp hạng của đêm đó. Ingest lỗi **không** chặn ranking: ranking vẫn chạy trên kho cũ và ghi cảnh báo, nên chuỗi lịch 03:00 không bao giờ đứt.
+- **Fetch-trước-truncate-sau trong transaction của từng bảng**: mạng hỏng giữa chừng hoặc nguồn trả 0 dòng thì bảng đó **giữ nguyên dữ liệu cũ**, không bao giờ làm rỗng kho. Một bảng lỗi cũng không kéo rollback các bảng khác (`errors` chỉ ghi nhận; chỉ bảng bắt buộc `sinh_vien`/`tbhk` lỗi mới đặt run `failed`).
+- **Nguồn đọc duy nhất**: gộp 5 lần `fetchRows` cũ của ranking và các truy vấn TTCDS vào chung kho `odp_*` để mỗi ngày chỉ kéo dữ liệu một lần, tránh lệch số giữa hai tính năng.
+- **`/admin` đọc qua service, không SQL trực tiếp**: `GET /api/admin/dashboard/odp-sync` gọi `OdpSyncService.getLatestRun()` (giữ đúng nguyên tắc mục 4.2: controller admin không tự query); `POST` gọi `OdpSyncService.sync({ triggerSource: 'manual' })`. Hai route đăng ký **sau** guard `requireAdmin` như mọi route `/admin/dashboard/*` khác.
 
 ---
 

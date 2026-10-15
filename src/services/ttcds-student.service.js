@@ -116,11 +116,13 @@ async function buildStudentDetail(key) {
     query(
       // `odp_bang_diem.tin_chi` luôn NULL (nguồn không có cột) → lấy từ `odp_mon_hoc`
       // theo mã môn suy từ prefix `ma_nhom` (cùng quy tắc `courseCode()` của
-      // academic-ranking.service.js: phần trước dấu `_` đầu tiên).
+      // academic-ranking.service.js: phần trước dấu `_` đầu tiên). So khớp KHÔNG
+      // phân biệt hoa/thường ở cả hai vế để mã môn nguồn lệch case vẫn nối được.
       `SELECT d.nkhk, d.ma_nhom, d.ten_mon_hoc, d.diem_hp, d.diem_hp_4, d.diem_chu_hp, d.dat_hp,
               COALESCE(d.tin_chi, m.tin_chi) AS tin_chi
        FROM odp_bang_diem d
-       LEFT JOIN odp_mon_hoc m ON m.ma_mon_hoc = split_part(d.ma_nhom, '_', 1)
+       LEFT JOIN odp_mon_hoc m
+         ON upper(trim(m.ma_mon_hoc)) = upper(trim(split_part(d.ma_nhom, '_', 1)))
        WHERE d.mssv::text = $1
        ORDER BY d.nkhk, d.ma_nhom`,
       [key]

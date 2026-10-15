@@ -55,6 +55,10 @@ const state = {
   // chỉ tải được bằng token của quản trị viên hệ thống (system owner).
   ttcds: null,
   ttcdsBusy: false,
+  // Kho ODP (tab odp): GET /api/admin/dashboard/odp-sync → lần chạy gần nhất +
+  // counts; nút "Chạy ngay" POST cùng endpoint. `odpSyncBusy` chặn double-submit.
+  odpSync: null,
+  odpSyncBusy: false,
   // Nhóm đang được admin gõ tiêu đề/nội dung mà chưa lưu; auto-refresh (mỗi
   // 15 giây) phải bỏ qua ô nhập của đúng nhóm đó để không ghi đè nội dung
   // chưa kịp lưu. Vì sao là Set theo group: mỗi dòng có ô nhập riêng nên cờ
@@ -215,7 +219,18 @@ const dom = {
   btnRefreshTtcds: document.getElementById('btn-refresh-ttcds'),
   ttcdsPermissionsCount: document.getElementById('ttcds-permissions-count'),
   ttcdsPermissionsBody: document.getElementById('ttcds-permissions-body'),
-  ttcdsAuditBody: document.getElementById('ttcds-audit-body')
+  ttcdsAuditBody: document.getElementById('ttcds-audit-body'),
+
+  // Kho ODP (tab odp)
+  odpSyncState: document.getElementById('odp-sync-state'),
+  odpSyncStateSub: document.getElementById('odp-sync-state-sub'),
+  odpSyncFinished: document.getElementById('odp-sync-finished'),
+  odpSyncFinishedSub: document.getElementById('odp-sync-finished-sub'),
+  odpSyncNext: document.getElementById('odp-sync-next'),
+  odpSyncNextSub: document.getElementById('odp-sync-next-sub'),
+  odpSyncError: document.getElementById('odp-sync-error'),
+  odpSyncCountsBody: document.getElementById('odp-sync-counts-body'),
+  btnOdpSyncRun: document.getElementById('btn-odp-sync-run')
 };
 
 let currentSelectedLog = null;
@@ -591,7 +606,8 @@ const tabTitles = {
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
   system: 'Sức Khỏe Máy Chủ & Hệ Thống',
-  ttcds: 'TTCDS phân quyền'
+  ttcds: 'TTCDS phân quyền',
+  odp: 'Kho ODP'
 };
 
 dom.navButtons.forEach((btn) => {
@@ -685,7 +701,7 @@ async function fetchAllData(isBackground = false) {
     // (đã gom + có nhãn). Danh sách endpoint thô vẫn lấy song song để làm đường
     // hạ cấp: nếu riêng truy vấn xếp hạng lỗi (p95/delta nặng hơn) thì khối vẫn
     // có gì đó để hiện thay vì trắng trơn.
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality, ttcdsPermissions, ttcdsAudit] = await Promise.all([
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, odpSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality, ttcdsPermissions, ttcdsAudit] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
@@ -697,6 +713,9 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`),
       api(`/api/admin/dashboard/ranking-sync`).catch(() => null),
+      // Kho ODP bọc .catch(() => null) như ranking-sync: đọc trạng thái lỗi thì
+      // chỉ tab Kho ODP báo lỗi, không kéo sập cả dashboard.
+      api(`/api/admin/dashboard/odp-sync`).catch(() => null),
       api(`/api/admin/dashboard/service-lock`).catch(() => null),
       // 4 endpoint phân tích (Task 6). Mỗi cái bọc .catch(() => null) để MỘT
       // endpoint lỗi — ví dụ truy vấn p95 quá nặng bị timeout — KHÔNG làm hỏng
@@ -720,6 +739,7 @@ async function fetchAllData(isBackground = false) {
     renderVisitedStudents(visitedData);
     renderSystem(system);
     renderRankingSync(rankingSync, rankingSyncRequestedAt);
+    renderOdpSync(odpSync);
     renderServiceLock(serviceLock, serviceLockRequestedAt);
     renderTtcds(ttcdsPermissions, ttcdsAudit);
     state.insights = {
@@ -2590,6 +2610,130 @@ if (dom.rankingSyncToggle) {
       showToast(err.message || 'Không lưu được cấu hình đồng bộ.', 'error');
     } finally {
       dom.rankingSyncToggle.disabled = state.rankingSync?.env_enabled === false;
+    }
+  });
+}
+
+// Kho ODP (tab odp). Nhãn bảng tiếng Việt để người vận hành đọc số dòng theo
+// tên nghiệp vụ; khóa lạ rơi về chính khóa counts cho khớp backend.
+const ODP_TABLE_LABELS = {
+  sinh_vien: 'Sinh viên (odp_sinh_vien)',
+  tbhk: 'Điểm TB học kỳ (odp_tbhk)',
+  bang_diem: 'Bảng điểm (odp_bang_diem)',
+  diem_danh: 'Điểm danh (odp_diem_danh)',
+  thoi_khoa_bieu: 'Thời khóa biểu (odp_thoi_khoa_bieu)',
+  ren_luyen: 'Rèn luyện (odp_ren_luyen)',
+  su_kien: 'Sự kiện (odp_su_kien)',
+  mon_hoc: 'Môn học (odp_mon_hoc)'
+};
+
+const ODP_STATUS_LABELS = {
+  running: '● Đang chạy',
+  success: '● Thành công',
+  failed: '● Thất bại'
+};
+
+function renderOdpSync(data) {
+  state.odpSync = data;
+  const body = dom.odpSyncCountsBody;
+  if (!body) return;
+
+  if (!data) {
+    if (dom.odpSyncState) dom.odpSyncState.textContent = '--';
+    if (dom.odpSyncStateSub) dom.odpSyncStateSub.textContent = 'Không tải được trạng thái kho ODP.';
+    if (dom.odpSyncError) { dom.odpSyncError.textContent = ''; dom.odpSyncError.hidden = true; }
+    body.innerHTML = '<tr><td colspan="2" class="text-center-muted">Không tải được trạng thái kho ODP (cần quyền quản trị). Đăng nhập lại rồi thử lại.</td></tr>';
+    return;
+  }
+
+  const latest = data.latest_run;
+  const hour = String(data.sync_hour ?? 3).padStart(2, '0');
+  if (dom.odpSyncNextSub) dom.odpSyncNextSub.textContent = `${hour}:00 Asia/Ho_Chi_Minh`;
+  if (dom.odpSyncNext) dom.odpSyncNext.textContent = data.next_run_at ? formatDateTime(data.next_run_at) : 'Tạm dừng';
+
+  if (latest) {
+    if (dom.odpSyncState) {
+      dom.odpSyncState.textContent = ODP_STATUS_LABELS[latest.status] || `● ${latest.status}`;
+      dom.odpSyncState.className = latest.status === 'success' ? 'sys-val text-green' : 'sys-val';
+    }
+    if (dom.odpSyncStateSub) {
+      const source = latest.trigger_source === 'manual' ? 'Chạy tay' : 'Theo lịch 03:00';
+      dom.odpSyncStateSub.textContent = `${source} • bắt đầu ${formatDateTime(latest.started_at)}`;
+    }
+    if (dom.odpSyncFinished) {
+      dom.odpSyncFinished.textContent = latest.finished_at ? formatDateTime(latest.finished_at) : '--';
+    }
+    if (dom.odpSyncFinishedSub) {
+      const counts = latest.counts || {};
+      const total = Object.values(counts).reduce((sum, value) => sum + (safeNumber(value) || 0), 0);
+      dom.odpSyncFinishedSub.textContent = `${formatNumber(total)} dòng • ${Object.keys(counts).length} bảng`;
+    }
+  } else {
+    if (dom.odpSyncState) { dom.odpSyncState.textContent = '○ Chưa chạy'; dom.odpSyncState.className = 'sys-val'; }
+    if (dom.odpSyncStateSub) dom.odpSyncStateSub.textContent = 'Chưa có lần đồng bộ nào';
+    if (dom.odpSyncFinished) dom.odpSyncFinished.textContent = '--';
+    if (dom.odpSyncFinishedSub) dom.odpSyncFinishedSub.textContent = '--';
+  }
+
+  // Lỗi từng bảng (nếu có): nói rõ bảng nào giữ nguyên dữ liệu cũ.
+  if (dom.odpSyncError) {
+    if (latest && latest.error) {
+      dom.odpSyncError.textContent = `Bảng lỗi ở lần chạy gần nhất: ${latest.error}`;
+      dom.odpSyncError.hidden = false;
+    } else {
+      dom.odpSyncError.textContent = '';
+      dom.odpSyncError.hidden = true;
+    }
+  }
+
+  const counts = latest && latest.counts ? latest.counts : null;
+  const keys = counts ? Object.keys(counts) : [];
+  if (keys.length === 0) {
+    body.innerHTML = '<tr><td colspan="2" class="text-center-muted">Chưa có số liệu số dòng (chưa chạy đồng bộ lần nào).</td></tr>';
+    return;
+  }
+  body.innerHTML = keys.map((key) => `
+    <tr>
+      <td>${escapeHtml(ODP_TABLE_LABELS[key] || key)}</td>
+      <td style="text-align: right;">${escapeHtml(formatNumber(counts[key]))}</td>
+    </tr>
+  `).join('');
+}
+
+async function refreshOdpSync() {
+  try {
+    renderOdpSync(await api('/api/admin/dashboard/odp-sync', { quiet: true }));
+  } catch {
+    renderOdpSync(null);
+  }
+}
+
+if (dom.btnOdpSyncRun) {
+  dom.btnOdpSyncRun.addEventListener('click', async () => {
+    if (state.odpSyncBusy) return;
+    state.odpSyncBusy = true;
+    const originalHtml = dom.btnOdpSyncRun.innerHTML;
+    dom.btnOdpSyncRun.disabled = true;
+    dom.btnOdpSyncRun.textContent = 'Đang đồng bộ...';
+    try {
+      const data = await api('/api/admin/dashboard/odp-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (data?.skipped) {
+        showToast('Một tiến trình khác đang đồng bộ kho ODP; bỏ qua lần này.', 'info');
+      } else if (Array.isArray(data?.errors) && data.errors.length > 0) {
+        showToast(`Đồng bộ xong nhưng ${data.errors.length} bảng lỗi (giữ nguyên dữ liệu cũ).`, 'error');
+      } else {
+        showToast('Đã đồng bộ kho ODP xong.', 'success');
+      }
+      await refreshOdpSync();
+    } catch (err) {
+      showToast(err.message || 'Không chạy được đồng bộ kho ODP.', 'error');
+    } finally {
+      state.odpSyncBusy = false;
+      dom.btnOdpSyncRun.disabled = false;
+      dom.btnOdpSyncRun.innerHTML = originalHtml;
     }
   });
 }

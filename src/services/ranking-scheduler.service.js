@@ -144,7 +144,7 @@ export const RankingSchedulerService = {
     // Chỉ cần MỘT trong hai service ready: lần boot đầu ingest có thể sẵn sàng
     // trong khi ranking chưa (hoặc ngược lại) — vẫn phải bật lịch 03:00.
     if (!OdpSyncService.isReady() && !AcademicRankingService.isReady()) {
-      console.warn('[ranking-sync] Chưa cấu hình database/CDS; scheduler đang tắt.');
+      console.warn('[ranking-sync] Chưa cấu hình database; scheduler đang tắt.');
       return false;
     }
     // Dọn run "running" bỏ dở từ lần deploy trước (nếu có) ngay khi khởi động.

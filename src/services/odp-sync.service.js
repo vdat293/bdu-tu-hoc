@@ -650,6 +650,22 @@ export const OdpSyncService = {
   },
 
   /**
+   * Lần chạy gần nhất từ `odp_sync_runs` cho /admin (đọc thuần, không tạo run).
+   * Trả `null` khi chưa cấu hình DB hoặc bảng chưa có dòng nào.
+   * @returns {Promise<object|null>}
+   */
+  async getLatestRun() {
+    if (!isDatabaseConfigured()) return null;
+    const result = await query(
+      `SELECT id, started_at, finished_at, status, trigger_source, counts, error
+       FROM odp_sync_runs
+       ORDER BY id DESC
+       LIMIT 1`
+    );
+    return result.rows[0] || null;
+  },
+
+  /**
    * @param {{ triggerSource?: 'scheduler'|'manual' }} [options]
    * @returns {Promise<{ skipped: boolean, runId: number|null, counts: object, errors: Array<{key:string,message:string}>, status?: string }>}
    */
