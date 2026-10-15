@@ -159,6 +159,22 @@ describe('TTCDS frontend', () => {
     expect(screen.getByRole('button', { name: 'Thêm sinh viên đầu tiên' })).toBeInTheDocument();
   });
 
+  it('group header keeps both actions in one container and hides the mentor prefix when absent', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    await screen.findByText('K29 Tân sinh viên');
+    const actions = document.querySelector('#tab-ttcds-group .club-directory-hero__action');
+    expect(actions).not.toBeNull();
+    expect(within(actions).getByRole('button', { name: 'Thêm sinh viên' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Tải lại' })).toBeInTheDocument();
+    expect(screen.getByText('1 sinh viên')).toBeInTheDocument();
+    expect(screen.queryByText(/Mentor:/)).not.toBeInTheDocument();
+  });
+
   it('group page shows waiting text without buttons on empty for view-level users', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);

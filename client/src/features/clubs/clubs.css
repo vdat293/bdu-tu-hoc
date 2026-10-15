@@ -291,3 +291,8 @@
 
 /* Tab TTCDS giữ pattern hiện tại, chỉ gọn khoảng cách. */
 #tab-ttcds .club-tabs, #tab-ttcds-group .club-tabs, #tab-ttcds-student .club-tabs { gap: 6px; }
+
+/* Header nhóm TTCDS: 2 nút hành động nằm chung 1 hàng, canh đỉnh khối tiêu đề
+   (container gốc display:grid nên mỗi nút rớt 1 dòng). Mobile ≤760px vẫn xếp
+   chồng full-width theo rule chung của motion.css. */
+#tab-ttcds-group .club-directory-hero__action { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }

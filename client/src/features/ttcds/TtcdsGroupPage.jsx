@@ -394,7 +394,7 @@ export default function TtcdsGroupPage() {
         <div className="club-directory-hero__copy">
           <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
           <h1>{group?.name || (groupsQuery.isLoading ? 'Đang tải nhóm…' : 'Nhóm sinh viên')}</h1>
-          <p>Mentor: {group?.mentor || '—'} · {members.length} sinh viên</p>
+          <p>{group?.mentor ? `Mentor: ${group.mentor} · ` : ''}{members.length} sinh viên</p>
         </div>
         <div className="club-directory-hero__action">
           {canCreate && (
