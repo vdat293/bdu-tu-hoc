@@ -10,7 +10,7 @@
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { PermissionService } from '../../services/permission.service.js';
 import { TtcdsService, normalizeTtcdsMssv } from '../../services/ttcds.service.js';
-import { DashboardProxy } from '../../services/dashboard-proxy.service.js';
+import { TtcdsStudentService } from '../../services/ttcds-student.service.js';
 import { query } from '../../db/database.js';
 
 function sendError(res, err, fallbackStatus = 500, fallbackMessage = 'Đã có lỗi xảy ra.') {
@@ -221,7 +221,7 @@ export const TtcdsController = {
       if (q.length < 2) {
         return res.status(400).json({ result: false, message: 'Nhập ít nhất 2 ký tự để tìm kiếm.' });
       }
-      const data = await DashboardProxy.searchStudents(q, { limit: req.query?.limit });
+      const data = await TtcdsStudentService.searchStudents(q, { limit: req.query?.limit });
       return res.json({ result: true, data });
     } catch (err) {
       return sendError(res, err, err?.status || 503, 'Không thể tìm kiếm sinh viên.');
@@ -234,7 +234,7 @@ export const TtcdsController = {
       await TtcdsService.requireAccess(mssv);
       const target = normalizeTtcdsMssv(req.params.mssv);
       await assertStudentInScope(mssv, target, req);
-      const data = await DashboardProxy.getStudent(target);
+      const data = await TtcdsStudentService.getStudent(target);
       return res.json({ result: true, data });
     } catch (err) {
       return sendError(res, err, err?.status || 503, 'Không thể tải thông tin sinh viên.');
@@ -247,7 +247,7 @@ export const TtcdsController = {
       await TtcdsService.requireAccess(mssv);
       const target = normalizeTtcdsMssv(req.params.mssv);
       await assertStudentInScope(mssv, target, req);
-      const data = await DashboardProxy.getAttendance(target, {
+      const data = await TtcdsStudentService.getAttendance(target, {
         ma_mon_hoc: req.query?.ma_mon_hoc,
         ma_nhom: req.query?.ma_nhom,
         nkhk: req.query?.nkhk

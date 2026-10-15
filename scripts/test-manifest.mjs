@@ -82,8 +82,7 @@ export const SAFE_NODE_TESTS = [
   'test-no-mock-data.js',
   'test-docx-caption-placeholders.js',
   'test-wordfmt-coursework-cover.js',
-  'test-wordfmt-advanced-options.js',
-  'test-ttcds-proxy.js'
+  'test-wordfmt-advanced-options.js'
 ];
 
 export const SAFE_ALIAS_TESTS = [
@@ -116,7 +115,8 @@ export const QUARANTINED_TESTS = new Map([
   ['test-permission-rbac.js', 'Ghi/xóa role/entitlement DB; chỉ chạy trên disposable test DB.'],
   ['test-ttcds-groups.js', 'Ghi/xóa group/member/permission DB; chỉ chạy trên disposable test DB.'],
   ['test-odp-sync.js', 'Ghi/xóa bảng odp_* + odp_sync_runs và mock HTTP ingest; chỉ chạy trên disposable test DB.'],
-  ['test-ttcds-api.js', 'Ghi/xóa group/member/permission/audit DB + stub proxy; chỉ chạy trên disposable test DB.'],
+  ['test-ttcds-api.js', 'Ghi/xóa group/member/permission/audit DB + stub service; chỉ chạy trên disposable test DB.'],
+  ['test-ttcds-student-local.js', 'Seed/xóa bảng odp_* rồi đọc chi tiết SV local; chỉ chạy trên disposable test DB.'],
   ['test-clan-management.js', 'Ghi/xóa clan/student DB; chỉ chạy trên disposable test DB.'],
   ['e2e-routing-smoke.js', 'Import server.js và khởi động side effect; chỉ chạy qua explicit wrapper sau app factory.'],
   ['test-server-load.js', 'Import full server, bind port và chạy scheduler; cần load environment riêng.']

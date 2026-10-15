@@ -3,7 +3,7 @@ import { closeDatabase, query } from '../src/db/database.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
 import { PermissionService } from '../src/services/permission.service.js';
 import { TtcdsService } from '../src/services/ttcds.service.js';
-import { DashboardProxy } from '../src/services/dashboard-proxy.service.js';
+import { TtcdsStudentService } from '../src/services/ttcds-student.service.js';
 import { TtcdsController } from '../src/modules/ttcds/ttcds.controller.js';
 
 if (!process.env.DATABASE_URL) {
@@ -39,9 +39,9 @@ const STUDENT_FIXTURE = {
 
 const originalCan = PermissionService.can;
 const originalIsSystemOwner = PermissionService.isSystemOwner;
-const originalSearch = DashboardProxy.searchStudents;
-const originalGetStudent = DashboardProxy.getStudent;
-const originalGetAttendance = DashboardProxy.getAttendance;
+const originalSearch = TtcdsStudentService.searchStudents;
+const originalGetStudent = TtcdsStudentService.getStudent;
+const originalGetAttendance = TtcdsStudentService.getAttendance;
 
 function mockReq({ token, params = {}, queryParams = {}, body = null } = {}) {
   return {
@@ -79,7 +79,7 @@ async function cleanupTestData() {
 }
 
 async function runTtcdsApiTest() {
-  console.log('Bat dau kiem thu /api/ttcds (controller + DB that, proxy stub)...');
+  console.log('Bat dau kiem thu /api/ttcds (controller + DB that, service stub)...');
 
   BduIdentityService.register(TOKENS.view, VIEW_MSSV, { expiresIn: 600 });
   BduIdentityService.register(TOKENS.create, CREATE_MSSV, { expiresIn: 600 });
@@ -91,15 +91,15 @@ async function runTtcdsApiTest() {
   PermissionService.isSystemOwner = async (mssv) =>
     String(mssv || '').trim().toUpperCase() === SYS_MSSV;
 
-  // Stub proxy: khong goi Dashboard that.
-  DashboardProxy.searchStudents = async () => ({ ket_qua: [] });
-  DashboardProxy.getStudent = async (mssv) => {
+  // Stub service: khong doc kho odp_* that trong test controller nay.
+  TtcdsStudentService.searchStudents = async () => ({ ket_qua: [] });
+  TtcdsStudentService.getStudent = async (mssv) => {
     if (String(mssv).toUpperCase() === MEMBER_MSSV) return STUDENT_FIXTURE;
     const err = new Error('Ban khong co quyen xem sinh vien nay');
     err.status = 403;
     throw err;
   };
-  DashboardProxy.getAttendance = async () => ({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
+  TtcdsStudentService.getAttendance = async () => ({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
 
   try {
     await cleanupTestData();
@@ -321,9 +321,9 @@ async function runTtcdsApiTest() {
   } finally {
     PermissionService.can = originalCan;
     PermissionService.isSystemOwner = originalIsSystemOwner;
-    DashboardProxy.searchStudents = originalSearch;
-    DashboardProxy.getStudent = originalGetStudent;
-    DashboardProxy.getAttendance = originalGetAttendance;
+    TtcdsStudentService.searchStudents = originalSearch;
+    TtcdsStudentService.getStudent = originalGetStudent;
+    TtcdsStudentService.getAttendance = originalGetAttendance;
     await closeDatabase();
   }
 }
