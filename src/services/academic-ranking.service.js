@@ -273,7 +273,12 @@ function recentActivity(gpaRows, detailRows, timetableRows, termCount = 3) {
     .sort((a, b) => b - a)
     .slice(0, termCount)
     .sort((a, b) => a - b);
-  if (!terms.length) throw new Error('Không xác định được học kỳ hoạt động từ dữ liệu CDS.');
+  if (!terms.length) {
+    throw new Error(
+      'Không xác định được học kỳ hoạt động từ kho ODP '
+      + '(kiểm tra bảng odp_tbhk/odp_thoi_khoa_bieu đã có dữ liệu chưa).'
+    );
+  }
   const activeMssv = new Set(terms.flatMap((term) => [...studentsByTerm.get(term)]));
   return { terms, activeMssv };
 }
@@ -737,9 +742,8 @@ export const AcademicRankingService = {
   },
 
   isReady() {
-    return isDatabaseConfigured()
-      && Boolean(process.env.CDS_USER)
-      && Boolean(process.env.CDS_PASSWORD);
+    // Ranking đọc kho local (Task 3) nên không cần CDS_USER/CDS_PASSWORD.
+    return isDatabaseConfigured();
   },
 
   async sync(triggerSource = 'scheduler') {

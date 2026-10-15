@@ -131,6 +131,22 @@ try {
 
     assert.deepEqual(httpCalls, [], 'không có lời gọi https.get trên đường đọc');
 
+    // isReady() chỉ cần DB: kho local đọc được dù máy không có creds CDS.
+    const savedUser = process.env.CDS_USER;
+    const savedPassword = process.env.CDS_PASSWORD;
+    delete process.env.CDS_USER;
+    delete process.env.CDS_PASSWORD;
+    try {
+      assert.equal(
+        AcademicRankingService.isReady(),
+        true,
+        'isReady không được đòi CDS_USER/CDS_PASSWORD khi đọc kho local'
+      );
+    } finally {
+      if (savedUser !== undefined) process.env.CDS_USER = savedUser;
+      if (savedPassword !== undefined) process.env.CDS_PASSWORD = savedPassword;
+    }
+
     // --- sync('manual') đầu-cuối: ghi academic_rankings từ kho -----------
     const synced = await AcademicRankingService.sync('manual');
     assert.equal(synced.skipped, false);
