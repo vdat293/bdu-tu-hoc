@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
+import '../clubs/clubs.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 export default function TtcdsHubPage() {

@@ -6,6 +6,7 @@ import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
+import '../clubs/clubs.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 /** Tóm tắt 1 dòng cho mỗi thành viên từ detail Dashboard đã cache. Thiếu → '—'. */

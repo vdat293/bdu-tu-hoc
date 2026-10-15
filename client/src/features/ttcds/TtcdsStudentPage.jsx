@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { getTtcdsStudent } from '../../api/ttcds.js';
 import { useAuth } from '../../app/providers.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
+import '../clubs/clubs.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 const TABS = [

@@ -7,6 +7,7 @@ import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
+import '../clubs/clubs.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 export default function TtcdsPage() {
