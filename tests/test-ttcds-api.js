@@ -229,6 +229,39 @@ async function runTtcdsApiTest() {
     }
     console.log('PASSED: search ngan bi 400.');
 
+    console.log('--- [Test 9] chu group bi ha view DELETE -> 403; system owner DELETE -> ok ---');
+    {
+      const created = mockRes();
+      await TtcdsController.createGroup(
+        mockReq({ token: TOKENS.create, body: { name: 'Nhom xoa test', nien_khoa: 'K29' } }),
+        created.res
+      );
+      assert.equal(created.captured.statusCode, 201);
+      const doomedId = created.captured.payload.data.id;
+
+      await TtcdsService.setLevel({ mssv: CREATE_MSSV, level: 'view', grantedBy: SYS_MSSV });
+      const demoted = mockRes();
+      await TtcdsController.deleteGroup(
+        mockReq({ token: TOKENS.create, params: { id: doomedId } }),
+        demoted.res
+      );
+      assert.equal(demoted.captured.statusCode, 403);
+      assert.equal(demoted.captured.payload.result, false);
+
+      const sysDel = mockRes();
+      await TtcdsController.deleteGroup(
+        mockReq({ token: TOKENS.sys, params: { id: doomedId } }),
+        sysDel.res
+      );
+      assert.equal(sysDel.captured.statusCode, 200);
+      assert.equal(sysDel.captured.payload.deleted, true);
+      const gone = await query('SELECT id FROM ttcds_groups WHERE id = $1', [doomedId]);
+      assert.equal(gone.rowCount, 0, 'system owner phai xoa duoc group');
+
+      await TtcdsService.setLevel({ mssv: CREATE_MSSV, level: 'create', grantedBy: SYS_MSSV });
+    }
+    console.log('PASSED: chu group muc view khong duoc xoa; system owner xoa duoc.');
+
     await cleanupTestData();
     console.log('TAT CA BAI KIEM THU TTCDS API DA DAT!');
   } finally {

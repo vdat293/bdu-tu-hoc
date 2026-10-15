@@ -128,6 +128,11 @@ export const TtcdsController = {
         return res.status(404).json({ result: false, message: 'Không tìm thấy nhóm.' });
       }
       await assertGroupOwnership(group, mssv, 'Bạn không có quyền xóa nhóm này.');
+      // Xóa là thao tác phá hủy: chủ group đã bị hạ xuống `view` không được
+      // xóa; system owner giữ quyền quản trị đầy đủ nên được miễn cổng create.
+      if (!(await PermissionService.isSystemOwner(mssv))) {
+        await TtcdsService.requireCreate(mssv);
+      }
       // Không có service helper: xóa trực tiếp, members cascade theo migration 057.
       await query('DELETE FROM ttcds_groups WHERE id = $1', [group.id]);
       return res.json({ result: true, deleted: true });
