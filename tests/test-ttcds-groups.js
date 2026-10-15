@@ -112,12 +112,30 @@ async function runTtcdsGroupsTest() {
     assert.equal(await TtcdsService.getLevel(` ${LEVEL_MSSV} `), 'create');
     assert.equal(await TtcdsService.getLevel(OTHER_OWNER_MSSV), 'view');
 
+    // granted_by cũng là MSSV: phải UPPER-trim như mọi MSSV khác.
+    const regranted = await TtcdsService.setLevel({
+      mssv: LEVEL_MSSV,
+      level: 'create',
+      grantedBy: '  test_grantor  ',
+      note: 'cấp lại'
+    });
+    assert.equal(regranted.granted_by, 'TEST_GRANTOR', 'granted_by phải được UPPER-trim');
+
     await assert.rejects(
       () => TtcdsService.setLevel({ mssv: LEVEL_MSSV, level: 'admin', grantedBy: OWNER_MSSV }),
       /check constraint|ttcds_permissions/i,
       'level ngoài view/create phải bị CHECK constraint từ chối'
     );
     assert.equal(await TtcdsService.getLevel(LEVEL_MSSV), 'create', 'Level hợp lệ trước đó không bị đổi');
+
+    // granted_by trắng vẫn phải thành NULL (không lưu chuỗi rỗng).
+    const clearedGrantor = await TtcdsService.setLevel({
+      mssv: LEVEL_MSSV,
+      level: 'create',
+      grantedBy: '   '
+    });
+    assert.equal(clearedGrantor.granted_by, null, 'granted_by trắng phải thành NULL');
+    assert.equal(await TtcdsService.getLevel(LEVEL_MSSV), 'create');
     console.log('✅ PASSED: chỉ có view/create, mặc định view khi chưa cấp.');
 
     console.log('--- [Test 6] Xoá group kéo theo thành viên (ON DELETE CASCADE) ---');

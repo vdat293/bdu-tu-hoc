@@ -149,7 +149,7 @@ export const TtcdsService = {
     `, [
       cleanMssv,
       String(level ?? '').trim(),
-      String(grantedBy ?? '').trim() || null,
+      normalizeTtcdsMssv(grantedBy) || null,
       String(note ?? '').trim() || null
     ]);
 
