@@ -81,7 +81,8 @@ export const SAFE_NODE_TESTS = [
   'test-no-mock-data.js',
   'test-docx-caption-placeholders.js',
   'test-wordfmt-coursework-cover.js',
-  'test-wordfmt-advanced-options.js'
+  'test-wordfmt-advanced-options.js',
+  'test-ttcds-proxy.js'
 ];
 
 export const SAFE_ALIAS_TESTS = [
