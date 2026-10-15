@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
   getTtcdsGroupMembers: vi.fn(),
   addTtcdsGroupMember: vi.fn(),
   removeTtcdsGroupMember: vi.fn(),
-  getTtcdsStudent: vi.fn()
+  getTtcdsStudent: vi.fn(),
+  getTtcdsPermissions: vi.fn(),
+  setTtcdsPermission: vi.fn(),
+  getTtcdsAudit: vi.fn()
 }));
 
 vi.mock('../../client/src/api/ttcds.js', async (importOriginal) => {
@@ -102,6 +105,33 @@ describe('TTCDS frontend', () => {
 
     expect(await screen.findByText('Điểm rèn luyện')).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('hides the admin section for non-owners (permissions 403)', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    mocks.getTtcdsPermissions.mockRejectedValue(new Error('Chỉ quản trị viên hệ thống mới được thực hiện thao tác này.'));
+    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+
+    await screen.findByText('Chưa có nhóm nào');
+    await waitFor(() => expect(mocks.getTtcdsPermissions).toHaveBeenCalled());
+    expect(screen.queryByText('Quản trị phân quyền')).not.toBeInTheDocument();
+  });
+
+  it('shows the admin section with owner context (permissions + audit)', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    mocks.getTtcdsPermissions.mockResolvedValue([
+      { mssv: '22050006', level: 'create', granted_by: 'SYS', granted_at: '2026-10-15', updated_at: '2026-10-15' }
+    ]);
+    mocks.getTtcdsAudit.mockResolvedValue([
+      { id: 1, actor_mssv: 'SYS', action: 'group.create', target_group_id: null, target_mssv: null, created_at: '2026-10-15' }
+    ]);
+    renderAt('/ttcds', '/ttcds', <TtcdsPage />);
+
+    expect(await screen.findByText('Quản trị phân quyền')).toBeInTheDocument();
+    expect(screen.getByText('22050006')).toBeInTheDocument();
+    expect(screen.getByText('group.create')).toBeInTheDocument();
   });
 
   it('parses a pasted MSSV list on commas, spaces and semicolons', () => {

@@ -7,6 +7,7 @@ import { useViewportDialog, ViewportModal } from '../../components/ViewportModal
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
+import TtcdsAdminPanel from './TtcdsAdminPanel.jsx';
 
 export default function TtcdsPage() {
   const auth = useAuth();
@@ -129,6 +130,8 @@ export default function TtcdsPage() {
           ))}
         </div>
       )}
+
+      {canAccess && <TtcdsAdminPanel enabled={canAccess} />}
 
       {showCreateModal && canCreate && (
         <ViewportModal id="modal-create-ttcds-group" title="Tạo nhóm sinh viên" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="club-modal club-modal-anim">

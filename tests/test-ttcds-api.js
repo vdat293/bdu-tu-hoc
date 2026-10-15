@@ -262,6 +262,43 @@ async function runTtcdsApiTest() {
     }
     console.log('PASSED: chu group muc view khong duoc xoa; system owner xoa duoc.');
 
+    console.log('--- [Test 10] GET permissions/audit: sys -> 200, nguoi thuong -> 403 ---');
+    {
+      const perms = mockRes();
+      await TtcdsController.listPermissions(
+        mockReq({ token: TOKENS.sys }),
+        perms.res
+      );
+      assert.equal(perms.captured.statusCode, 200);
+      assert.equal(perms.captured.payload.result, true);
+      assert.ok(Array.isArray(perms.captured.payload.data), 'GET permissions phai tra ve mang');
+
+      const permsDenied = mockRes();
+      await TtcdsController.listPermissions(
+        mockReq({ token: TOKENS.view }),
+        permsDenied.res
+      );
+      assert.equal(permsDenied.captured.statusCode, 403);
+
+      const auditLogs = mockRes();
+      await TtcdsController.listAuditLogs(
+        mockReq({ token: TOKENS.sys, queryParams: { limit: '5' } }),
+        auditLogs.res
+      );
+      assert.equal(auditLogs.captured.statusCode, 200);
+      assert.equal(auditLogs.captured.payload.result, true);
+      assert.ok(Array.isArray(auditLogs.captured.payload.data), 'GET audit phai tra ve mang');
+      assert.ok(auditLogs.captured.payload.data.length <= 5, 'limit phai duoc ton trong');
+
+      const auditDenied = mockRes();
+      await TtcdsController.listAuditLogs(
+        mockReq({ token: TOKENS.view }),
+        auditDenied.res
+      );
+      assert.equal(auditDenied.captured.statusCode, 403);
+    }
+    console.log('PASSED: chi system owner xem duoc permissions/audit.');
+
     await cleanupTestData();
     console.log('TAT CA BAI KIEM THU TTCDS API DA DAT!');
   } finally {

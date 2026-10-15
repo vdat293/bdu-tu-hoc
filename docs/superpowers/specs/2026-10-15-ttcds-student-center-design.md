@@ -86,8 +86,9 @@ Migration mới: `migrations/019_ttcds_center.sql`. Không đụng bảng `clans
   `GET /api/ttcds/groups`, `POST /api/ttcds/groups {name, nien_khoa, description}`
   (cần `create`), `DELETE /api/ttcds/groups/:id`,
   `GET/POST/DELETE /api/ttcds/groups/:id/members` (`{mssv, note}`).
-- Proxy Dashboard (service account, `DASHBOARD_BE_URL` + `DASHBOARD_SERVICE_TOKEN`,
-  service account cần scope toàn trường — verify `server/src/auth/scope.ts` lúc implement):
+- Proxy Dashboard (service account, `DASHBOARD_BE_URL` + `DASHBOARD_USER`/`DASHBOARD_PASSWORD`
+  cookie-session auth — Dashboard không có token endpoint; login `POST /api/dang-nhap`
+  set cookie `bdudash_session`, service account cần scope toàn trường):
   - `GET /api/ttcds/students/search?q=` → forward `/api/tim-sinh-vien`.
   - `GET /api/ttcds/students/:mssv` → forward `/api/sinh-vien/:mssv`, giữ nguyên
     `ho_so, gpa_hoc_ky, diem_danh, bang_diem, thoi_khoa_bieu, diem_danh_mon, su_kien, ren_luyen`.
