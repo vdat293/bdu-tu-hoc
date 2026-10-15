@@ -38,6 +38,7 @@ export const TtcdsService = {
         g.name,
         g.nien_khoa,
         g.description,
+        g.mentor,
         g.owner_mssv,
         g.created_at,
         COUNT(m.id)::int AS member_count
@@ -52,17 +53,18 @@ export const TtcdsService = {
   },
 
   /** Tạo group mới; trả về null khi thiếu tên hoặc owner. */
-  async createGroup({ name, nienKhoa, description, ownerMssv } = {}) {
+  async createGroup({ name, mentor, nienKhoa, description, ownerMssv } = {}) {
     const cleanName = String(name ?? '').trim();
     const cleanOwner = normalizeTtcdsMssv(ownerMssv);
     if (!cleanName || !cleanOwner || !isDatabaseConfigured()) return null;
 
     const result = await query(`
-      INSERT INTO ttcds_groups (name, nien_khoa, description, owner_mssv)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO ttcds_groups (name, mentor, nien_khoa, description, owner_mssv)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `, [
       cleanName,
+      String(mentor ?? '').trim().slice(0, 120) || null,
       String(nienKhoa ?? '').trim() || null,
       String(description ?? '').trim() || null,
       cleanOwner

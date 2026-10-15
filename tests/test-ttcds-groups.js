@@ -63,6 +63,39 @@ async function runTtcdsGroupsTest() {
     assert.ok(adminGroups.some((item) => item.id === group.id), 'includeAll phải thấy mọi group');
     console.log('✅ PASSED: group riêng tư theo owner, includeAll cho admin.');
 
+    console.log('--- [Test 2b] mentor: trim, absent → null, blank → null ---');
+    const mentorGroup = await TtcdsService.createGroup({
+      name: 'Nhóm mentor test',
+      mentor: ' Thầy Đạt ',
+      ownerMssv: OWNER_MSSV
+    });
+    assert.ok(mentorGroup?.id, 'createGroup có mentor phải trả về group có id');
+    assert.equal(mentorGroup.mentor, 'Thầy Đạt', 'mentor phải được trim');
+    const listedMentor = (await TtcdsService.listGroups(OWNER_MSSV))
+      .find((item) => item.id === mentorGroup.id);
+    assert.equal(listedMentor?.mentor, 'Thầy Đạt', 'listGroups phải trả mentor');
+
+    const noMentorGroup = await TtcdsService.createGroup({
+      name: 'Nhóm không mentor',
+      ownerMssv: OWNER_MSSV
+    });
+    assert.equal(noMentorGroup.mentor, null, 'thiếu mentor phải thành NULL');
+
+    const blankMentorGroup = await TtcdsService.createGroup({
+      name: 'Nhóm mentor rỗng',
+      mentor: '   ',
+      ownerMssv: OWNER_MSSV
+    });
+    assert.equal(blankMentorGroup.mentor, null, "mentor rỗng/'   ' phải thành NULL");
+
+    const longMentorGroup = await TtcdsService.createGroup({
+      name: 'Nhóm mentor dài',
+      mentor: ` ${'M'.repeat(150)} `,
+      ownerMssv: OWNER_MSSV
+    });
+    assert.equal(longMentorGroup.mentor.length, 120, 'mentor tối đa 120 ký tự');
+    console.log('✅ PASSED: mentor trim, absent/blank → null, tối đa 120 ký tự.');
+
     console.log('--- [Test 3] addMember chuẩn hóa MSSV + seed students ---');
     await TtcdsService.addMember(group.id, ` ${MEMBER_A} `, {
       addedBy: OWNER_MSSV,
@@ -92,7 +125,8 @@ async function runTtcdsGroupsTest() {
     assert.equal(seeded.rows.length, 2, 'addMember phải seed students trước khi thêm vào group');
 
     const groupsWithMembers = await TtcdsService.listGroups(OWNER_MSSV);
-    assert.equal(Number(groupsWithMembers[0].member_count), 2, 'member_count phải đếm đúng thành viên');
+    const groupWithMembers = groupsWithMembers.find((item) => item.id === group.id);
+    assert.equal(Number(groupWithMembers.member_count), 2, 'member_count phải đếm đúng thành viên');
     console.log('✅ PASSED: MSSV chuẩn hóa, không nhân bản, students được seed, member_count đúng.');
 
     console.log('--- [Test 4] removeMember trả về boolean và chuẩn hóa MSSV ---');

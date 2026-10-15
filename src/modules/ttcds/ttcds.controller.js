@@ -99,12 +99,13 @@ export const TtcdsController = {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       await TtcdsService.requireCreate(mssv);
-      const { name, nien_khoa, description } = req.body || {};
+      const { name, mentor, nien_khoa, description } = req.body || {};
       if (!String(name ?? '').trim()) {
         return res.status(400).json({ result: false, message: 'Tên nhóm không được để trống.' });
       }
       const group = await TtcdsService.createGroup({
         name,
+        mentor,
         nienKhoa: nien_khoa,
         description,
         ownerMssv: mssv
