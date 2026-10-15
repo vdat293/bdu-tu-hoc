@@ -276,8 +276,30 @@
    `.glass-panel` dùng chung nơi khác. */
 .ttcds-panel { border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
 
-/* Tab TTCDS nằm giữa thẻ hồ sơ và các khối nội dung, khoảng cách gọn. */
-#tab-ttcds-student .club-tabs { margin-bottom: 2px; }
+/* Task 7 — nhịp dọc 20px + bỏ hộp lồng hộp. Tất cả scoped #tab-ttcds* để
+   không loang sang trang CLB (`.club-*`/`.glass-panel` dùng chung).
+   Gốc rễ "dính": `.tab-pane{display:block !important}` (app.css) đè
+   `.club-experience{display:grid;gap:20px}` nên nhịp grid mất hẳn → dùng
+   margin dọc tường minh cho mọi khối con trực tiếp. */
+/* 1+2+6. Nhịp dọc đồng nhất 20px giữa mọi khối (kể breadcrumb "← ..." và
+   header → bảng ở trang nhóm); khối cuối không margin thừa. */
+#tab-ttcds > *, #tab-ttcds-group > *, #tab-ttcds-student > * { margin: 0 0 20px; }
+#tab-ttcds > *:last-child, #tab-ttcds-group > *:last-child, #tab-ttcds-student > *:last-child { margin-bottom: 0; }
+/* 2. Breadcrumb "← Sinh viên của tôi": cùng nhịp 20px, chiều cao dòng gọn. */
+#tab-ttcds-group > p:first-child, #tab-ttcds-student > p:first-child { line-height: 1.5; }
+/* Nhịp giữa các khối kỳ trong tabpanel TKB/Bảng điểm (khối kỳ là anh-em). */
+#tab-ttcds-student [role='tabpanel'] > * { margin: 0 0 20px; }
+#tab-ttcds-student [role='tabpanel'] > *:last-child { margin-bottom: 0; }
+/* 3. Tab strip: cách khối trên 4px, cách panel dưới 20px + gạch chân phân cách
+   để tab không dính vào khối trên/dưới; tab active giữ gạch/nền hiện có. */
+#tab-ttcds .club-tabs, #tab-ttcds-group .club-tabs, #tab-ttcds-student .club-tabs { gap: 6px; margin-top: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--club-line); }
+#tab-ttcds .club-tabs button, #tab-ttcds-group .club-tabs button, #tab-ttcds-student .club-tabs button { padding: 10px 16px; }
+/* 4. Bỏ hộp lồng hộp ở tab Tổng quan: khối ngoài thành wrapper trần (không
+   viền/nền/bóng), mỗi cấp chỉ còn MỘT viền ở 4 ô `.ttcds-stat` con.
+   Giữ nguyên class `.ttcds-panel` để DOM/test không đổi. */
+#tab-ttcds-student .ttcds-student-overview { border: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; }
+/* 5. Padding trong khối ≥ 20px (thay inline 16px đã bỏ ở JSX); ô con giữ ≥ 14px. */
+#tab-ttcds .ttcds-panel, #tab-ttcds-group .ttcds-panel, #tab-ttcds-student .ttcds-panel:not(.ttcds-student-overview), #tab-ttcds-student .profile-hero-card { padding: 20px; }
 
 @media (max-width: 480px) {
   .ttcds-stats, .ttcds-cell-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }

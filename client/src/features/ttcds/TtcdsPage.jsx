@@ -152,7 +152,7 @@ export default function TtcdsPage() {
               <span className="ttcds-stat__meta">Sinh viên đang theo dõi</span>
             </div>
           </div>
-          <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
+          <div className="card glass-panel ttcds-panel">
             <div className="ttcds-panel-head">
               <h2>Danh sách nhóm</h2>
               <p className="ttcds-panel-sub">{list.length} nhóm · {totalMembers} sinh viên đang theo dõi</p>

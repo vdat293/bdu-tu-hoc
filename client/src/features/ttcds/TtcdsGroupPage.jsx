@@ -428,7 +428,7 @@ export default function TtcdsGroupPage() {
           ) : undefined}
         />
       ) : (
-        <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
+        <div className="card glass-panel ttcds-panel">
           <div className="ttcds-panel-head">
             <h2>Danh sách sinh viên</h2>
             <p className="ttcds-panel-sub">{members.length} sinh viên{group?.name ? ` · ${group.name}` : ''}</p>

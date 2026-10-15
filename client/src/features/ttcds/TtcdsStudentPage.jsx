@@ -107,7 +107,7 @@ function ProfileCard({ profile, mssv, termSource }) {
     { label: 'Trạng thái', value: profile.hien_dien ?? 'Đang học', meta: null }
   ];
   return (
-    <div className="profile-hero-card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }}>
+    <div className="profile-hero-card glass-panel ttcds-panel">
       <h2>{profile.ten_day_du || '—'} <span className="club-muted">{profile.mssv || mssv}</span></h2>
       <div className="ttcds-cell-grid">
         {cells.map((cell) => (
@@ -161,7 +161,7 @@ function OverviewTab({ detail }) {
   ];
 
   return (
-    <div className="card glass-panel ttcds-panel ttcds-student-overview" style={{ padding: '16px' }}>
+    <div className="card glass-panel ttcds-panel ttcds-student-overview">
       <div className="ttcds-panel-head">
         <h2>Tổng quan kỳ gần nhất</h2>
         <p className="ttcds-panel-sub">Số liệu mới nhất, rèn luyện có thể trễ một nhịp</p>
@@ -199,7 +199,7 @@ function TimetableTab({ detail }) {
       {byTerm.map(([nkhk, rows]) => {
         const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
         return (
-          <div className="card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+          <div className="card glass-panel ttcds-panel" key={nkhk}>
             <div className="ttcds-panel-head">
               <h2>{termLine}</h2>
               <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} buổi học</p>
@@ -237,7 +237,7 @@ function GradesTab({ detail }) {
       {byTerm.map(([nkhk, rows]) => {
         const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
         return (
-          <div className="card glass-panel ttcds-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
+          <div className="card glass-panel ttcds-panel" key={nkhk}>
             <div className="ttcds-panel-head">
               <h2>{termLine}</h2>
               <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} môn</p>
@@ -270,7 +270,7 @@ function EventsTab({ detail }) {
   const events = Array.isArray(detail?.su_kien) ? detail.su_kien : [];
   if (events.length === 0) return <p>Chưa tham gia sự kiện nào</p>;
   return (
-    <div className="card glass-panel ttcds-panel" style={{ padding: '16px' }}>
+    <div className="card glass-panel ttcds-panel">
       <div className="ttcds-panel-head">
         <h2>Sự kiện · {events.length} sự kiện đã tham gia</h2>
         <p className="ttcds-panel-sub">Hoạt động đã ghi nhận theo từng học kỳ</p>
