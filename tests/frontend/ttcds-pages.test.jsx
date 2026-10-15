@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -96,7 +96,7 @@ describe('TTCDS frontend', () => {
 
     await screen.findByText('K29 Tân sinh viên');
     expect(screen.queryByRole('button', { name: /Tạo nhóm/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Xóa' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xóa nhóm/ })).not.toBeInTheDocument();
   });
 
   it('shows the create and delete buttons for create-level users', async () => {
@@ -106,7 +106,23 @@ describe('TTCDS frontend', () => {
 
     await screen.findByText('K29 Tân sinh viên');
     expect(screen.getByRole('button', { name: 'Tạo nhóm mới' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Xóa' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xóa nhóm K29 Tân sinh viên' })).toBeInTheDocument();
+  });
+
+  it('asks for confirmation with the group name before deleting', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
+    mocks.deleteTtcdsGroup.mockResolvedValue({});
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xóa nhóm K29 Tân sinh viên' }));
+    expect(mocks.deleteTtcdsGroup).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('K29 Tân sinh viên');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa nhóm' }));
+    await waitFor(() => expect(mocks.deleteTtcdsGroup).toHaveBeenCalledWith('test-token', 'g1'));
   });
 
   it('shows a centered create CTA on empty for create-level users', async () => {
@@ -175,6 +191,106 @@ describe('TTCDS frontend', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
+  it('names each member delete and detail control after its subject', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    expect(await screen.findByRole('link', { name: 'Chi tiết sinh viên Nguyễn Văn A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xóa sinh viên Nguyễn Văn A' })).toBeInTheDocument();
+  });
+
+  it('asks for confirmation with the student name before removing a member', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    mocks.removeTtcdsGroupMember.mockResolvedValue({});
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xóa sinh viên Nguyễn Văn A' }));
+    expect(mocks.removeTtcdsGroupMember).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Nguyễn Văn A');
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa sinh viên' }));
+    await waitFor(() => expect(mocks.removeTtcdsGroupMember).toHaveBeenCalledWith('test-token', 'g1', '24050126'));
+  });
+
+  it('renders a single dash when a member summary fails to load', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
+    mocks.getTtcdsStudent.mockRejectedValue(new Error('boom'));
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    expect(await screen.findByText('Chưa tải được tóm tắt —')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('— —');
+  });
+
+  it('drives the tab widget with arrow keys and a roving tabindex', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    const overview = await screen.findByRole('tab', { name: 'Tổng quan' });
+    const tkb = screen.getByRole('tab', { name: 'Thời khóa biểu' });
+    expect(overview).toHaveAttribute('tabindex', '0');
+    expect(tkb).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    expect(tkb).toHaveAttribute('aria-selected', 'true');
+    expect(tkb).toHaveAttribute('tabindex', '0');
+    expect(overview).toHaveAttribute('tabindex', '-1');
+    expect(document.activeElement).toBe(tkb);
+
+    fireEvent.keyDown(tkb, { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Sự kiện' })).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Sự kiện' }), { key: 'Home' });
+    expect(overview).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('wraps the grades table in a scroll container with column scopes', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Bảng điểm chi tiết' }));
+
+    const table = await screen.findByRole('table');
+    expect(table.parentElement).toHaveClass('table-scroll');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+  });
+
+  it('turns a 404 student load into a back link plus a list action', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    const notFound = new Error('Không tìm thấy sinh viên.');
+    notFound.status = 404;
+    mocks.getTtcdsStudent.mockRejectedValue(notFound);
+    renderAt('/ttcds/students/99999999', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Không tìm thấy sinh viên' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Sinh viên của tôi' })).toHaveAttribute('href', '/mystudent');
+    expect(screen.getByRole('link', { name: 'Về danh sách' })).toHaveAttribute('href', '/mystudent');
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a back link and retry on a generic student load error', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockRejectedValue(new Error('Lỗi mạng'));
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Chưa thể tải thông tin sinh viên' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Sinh viên của tôi' })).toHaveAttribute('href', '/mystudent');
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+  });
+
   it('service page has no admin section anymore', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
     mocks.getTtcdsGroups.mockResolvedValue([]);
@@ -191,6 +307,16 @@ describe('TTCDS frontend', () => {
     const link = await screen.findByRole('link', { name: 'Sinh viên của tôi' });
     expect(link.getAttribute('href')).toBe('/mystudent');
     expect(screen.getByText('Sắp ra mắt')).toBeInTheDocument();
+  });
+
+  it('keeps the hub reachable by deep link without adding a nav entry', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    renderAt('/ttcds', '/ttcds', <TtcdsHubPage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Trung tâm Chuyển đổi số' })).toBeInTheDocument();
+    // Quyết định: hub giữ làm deep-link, KHÔNG thêm mục nav (sidebar chỉ có "Sinh viên của tôi").
+    expect(navigation.find((entry) => entry.path === '/ttcds')).toBeUndefined();
+    expect(findRouteMeta('/ttcds').title).toBe('Trung tâm CĐS');
   });
 
   it('hub shows a 403 notice without access', async () => {

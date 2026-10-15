@@ -49,6 +49,7 @@
 .club-icon-button:hover { background: var(--club-surface-soft); color: var(--club-ink); }
 
 .club-directory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 276px), 1fr)); gap: 12px; min-width: 0; }
+.table-scroll { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .club-card { display: flex; min-width: 0; min-height: 208px; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--club-line); border-radius: 10px; background: var(--club-surface); transition: border-color 180ms ease-out, background-color 180ms ease-out, transform 180ms ease-out; }
 .club-card:hover { border-color: color-mix(in srgb, var(--club-accent) 52%, var(--club-line)); background: var(--club-surface-soft); }
 .club-card__topline { display: flex; align-items: center; gap: 10px; min-width: 0; }

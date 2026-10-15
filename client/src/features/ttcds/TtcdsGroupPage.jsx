@@ -3,6 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { Link, useParams } from 'react-router-dom';
 import { addTtcdsGroupMember, getTtcdsGroupMembers, getTtcdsGroups, getTtcdsStudent, parseMssvList, removeTtcdsGroupMember } from '../../api/ttcds.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
@@ -43,6 +44,7 @@ export default function TtcdsGroupPage() {
   const auth = useAuth();
   const { notify } = useToasts();
   const client = useQueryClient();
+  const [confirmUI, askConfirm] = useConfirm();
   const [paste, setPaste] = useState('');
   const [addErrors, setAddErrors] = useState([]);
   const pasteRef = useRef(null);
@@ -129,6 +131,18 @@ export default function TtcdsGroupPage() {
     },
     onError: (error) => notify(error.message, 'error')
   });
+
+  // Xoá thành viên là thao tác phá huỷ → hỏi đúng tên/MSSV trước khi gọi DELETE.
+  const confirmRemoveMember = async (member) => {
+    const label = summaries[member.mssv]?.name || member.mssv;
+    const ok = await askConfirm({
+      title: 'Xóa sinh viên khỏi nhóm?',
+      message: `Sinh viên "${label}" (${member.mssv}) sẽ bị xóa khỏi nhóm này. Thao tác không thể hoàn tác.`,
+      confirmText: 'Xóa sinh viên',
+      danger: true
+    });
+    if (ok) remove.mutate(member.mssv);
+  };
 
   if (caps.isLoading) {
     return (
@@ -217,12 +231,12 @@ export default function TtcdsGroupPage() {
                     <li>Sự kiện kỳ này: {summary.eventCount}</li>
                   </ul>
                 ) : (
-                  <p>Chưa tải được tóm tắt — <span>—</span></p>
+                  <p>Chưa tải được tóm tắt —</p>
                 )}
                 <div className="club-modal__footer">
-                  <Link className="btn btn-secondary" to={`/ttcds/students/${member.mssv}`}>Chi tiết</Link>
+                  <Link className="btn btn-secondary" aria-label={`Chi tiết sinh viên ${summary ? summary.name : member.mssv}`} to={`/ttcds/students/${member.mssv}`}>Chi tiết</Link>
                   {canCreate && (
-                    <button type="button" className="btn btn-secondary" disabled={remove.isPending} onClick={() => remove.mutate(member.mssv)}>
+                    <button type="button" className="btn btn-secondary" aria-label={`Xóa sinh viên ${summary ? summary.name : member.mssv}`} disabled={remove.isPending} onClick={() => confirmRemoveMember(member)}>
                       Xóa
                     </button>
                   )}
@@ -232,6 +246,8 @@ export default function TtcdsGroupPage() {
           })}
         </div>
       )}
+
+      {confirmUI}
     </section>
   );
 }

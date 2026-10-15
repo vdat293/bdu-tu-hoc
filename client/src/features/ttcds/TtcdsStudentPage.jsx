@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getTtcdsStudent } from '../../api/ttcds.js';
@@ -131,21 +131,23 @@ function GradesTab({ detail }) {
       {byTerm.map(([nkhk, rows]) => (
         <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} key={nkhk}>
           <h2>Học kỳ {nkhk} · {rows.length} môn</h2>
-          <table>
-            <thead><tr><th>Mã môn</th><th>Tên môn</th><th>Tín chỉ</th><th>Điểm</th><th>Thang 4</th><th>Chữ</th></tr></thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.ma_mon_hoc}-${index}`}>
-                  <td>{row.ma_mon_hoc ?? '—'}</td>
-                  <td>{row.ten_mon ?? '—'}</td>
-                  <td>{row.so_tin_chi ?? '—'}</td>
-                  <td>{row.diem ?? '—'}</td>
-                  <td>{row.diem_he_4 ?? '—'}</td>
-                  <td>{row.diem_chu ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th scope="col">Mã môn</th><th scope="col">Tên môn</th><th scope="col">Tín chỉ</th><th scope="col">Điểm</th><th scope="col">Thang 4</th><th scope="col">Chữ</th></tr></thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={`${row.ma_mon_hoc}-${index}`}>
+                    <td>{row.ma_mon_hoc ?? '—'}</td>
+                    <td>{row.ten_mon ?? '—'}</td>
+                    <td>{row.so_tin_chi ?? '—'}</td>
+                    <td>{row.diem ?? '—'}</td>
+                    <td>{row.diem_he_4 ?? '—'}</td>
+                    <td>{row.diem_chu ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
     </>
@@ -173,6 +175,26 @@ export default function TtcdsStudentPage() {
   const { mssv } = useParams();
   const auth = useAuth();
   const [tab, setTab] = useState('tong-quan');
+  const tabRefs = useRef({});
+
+  const focusTab = (id) => {
+    setTab(id);
+    tabRefs.current[id]?.focus();
+  };
+
+  // WAI-ARIA APG: tablist điều hướng bằng ←/→/Home/End + roving tabindex, để chỉ
+  // tab đang chọn nằm trong tab-order còn các tab khác nhường phím cho panel.
+  const onTablistKeyDown = (event) => {
+    const currentIndex = TABS.findIndex((entry) => entry.id === tab);
+    let nextIndex = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TABS.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = TABS.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    focusTab(TABS[nextIndex].id);
+  };
 
   const caps = useTtcdsCapabilities();
   const canAccess = Boolean(caps.data?.can_access);
@@ -194,12 +216,22 @@ export default function TtcdsStudentPage() {
   if (caps.isSuccess && !canAccess) return <TtcdsForbiddenNotice />;
 
   if (detail.isError) {
+    // Lỗi không được là ngõ cụt: luôn giữ link quay lại danh sách và h1 cho trang.
+    // 404 là lỗi vĩnh viễn nên "Thử lại" vô nghĩa → đổi hành động thành về danh sách.
+    const notFound = detail.error?.status === 404;
     return (
-      <div className="club-empty" role="alert">
-        <h2>Chưa thể tải thông tin sinh viên</h2>
-        <p>{detail.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
-        <button type="button" className="btn btn-secondary" onClick={() => detail.refetch()}>Thử lại</button>
-      </div>
+      <section id="tab-ttcds-student" className="tab-pane club-experience">
+        <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
+        <div className="club-empty" role="alert">
+          <h1>{notFound ? 'Không tìm thấy sinh viên' : 'Chưa thể tải thông tin sinh viên'}</h1>
+          <p>{notFound ? 'Không có sinh viên với mã này trong hệ thống.' : (detail.error?.message || 'Vui lòng thử lại sau ít phút.')}</p>
+          {notFound ? (
+            <Link className="btn btn-secondary" to="/mystudent">Về danh sách</Link>
+          ) : (
+            <button type="button" className="btn btn-secondary" onClick={() => detail.refetch()}>Thử lại</button>
+          )}
+        </div>
+      </section>
     );
   }
 
@@ -217,15 +249,17 @@ export default function TtcdsStudentPage() {
         <p>ĐTB tích lũy {lastGpa ? fmt(lastGpa.dtb_tich_luy_he_4) : '—'} · Tín chỉ tích lũy {lastGpa?.so_tin_chi_dat_tich_luy ?? '—'}</p>
       </div>
 
-      <div className="nav-tab" role="tablist">
+      <div className="nav-tab" role="tablist" onKeyDown={onTablistKeyDown}>
         {TABS.map((entry) => (
           <button
             key={entry.id}
             id={`tab-${entry.id}`}
+            ref={(element) => { tabRefs.current[entry.id] = element; }}
             type="button"
             role="tab"
             aria-selected={tab === entry.id}
             aria-controls={`panel-${entry.id}`}
+            tabIndex={tab === entry.id ? 0 : -1}
             className={`tab${tab === entry.id ? ' active' : ''}`}
             onClick={() => setTab(entry.id)}
           >
@@ -234,7 +268,7 @@ export default function TtcdsStudentPage() {
         ))}
       </div>
 
-      <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={0}>
         {tab === 'tong-quan' && <OverviewTab detail={data} />}
         {tab === 'tkb' && <TimetableTab detail={data} />}
         {tab === 'bang-diem' && <GradesTab detail={data} />}

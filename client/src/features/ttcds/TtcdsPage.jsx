@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { createTtcdsGroup, deleteTtcdsGroup, getTtcdsGroups } from '../../api/ttcds.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
@@ -14,6 +15,7 @@ export default function TtcdsPage() {
   const client = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [draft, setDraft] = useState({ name: '', nien_khoa: '', description: '' });
+  const [confirmUI, askConfirm] = useConfirm();
   const createDialogRef = useRef(null);
   const createCloseRef = useRef(null);
   const createOpenerRef = useRef(null);
@@ -55,6 +57,18 @@ export default function TtcdsPage() {
     if (!canCreate) return;
     createOpenerRef.current = event.currentTarget;
     setShowCreateModal(true);
+  };
+
+  // Xoá nhóm là thao tác phá huỷ và không thể hoàn tác → luôn hỏi tên nhóm trước
+  // khi gọi DELETE (nhất quán với luồng admin và các trang khác của cổng).
+  const confirmRemove = async (group) => {
+    const ok = await askConfirm({
+      title: 'Xóa nhóm sinh viên?',
+      message: `Nhóm "${group.name}" cùng danh sách sinh viên đã gán sẽ bị xóa. Thao tác này không thể hoàn tác.`,
+      confirmText: 'Xóa nhóm',
+      danger: true
+    });
+    if (ok) remove.mutate(group.id);
   };
 
   if (caps.isLoading) {
@@ -134,7 +148,7 @@ export default function TtcdsPage() {
                   <td>{group.member_count ?? 0}</td>
                   {canCreate && (
                     <td>
-                      <button type="button" className="btn btn-secondary" disabled={remove.isPending} onClick={() => remove.mutate(group.id)}>
+                      <button type="button" className="btn btn-secondary" aria-label={`Xóa nhóm ${group.name}`} disabled={remove.isPending} onClick={() => confirmRemove(group)}>
                         Xóa
                       </button>
                     </td>
@@ -163,6 +177,8 @@ export default function TtcdsPage() {
           </form>
         </ViewportModal>
       )}
+
+      {confirmUI}
     </section>
   );
 }
