@@ -225,3 +225,32 @@
 .club-danger-zone p { margin: 0; color: var(--club-muted); font-size: .84rem; line-height: 1.5; }
 
 .club-experience :is(button, input, textarea, select, a):focus-visible { outline: 3px solid color-mix(in srgb, var(--club-accent) 46%, transparent); outline-offset: 2px; }
+
+/* Bảng gọn danh sách nhóm (Sinh viên của tôi): header tách cột rõ, dòng có hover,
+   cột Thao tác canh phải — trước đây bảng trần nên các tiêu đề dính liền nhau. */
+.ttcds-groups-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.ttcds-groups-table th,
+.ttcds-groups-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--club-line); }
+.ttcds-groups-table th { color: var(--club-muted); font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.ttcds-groups-table tbody tr:hover { background: color-mix(in srgb, var(--club-accent) 6%, transparent); }
+.ttcds-groups-table th:last-child,
+.ttcds-groups-table td:last-child { text-align: right; }
+.ttcds-groups-table td:first-child a { color: var(--club-accent); font-weight: 650; text-decoration: none; }
+.ttcds-groups-table td:first-child a:hover { text-decoration: underline; }
+
+/* Ô thêm sinh viên kiểu autocomplete (gõ ≥2 ký tự → gợi ý). */
+.ttcds-student-search { display: grid; gap: 6px; }
+.ttcds-student-search > label { color: var(--club-muted); font-size: .8rem; font-weight: 650; }
+.ttcds-student-search__control { position: relative; }
+.ttcds-student-search__list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--club-line); border-radius: 10px; background: var(--bg-card); box-shadow: 0 12px 28px rgba(0, 0, 0, .18); }
+.ttcds-student-search__option button { display: grid; gap: 2px; width: 100%; padding: 8px 10px; text-align: left; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: inherit; }
+.ttcds-student-search__option.is-active button,
+.ttcds-student-search__option button:hover { background: color-mix(in srgb, var(--club-accent) 12%, transparent); }
+.ttcds-student-search__name { color: var(--club-ink); font-size: .88rem; font-weight: 650; }
+.ttcds-student-search__meta { color: var(--club-muted); font-size: .76rem; }
+.ttcds-student-search__empty { display: flex; align-items: center; gap: 8px; padding: 10px; color: var(--club-muted); font-size: .82rem; }
+.ttcds-student-search__hint { margin: 0; color: var(--club-muted); font-size: .76rem; }
+
+/* Form thêm SV trong nhóm: khối card có viền bao quanh rõ ràng. */
+.ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
+.ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createTtcdsGroup, deleteTtcdsGroup, getTtcdsGroups } from '../../api/ttcds.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
@@ -14,8 +14,10 @@ export default function TtcdsPage() {
   const auth = useAuth();
   const { notify } = useToasts();
   const client = useQueryClient();
+  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [draft, setDraft] = useState({ name: '', nien_khoa: '', description: '' });
+  const [nameInvalid, setNameInvalid] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
   const createDialogRef = useRef(null);
   const createCloseRef = useRef(null);
@@ -36,11 +38,14 @@ export default function TtcdsPage() {
 
   const create = useMutation({
     mutationFn: () => createTtcdsGroup(auth.token, draft),
-    onSuccess: () => {
+    onSuccess: (group) => {
       setDraft({ name: '', nien_khoa: '', description: '' });
+      setNameInvalid(false);
       setShowCreateModal(false);
-      refreshGroups();
       notify('Đã tạo nhóm mới.', 'success');
+      // Tạo xong vào thẳng nhóm vừa tạo để thêm SV ngay; `justCreated` cho
+      // TtcdsGroupPage biết cần focus ô tìm kiếm sinh viên.
+      if (group?.id != null) navigate(`/ttcds/groups/${group.id}`, { state: { justCreated: true } });
     },
     onError: (error) => notify(error.message, 'error')
   });
@@ -57,6 +62,7 @@ export default function TtcdsPage() {
   const openCreate = (event) => {
     if (!canCreate) return;
     createOpenerRef.current = event.currentTarget;
+    setNameInvalid(false);
     setShowCreateModal(true);
   };
 
@@ -132,13 +138,13 @@ export default function TtcdsPage() {
         />
       ) : (
         <div className="table-scroll">
-          <table>
+          <table className="ttcds-groups-table">
             <thead>
               <tr>
                 <th scope="col">Tên nhóm</th>
                 <th scope="col">Niên khóa</th>
                 <th scope="col">Số SV</th>
-                {canCreate && <th scope="col"><span className="sr-only">Thao tác</span></th>}
+                {canCreate && <th scope="col">Thao tác</th>}
               </tr>
             </thead>
             <tbody>
@@ -167,8 +173,30 @@ export default function TtcdsPage() {
             <div><span className="club-eyebrow">NHÓM MỚI</span><h2>Tạo nhóm sinh viên</h2></div>
             <button ref={createCloseRef} type="button" className="club-icon-button" onClick={() => setShowCreateModal(false)} aria-label="Đóng hộp thoại">×</button>
           </div>
-          <form className="club-form" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim()) { notify('Vui lòng nhập tên nhóm.', 'warning'); return; } create.mutate(); }}>
-            <label htmlFor="new-ttcds-group-name">Tên nhóm <span aria-hidden="true">*</span><input id="new-ttcds-group-name" className="form-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Ví dụ: K29 Tân sinh viên" required /></label>
+          <form className="club-form" onSubmit={(event) => {
+            event.preventDefault();
+            if (!draft.name.trim()) {
+              setNameInvalid(true);
+              notify('Vui lòng nhập tên nhóm.', 'warning');
+              return;
+            }
+            create.mutate();
+          }}>
+            <label htmlFor="new-ttcds-group-name">
+              <span>Tên nhóm <span aria-hidden="true">*</span></span>
+              <input
+                id="new-ttcds-group-name"
+                className="form-input"
+                value={draft.name}
+                aria-required="true"
+                aria-invalid={nameInvalid || undefined}
+                onChange={(event) => {
+                  setDraft({ ...draft, name: event.target.value });
+                  if (nameInvalid && event.target.value.trim()) setNameInvalid(false);
+                }}
+                placeholder="Ví dụ: K29 Tân sinh viên"
+              />
+            </label>
             <label htmlFor="new-ttcds-group-nien-khoa">Niên khóa<input id="new-ttcds-group-nien-khoa" className="form-input" value={draft.nien_khoa} onChange={(event) => setDraft({ ...draft, nien_khoa: event.target.value })} placeholder="Ví dụ: K29" /></label>
             <label htmlFor="new-ttcds-group-desc">Mô tả<textarea id="new-ttcds-group-desc" className="form-input" rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Ghi chú về nhóm sinh viên này…" /></label>
             <div className="club-modal__footer">

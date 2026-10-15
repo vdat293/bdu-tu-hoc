@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   getTtcdsGroupMembers: vi.fn(),
   addTtcdsGroupMember: vi.fn(),
   removeTtcdsGroupMember: vi.fn(),
-  getTtcdsStudent: vi.fn()
+  getTtcdsStudent: vi.fn(),
+  searchTtcdsStudents: vi.fn()
 }));
 
 vi.mock('../../client/src/api/ttcds.js', async (importOriginal) => {
@@ -219,14 +220,14 @@ describe('TTCDS frontend', () => {
     await waitFor(() => expect(mocks.removeTtcdsGroupMember).toHaveBeenCalledWith('test-token', 'g1', '24050126'));
   });
 
-  it('renders a single dash when a member summary fails to load', async () => {
+  it('renders a single sentence when a member summary fails to load', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
     mocks.getTtcdsGroupMembers.mockResolvedValue([{ mssv: '24050126' }]);
     mocks.getTtcdsStudent.mockRejectedValue(new Error('boom'));
     renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
 
-    expect(await screen.findByText('Chưa tải được tóm tắt —')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa tải được tóm tắt.')).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('— —');
   });
 
@@ -342,5 +343,61 @@ describe('TTCDS frontend', () => {
         { nkhk: 2, ten_su_kien: 'B' }
       ]
     }).eventCount).toBe(0);
+  });
+
+  it('suggests students while typing and adds the picked one immediately', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([]);
+    mocks.searchTtcdsStudents.mockResolvedValue({
+      ket_qua: [{ mssv: '24050126', ten_day_du: 'Nguyễn Văn A', ma_lop: 'K29A' }]
+    });
+    mocks.addTtcdsGroupMember.mockResolvedValue({});
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    const input = await screen.findByRole('combobox', { name: /Thêm sinh viên theo tên hoặc MSSV/i });
+    fireEvent.change(input, { target: { value: 'nguyen' } });
+
+    // Debounce 300ms rồi mới gọi API.
+    await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
+    expect(mocks.searchTtcdsStudents.mock.calls[0][1]).toBe('nguyen');
+
+    const option = await screen.findByRole('option', { selected: true });
+    expect(option).toHaveTextContent('Nguyễn Văn A');
+    expect(option).toHaveTextContent('24050126');
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(mocks.addTtcdsGroupMember).toHaveBeenCalledWith(
+      'test-token',
+      'g1',
+      expect.objectContaining({ mssv: '24050126' })
+    ));
+    expect(input.value).toBe('');
+  });
+
+  it('does not mark the name field invalid before the first submit', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo nhóm đầu tiên' }));
+    const nameInput = await screen.findByLabelText(/Tên nhóm/i);
+    expect(nameInput).not.toHaveAttribute('aria-invalid');
+
+    fireEvent.submit(nameInput.closest('form'));
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.change(nameInput, { target: { value: 'K30' } });
+    expect(nameInput).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('labels the group table actions column and keeps it accessible', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    await screen.findByText('K29 Tân sinh viên');
+    expect(screen.getByRole('columnheader', { name: 'Thao tác' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Tên nhóm' })).toBeInTheDocument();
   });
 });
