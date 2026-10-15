@@ -22,6 +22,7 @@ async function cleanupTestData() {
   await query("DELETE FROM ttcds_permissions WHERE mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM ttcds_audit_logs WHERE actor_mssv LIKE 'TEST_TTCDS%' OR target_mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM identity_entitlement_grants WHERE mssv LIKE 'TEST_TTCDS%'");
+  await query("DELETE FROM system_roles WHERE mssv LIKE 'TEST_TTCDS%'");
   await query("DELETE FROM students WHERE mssv LIKE 'TEST_TTCDS%'");
 }
 
@@ -141,6 +142,22 @@ async function runTtcdsGroupsTest() {
     assert.equal(clearedGrantor.granted_by, null, 'granted_by trắng phải thành NULL');
     assert.equal(await TtcdsService.getLevel(LEVEL_MSSV), 'create');
     console.log('✅ PASSED: chỉ có view/create, mặc định view khi chưa cấp.');
+
+    console.log("--- [Test 5b] Owner hệ thống luôn 'create' ---");
+    const SYSOWNER_MSSV = 'TEST_TTCDS_SYSOWNER';
+    await query(
+      "INSERT INTO system_roles (mssv, role, is_active) VALUES ($1, 'owner', TRUE) ON CONFLICT DO NOTHING",
+      [SYSOWNER_MSSV]
+    );
+    await query(`
+      INSERT INTO identity_entitlement_grants (mssv, item_id, source, reason)
+      VALUES ($1, 'title:ttcds', 'manual', 'sysowner test grant')
+      ON CONFLICT DO NOTHING;
+    `, [SYSOWNER_MSSV]);
+    await TtcdsService.setLevel({ mssv: SYSOWNER_MSSV, level: 'view', grantedBy: OWNER_MSSV });
+    assert.equal(await TtcdsService.getLevel(SYSOWNER_MSSV), 'create', 'Owner hệ thống luôn create kể cả khi bị gán view');
+    assert.equal(await TtcdsService.requireCreate(SYSOWNER_MSSV), true, 'requireCreate phải pass cho owner');
+    console.log('✅ PASSED: owner hệ thống mặc định create.');
 
     console.log('--- [Test 6] Xoá group kéo theo thành viên (ON DELETE CASCADE) ---');
     await query('DELETE FROM ttcds_groups WHERE id = $1', [group.id]);

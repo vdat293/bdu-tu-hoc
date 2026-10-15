@@ -131,11 +131,16 @@ export const TtcdsService = {
     return result.rows;
   },
 
-  /** Chưa có dòng trong ttcds_permissions nghĩa là 'view' (mặc định an toàn). */
+  /**
+   * Chưa có dòng trong ttcds_permissions nghĩa là 'view' (mặc định an toàn),
+   * TRỪ owner hệ thống (`system_roles` role owner): luôn 'create' — admin vừa
+   * có nametag vừa quản trị thì không phải tự cấp quyền cho chính mình.
+   */
   async getLevel(mssv) {
     const cleanMssv = normalizeTtcdsMssv(mssv);
     if (!cleanMssv || !isDatabaseConfigured()) return 'view';
 
+    if (await PermissionService.isSystemOwner(cleanMssv)) return 'create';
     const result = await query('SELECT level FROM ttcds_permissions WHERE mssv = $1', [cleanMssv]);
     return result.rows[0]?.level === 'create' ? 'create' : 'view';
   },
