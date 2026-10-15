@@ -93,12 +93,27 @@ function buildUrl(path, params) {
   return `${baseUrl()}${path}${suffix ? `?${suffix}` : ''}`;
 }
 
-/** Chỉ lấy giá trị cookie bdudash_session, bỏ mọi attribute (Path/HttpOnly...). */
+/**
+ * Chỉ lấy giá trị cookie bdudash_session, bỏ mọi attribute (Path/HttpOnly...).
+ * Node/undici expose nhiều Set-Cookie qua `getSetCookie()` (mảng); `get('set-cookie')`
+ * có thể null/gộp khi Dashboard set thêm cookie. Ưu tiên mảng, fallback về string.
+ */
 function extractSessionCookie(response) {
-  const raw = response?.headers?.get?.('set-cookie');
-  if (!raw) return null;
-  const match = String(raw).match(/(?:^|;\s*)bdudash_session=([^;]+)/);
-  return match ? `${SESSION_COOKIE_NAME}=${match[1].trim()}` : null;
+  const headers = response?.headers;
+  const candidates = [];
+
+  if (typeof headers?.getSetCookie === 'function') {
+    const values = headers.getSetCookie();
+    if (Array.isArray(values)) candidates.push(...values);
+  }
+  const single = headers?.get?.('set-cookie');
+  if (single) candidates.push(single);
+
+  for (const raw of candidates) {
+    const match = String(raw ?? '').match(/(?:^|;\s*)bdudash_session=([^;]+)/);
+    if (match) return `${SESSION_COOKIE_NAME}=${match[1].trim()}`;
+  }
+  return null;
 }
 
 async function performLogin() {

@@ -15,6 +15,11 @@ const originalFetch = globalThis.fetch;
 const captured = [];
 let loginCount = 0;
 let detail2405Calls = 0;
+let detail5555Calls = 0;
+// Khi bật, response login CHỈ expose cookie qua getSetCookie() (không có
+// header `set-cookie` dạng string) — mô phỏng undici khi Dashboard set nhiều cookie.
+let loginCookieViaArrayOnly = false;
+let arrayOnlyLogins = 0;
 
 const STUDENT_A = {
   tim_thay: true,
@@ -40,6 +45,17 @@ const STUDENT_B = {
 };
 const SEARCH_RESULT = { ket_qua: [{ mssv: '22050006', ho_ten: 'Nguyễn Văn A' }] };
 const ATTENDANCE = { tong_so_buoi: 15, so_buoi_vang: 1, nhat_ky: [] };
+const STUDENT_C = {
+  tim_thay: true,
+  ho_so: { mssv: '55555555', ho_ten: 'Lê Văn C' },
+  gpa_hoc_ky: [],
+  diem_danh: [],
+  bang_diem: [],
+  diem_danh_mon: [],
+  thoi_khoa_bieu: [],
+  ren_luyen: [{ nkhk: '20251', diem_ren_luyen: 60, xep_loai: 'Trung bình' }],
+  su_kien: []
+};
 
 const consoleCalls = [];
 const originalConsole = { log: console.log, warn: console.warn, error: console.error };
@@ -50,13 +66,16 @@ for (const level of ['log', 'warn', 'error']) {
   };
 }
 
-function jsonResponse(body, { status = 200, setCookie } = {}) {
+function jsonResponse(body, { status = 200, setCookie, setCookies } = {}) {
   const headers = new Map();
   if (setCookie) headers.set('set-cookie', setCookie);
   return {
     status,
     ok: status >= 200 && status < 300,
-    headers: { get: (name) => headers.get(String(name).toLowerCase()) ?? null },
+    headers: {
+      get: (name) => headers.get(String(name).toLowerCase()) ?? null,
+      ...(Array.isArray(setCookies) ? { getSetCookie: () => setCookies } : {})
+    },
     async json() {
       return body;
     }
@@ -72,6 +91,13 @@ globalThis.fetch = async (url, options = {}) => {
     const body = JSON.parse(options.body);
     if (body.ten_dang_nhap !== SERVICE_USER || body.mat_khau !== SERVICE_PASSWORD) {
       return jsonResponse({ loi: 'Tên đăng nhập hoặc mật khẩu không đúng' }, { status: 401 });
+    }
+    if (loginCookieViaArrayOnly) {
+      arrayOnlyLogins += 1;
+      return jsonResponse(
+        { ok: true, nguoi_dung: { ten_dang_nhap: SERVICE_USER } },
+        { setCookies: [`bdudash_session=JWT-ARRAY-${loginCount}; Path=/; HttpOnly; SameSite=Lax`] }
+      );
     }
     return jsonResponse(
       { ok: true, nguoi_dung: { ten_dang_nhap: SERVICE_USER } },
@@ -98,6 +124,13 @@ globalThis.fetch = async (url, options = {}) => {
   }
   if (target.includes('/api/sinh-vien/99999999')) {
     return jsonResponse({ loi: 'Bạn không có quyền xem sinh viên này' }, { status: 403 });
+  }
+  if (target.includes('/api/sinh-vien/55555555')) {
+    detail5555Calls += 1;
+    if (detail5555Calls === 1) {
+      return jsonResponse({ loi: 'Phiên đăng nhập đã hết hạn' }, { status: 401 });
+    }
+    return jsonResponse(STUDENT_C);
   }
   if (target.includes('/api/sinh-vien/77777777')) {
     throw new Error(`ECONNREFUSED ${BASE_URL}`);
@@ -208,7 +241,19 @@ try {
   });
   console.log('✅ PASSED: lỗi kết nối Dashboard -> 503 retryable, không lộ mật khẩu.');
 
-  console.log('--- [Test 8] mật khẩu không xuất hiện trong bất kỳ log nào ---');
+  console.log('--- [Test 8] login cookie CHỈ có qua getSetCookie() vẫn đăng nhập được ---');
+  loginCookieViaArrayOnly = true;
+  const detailBeforeArray = detail5555Calls;
+  const loginsBeforeArray = loginCount;
+  const recoveredViaArray = await DashboardProxy.getStudent('55555555');
+  assert.deepEqual(recoveredViaArray, STUDENT_C, 'getSetCookie() phải được đọc để login + retry thành công');
+  assert.equal(detail5555Calls - detailBeforeArray, 2, '401 rồi retry sau khi relogin bằng cookie từ getSetCookie()');
+  assert.equal(loginCount - loginsBeforeArray, 1, 'Chỉ login lại 1 lần');
+  assert.equal(arrayOnlyLogins, 1, 'Login phải đi qua nhánh response getSetCookie()-only');
+  loginCookieViaArrayOnly = false;
+  console.log('✅ PASSED: set-cookie chỉ qua getSetCookie() -> login + retry OK.');
+
+  console.log('--- [Test 9] mật khẩu không xuất hiện trong bất kỳ log nào ---');
   const loggedText = consoleCalls.join('\n');
   assert.equal(loggedText.includes(SERVICE_PASSWORD), false, 'Mật khẩu không được ghi log');
   assert.equal(
