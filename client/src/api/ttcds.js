@@ -24,8 +24,8 @@ export async function getTtcdsGroups(token, { signal } = {}) {
   return unwrap(data, []);
 }
 
-export async function createTtcdsGroup(token, { name, nien_khoa, description } = {}) {
-  const data = await request('/api/ttcds/groups', { method: 'POST', token, body: { name, nien_khoa, description }, defaultMessage: 'Không thể tạo nhóm.' });
+export async function createTtcdsGroup(token, { name, mentor } = {}) {
+  const data = await request('/api/ttcds/groups', { method: 'POST', token, body: { name, mentor }, defaultMessage: 'Không thể tạo nhóm.' });
   return unwrap(data, data);
 }
 

@@ -16,7 +16,7 @@ export default function TtcdsPage() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [draft, setDraft] = useState({ name: '', nien_khoa: '', description: '' });
+  const [draft, setDraft] = useState(() => ({ name: '', mentor: auth.user?.name ?? '' }));
   const [nameInvalid, setNameInvalid] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
   const createDialogRef = useRef(null);
@@ -39,7 +39,7 @@ export default function TtcdsPage() {
   const create = useMutation({
     mutationFn: () => createTtcdsGroup(auth.token, draft),
     onSuccess: (group) => {
-      setDraft({ name: '', nien_khoa: '', description: '' });
+      setDraft({ name: '', mentor: auth.user?.name ?? '' });
       setNameInvalid(false);
       setShowCreateModal(false);
       refreshGroups();
@@ -138,34 +138,50 @@ export default function TtcdsPage() {
           ) : undefined}
         />
       ) : (
-        <div className="table-scroll">
-          <table className="ttcds-groups-table">
-            <thead>
-              <tr>
-                <th scope="col">Tên nhóm</th>
-                <th scope="col">Niên khóa</th>
-                <th scope="col">Số SV</th>
-                {canCreate && <th scope="col">Thao tác</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((group) => (
-                <tr key={group.id}>
-                  <td><Link to={`/ttcds/groups/${group.id}`}>{group.name}</Link></td>
-                  <td>{group.nien_khoa || '—'}</td>
-                  <td>{group.member_count ?? 0}</td>
-                  {canCreate && (
-                    <td>
-                      <button type="button" className="btn btn-secondary" aria-label={`Xóa nhóm ${group.name}`} disabled={remove.isPending} onClick={() => confirmRemove(group)}>
-                        Xóa
-                      </button>
-                    </td>
-                  )}
+        <>
+          <div className="stats-grid" aria-label="Tổng quan nhóm">
+            <div className="stat-card">
+              <div className="stat-info">
+                <span className="stat-title">Số nhóm</span>
+                <span className="stat-value">{list.length}</span>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-info">
+                <span className="stat-title">Tổng sinh viên</span>
+                <span className="stat-value">{list.reduce((sum, group) => sum + (group.member_count ?? 0), 0)}</span>
+              </div>
+            </div>
+          </div>
+          <div className="table-scroll">
+            <table className="ttcds-groups-table">
+              <thead>
+                <tr>
+                  <th scope="col">Tên nhóm</th>
+                  <th scope="col">Mentor</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Số SV</th>
+                  {canCreate && <th scope="col">Thao tác</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {list.map((group) => (
+                  <tr key={group.id}>
+                    <td><Link to={`/ttcds/groups/${group.id}`}>{group.name}</Link></td>
+                    <td>{group.mentor || '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{group.member_count ?? 0}</td>
+                    {canCreate && (
+                      <td>
+                        <button type="button" className="btn btn-secondary" aria-label={`Xóa nhóm ${group.name}`} disabled={remove.isPending} onClick={() => confirmRemove(group)}>
+                          Xóa
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {showCreateModal && canCreate && (
@@ -198,8 +214,17 @@ export default function TtcdsPage() {
                 placeholder="Ví dụ: K29 Tân sinh viên"
               />
             </label>
-            <label htmlFor="new-ttcds-group-nien-khoa">Niên khóa<input id="new-ttcds-group-nien-khoa" className="form-input" value={draft.nien_khoa} onChange={(event) => setDraft({ ...draft, nien_khoa: event.target.value })} placeholder="Ví dụ: K29" /></label>
-            <label htmlFor="new-ttcds-group-desc">Mô tả<textarea id="new-ttcds-group-desc" className="form-input" rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Ghi chú về nhóm sinh viên này…" /></label>
+            <label htmlFor="new-ttcds-group-mentor">
+              <span>Mentor</span>
+              <input
+                id="new-ttcds-group-mentor"
+                className="form-input"
+                value={draft.mentor}
+                maxLength={120}
+                onChange={(event) => setDraft({ ...draft, mentor: event.target.value })}
+                placeholder="Người phụ trách nhóm"
+              />
+            </label>
             <div className="club-modal__footer">
               <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Hủy</button>
               <button type="submit" className="btn btn-primary" disabled={create.isPending}>{create.isPending ? 'Đang tạo…' : 'Tạo nhóm'}</button>

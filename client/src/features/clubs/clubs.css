@@ -235,7 +235,7 @@
 .ttcds-groups-table tbody tr:hover { background: color-mix(in srgb, var(--club-accent) 6%, transparent); }
 .ttcds-groups-table th:last-child,
 .ttcds-groups-table td:last-child { text-align: right; }
-.ttcds-groups-table td:first-child a { color: var(--club-accent); font-weight: 650; text-decoration: none; }
+.ttcds-groups-table td:first-child a { color: var(--club-ink); font-weight: 650; text-decoration: none; }
 .ttcds-groups-table td:first-child a:hover { text-decoration: underline; }
 
 /* Ô thêm sinh viên trong popup, kiểu khung mời của Google: input nằm trên,

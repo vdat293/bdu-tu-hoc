@@ -79,13 +79,17 @@ describe('TTCDS frontend', () => {
 
   it('renders the service h1 and a compact group table', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
-    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', mentor: 'Thầy TTCDS', member_count: 2 }]);
     renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Sinh viên của tôi' })).toBeInTheDocument();
     expect(await screen.findByText('K29 Tân sinh viên')).toBeInTheDocument();
-    expect(screen.getByText('Niên khóa')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Mentor' })).toBeInTheDocument();
     expect(screen.getByText('Số SV')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Niên khóa' })).not.toBeInTheDocument();
+    expect(screen.getByText('Thầy TTCDS')).toBeInTheDocument();
+    expect(screen.getByText('Số nhóm')).toBeInTheDocument();
+    expect(screen.getByText('Tổng sinh viên')).toBeInTheDocument();
     const nameLink = screen.getByRole('link', { name: 'K29 Tân sinh viên' });
     expect(nameLink.getAttribute('href')).toBe('/ttcds/groups/g1');
   });
@@ -402,6 +406,56 @@ describe('TTCDS frontend', () => {
     fireEvent.change(input, { target: { value: '2405' } });
     await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
     expect(mocks.searchTtcdsStudents.mock.calls[0][1]).toBe('2405');
+  });
+
+  it('create modal only asks for name plus mentor prefilled with the user name', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo nhóm đầu tiên' }));
+    const mentorInput = await screen.findByLabelText(/Mentor/i);
+    expect(mentorInput).toHaveValue('Thầy TTCDS');
+    expect(mentorInput).toHaveAttribute('maxlength', '120');
+    fireEvent.change(mentorInput, { target: { value: 'Cô Mentor' } });
+    expect(mentorInput).toHaveValue('Cô Mentor');
+    expect(screen.queryByLabelText(/Niên khóa/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Mô tả/i)).not.toBeInTheDocument();
+  });
+
+  it('forwards the mentor when creating a group', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    mocks.createTtcdsGroup.mockResolvedValue({ id: 'g2', name: 'K30' });
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo nhóm đầu tiên' }));
+    fireEvent.change(await screen.findByLabelText(/Tên nhóm/i), { target: { value: 'K30' } });
+    fireEvent.change(screen.getByLabelText(/Mentor/i), { target: { value: 'Cô Mentor' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo nhóm' }));
+    await waitFor(() => expect(mocks.createTtcdsGroup).toHaveBeenCalledWith(
+      'test-token',
+      expect.objectContaining({ name: 'K30', mentor: 'Cô Mentor' })
+    ));
+  });
+
+  it('shows a dash for missing mentor and totals in the summary strip', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([
+      { id: 'g1', name: 'Nhóm A', mentor: 'Thầy TTCDS', member_count: 2 },
+      { id: 'g2', name: 'Nhóm B', member_count: 3 }
+    ]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    await screen.findByText('Nhóm A');
+    const strip = document.querySelector('.stats-grid');
+    expect(strip).not.toBeNull();
+    expect(strip.textContent).toContain('Số nhóm');
+    expect(strip.textContent).toContain('Tổng sinh viên');
+    const values = [...strip.querySelectorAll('.stat-value')].map((node) => node.textContent);
+    expect(values).toEqual(['2', '5']);
+    expect(screen.getByRole('columnheader', { name: 'Số SV' }).style.textAlign).toBe('right');
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('does not mark the name field invalid before the first submit', async () => {
