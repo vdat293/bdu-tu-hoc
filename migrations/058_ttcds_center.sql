@@ -1,4 +1,4 @@
--- Migration 057: Trung tâm Chuyển đổi số — nhóm quan tâm "Sinh viên của tôi".
+-- Migration 058: Trung tâm Chuyển đổi số — nhóm quan tâm "Sinh viên của tôi".
 -- Group riêng tư theo người tạo (owner_mssv); MSSV chuẩn hóa UPPER ở service layer.
 -- Quyền trong Trung tâm chỉ 2 nấc view/create; chưa có dòng = 'view'.
 -- ttcds_audit_logs giữ bằng chứng tạo group / thêm-bớt SV / cấp quyền.

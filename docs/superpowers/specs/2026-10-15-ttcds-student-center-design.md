@@ -61,7 +61,7 @@ Tham khảo UI/API Dashboard (đã đọc trực tiếp):
 
 ## 4. Data model (Phần 2/5 — đã duyệt)
 
-Migration mới: `migrations/019_ttcds_center.sql`. Không đụng bảng `clans`.
+Migration mới: `migrations/058_ttcds_center.sql` (019 đã tồn tại, 057 thuộc migration khác). Không đụng bảng `clans`.
 
 - `ttcds_groups`
   (`id uuid PK`, `name`, `nien_khoa` vd K29, `description`,
