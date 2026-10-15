@@ -51,6 +51,10 @@ const state = {
   serviceLockBusy: new Set(),
   serviceLock: null,
   serviceLockMutationAt: 0,
+  // TTCDS phân quyền: dữ liệu GET /api/ttcds/permissions + /api/ttcds/audit,
+  // chỉ tải được bằng token của quản trị viên hệ thống (system owner).
+  ttcds: null,
+  ttcdsBusy: false,
   // Nhóm đang được admin gõ tiêu đề/nội dung mà chưa lưu; auto-refresh (mỗi
   // 15 giây) phải bỏ qua ô nhập của đúng nhóm đó để không ghi đè nội dung
   // chưa kịp lưu. Vì sao là Set theo group: mỗi dòng có ô nhập riêng nên cờ
@@ -200,7 +204,18 @@ const dom = {
   serviceLockState: document.getElementById('service-lock-state'),
   serviceLockStateSub: document.getElementById('service-lock-state-sub'),
   serviceLockUpdated: document.getElementById('service-lock-updated'),
-  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub')
+  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub'),
+
+  // TTCDS phân quyền (tab ttcds)
+  formTtcdsGrant: document.getElementById('form-ttcds-grant'),
+  inputTtcdsMssv: document.getElementById('input-ttcds-mssv'),
+  selectTtcdsLevel: document.getElementById('select-ttcds-level'),
+  inputTtcdsNote: document.getElementById('input-ttcds-note'),
+  btnTtcdsGrant: document.getElementById('btn-ttcds-grant'),
+  btnRefreshTtcds: document.getElementById('btn-refresh-ttcds'),
+  ttcdsPermissionsCount: document.getElementById('ttcds-permissions-count'),
+  ttcdsPermissionsBody: document.getElementById('ttcds-permissions-body'),
+  ttcdsAuditBody: document.getElementById('ttcds-audit-body')
 };
 
 let currentSelectedLog = null;
@@ -455,7 +470,11 @@ async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers });
   
   if (res.status === 401 || res.status === 403) {
-    openAuthModal();
+    // `quiet` dành cho endpoint chỉ một nhóm nhỏ dùng được (TTCDS phân quyền
+    // đòi system owner): người đăng nhập hợp lệ nhưng thiếu quyền thì tab đó
+    // tự báo lỗi, không bật cửa sổ xác thực đè lên toàn trang mỗi lần
+    // auto-refresh. Chưa đăng nhập thì các endpoint khác vẫn mở cửa sổ này.
+    if (!options.quiet) openAuthModal();
     throw new Error('Yêu cầu xác thực khóa quản trị viên.');
   }
 
@@ -571,7 +590,8 @@ const tabTitles = {
   insights: 'Phân Tích Hành Vi Người Dùng',
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
-  system: 'Sức Khỏe Máy Chủ & Hệ Thống'
+  system: 'Sức Khỏe Máy Chủ & Hệ Thống',
+  ttcds: 'TTCDS phân quyền'
 };
 
 dom.navButtons.forEach((btn) => {
@@ -665,7 +685,7 @@ async function fetchAllData(isBackground = false) {
     // (đã gom + có nhãn). Danh sách endpoint thô vẫn lấy song song để làm đường
     // hạ cấp: nếu riêng truy vấn xếp hạng lỗi (p95/delta nặng hơn) thì khối vẫn
     // có gì đó để hiện thay vì trắng trơn.
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality] = await Promise.all([
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality, ttcdsPermissions, ttcdsAudit] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
@@ -684,7 +704,12 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/insights/features?timeRange=${state.timeRange}`).catch(() => null),
       api(`/api/admin/dashboard/insights/hours?timeRange=${state.timeRange}`).catch(() => null),
       api(`/api/admin/dashboard/insights/cohort?timeRange=${state.timeRange}`).catch(() => null),
-      api(`/api/admin/dashboard/insights/quality?timeRange=${state.timeRange}`).catch(() => null)
+      api(`/api/admin/dashboard/insights/quality?timeRange=${state.timeRange}`).catch(() => null),
+      // TTCDS phân quyền bọc .catch(() => null) như 4 endpoint insights: người
+      // đăng nhập không phải system owner bị 403 thì chỉ tab này báo lỗi, cả
+      // dashboard vẫn vẽ. Chưa đăng nhập thì api() đã tự mở cửa sổ xác thực.
+      api('/api/ttcds/permissions', { quiet: true }).catch(() => null),
+      api('/api/ttcds/audit?limit=50', { quiet: true }).catch(() => null)
     ]);
 
     renderOverview(overview);
@@ -696,6 +721,7 @@ async function fetchAllData(isBackground = false) {
     renderSystem(system);
     renderRankingSync(rankingSync, rankingSyncRequestedAt);
     renderServiceLock(serviceLock, serviceLockRequestedAt);
+    renderTtcds(ttcdsPermissions, ttcdsAudit);
     state.insights = {
       ...state.insights,
       features: insightFeatures,
@@ -2745,6 +2771,139 @@ function bindServiceLockToggle(rowEl, group, label) {
     } finally {
       serviceLockToggle.disabled = false;
     }
+  });
+}
+
+/* ==========================================================================
+   TTCDS PHÂN QUYỀN (tab ttcds)
+   --------------------------------------------------------------------------
+   Bảng (MSSV, nấc view/create, người cấp, cập nhật) + form cấp/thu hồi +
+   bảng nhật ký audit mới nhất. Gọi GET/PUT /api/ttcds/permissions và
+   GET /api/ttcds/audit bằng token sẵn có của trang (helper api(), Bearer),
+   giống mọi tab khác. Backend chỉ chấp nhận nấc view|create nên "thu hồi"
+   nghĩa là hạ về view; chưa có dòng nào trong DB cũng tương đương view.
+   Fetch trong fetchAllData bọc quiet+catch nên người thiếu quyền chỉ thấy
+   trạng thái lỗi ở đúng tab này, không bật cửa sổ xác thực toàn trang.
+   ========================================================================== */
+
+function renderTtcds(permissions, audit) {
+  state.ttcds = { permissions, audit };
+  const permBody = dom.ttcdsPermissionsBody;
+  const auditBody = dom.ttcdsAuditBody;
+  if (!permBody || !auditBody) return;
+
+  const rows = Array.isArray(permissions) ? permissions : [];
+  if (dom.ttcdsPermissionsCount) dom.ttcdsPermissionsCount.textContent = String(rows.length);
+
+  if (permissions === null) {
+    permBody.innerHTML = '<tr><td colspan="5" class="text-center-muted">Không tải được danh sách phân quyền (cần quyền quản trị hệ thống). Đăng nhập lại rồi bấm Làm Mới.</td></tr>';
+  } else if (rows.length === 0) {
+    permBody.innerHTML = '<tr><td colspan="5" class="text-center-muted">Chưa có dòng phân quyền nào.</td></tr>';
+  } else {
+    permBody.innerHTML = rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.mssv)}</td>
+        <td>${escapeHtml(row.level)}</td>
+        <td>${escapeHtml(row.granted_by || '—')}</td>
+        <td>${escapeHtml(row.updated_at || row.granted_at || '—')}</td>
+        <td style="text-align: right;">
+          ${row.level === 'create'
+            ? `<button type="button" class="btn-page" data-ttcds-revoke="${escapeHtml(row.mssv)}">Thu hồi</button>`
+            : '<span class="text-center-muted">—</span>'}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const logs = Array.isArray(audit) ? audit : [];
+  if (audit === null) {
+    auditBody.innerHTML = '<tr><td colspan="6" class="text-center-muted">Không tải được nhật ký thao tác.</td></tr>';
+  } else if (logs.length === 0) {
+    auditBody.innerHTML = '<tr><td colspan="6" class="text-center-muted">Chưa có thao tác nào được ghi nhận.</td></tr>';
+  } else {
+    auditBody.innerHTML = logs.map((log) => `
+      <tr>
+        <td>${escapeHtml(log.id)}</td>
+        <td>${escapeHtml(log.actor_mssv)}</td>
+        <td>${escapeHtml(log.action)}</td>
+        <td>${escapeHtml(log.target_group_id || '—')}</td>
+        <td>${escapeHtml(log.target_mssv || '—')}</td>
+        <td>${escapeHtml(log.created_at ? formatDateTime(log.created_at) : '—')}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+async function refreshTtcds() {
+  const [permissions, audit] = await Promise.all([
+    api('/api/ttcds/permissions', { quiet: true }).catch(() => null),
+    api('/api/ttcds/audit?limit=50', { quiet: true }).catch(() => null)
+  ]);
+  renderTtcds(permissions, audit);
+}
+
+if (dom.formTtcdsGrant) {
+  dom.formTtcdsGrant.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const mssv = String(dom.inputTtcdsMssv?.value || '').trim().toUpperCase();
+    if (!mssv) {
+      showToast('Vui lòng nhập MSSV được cấp quyền.', 'error');
+      return;
+    }
+    const level = dom.selectTtcdsLevel?.value === 'create' ? 'create' : 'view';
+    const note = String(dom.inputTtcdsNote?.value || '').trim();
+    if (state.ttcdsBusy) return;
+    state.ttcdsBusy = true;
+    if (dom.btnTtcdsGrant) dom.btnTtcdsGrant.disabled = true;
+    try {
+      await api('/api/ttcds/permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mssv, level, note: note || undefined })
+      });
+      if (dom.inputTtcdsMssv) dom.inputTtcdsMssv.value = '';
+      if (dom.inputTtcdsNote) dom.inputTtcdsNote.value = '';
+      await refreshTtcds();
+      showToast('Đã cập nhật phân quyền.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Không lưu được phân quyền.', 'error');
+    } finally {
+      state.ttcdsBusy = false;
+      if (dom.btnTtcdsGrant) dom.btnTtcdsGrant.disabled = false;
+    }
+  });
+}
+
+if (dom.ttcdsPermissionsBody) {
+  // Thu hồi = PUT hạ về nấc view (backend không có endpoint xóa dòng).
+  dom.ttcdsPermissionsBody.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-ttcds-revoke]');
+    if (!button || state.ttcdsBusy) return;
+    const mssv = button.getAttribute('data-ttcds-revoke');
+    if (!mssv) return;
+    if (!window.confirm(`Thu hồi quyền tạo nhóm của ${mssv} (hạ về nấc view)?`)) return;
+    state.ttcdsBusy = true;
+    button.disabled = true;
+    try {
+      await api('/api/ttcds/permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mssv, level: 'view' })
+      });
+      await refreshTtcds();
+      showToast(`Đã thu hồi quyền tạo nhóm của ${mssv}.`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Không thu hồi được phân quyền.', 'error');
+    } finally {
+      state.ttcdsBusy = false;
+    }
+  });
+}
+
+if (dom.btnRefreshTtcds) {
+  dom.btnRefreshTtcds.addEventListener('click', async () => {
+    await refreshTtcds();
+    showToast('Đã làm mới dữ liệu phân quyền!', 'info');
   });
 }
 

@@ -21,7 +21,7 @@ const badges = {
   '/enrollment': ['Soon', 'badge-pill-amber'],
   '/clans': ['Guild', 'badge-pill-emerald'],
   '/confession': ['CFS', 'badge-pill-purple'],
-  '/ttcds': ['TTCDS', 'badge-pill-emerald']
+  '/mystudent': ['TTCDS', 'badge-pill-emerald']
 };
 
 function getInitials(name) {

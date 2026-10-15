@@ -37,10 +37,10 @@ export default function TtcdsHubPage() {
 
       <div className="club-directory-grid">
         <article className="club-card">
-          <h2><Link to="/ttcds/sinh-vien-cua-toi">Sinh viên của tôi</Link></h2>
+          <h2><Link to="/mystudent">Sinh viên của tôi</Link></h2>
           <p>Theo dõi và hỗ trợ nhóm tân sinh viên được phân công cho bạn.</p>
           <div className="club-modal__footer">
-            <Link className="btn btn-secondary" to="/ttcds/sinh-vien-cua-toi">Mở dịch vụ</Link>
+            <Link className="btn btn-secondary" to="/mystudent">Mở dịch vụ</Link>
           </div>
         </article>
         <article className="club-card" aria-disabled="true">

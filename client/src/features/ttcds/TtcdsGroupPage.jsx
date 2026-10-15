@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { addTtcdsGroupMember, getTtcdsGroupMembers, getTtcdsGroups, getTtcdsStudent, parseMssvList, removeTtcdsGroupMember } from '../../api/ttcds.js';
@@ -45,6 +45,8 @@ export default function TtcdsGroupPage() {
   const client = useQueryClient();
   const [paste, setPaste] = useState('');
   const [addErrors, setAddErrors] = useState([]);
+  const pasteRef = useRef(null);
+  const focusPaste = () => pasteRef.current?.focus();
 
   const caps = useTtcdsCapabilities();
   const canAccess = Boolean(caps.data?.can_access);
@@ -151,7 +153,7 @@ export default function TtcdsGroupPage() {
     <section id="tab-ttcds-group" className="tab-pane club-experience">
       <header className="club-directory-hero">
         <div className="club-directory-hero__copy">
-          <p><Link to="/ttcds">← Trung tâm CĐS</Link></p>
+          <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
           <h1>{group?.name || 'Nhóm sinh viên'}</h1>
           <p>{group?.nien_khoa || '—'} · {members.length} sinh viên</p>
         </div>
@@ -163,7 +165,7 @@ export default function TtcdsGroupPage() {
       {canCreate && (
         <form className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }} onSubmit={submitPaste}>
           <label htmlFor="ttcds-add-mssv">Thêm MSSV (dán danh sách, cách nhau bởi phẩy / khoảng trắng / chấm phẩy)
-            <textarea id="ttcds-add-mssv" className="form-input" rows={3} value={paste} onChange={(event) => setPaste(event.target.value)} placeholder="24050126, 24050006; 22050006" />
+            <textarea id="ttcds-add-mssv" ref={pasteRef} className="form-input" rows={3} value={paste} onChange={(event) => setPaste(event.target.value)} placeholder="24050126, 24050006; 22050006" />
           </label>
           {addErrors.length > 0 && (
             <ul role="alert" style={{ color: 'var(--color-rose)' }}>
@@ -187,7 +189,15 @@ export default function TtcdsGroupPage() {
           <button type="button" className="btn btn-secondary" onClick={() => membersQuery.refetch()}>Thử lại</button>
         </div>
       ) : members.length === 0 ? (
-        <EmptyState title="Nhóm chưa có sinh viên" hint={canCreate ? 'Dán danh sách MSSV ở ô phía trên để thêm.' : 'Nhờ quản trị viên giao sinh viên vào nhóm này.'} />
+        <EmptyState
+          title="Nhóm chưa có sinh viên"
+          hint={canCreate ? 'Dán danh sách MSSV ở ô phía trên để thêm.' : 'Nhờ quản trị viên giao sinh viên vào nhóm này.'}
+          action={canCreate ? (
+            <button type="button" className="btn btn-primary" onClick={focusPaste}>
+              Thêm sinh viên đầu tiên
+            </button>
+          ) : undefined}
+        />
       ) : (
         <div className="club-directory-grid">
           {members.map((member, index) => {

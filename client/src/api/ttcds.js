@@ -58,21 +58,3 @@ export async function getTtcdsStudent(token, mssv, { signal } = {}) {
   const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}`, { token, signal, defaultMessage: 'Không thể tải thông tin sinh viên.' });
   return unwrap(data, data);
 }
-
-export async function getTtcdsPermissions(token, { signal } = {}) {
-  const data = await request('/api/ttcds/permissions', { token, signal, defaultMessage: 'Không thể tải danh sách phân quyền.' });
-  return unwrap(data, []);
-}
-
-export async function setTtcdsPermission(token, { mssv, level, note } = {}) {
-  const data = await request('/api/ttcds/permissions', { method: 'PUT', token, body: { mssv, level, note }, defaultMessage: 'Không thể cập nhật phân quyền.' });
-  return unwrap(data, data);
-}
-
-export async function getTtcdsAudit(token, { limit, signal } = {}) {
-  const params = new URLSearchParams();
-  if (limit !== undefined && limit !== null && limit !== '') params.set('limit', String(limit));
-  const suffix = params.toString();
-  const data = await request(`/api/ttcds/audit${suffix ? `?${suffix}` : ''}`, { token, signal, defaultMessage: 'Không thể tải nhật ký thao tác.' });
-  return unwrap(data, []);
-}

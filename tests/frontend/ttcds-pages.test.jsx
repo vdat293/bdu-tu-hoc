@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,10 +11,7 @@ const mocks = vi.hoisted(() => ({
   getTtcdsGroupMembers: vi.fn(),
   addTtcdsGroupMember: vi.fn(),
   removeTtcdsGroupMember: vi.fn(),
-  getTtcdsStudent: vi.fn(),
-  getTtcdsPermissions: vi.fn(),
-  setTtcdsPermission: vi.fn(),
-  getTtcdsAudit: vi.fn()
+  getTtcdsStudent: vi.fn()
 }));
 
 vi.mock('../../client/src/api/ttcds.js', async (importOriginal) => {
@@ -27,10 +24,11 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
 }));
 
 import TtcdsPage from '../../client/src/features/ttcds/TtcdsPage.jsx';
+import TtcdsGroupPage from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import TtcdsHubPage from '../../client/src/features/ttcds/TtcdsHubPage.jsx';
 import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
 import { summarizeTtcdsStudent } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
-import { navigation, filterNavigation } from '../../client/src/app/navigation.js';
+import { navigation, filterNavigation, findRouteMeta } from '../../client/src/app/navigation.js';
 import { parseMssvList } from '../../client/src/api/ttcds.js';
 
 function renderAt(path, route, element) {
@@ -63,85 +61,135 @@ describe('TTCDS frontend', () => {
   it('shows a 403 notice without access and hides the nav item', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: false, level: null });
     mocks.getTtcdsGroups.mockResolvedValue([]);
-    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
     expect(await screen.findByText('Bạn không thuộc Trung tâm Chuyển đổi số.')).toBeInTheDocument();
 
-    const item = navigation.find((entry) => entry.path === '/ttcds');
+    const item = navigation.find((entry) => entry.path === '/mystudent');
     expect(item).toBeTruthy();
+    expect(item.label).toBe('Sinh viên của tôi');
     expect(filterNavigation(navigation, { can_access: false })).not.toContain(item);
     expect(filterNavigation(navigation, { can_access: true })).toContain(item);
   });
 
-  it('hides the create button for view-level users', async () => {
+  it('titles the /mystudent route as Sinh vien cua toi', () => {
+    expect(findRouteMeta('/mystudent').title).toBe('Sinh viên của tôi');
+  });
+
+  it('renders the service h1 and a compact group table', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sinh viên của tôi' })).toBeInTheDocument();
+    expect(await screen.findByText('K29 Tân sinh viên')).toBeInTheDocument();
+    expect(screen.getByText('Niên khóa')).toBeInTheDocument();
+    expect(screen.getByText('Số SV')).toBeInTheDocument();
+    const nameLink = screen.getByRole('link', { name: 'K29 Tân sinh viên' });
+    expect(nameLink.getAttribute('href')).toBe('/ttcds/groups/g1');
+  });
+
+  it('hides every write button for view-level users', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
-    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
     await screen.findByText('K29 Tân sinh viên');
     expect(screen.queryByRole('button', { name: /Tạo nhóm/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Xóa' })).not.toBeInTheDocument();
   });
 
-  it('shows the create button for create-level users', async () => {
+  it('shows the create and delete buttons for create-level users', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29', member_count: 2 }]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    await screen.findByText('K29 Tân sinh viên');
+    expect(screen.getByRole('button', { name: 'Tạo nhóm mới' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xóa' })).toBeInTheDocument();
+  });
+
+  it('shows a centered create CTA on empty for create-level users', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
     mocks.getTtcdsGroups.mockResolvedValue([]);
-    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
-    expect(await screen.findByRole('button', { name: /Tạo nhóm/i })).toBeInTheDocument();
+    expect(await screen.findByText('Chưa có nhóm nào')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo nhóm đầu tiên' })).toBeInTheDocument();
   });
 
-  it('renders the ren-luyen block from the ren_luyen field', async () => {
+  it('shows guidance text without any button on empty for view-level users', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsGroups.mockResolvedValue([]);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
+
+    expect(await screen.findByText('Chưa có nhóm nào')).toBeInTheDocument();
+    expect(screen.getByText('Nhờ quản trị viên tạo nhóm và giao sinh viên cho bạn.')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('group page shows an add-first-student CTA on empty for create-level users', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([]);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    expect(await screen.findByText('Nhóm chưa có sinh viên')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thêm sinh viên đầu tiên' })).toBeInTheDocument();
+  });
+
+  it('group page shows waiting text without buttons on empty for view-level users', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([]);
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    expect(await screen.findByText('Nhóm chưa có sinh viên')).toBeInTheDocument();
+    expect(screen.getByText('Nhờ quản trị viên giao sinh viên vào nhóm này.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm sinh viên đầu tiên' })).not.toBeInTheDocument();
+  });
+
+  it('renders the snapshot card with the latest 4 numbers', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
-    expect(await screen.findByText('Điểm rèn luyện')).toBeInTheDocument();
-    expect(screen.getByText('85')).toBeInTheDocument();
-    expect(screen.getByText('Tốt')).toBeInTheDocument();
+    expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
+    expect(screen.getByText('3.20 · Học kỳ 1')).toBeInTheDocument();
+    expect(screen.getByText('18 có mặt · 2 vắng · 90.0% · Học kỳ 1')).toBeInTheDocument();
+    expect(screen.getByText('85 · Tốt · kỳ 1')).toBeInTheDocument();
+    expect(screen.getByText('1 sự kiện · kỳ 1')).toBeInTheDocument();
+    // No per-term history tables in the overview tab anymore.
+    expect(screen.queryByText('Điểm theo học kỳ')).not.toBeInTheDocument();
+    expect(screen.queryByText('Điểm danh theo học kỳ')).not.toBeInTheDocument();
+    expect(screen.queryByText('Điểm rèn luyện')).not.toBeInTheDocument();
   });
 
-  it("renders '—' when ren_luyen is missing", async () => {
+  it("renders '—' for ren luyen when the field is missing", async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue({ ...detailFixture, ren_luyen: [] });
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
-    expect(await screen.findByText('Điểm rèn luyện')).toBeInTheDocument();
+    expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
+    expect(screen.getByText('Rèn luyện')).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
-  it('hides the admin section for non-owners (permissions 403)', async () => {
-    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+  it('service page has no admin section anymore', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
     mocks.getTtcdsGroups.mockResolvedValue([]);
-    mocks.getTtcdsPermissions.mockRejectedValue(new Error('Chỉ quản trị viên hệ thống mới được thực hiện thao tác này.'));
-    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
+    renderAt('/mystudent', '/mystudent', <TtcdsPage />);
 
     await screen.findByText('Chưa có nhóm nào');
-    await waitFor(() => expect(mocks.getTtcdsPermissions).toHaveBeenCalled());
     expect(screen.queryByText('Quản trị phân quyền')).not.toBeInTheDocument();
   });
 
-  it('shows the admin section with owner context (permissions + audit)', async () => {
-    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
-    mocks.getTtcdsGroups.mockResolvedValue([]);
-    mocks.getTtcdsPermissions.mockResolvedValue([
-      { mssv: '22050006', level: 'create', granted_by: 'SYS', granted_at: '2026-10-15', updated_at: '2026-10-15' }
-    ]);
-    mocks.getTtcdsAudit.mockResolvedValue([
-      { id: 1, actor_mssv: 'SYS', action: 'group.create', target_group_id: null, target_mssv: null, created_at: '2026-10-15' }
-    ]);
-    renderAt('/ttcds/sinh-vien-cua-toi', '/ttcds/sinh-vien-cua-toi', <TtcdsPage />);
-
-    expect(await screen.findByText('Quản trị phân quyền')).toBeInTheDocument();
-    expect(screen.getByText('22050006')).toBeInTheDocument();
-    expect(screen.getByText('group.create')).toBeInTheDocument();
-  });
-
-  it('hub renders the Sinh vien cua toi service card with the right link', async () => {
+  it('hub renders the Sinh vien cua toi service card with the /mystudent link', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     renderAt('/ttcds', '/ttcds', <TtcdsHubPage />);
 
     const link = await screen.findByRole('link', { name: 'Sinh viên của tôi' });
-    expect(link.getAttribute('href')).toBe('/ttcds/sinh-vien-cua-toi');
+    expect(link.getAttribute('href')).toBe('/mystudent');
     expect(screen.getByText('Sắp ra mắt')).toBeInTheDocument();
   });
 

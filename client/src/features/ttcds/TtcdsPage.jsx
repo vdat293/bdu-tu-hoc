@@ -7,7 +7,6 @@ import { useViewportDialog, ViewportModal } from '../../components/ViewportModal
 import EmptyState from '../clubs/components/EmptyState.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
-import TtcdsAdminPanel from './TtcdsAdminPanel.jsx';
 
 export default function TtcdsPage() {
   const auth = useAuth();
@@ -60,7 +59,7 @@ export default function TtcdsPage() {
 
   if (caps.isLoading) {
     return (
-      <section className="club-directory-grid" aria-label="Đang tải Trung tâm CĐS">
+      <section className="club-directory-grid" aria-label="Đang tải Sinh viên của tôi">
         {[1, 2, 3].map((item) => <ClubCardSkeleton key={item} />)}
       </section>
     );
@@ -71,7 +70,7 @@ export default function TtcdsPage() {
   if (caps.isError) {
     return (
       <div className="club-empty" role="alert">
-        <h2>Chưa thể tải Trung tâm Chuyển đổi số</h2>
+        <h2>Chưa thể tải Sinh viên của tôi</h2>
         <p>{caps.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
         <button type="button" className="btn btn-secondary" onClick={() => caps.refetch()}>Thử lại</button>
       </div>
@@ -84,8 +83,8 @@ export default function TtcdsPage() {
     <section id="tab-ttcds" className="tab-pane club-experience">
       <header className="club-directory-hero">
         <div className="club-directory-hero__copy">
-          <h1>Trung tâm Chuyển đổi số</h1>
-          <p>Nhóm sinh viên quan tâm theo khóa — mỗi nhóm do chính bạn tạo và quản lý.</p>
+          <h1>Sinh viên của tôi</h1>
+          <p>Nhóm tân sinh viên được phân công cho bạn.</p>
         </div>
         {canCreate && (
           <div className="club-directory-hero__action">
@@ -110,28 +109,42 @@ export default function TtcdsPage() {
         <EmptyState
           title="Chưa có nhóm nào"
           hint={canCreate ? 'Tạo nhóm đầu tiên cho khóa sinh viên của bạn.' : 'Nhờ quản trị viên tạo nhóm và giao sinh viên cho bạn.'}
+          action={canCreate ? (
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              Tạo nhóm đầu tiên
+            </button>
+          ) : undefined}
         />
       ) : (
-        <div className="club-directory-grid">
-          {list.map((group) => (
-            <article className="club-card" key={group.id}>
-              <h2><Link to={`/ttcds/groups/${group.id}`}>{group.name}</Link></h2>
-              <p>{group.nien_khoa || '—'} · {group.member_count ?? 0} sinh viên</p>
-              {group.description && <p className="club-permission-note">{group.description}</p>}
-              <div className="club-modal__footer">
-                <Link className="btn btn-secondary" to={`/ttcds/groups/${group.id}`}>Mở nhóm</Link>
-                {canCreate && (
-                  <button type="button" className="btn btn-secondary" disabled={remove.isPending} onClick={() => remove.mutate(group.id)}>
-                    Xóa
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Tên nhóm</th>
+                <th scope="col">Niên khóa</th>
+                <th scope="col">Số SV</th>
+                {canCreate && <th scope="col"><span className="sr-only">Thao tác</span></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((group) => (
+                <tr key={group.id}>
+                  <td><Link to={`/ttcds/groups/${group.id}`}>{group.name}</Link></td>
+                  <td>{group.nien_khoa || '—'}</td>
+                  <td>{group.member_count ?? 0}</td>
+                  {canCreate && (
+                    <td>
+                      <button type="button" className="btn btn-secondary" disabled={remove.isPending} onClick={() => remove.mutate(group.id)}>
+                        Xóa
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-
-      {canAccess && <TtcdsAdminPanel enabled={canAccess} />}
 
       {showCreateModal && canCreate && (
         <ViewportModal id="modal-create-ttcds-group" title="Tạo nhóm sinh viên" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="club-modal club-modal-anim">

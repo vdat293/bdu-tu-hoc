@@ -26,74 +26,49 @@ function OverviewTab({ detail }) {
   const gpa = Array.isArray(detail?.gpa_hoc_ky) ? detail.gpa_hoc_ky : [];
   const attendance = Array.isArray(detail?.diem_danh) ? detail.diem_danh : [];
   const renLuyen = Array.isArray(detail?.ren_luyen) ? detail.ren_luyen : [];
+  const events = Array.isArray(detail?.su_kien) ? detail.su_kien : [];
+
+  const lastGpa = gpa[gpa.length - 1];
+  const lastAttendance = attendance[attendance.length - 1];
+  const lastRenLuyen = renLuyen[renLuyen.length - 1];
+  const latestNkhk = lastAttendance?.nkhk ?? lastGpa?.nkhk ?? null;
+  const eventCount = latestNkhk != null ? events.filter((event) => event?.nkhk === latestNkhk).length : 0;
+
+  const present = Number(lastAttendance?.di_hoc) || 0;
+  const absent = Number(lastAttendance?.vang) || 0;
+  const total = present + absent;
+
   return (
-    <>
-      <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
-        <h2>Điểm theo học kỳ</h2>
-        {gpa.length === 0 ? (
-          <p>Chưa có dữ liệu</p>
-        ) : (
-          <table>
-            <thead><tr><th>Học kỳ / năm học</th><th>ĐTB kỳ</th><th>Tích lũy</th><th>Tín chỉ kỳ</th><th>Xếp loại</th></tr></thead>
-            <tbody>
-              {gpa.map((row) => (
-                <tr key={row.nkhk}>
-                  <td>{termName(row)}</td>
-                  <td>{fmt(row.dtb_hk_he_4)}</td>
-                  <td>{fmt(row.dtb_tich_luy_he_4)}</td>
-                  <td>{row.so_tin_chi_dat_hk ?? '—'}</td>
-                  <td>{row.xep_loai_hoc_ki ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
-        <h2>Điểm danh theo học kỳ</h2>
-        {attendance.length === 0 ? (
-          <p>Chưa có dữ liệu</p>
-        ) : (
-          <table>
-            <thead><tr><th>Học kỳ / năm học</th><th>Có mặt</th><th>Vắng</th><th>Tỷ lệ</th></tr></thead>
-            <tbody>
-              {attendance.map((row) => {
-                const present = Number(row.di_hoc) || 0;
-                const absent = Number(row.vang) || 0;
-                const total = present + absent;
-                return (
-                  <tr key={row.nkhk}>
-                    <td>{termName(row)}</td>
-                    <td>{row.di_hoc ?? '—'}</td>
-                    <td>{row.vang ?? '—'}</td>
-                    <td>{total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-      <div className="card glass-panel" style={{ padding: '16px' }}>
-        <h2>Điểm rèn luyện</h2>
-        {renLuyen.length === 0 ? (
-          <p>—</p>
-        ) : (
-          <table>
-            <thead><tr><th>Học kỳ</th><th>Điểm</th><th>Xếp loại</th></tr></thead>
-            <tbody>
-              {renLuyen.map((row) => (
-                <tr key={row.nkhk}>
-                  <td>{row.nkhk ?? '—'}</td>
-                  <td>{row.diem_ren_luyen ?? '—'}</td>
-                  <td>{row.xep_loai ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
+    <div className="card glass-panel" style={{ padding: '16px' }}>
+      <h2>Tổng quan kỳ gần nhất</h2>
+      <dl>
+        <div>
+          <dt>ĐTB tích lũy</dt>
+          <dd>{lastGpa ? `${fmt(lastGpa.dtb_tich_luy_he_4)} · ${termName(lastGpa)}` : '—'}</dd>
+        </div>
+        <div>
+          <dt>Chuyên cần</dt>
+          <dd>
+            {lastAttendance
+              ? `${present} có mặt · ${absent} vắng · ${total > 0 ? `${((100 * present) / total).toFixed(1)}%` : '—'} · ${termName(lastAttendance)}`
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Rèn luyện</dt>
+          <dd>
+            {lastRenLuyen?.diem_ren_luyen != null
+              ? `${lastRenLuyen.diem_ren_luyen} · ${lastRenLuyen.xep_loai || '—'} · kỳ ${lastRenLuyen.nkhk ?? '—'}`
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Sự kiện</dt>
+          <dd>{latestNkhk != null ? `${eventCount} sự kiện · kỳ ${latestNkhk}` : '—'}</dd>
+        </div>
+      </dl>
+      <p className="club-permission-note">Điểm rèn luyện thường về trễ một nhịp so với điểm số và điểm danh.</p>
+    </div>
   );
 }
 
@@ -235,7 +210,7 @@ export default function TtcdsStudentPage() {
 
   return (
     <section id="tab-ttcds-student" className="tab-pane club-experience">
-      <p><Link to="/ttcds">← Trung tâm CĐS</Link></p>
+      <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
       <div className="card glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
         <h2>{profile.ten_day_du || '—'} <span>{profile.mssv || mssv}</span></h2>
         <p>Lớp {profile.ma_lop ?? '—'} · {profile.ten_khoa ?? '—'} · Niên khóa {profile.nien_khoa ?? '—'}</p>

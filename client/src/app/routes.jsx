@@ -65,8 +65,9 @@ export default function AppRoutes() {
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
+      <Route path="mystudent" element={<Lazy><TtcdsPage /></Lazy>} />
       <Route path="ttcds" element={<Lazy><TtcdsHubPage /></Lazy>} />
-      <Route path="ttcds/sinh-vien-cua-toi" element={<Lazy><TtcdsPage /></Lazy>} />
+      <Route path="ttcds/sinh-vien-cua-toi" element={<Navigate to="/mystudent" replace />} />
       <Route path="ttcds/groups/:id" element={<Lazy><TtcdsGroupPage /></Lazy>} />
       <Route path="ttcds/students/:mssv" element={<Lazy><TtcdsStudentPage /></Lazy>} />
     </Route>

@@ -13,8 +13,7 @@ export const navigation = [
   { path: '/grammar', label: 'Luyện ngữ pháp', icon: 'Ab', keywords: 'luyện ngữ pháp grammar toeic destination trắc nghiệm điền từ sắp xếp đọc hiểu' },
   { path: '/clans', label: 'CLB / Nhóm Học Tập', icon: '10', keywords: 'clan nhóm câu lạc bộ guild' },
   { path: '/confession', label: 'BDU Confession', icon: '11', keywords: 'bài viết diễn đàn confession cfs' },
-  { path: '/ttcds', label: 'Trung tâm CĐS', icon: '12', keywords: 'trung tâm chuyển đổi số sinh viên của tôi ttcds', requiresCapability: 'ttcds:access', section: 'ttcds' },
-  { path: '/ttcds/sinh-vien-cua-toi', label: 'Sinh viên của tôi', keywords: 'sinh viên của tôi theo dõi tân sinh viên ttcds', requiresCapability: 'ttcds:access', section: 'ttcds', hideInSidebar: true }
+  { path: '/mystudent', label: 'Sinh viên của tôi', icon: '12', keywords: 'trung tâm chuyển đổi số sinh viên của tôi ttcds', requiresCapability: 'ttcds:access', section: 'ttcds' }
 ];
 
 export function filterNavigation(items, capabilities) {
@@ -33,6 +32,7 @@ export function findRouteMeta(pathname) {
   if (canonical.startsWith('/vocab/')) return { title: 'Luyện từ vựng' };
   if (canonical.startsWith('/grammar')) return { title: 'Luyện ngữ pháp' };
   if (canonical.startsWith('/clans/')) return { title: 'Kênh CLB' };
+  if (canonical === '/mystudent') return { title: 'Sinh viên của tôi' };
   if (canonical.startsWith('/ttcds')) return { title: 'Trung tâm CĐS' };
   if (canonical.startsWith('/confession/profile/')) return { title: 'Hồ sơ sinh viên' };
   return routeMeta[canonical] || { title: 'BDU Tự Học' };
