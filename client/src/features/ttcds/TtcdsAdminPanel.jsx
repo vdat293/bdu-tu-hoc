@@ -38,6 +38,7 @@ export default function TtcdsAdminPanel({ enabled }) {
     onSuccess: () => {
       setDraft({ mssv: '', level: 'view', note: '' });
       client.invalidateQueries({ queryKey: ['ttcds-admin-permissions'] });
+      client.invalidateQueries({ queryKey: ['ttcds-admin-audit'] });
       notify('Đã cập nhật phân quyền.', 'success');
     },
     onError: (error) => notify(error.message, 'error')

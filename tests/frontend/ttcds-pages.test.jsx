@@ -28,6 +28,7 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
 
 import TtcdsPage from '../../client/src/features/ttcds/TtcdsPage.jsx';
 import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
+import { summarizeTtcdsStudent } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import { navigation, filterNavigation } from '../../client/src/app/navigation.js';
 import { parseMssvList } from '../../client/src/api/ttcds.js';
 
@@ -138,5 +139,17 @@ describe('TTCDS frontend', () => {
     expect(parseMssvList(' 24050126,24050006; 22050006\n24050127 ')).toEqual(
       ['24050126', '24050006', '22050006', '24050127']
     );
+  });
+
+  it('counts 0 term events when the student has no term (label says current term)', () => {
+    expect(summarizeTtcdsStudent({
+      ...detailFixture,
+      gpa_hoc_ky: [],
+      diem_danh: [],
+      su_kien: [
+        { nkhk: 1, ten_su_kien: 'A' },
+        { nkhk: 2, ten_su_kien: 'B' }
+      ]
+    }).eventCount).toBe(0);
   });
 });

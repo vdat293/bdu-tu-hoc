@@ -78,7 +78,7 @@ export const TtcdsController = {
       const level = can_access ? await TtcdsService.getLevel(mssv) : null;
       return res.json({ result: true, can_access, level });
     } catch (err) {
-      return sendError(res, err, 401, 'Vui lòng đăng nhập để tiếp tục.');
+      return sendError(res, err, err?.status || 500, 'Vui lòng đăng nhập để tiếp tục.');
     }
   },
 
@@ -135,6 +135,10 @@ export const TtcdsController = {
       }
       // Không có service helper: xóa trực tiếp, members cascade theo migration 057.
       await query('DELETE FROM ttcds_groups WHERE id = $1', [group.id]);
+      await query(
+        'INSERT INTO ttcds_audit_logs (actor_mssv, action, target_group_id) VALUES ($1, $2, $3)',
+        [normalizeTtcdsMssv(mssv), 'group.delete', group.id]
+      );
       return res.json({ result: true, deleted: true });
     } catch (err) {
       return sendError(res, err, err?.status || 500, 'Không thể xóa nhóm.');
@@ -288,12 +292,10 @@ export const TtcdsController = {
         grantedBy: mssv,
         note: req.body?.note
       });
-      if (level === 'create') {
-        await query(
-          'INSERT INTO ttcds_audit_logs (actor_mssv, action, target_mssv) VALUES ($1, $2, $3)',
-          [normalizeTtcdsMssv(mssv), 'permission.grant', target]
-        );
-      }
+      await query(
+        'INSERT INTO ttcds_audit_logs (actor_mssv, action, target_mssv) VALUES ($1, $2, $3)',
+        [normalizeTtcdsMssv(mssv), 'permission.grant', target]
+      );
       return res.json({ result: true, data });
     } catch (err) {
       return sendError(res, err, err?.status || 500, 'Không thể cập nhật phân quyền.');

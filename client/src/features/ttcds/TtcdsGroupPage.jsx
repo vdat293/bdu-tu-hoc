@@ -34,7 +34,7 @@ export function summarizeTtcdsStudent(detail) {
     attendance: attendancePct != null ? `${attendancePct.toFixed(1)}%` : '—',
     renLuyen: lastRenLuyen?.diem_ren_luyen != null ? String(lastRenLuyen.diem_ren_luyen) : '—',
     renLuyenRank: lastRenLuyen?.xep_loai || '—',
-    eventCount: latestNkhk != null ? events.filter((event) => event?.nkhk === latestNkhk).length : events.length
+    eventCount: latestNkhk != null ? events.filter((event) => event?.nkhk === latestNkhk).length : 0
   };
 }
 

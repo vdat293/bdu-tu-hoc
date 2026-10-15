@@ -257,6 +257,11 @@ async function runTtcdsApiTest() {
       assert.equal(sysDel.captured.payload.deleted, true);
       const gone = await query('SELECT id FROM ttcds_groups WHERE id = $1', [doomedId]);
       assert.equal(gone.rowCount, 0, 'system owner phai xoa duoc group');
+      const delAudit = await query(
+        "SELECT action FROM ttcds_audit_logs WHERE actor_mssv = $1 AND target_group_id = $2 AND action = 'group.delete'",
+        [SYS_MSSV, doomedId]
+      );
+      assert.equal(delAudit.rowCount, 1, 'deleteGroup phai ghi audit group.delete');
 
       await TtcdsService.setLevel({ mssv: CREATE_MSSV, level: 'create', grantedBy: SYS_MSSV });
     }
@@ -296,6 +301,18 @@ async function runTtcdsApiTest() {
         auditDenied.res
       );
       assert.equal(auditDenied.captured.statusCode, 403);
+
+      const viewGrant = mockRes();
+      await TtcdsController.setPermission(
+        mockReq({ token: TOKENS.sys, body: { mssv: VIEW_MSSV, level: 'view' } }),
+        viewGrant.res
+      );
+      assert.equal(viewGrant.captured.statusCode, 200);
+      const grantAudit = await query(
+        "SELECT action FROM ttcds_audit_logs WHERE actor_mssv = $1 AND target_mssv = $2 AND action = 'permission.grant'",
+        [SYS_MSSV, VIEW_MSSV]
+      );
+      assert.ok(grantAudit.rowCount >= 1, 'setPermission level view phai ghi audit permission.grant');
     }
     console.log('PASSED: chi system owner xem duoc permissions/audit.');
 
