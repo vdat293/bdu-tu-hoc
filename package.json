@@ -29,6 +29,7 @@
     "db:backup:scheduler": "node scripts/db-backup-scheduler.js",
     "db:backup:verify": "node scripts/db-backup-verify.js",
     "rankings:sync": "node scripts/sync-rankings.js",
+    "odp:sync": "node scripts/odp-sync.js",
     "vocab:import": "node scripts/import-vocab.js",
     "grammar:import": "node scripts/import-grammar.js",
     "grammar:extra:import": "node scripts/import-grammar-extra.js",

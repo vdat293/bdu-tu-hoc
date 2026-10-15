@@ -20,6 +20,7 @@ export const SAFE_NODE_TESTS = [
   'test-bdu-identity-realtime.js',
   'test-profile-service.js',
   'test-academic-ranking.js',
+  'test-odp-scheduler.js',
   'test-avatar-override.js',
   'test-avatar-bdu-fallback.js',
   'test-media-storage.js',
