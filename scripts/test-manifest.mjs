@@ -111,6 +111,7 @@ export const QUARANTINED_TESTS = new Map([
   ['test-community.js', 'Ghi/xóa community/clan DB và dùng ID cố định; chỉ chạy trên disposable test DB.'],
   ['test-community-realtime-upgrade.js', 'WebSocket integration có side effect; chỉ chạy qua explicit wrapper.'],
   ['test-permission-rbac.js', 'Ghi/xóa role/entitlement DB; chỉ chạy trên disposable test DB.'],
+  ['test-ttcds-groups.js', 'Ghi/xóa group/member/permission DB; chỉ chạy trên disposable test DB.'],
   ['test-clan-management.js', 'Ghi/xóa clan/student DB; chỉ chạy trên disposable test DB.'],
   ['e2e-routing-smoke.js', 'Import server.js và khởi động side effect; chỉ chạy qua explicit wrapper sau app factory.'],
   ['test-server-load.js', 'Import full server, bind port và chạy scheduler; cần load environment riêng.']
