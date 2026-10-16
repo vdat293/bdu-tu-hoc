@@ -1,6 +1,6 @@
 # Design: Hai tầng service + dọn rác có bằng chứng
 
-> Trạng thái: chờ duyệt. Spec này là cơ sở để viết implementation plan.
+> Trạng thái: đã duyệt và đã thực thi — xem §8 "Kết quả thực thi".
 
 ## 1. Intent
 
@@ -27,7 +27,9 @@ src/modules/<domain>/  x.controller.js + <domain>-của-domain.service.js
 src/services/          service dùng chung (bdu-identity, community-realtime, bdu, …) + core service
 ```
 
-### 3.1 Danh sách dời (19 file — đếm tại thời điểm viết spec, script phân loại sẽ tính lại lúc chạy)
+### 3.1 Danh sách dời (19 file lúc viết spec → **12 file** lúc chạy; 7 file còn lại chuyển sang giữ, xem §3.2)
+
+> **Đính chính của implementation plan:** script phân loại khi chạy rút danh sách dời xuống **12/19** file. 7 file trong bảng dưới — `system-settings`, `clan-role`, `clan-quiz`, `community`, `reminder-digest`, `identity-presentation`, `media-upload` — **không dời** vì có inbound từ tầng dùng chung `src/services/`; lý do từng file ở §3.2.
 
 | Service | Domain đích |
 | :--- | :--- |
@@ -50,6 +52,18 @@ src/services/          service dùng chung (bdu-identity, community-realtime, bd
 
 Dời `bdu-identity` đi đâu cũng sai: nó thuộc về không domain nào. Đổi tên tủ không tạo giá trị (YAGNI).
 
+**7 file §3.1 tưởng dời nhưng ở lại** — mỗi file có inbound từ tầng dùng chung, dời đi sẽ buộc shared import ngược lên `src/modules/` hoặc nhân bản instance:
+
+| Service ở lại | Inbound (bằng chứng grep) |
+| :--- | :--- |
+| `system-settings.service.js` | `service-lock.service.js`, `ranking-scheduler.service.js` |
+| `clan-role.service.js` | `student.service.js` |
+| `clan-quiz.service.js` | `student.service.js` |
+| `community.service.js` | `entertainment-game.service.js`, `learning.service.js` |
+| `reminder-digest.service.js` | `reminder-scheduler.service.js` |
+| `identity-presentation.service.js` | `community-realtime.service.js`, `community.service.js`, `entertainment-game.service.js`, `learning.service.js` |
+| `media-upload.service.js` | `community.service.js`, `media-cleanup.service.js` |
+
 ## 4. Cơ chế dời
 
 1. `git mv src/services/<f>.js src/modules/<domain>/` — giữ lịch sử.
@@ -63,6 +77,15 @@ Dời `bdu-identity` đi đâu cũng sai: nó thuộc về không domain nào. �
 **Nhóm A — local, không đụng git** (xoá thẳng, không cần test): `dist/`, `temp/`, `.acc/`, `.playwright-mcp/`, `.env.bak.local`, dump SQL local trong `data/` (`backup.sql`, `vps_sync_*.sql`), file `aws/*generated*`.
 
 **Nhóm B — ứng viên code, chỉ xoá khi có bằng chứng**: `src/services/moodle.service.js`, `src/services/identity-reward.service.js`, `public/css/showcase.css`, `public/js/interactions.js`. Điều kiện: grep toàn repo (trừ chính file + test của nó) không tìm thấy import/refer → xoá kèm test phụ thuộc → chạy lại test. **Không chứng minh được → giữ và báo lại trong phần nghiệm thu.**
+
+**Verdict nhóm B (Task 1): cả 4 GIỮ, không xoá** — mỗi file có ≥1 nơi dùng thật (grep trên `src client scripts tests server.js vite.config.js Dockerfile public/index.html`):
+
+| Ứng viên | Inbound | Verdict |
+| :--- | :--- | :--- |
+| `src/services/moodle.service.js` | `english-exercise.service.js:6` + 2 test | Giữ |
+| `src/services/identity-reward.service.js` | `identity-admin.service.js:4` + test | Giữ |
+| `public/css/showcase.css` | `public/index.html:24`, `client/index.html:17` + 4 test | Giữ |
+| `public/js/interactions.js` | `public/index.html:2386` (fallback SPA khi chưa có React build) | Giữ |
 
 Không xoá: `public/games/*`, `public/admin/*`, `public/admin-tool.*` (app.js mount trực tiếp), `data/grammar-practice-extra/*` (dữ liệu nội dung), `docs/`, toàn bộ `scripts/` và `tests/` (đã kiểm: không file nào mồ côi).
 
@@ -83,7 +106,12 @@ Chạy **trước** khi bắt đầu để lưu baseline, chạy lại sau mỗi
 ## 7. Chia commit
 
 1. `chore: don rac local + xoa ung vien co bang chung` (nhóm A + B, có bằng chứng)
-2. `refactor(services): don 20 service don vi vao src/modules/<domain>/` (git mv + sửa import + sửa `__dirname` + docs)
-3. Commit cập nhật `docs/architecture.md`/`READFORME.md` nếu tách riêng.
+2. `refactor(services): don 12 service don-domain vao src/modules/<domain>/` (git mv + sửa import + sửa `__dirname`)
+3. `docs: cap nhat kien truc hai tang service sau refactor` (docs/architecture.md + READFORME.md + spec + guard test)
 
 Mỗi commit tự kiểm chứng được bằng `npm run ci`.
+
+## 8. Kết quả thực thi
+
+- **Task 2** — commit `ac2307f` (`refactor(services): don 12 service don-domain vao src/modules/<domain>`): dời đúng 12 file (11 đích), sửa inbound/outbound (không shim), thêm guard `tests/test-service-domain-paths.js`. Baseline node test **81 → 82** file (thêm guard), tất cả xanh; vitest 37 file / 302 test, build xanh, `verify-route-order` OK, `verify-controller-split` xanh.
+- **Task 3** — commit docs: `docs/architecture.md` (§2 bảng domain, §3.7, §4.1 hai tầng, §5 lookup), `READFORME.md` (bản đồ cây), spec này (số đếm + verdict nhóm B), và `tests/test-service-domain-paths.js` dùng `deepStrictEqual`.

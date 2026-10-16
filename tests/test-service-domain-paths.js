@@ -58,8 +58,8 @@ for (const [name, domain] of Object.entries(MOVED)) {
     leftAtOldPath.push(path.join('src', 'services', name));
   }
 }
-assert.deepEqual(missingAtDest, [], `Thiếu file ở đích mới:\n  ${missingAtDest.join('\n  ')}`);
-assert.deepEqual(leftAtOldPath, [], `File đã dời vẫn còn ở src/services/:\n  ${leftAtOldPath.join('\n  ')}`);
+assert.deepStrictEqual(missingAtDest, [], `Thiếu file ở đích mới:\n  ${missingAtDest.join('\n  ')}`);
+assert.deepStrictEqual(leftAtOldPath, [], `File đã dời vẫn còn ở src/services/:\n  ${leftAtOldPath.join('\n  ')}`);
 
 // (b) Không còn tham chiếu đường dẫn cũ trong vùng quét.
 const scanned = [];
@@ -76,7 +76,7 @@ for (const file of scanned) {
     if (oldRefRe.test(line)) staleRefs.push(`${path.relative(ROOT, file)}:${index + 1}: ${line.trim()}`);
   });
 }
-assert.deepEqual(staleRefs, [], `Còn tham chiếu đường dẫn service cũ:\n  ${staleRefs.join('\n  ')}`);
+assert.deepStrictEqual(staleRefs, [], `Còn tham chiếu đường dẫn service cũ:\n  ${staleRefs.join('\n  ')}`);
 
 // (c) src/services/ không import ngược lên src/modules/.
 const servicesDir = path.join(ROOT, 'src', 'services');
@@ -87,6 +87,6 @@ for (const file of collectFiles(servicesDir, [])) {
     backImports.push(path.relative(ROOT, file));
   }
 }
-assert.deepEqual(backImports, [], `Tầng shared import ngược lên domain:\n  ${backImports.join('\n  ')}`);
+assert.deepStrictEqual(backImports, [], `Tầng shared import ngược lên domain:\n  ${backImports.join('\n  ')}`);
 
 console.log(`✅ Service domain paths OK: ${Object.keys(MOVED).length} service ở đúng domain, 0 tham chiếu cũ.`);

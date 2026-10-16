@@ -15,7 +15,7 @@ flowchart TD
     APP -->|/api| ASSEMBLER["src/routes/api.routes.js<br/>gọi register*Routes(router) theo thứ tự"]
     ASSEMBLER --> ROUTEFILE["src/routes/<domain>.routes.js<br/>router.get/post(...)"]
     ROUTEFILE -->|ApiController.<method>| CTRL["src/modules/<domain>/<domain>.controller.js"]
-    CTRL -->|import trực tiếp| SVC["src/services/<domain>*.service.js"]
+    CTRL -->|import trực tiếp| SVC["src/modules/<domain>/*.service.js (riêng domain)<br/>+ src/services/*.service.js (dùng chung)"]
     SVC --> DB["src/db/database.js<br/>getPool / query / transaction / withAdvisoryLock"]
     DB --> PGSQL[(PostgreSQL 16)]
     SVC --> EXT["BDU / Moodle / R2 / Facebook / Discord / bin/wordfmt"]
@@ -33,27 +33,27 @@ Các điểm cần nhớ:
 
 ## 2. Bảng 17 domain nghiệp vụ
 
-Cột "Controller" là file export object literal; cột "Route" là file chứa hàm `register*Routes`. Cột "Service chính" liệt kê các service mà controller đó import (đã đối chiếu trực tiếp từ câu lệnh `import` trong file).
+Cột "Controller" là file export object literal; cột "Route" là file chứa hàm `register*Routes`. Cột "Service được controller import" liệt kê các service mà controller đó import (đã đối chiếu trực tiếp từ câu lệnh `import` trong file). Sau refactor hai tầng (`ac2307f`): service **riêng của domain** nằm ở `src/modules/<domain>/` và được ghi kèm đường dẫn; tên trần (không có thư mục) là service **dùng chung** ở `src/services/` — xem mục 4.1.
 
 | Domain | Controller | Route | Service được controller import |
 | :--- | :--- | :--- | :--- |
 | **auth** | `src/modules/auth/auth.controller.js` (54 dòng) | `src/routes/auth.routes.js` | `bdu.service.js`, `bdu-identity.service.js`, `student.service.js`, `academic-snapshot.service.js`, `schedule-snapshot.service.js`, `notification-prefs.service.js` |
-| **academics** | `src/modules/academics/academics.controller.js` (185) | (dùng chung `auth.routes.js`) | `academic-ranking.service.js`, `academic-snapshot.service.js`, `achievement.service.js`, `bdu.service.js`, `bdu-identity.service.js`, `learning.service.js`, `ranking-scheduler.service.js`, `schedule-snapshot.service.js` |
+| **academics** | `src/modules/academics/academics.controller.js` (185) | (dùng chung `auth.routes.js`) | `academic-ranking.service.js`, `academic-snapshot.service.js`, `src/modules/academics/achievement.service.js`, `bdu.service.js`, `bdu-identity.service.js`, `learning.service.js`, `ranking-scheduler.service.js`, `schedule-snapshot.service.js` |
 | **identity** | `src/modules/identity/identity.controller.js` (352) | `src/routes/identity.routes.js` (4 hàm register) | `identity-presentation.service.js`, `identity-admin.service.js`, `student.service.js`, `permission.service.js`, `bdu.service.js`, `bdu-identity.service.js`, `academic-snapshot.service.js`, `academic-ranking.service.js`, `community-realtime.service.js` |
-| **media** | `src/modules/media/media.controller.js` (90) | (nằm trong `identity.routes.js` + `community.routes.js`) | `media-upload.service.js`, `avatar-override.service.js`, `identity-admin.service.js`, `bdu-identity.service.js`, `community-realtime.service.js` |
+| **media** | `src/modules/media/media.controller.js` (90) | (nằm trong `identity.routes.js` + `community.routes.js`) | `media-upload.service.js`, `src/modules/media/avatar-override.service.js`, `identity-admin.service.js`, `bdu-identity.service.js`, `community-realtime.service.js` |
 | **meta** | `src/modules/meta/meta.controller.js` (44) | `src/routes/meta.routes.js` | `wordfmt.service.js`, `community-realtime.service.js` |
 | **learning** | `src/modules/learning/learning.controller.js` (149) | `src/routes/learning.routes.js` | `learning.service.js`, `bdu.service.js`, `bdu-identity.service.js`, `community-realtime.service.js` |
 | **games** | `src/modules/games/games.controller.js` (195) | `src/routes/games.routes.js` | `entertainment-game.service.js`, `community-realtime.service.js`, `bdu-identity.service.js` |
 | **wordfmt** | `src/modules/wordfmt/wordfmt.controller.js` (130) | `src/routes/wordfmt.routes.js` | `wordfmt.service.js`, `bdu-identity.service.js` |
-| **survey** | `src/modules/survey/survey.controller.js` (135) | `src/routes/survey.routes.js` | `survey.service.js`, `survey-run.service.js`, `bdu-identity.service.js` |
-| **training** (thêm ở `c061b4c`) | `src/modules/training/training.controller.js` (106) | `src/routes/training.routes.js` | `training-score.service.js`, `training-cds-credentials.service.js`, `bdu-identity.service.js` |
-| **english** | `src/modules/english/english.controller.js` (149) | `src/routes/english.routes.js` | `english-exercise.service.js`, `permission.service.js`, `bdu-identity.service.js` |
-| **community** | `src/modules/community/community.controller.js` (450) | `src/routes/community.routes.js` | `community.service.js`, `community-realtime.service.js`, `mention.service.js`, `facebook-import.service.js`, `reminder-digest.service.js`, `bdu-identity.service.js` |
-| **notifications** | `src/modules/notifications/notifications.controller.js` (206) | `src/routes/notifications.routes.js` (2 hàm register) | `notification.service.js`, `notification-prefs.service.js`, `discord-link.service.js`, `discord-oauth.service.js`, `schedule-snapshot.service.js`, `bdu-identity.service.js` |
+| **survey** | `src/modules/survey/survey.controller.js` (135) | `src/routes/survey.routes.js` | `src/modules/survey/survey.service.js`, `src/modules/survey/survey-run.service.js`, `bdu-identity.service.js` |
+| **training** (thêm ở `c061b4c`) | `src/modules/training/training.controller.js` (106) | `src/routes/training.routes.js` | `src/modules/training/training-score.service.js`, `training-cds-credentials.service.js`, `bdu-identity.service.js` |
+| **english** | `src/modules/english/english.controller.js` (149) | `src/routes/english.routes.js` | `src/modules/english/english-exercise.service.js`, `permission.service.js`, `bdu-identity.service.js` |
+| **community** | `src/modules/community/community.controller.js` (450) | `src/routes/community.routes.js` | `community.service.js`, `community-realtime.service.js`, `src/modules/community/mention.service.js`, `facebook-import.service.js`, `reminder-digest.service.js`, `bdu-identity.service.js` |
+| **notifications** | `src/modules/notifications/notifications.controller.js` (206) | `src/routes/notifications.routes.js` (2 hàm register) | `src/modules/notifications/notification.service.js`, `notification-prefs.service.js`, `discord-link.service.js`, `src/modules/notifications/discord-oauth.service.js`, `schedule-snapshot.service.js`, `bdu-identity.service.js` |
 | **broadcast** | `src/modules/broadcast/broadcast.controller.js` (37) | `src/routes/broadcast.routes.js` | `broadcast.service.js` |
 | **clubs** | `src/modules/clubs/clubs.controller.js` (289) | `src/routes/clubs.routes.js` | `clan-quiz.service.js`, `clan-role.service.js`, `permission.service.js`, `student.service.js`, `bdu-identity.service.js` |
-| **vocab** | `src/modules/vocab/vocab.controller.js` (150) | `src/routes/vocab.routes.js` | `vocab.service.js`, `bdu-identity.service.js` |
-| **grammar** | `src/modules/grammar/grammar.controller.js` (128) | `src/routes/grammar.routes.js` | `grammar.service.js`, `bdu-identity.service.js` |
+| **vocab** | `src/modules/vocab/vocab.controller.js` (150) | `src/routes/vocab.routes.js` | `src/modules/vocab/vocab.service.js`, `bdu-identity.service.js` |
+| **grammar** | `src/modules/grammar/grammar.controller.js` (128) | `src/routes/grammar.routes.js` | `src/modules/grammar/grammar.service.js`, `bdu-identity.service.js` |
 | **admin** (tách riêng) | `src/modules/admin/admin-dashboard.controller.js` (436) | `src/routes/admin.routes.js` | `traffic.service.js`, `system-settings.service.js`, `identity-admin.service.js`, `academic-ranking.service.js`, `ranking-scheduler.service.js`, `bdu.service.js`, `bdu-identity.service.js` |
 
 Hai điểm cần lưu ý về bảng này:
@@ -168,7 +168,7 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 
 ### 3.7. Endpoint phân tích `/admin/dashboard/insights/*` đọc qua taxonomy chung
 
-**Quy ước**: 5 endpoint `GET /admin/dashboard/insights/features|hours|cohort|quality` và `GET /admin/dashboard/insights/users/:mssv/journey` (đăng ký trong `src/routes/admin.routes.js`, sau `PUT /admin/dashboard/service-lock`) đều qua `TrafficInsightsService` trong `src/services/traffic-insights.service.js`, chỉ đọc hai bảng sẵn có `traffic_logs` + `students`, không thêm migration.
+**Quy ước**: 5 endpoint `GET /admin/dashboard/insights/features|hours|cohort|quality` và `GET /admin/dashboard/insights/users/:mssv/journey` (đăng ký trong `src/routes/admin.routes.js`, sau `PUT /admin/dashboard/service-lock`) đều qua `TrafficInsightsService` trong `src/modules/admin/traffic-insights.service.js`, chỉ đọc hai bảng sẵn có `traffic_logs` + `students`, không thêm migration.
 
 **Vì sao**:
 
@@ -178,20 +178,33 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 
 ---
 
-## 4. Nợ kỹ thuật còn lại
+## 4. Quyết định kiến trúc & nợ kỹ thuật còn lại
 
-### 4.1. Service vẫn nằm ở `src/services/`, không theo domain
+### 4.1. Hai tầng service có chủ đích: shared `src/services/` + domain-owned `src/modules/<domain>/`
 
-**Trạng thái**: `src/services/` có 53 file (42 `*.service.js` ở gốc + 11 file trong `src/services/games/`). Domain directory `src/modules/<domain>/` hiện **chỉ chứa controller**, chưa chứa service.
+**Trạng thái** (sau commit `ac2307f`): 12 service đơn-domain đã dời về `src/modules/<domain>/`. `src/services/` còn **45 file** (34 `*.service.js` ở gốc + 11 file trong `src/services/games/`) và mang vai trò **tầng dùng chung/core** — sở hữu có chủ đích, không còn là bãi tập kết.
 
-**Quyết định: cố ý dừng lại ở controller.** Lý do, theo thứ tự sức nặng:
+Tiêu chí phân loại (quyết định đã duyệt): dời về domain **chỉ khi** service được đúng **một** domain import, **không** có caller ngoài `src/modules/` (`app.js` / `jobs` / `server.js` / `scripts` / `client`), **và** không bị service tầng dùng chung import lại. Không thoả thì **ở lại** `src/services/`.
 
-1. **71 file test import trực tiếp `src/services/...`**. Di chuyển service nghĩa là sửa path import ở 71 file test cộng mọi nơi khác. Đây là đợt refactor rủi ro cao, độ lợi ích thấp — test vẫn cover đúng hành vi cũ.
-2. **Path theo độ sâu thư mục** (mục 3.5). `wordfmt.service.js` và `facebook-import.service.js` dùng `path.resolve(__dirname, '../../')`; di chuyển thêm 1 cấp sẽ phải sửa `ROOT_DIR` và mọi hằng dẫn xuất (`TEMP_DIR`, `PROFILES_DIR`, `DLL_PATH`) trong khi đường dẫn đó **đang chạy đúng** trong Docker.
-3. **`client/` import ngược**. `client/src/features/grammar/grammar-lib.js` đang kéo `src/utils/grammar-answers.js` vào frontend build. Khi mạng phụ thuộc còn đi xuyên biên `src/` ↔ `client/`, thêm một đợt di dời hàng loạt làm tăng rủi ro `Dockerfile` build fail mà không thêm giá trị gì cho người dùng.
-4. **Controller mới là phần thực sự cần tách**. File gốc dài 2612 dòng, chứa 130 method thuộc 16 domain (nay 136 method thuộc 17 domain); đó là điểm đau thật khi sửa code. Service vốn đã là file riêng, tên đã có domain (`bdu-identity.service.js`, `clan-role.service.js`, `media-upload.service.js`…). Di chuyển service **không làm file nào ngắn đi**.
+**7 service ở lại vì có inbound từ tầng dùng chung** (bằng chứng grep trong commit `ac2307f`):
 
-**Khi nào nên làm tiếp**: nếu sau này có dự án scale nhiều người thêm, và muốn mỗi domain tự chứa trọn (`src/modules/<domain>/*.service.js`), thì nên làm **một lần, có kế hoạch sửa cả 71 file test** và cập nhật `Dockerfile` + `client/src/features/grammar/grammar-lib.js` cùng lúc. Làm nửa chừng còn tệ hơn không làm.
+| Service ở lại `src/services/` | Bị import bởi (inbound) |
+| :--- | :--- |
+| `system-settings.service.js` | `service-lock.service.js`, `ranking-scheduler.service.js` |
+| `clan-role.service.js` | `student.service.js` |
+| `clan-quiz.service.js` | `student.service.js` |
+| `community.service.js` | `entertainment-game.service.js`, `learning.service.js` |
+| `reminder-digest.service.js` | `reminder-scheduler.service.js` |
+| `identity-presentation.service.js` | `community-realtime.service.js`, `community.service.js`, `entertainment-game.service.js`, `learning.service.js` |
+| `media-upload.service.js` | `community.service.js`, `media-cleanup.service.js` |
+
+**Vì sao hai tầng thay vì "tất cả vào domain"**: kéo 7 service trên vào domain sẽ buộc tầng dùng chung import ngược lên `src/modules/`, hoặc phải nhân bản instance (phá quy tắc 3.3 — hai URL import = hai instance module, state `Map` bị chia đôi âm thầm). Hai tầng giữ đúng **một URL** cho mỗi module mà vẫn cho mỗi domain tự chứa service riêng.
+
+**Ràng buộc đã xử lý khi dời** (mục 3.5): service dời sâu thêm 1 cấp đã sửa `../db/` → `../../db/`, `../config/` → `../../config/`, `../utils/` → `../../utils/`, và `./<shared>.service.js` → `../../services/<shared>.service.js`. Hai ngoại lệ: `survey-run.service.js` giữ nguyên `./survey.service.js` (đi chung cặp vào `src/modules/survey/`); `english-exercise.service.js` dùng `process.cwd()` + env nên không phụ thuộc độ sâu. Không để lại re-export shim ở đường dẫn cũ.
+
+**Guard**: `tests/test-service-domain-paths.js` chốt 3 điều — 12 file nằm ở đúng `src/modules/<domain>/`, 0 tham chiếu đường dẫn cũ `services/<name>` trong `src` / `tests` / `scripts` / `client` / `server.js`, và `src/services/` không import `../modules/`.
+
+**Còn lại (không cần làm ngay)**: `src/services/` vẫn là một mặt phẳng theo tên file, chưa chia thư mục con theo nhóm (`notifications`, `media`, …). Đổi tên tủ không tạo giá trị (YAGNI) cho tới khi có nhu cầu scale thật.
 
 ### 4.2. Controller còn gọi SQL trực tiếp
 
@@ -199,7 +212,7 @@ Biến thể cùng loại khác: `src/config/load-env.js` dùng `path.resolve(pr
 
 **Đánh giá**: đây là **mùi có sẵn** từ trước đợt tách, không phải hệ quả của việc tách file. Tách file **không giải quyết được** vấn đề này — nó chỉ làm vấn đề dễ nhìn thấy hơn.
 
-Cách xử lý đúng: chuyển SQL đó xuống `notification.service.js` hoặc `discord-link.service.js` (cả hai đều đã được controller này import sẵn) kèm bộ test. Việc này độc lập với việc di chuyển service ở mục 4.1, nên làm được ngay mà không cần đợi.
+Cách xử lý đúng: chuyển SQL đó xuống `src/modules/notifications/notification.service.js` hoặc `discord-link.service.js` (cả hai đều đã được controller này import sẵn) kèm bộ test. Việc này độc lập với việc di chuyển service ở mục 4.1, nên làm được ngay mà không cần đợi.
 
 ---
 
@@ -209,8 +222,8 @@ Cách xử lý đúng: chuyển SQL đó xuống `notification.service.js` hoặ
 | :--- | :--- |
 | Thêm URL API | `src/routes/<domain>.routes.js` (giữ vị trí trong `api.routes.js`) |
 | Sửa xử lý 1 endpoint | `src/modules/<domain>/<domain>.controller.js` |
-| Sửa SQL / logic nghiệp vụ | `src/services/<domain>*.service.js` |
-| Thêm job nền | `src/services/` + `src/jobs/index.js` |
+| Sửa SQL / logic nghiệp vụ của một domain | `src/modules/<domain>/*.service.js` (service riêng domain) hoặc `src/services/<shared>.service.js` (tầng dùng chung — xem mục 4.1) |
+| Thêm job nền | `src/services/` (scheduler dùng chung) + `src/jobs/index.js` |
 | Sửa header/cookie/static/fallback | `src/app.js` |
 | Sửa WebSocket hoặc vòng đời tiến trình | `server.js` |
 | Thêm bảng/cột mới | `migrations/0NN_<ten>.sql` (version chưa dùng, không sửa file đã apply) |

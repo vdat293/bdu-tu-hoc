@@ -33,7 +33,7 @@ flowchart TB
         JOBS["src/jobs/index.js — 7 scheduler nền + 1 đồng bộ catalog"]
         ROUTER["src/routes/ — assembler + 16 file route domain (20 hàm register)"]
         CTRL["src/controllers/api.controller.js (barrel) → src/modules/<domain>/"]
-        SVC["src/services/ — 42 service + src/services/games/ (11 file)"]
+        SVC["src/services/ — tầng dùng chung: 34 *.service.js + games/ (11 file)<br/>+ service riêng domain ở src/modules/<domain>/"]
         DB["src/db/database.js — pool, transaction, advisory lock"]
         WS["WebSocket /ws/community (CommunityRealtime)"]
     end
@@ -135,7 +135,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | **`src/routes/<domain>.routes.js`** | 16 file route theo domain | Mỗi file export hàm `register*Routes(router, deps = {})`. `identity.routes.js` có 4 hàm, `notifications.routes.js` có 2 hàm — vì các domain bị xen kẽ trong file gốc. |
 | **`src/routes/_shared/http-deps.js`** | Dependency HTTP dùng chung | Export `ApiController` (barrel), `AdminDashboardController`, `WordFmtService`, `BduIdentityService`, 3 config `multer` (`upload`, `avatarUpload`, `mediaUpload`) và middleware `requireVerifiedMssv`. Tách riêng để mọi file route dùng **chung một instance** của multer và một instance `requireVerifiedMssv`. |
 | **`src/controllers/api.controller.js`** | Barrel gom controller | **Chỉ re-export, không chứa logic.** Export 17 `XxxController` từ `src/modules/<domain>/` và gom vào object `ApiController` để route layer gọi `ApiController.<method>`. Tổng cộng **136 method** trong 17 file controller domain (kiểm bằng `node scripts/verify-controller-split.mjs`). |
-| **`src/modules/<domain>/`** | 17 controller domain | `auth`, `academics`, `identity`, `media`, `meta`, `learning`, `games`, `wordfmt`, `survey`, `training`, `english`, `community`, `notifications`, `broadcast`, `clubs`, `vocab`, `grammar` — cộng thêm `src/modules/admin/admin-dashboard.controller.js` tách riêng ở bước đầu tiên (không nằm trong `ApiController`). |
+| **`src/modules/<domain>/`** | 17 controller domain + service riêng domain | `auth`, `academics`, `identity`, `media`, `meta`, `learning`, `games`, `wordfmt`, `survey`, `training`, `english`, `community`, `notifications`, `broadcast`, `clubs`, `vocab`, `grammar` — cộng thêm `src/modules/admin/admin-dashboard.controller.js` tách riêng ở bước đầu tiên (không nằm trong `ApiController`). Từ `ac2307f`, mỗi `src/modules/<domain>/` còn chứa service **riêng của domain** (12 service đơn-domain đã dời về đây, ví dụ `src/modules/community/mention.service.js`); service **dùng chung** vẫn ở `src/services/`. |
 | **`src/modules/_shared/`** | Helper thuần | `bearer-token.js` (gộp 4 bản sao trùng lặp, có `.trim()`), `safe-api-error.js` (lọc message lỗi trước khi trả client). Cả hai **không import gì** nên không tạo phụ thuộc vòng. |
 
 ### 4.3. Tầng nghiệp vụ & dữ liệu
@@ -143,7 +143,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | Đường dẫn | Vai trò | Chức năng cụ thể |
 | :--- | :--- | :--- |
 | **`src/jobs/index.js`** | Vòng đời job nền | `startJobs()` bật 7 scheduler (`RankingSchedulerService`, `ReminderSchedulerService`, `OutboxMailerService`, `TrafficService`, `FacebookImportService`, `AssetHistoryService`, `MediaCleanupService`) + `IdentityAdminService.syncCatalogFromJson()`. `stopJobs()` dừng chúng và thêm `EntertainmentGameService.stop()`. |
-| **`src/services/`** | Lớp service | **53 file**: 42 `*.service.js` ở gốc + thư mục `games/` (11 file: `index.js`, `shared.js` và 9 bộ luật `backgammon`, `battleship`, `caro`, `checkers`, `chess`, `connect4`, `go`, `tic-tac-toe`, `xiangqi`; site `public/games` hiện chỉ bật 7 game cốt lõi). ⚠️ Service **chưa** di chuyển vào `src/modules/<domain>/`; xem mục "Nợ kỹ thuật còn lại" ở [`docs/architecture.md`](docs/architecture.md). |
+| **`src/services/`** | Tầng service dùng chung | **45 file**: 34 `*.service.js` ở gốc + thư mục `games/` (11 file: `index.js`, `shared.js` và 9 bộ luật `backgammon`, `battleship`, `caro`, `checkers`, `chess`, `connect4`, `go`, `tic-tac-toe`, `xiangqi`; site `public/games` hiện chỉ bật 7 game cốt lõi). Service **riêng của domain** đã dời về `src/modules/<domain>/` (12 service, commit `ac2307f`); `src/services/` còn lại là tầng dùng chung/core có chủ đích — xem mục "Hai tầng service" ở [`docs/architecture.md`](docs/architecture.md) §4.1. |
 | **`src/db/database.js`** | Truy cập PostgreSQL | `getPool()`, `query()`, `transaction()`, `withAdvisoryLock()`, `getMigrationPool()`, `closeDatabase()`. Test mode bắt buộc `NODE_ENV=test` + `BDU_TEST_MODE=1` + `BDU_TEST_CONFIRM_DESTRUCTIVE=1`, database tên `bdu_test_*`, host trong allowlist. |
 | **`src/config/load-env.js`** | Env loader + hàng rào test | Nạp `.env` khi **không** ở test mode (fail-closed: tuyệt đối không fallback sang `.env` production khi `NODE_ENV=test`). Chặn chạy trực tiếp `node tests/test-*.js` (mã lỗi `UNMANAGED_TEST_EXECUTION`). |
 | **`src/utils/`** | Hàm dùng chung | `docx-*` (graduation/layout/postprocessor/proposal-preservation/structure), `grammar-answers.js`, `grammar-data.js`, `vocab-pos.js`, `async-queue.js`, `request-context.js`, `request-rate-limit.js`. ⚠️ Thư mục này **không được di chuyển** vì client import ngược. |
@@ -161,11 +161,11 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | Hệ thống | Nơi xử lý | Chi tiết |
 | :--- | :--- | :--- |
 | **Cổng thông tin BDU** | `src/services/bdu.service.js`, `bdu-identity.service.js` | `BDU_BASE_URL = https://sv.bdu.edu.vn/public/api`. Crawler/proxy đóng giả trình duyệt, quản lý session cookie, parse JSON/HTML: bảng điểm, TKB theo tuần (`/public/api/sch/w-locdstkbtuanusertheohocky`), lý lịch, khảo sát giảng viên. Tài khoản dịch vụ chỉ đọc qua `CDS_USER`/`CDS_PASSWORD`. |
-| **Moodle** | `src/services/moodle.service.js`, `english-exercise.service.js` | `MOODLE_URL = https://bdu.vn247.org`. Đăng nhập, quét quiz theo Course ID, đối chiếu ngân hàng đáp án cục bộ. Mật khẩu Moodle chỉ nằm trong bộ nhớ phiên; câu hỏi **không** gửi sang dịch vụ AI bên ngoài. |
+| **Moodle** | `src/services/moodle.service.js`, `src/modules/english/english-exercise.service.js` | `MOODLE_URL = https://bdu.vn247.org`. Đăng nhập, quét quiz theo Course ID, đối chiếu ngân hàng đáp án cục bộ. Mật khẩu Moodle chỉ nằm trong bộ nhớ phiên; câu hỏi **không** gửi sang dịch vụ AI bên ngoài. |
 | **WordFmt (.NET)** | `src/services/wordfmt.service.js` | `ROOT_DIR` = `path.resolve(__dirname, '../../')`; gọi `execFile('dotnet', [bin/wordfmt/wordfmt.dll, ...], { cwd: ROOT_DIR })`. |
-| **Cloudflare R2** | `media-storage.service.js`, `media-upload.service.js`, `avatar-override.service.js` | Ảnh/avatar lưu trên R2, **không ghi file runtime xuống máy chủ**. `/media/r2/*` stream object khi chưa có custom domain. |
+| **Cloudflare R2** | `media-storage.service.js`, `media-upload.service.js`, `src/modules/media/avatar-override.service.js` | Ảnh/avatar lưu trên R2, **không ghi file runtime xuống máy chủ**. `/media/r2/*` stream object khi chưa có custom domain. |
 | **Facebook** | `src/services/facebook-import.service.js` | Facebook đã khai tử Groups API nên dùng Playwright đọc feed nhóm `bdu.confessions`. |
-| **Discord** | `discord-oauth.service.js`, `discord-link.service.js`, `scripts/discord-bot.js` | OAuth2 liên kết tài khoản + bot nhắc lịch/tag (service riêng `bdu-notifier-bot`). |
+| **Discord** | `src/modules/notifications/discord-oauth.service.js`, `discord-link.service.js`, `scripts/discord-bot.js` | OAuth2 liên kết tài khoản + bot nhắc lịch/tag (service riêng `bdu-notifier-bot`). |
 
 ### 4.6. Tiện ích bảo trì
 
@@ -220,9 +220,9 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 - **Sửa giao diện legacy / trang quản trị / Game Hub**:
   👉 `public/index.html` + `public/css/style.css` + `public/js/app.js`; `public/admin-tool.html`; `public/admin/`; `public/games/`.
 - **Thêm hoặc đổi một API endpoint**:
-  👉 Sửa `src/routes/<domain>.routes.js` (URL) **và** `src/modules/<domain>/<domain>.controller.js` (xử lý). Nếu nghiệp vụ phức tạp, đặt SQL vào `src/services/<domain>-*.service.js`.
+  👉 Sửa `src/routes/<domain>.routes.js` (URL) **và** `src/modules/<domain>/<domain>.controller.js` (xử lý). Nếu nghiệp vụ phức tạp, đặt SQL vào `src/modules/<domain>/<domain>-*.service.js` (service riêng domain); service dùng chung nhiều domain vẫn ở `src/services/`.
 - **Đổi thuật toán dữ liệu điểm, TKB BDU, Moodle, R2, Facebook, Discord**:
-  👉 Sửa trong `src/services/` (`bdu.service.js`, `bdu-identity.service.js`, `moodle.service.js`, `english-exercise.service.js`, `media-*.service.js`, `facebook-import.service.js`, `discord-*.service.js`).
+  👉 Sửa trong `src/services/` (`bdu.service.js`, `bdu-identity.service.js`, `moodle.service.js`, `media-*.service.js`, `facebook-import.service.js`, `discord-link.service.js`) hoặc `src/modules/<domain>/` cho phần riêng domain (`english-exercise.service.js`, `discord-oauth.service.js`, …).
 - **Đổi quy chuẩn canh lề, font chữ, format bìa Word**:
   👉 Sửa project C# `dinh dang word/src/WordFmt.Core/` rồi build đè binary vào `bdu-tu-hoc/bin/wordfmt/`. Profile mặc định nằm ở `bin/wordfmt/profiles/*.json` và `profiles/`.
 - **Thêm một job nền**:
