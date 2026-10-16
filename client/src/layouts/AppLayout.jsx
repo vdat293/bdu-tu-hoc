@@ -1,14 +1,16 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { navigation, findRouteMeta } from '../app/navigation.js';
+import { navigation, findRouteMeta, filterNavigation } from '../app/navigation.js';
 import { useAuth } from '../app/providers.jsx';
+import { useTtcdsCapabilities } from '../features/ttcds/useTtcdsCapabilities.jsx';
 import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
 
-const navGroups = [
-  { title: 'CỔNG SINH VIÊN', items: navigation.slice(0, 4) },
-  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: navigation.slice(4, 9) },
-  { title: 'GÓC TỰ HỌC SỐ', items: navigation.slice(9) }
+const navGroupsFor = (items) => [
+  { title: 'CỔNG SINH VIÊN', items: items.filter((i) => i.section !== 'ttcds').slice(0, 4) },
+  { title: 'BỘ CÔNG CỤ TỰ ĐỘNG', items: items.filter((i) => i.section !== 'ttcds').slice(4, 9) },
+  { title: 'GÓC TỰ HỌC SỐ', items: items.filter((i) => i.section !== 'ttcds').slice(9) },
+  { title: 'TRUNG TÂM CHUYỂN ĐỔI SỐ', items: items.filter((i) => i.section === 'ttcds' && !i.hideInSidebar) }
 ];
 
 const badges = {
@@ -18,7 +20,8 @@ const badges = {
   '/english': ['Moodle', 'badge-pill-emerald'],
   '/enrollment': ['Soon', 'badge-pill-amber'],
   '/clans': ['Guild', 'badge-pill-emerald'],
-  '/confession': ['CFS', 'badge-pill-purple']
+  '/confession': ['CFS', 'badge-pill-purple'],
+  '/mystudent': ['TTCDS', 'badge-pill-emerald']
 };
 
 function getInitials(name) {
@@ -26,7 +29,7 @@ function getInitials(name) {
   return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
 }
 
-function CommandPalette({ open, onClose }) {
+function CommandPalette({ open, onClose, itemsProp }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
@@ -40,7 +43,7 @@ function CommandPalette({ open, onClose }) {
 
   if (!open) return null;
 
-  const items = navigation.filter((item) =>
+  const items = (itemsProp || navigation).filter((item) =>
     `${item.label} ${item.keywords}`.toLocaleLowerCase('vi-VN').includes(query.toLocaleLowerCase('vi-VN'))
   );
 
@@ -108,6 +111,9 @@ export default function AppLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('bdu_theme') || 'light');
   const meta = useMemo(() => findRouteMeta(location.pathname), [location.pathname]);
+  const capsQuery = useTtcdsCapabilities();
+  const visibleNavigation = useMemo(() => filterNavigation(navigation, capsQuery.data), [capsQuery.data]);
+  const navGroups = useMemo(() => navGroupsFor(visibleNavigation), [visibleNavigation]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -169,7 +175,7 @@ export default function AppLayout() {
         </div>
 
         <nav id="primary-navigation" className="sidebar-nav">
-          {navGroups.map((group) => (
+          {navGroups.filter((group) => group.items.length > 0).map((group) => (
             <div className="nav-group" key={group.title}>
               <div className="nav-group-title">{group.title}</div>
               {group.items.map((item, index) => {
@@ -307,7 +313,7 @@ export default function AppLayout() {
         </main>
       </div>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} itemsProp={visibleNavigation} />
     </div>
   );
 }

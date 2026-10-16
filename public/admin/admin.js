@@ -51,6 +51,14 @@ const state = {
   serviceLockBusy: new Set(),
   serviceLock: null,
   serviceLockMutationAt: 0,
+  // TTCDS phân quyền: dữ liệu GET /api/ttcds/permissions + /api/ttcds/audit,
+  // chỉ tải được bằng token của quản trị viên hệ thống (system owner).
+  ttcds: null,
+  ttcdsBusy: false,
+  // Kho ODP (tab odp): GET /api/admin/dashboard/odp-sync → lần chạy gần nhất +
+  // counts; nút "Chạy ngay" POST cùng endpoint. `odpSyncBusy` chặn double-submit.
+  odpSync: null,
+  odpSyncBusy: false,
   // Nhóm đang được admin gõ tiêu đề/nội dung mà chưa lưu; auto-refresh (mỗi
   // 15 giây) phải bỏ qua ô nhập của đúng nhóm đó để không ghi đè nội dung
   // chưa kịp lưu. Vì sao là Set theo group: mỗi dòng có ô nhập riêng nên cờ
@@ -200,7 +208,29 @@ const dom = {
   serviceLockState: document.getElementById('service-lock-state'),
   serviceLockStateSub: document.getElementById('service-lock-state-sub'),
   serviceLockUpdated: document.getElementById('service-lock-updated'),
-  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub')
+  serviceLockUpdatedSub: document.getElementById('service-lock-updated-sub'),
+
+  // TTCDS phân quyền (tab ttcds)
+  formTtcdsGrant: document.getElementById('form-ttcds-grant'),
+  inputTtcdsMssv: document.getElementById('input-ttcds-mssv'),
+  selectTtcdsLevel: document.getElementById('select-ttcds-level'),
+  inputTtcdsNote: document.getElementById('input-ttcds-note'),
+  btnTtcdsGrant: document.getElementById('btn-ttcds-grant'),
+  btnRefreshTtcds: document.getElementById('btn-refresh-ttcds'),
+  ttcdsPermissionsCount: document.getElementById('ttcds-permissions-count'),
+  ttcdsPermissionsBody: document.getElementById('ttcds-permissions-body'),
+  ttcdsAuditBody: document.getElementById('ttcds-audit-body'),
+
+  // Kho ODP (tab odp)
+  odpSyncState: document.getElementById('odp-sync-state'),
+  odpSyncStateSub: document.getElementById('odp-sync-state-sub'),
+  odpSyncFinished: document.getElementById('odp-sync-finished'),
+  odpSyncFinishedSub: document.getElementById('odp-sync-finished-sub'),
+  odpSyncNext: document.getElementById('odp-sync-next'),
+  odpSyncNextSub: document.getElementById('odp-sync-next-sub'),
+  odpSyncError: document.getElementById('odp-sync-error'),
+  odpSyncCountsBody: document.getElementById('odp-sync-counts-body'),
+  btnOdpSyncRun: document.getElementById('btn-odp-sync-run')
 };
 
 let currentSelectedLog = null;
@@ -455,7 +485,11 @@ async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers });
   
   if (res.status === 401 || res.status === 403) {
-    openAuthModal();
+    // `quiet` dành cho endpoint chỉ một nhóm nhỏ dùng được (TTCDS phân quyền
+    // đòi system owner): người đăng nhập hợp lệ nhưng thiếu quyền thì tab đó
+    // tự báo lỗi, không bật cửa sổ xác thực đè lên toàn trang mỗi lần
+    // auto-refresh. Chưa đăng nhập thì các endpoint khác vẫn mở cửa sổ này.
+    if (!options.quiet) openAuthModal();
     throw new Error('Yêu cầu xác thực khóa quản trị viên.');
   }
 
@@ -571,7 +605,9 @@ const tabTitles = {
   insights: 'Phân Tích Hành Vi Người Dùng',
   logs: 'Nhật Ký Truy Cập Chi Tiết',
   users: 'Sinh Viên Hoạt Động Tích Cực',
-  system: 'Sức Khỏe Máy Chủ & Hệ Thống'
+  system: 'Sức Khỏe Máy Chủ & Hệ Thống',
+  ttcds: 'TTCDS phân quyền',
+  odp: 'Kho ODP'
 };
 
 dom.navButtons.forEach((btn) => {
@@ -665,7 +701,7 @@ async function fetchAllData(isBackground = false) {
     // (đã gom + có nhãn). Danh sách endpoint thô vẫn lấy song song để làm đường
     // hạ cấp: nếu riêng truy vấn xếp hạng lỗi (p95/delta nặng hơn) thì khối vẫn
     // có gì đó để hiện thay vì trắng trơn.
-    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality] = await Promise.all([
+    const [overview, timeline, endpoints, devices, logsData, visitedData, system, rankingSync, odpSync, serviceLock, insightFeatures, insightHours, insightCohort, insightQuality, ttcdsPermissions, ttcdsAudit] = await Promise.all([
       api(`/api/admin/dashboard/overview?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/timeline?timeRange=${state.timeRange}`),
       api(`/api/admin/dashboard/endpoints?timeRange=${state.timeRange}&limit=10`),
@@ -677,6 +713,9 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/visited-students?page=${state.visitedFilters.page}&limit=${state.visitedFilters.limit}&filter=${state.visitedFilters.filter}&sortBy=${state.visitedFilters.sortBy}&sortDir=${state.visitedFilters.sortDir}&search=${encodeURIComponent(state.visitedFilters.search)}`),
       api(`/api/admin/dashboard/system`),
       api(`/api/admin/dashboard/ranking-sync`).catch(() => null),
+      // Kho ODP bọc .catch(() => null) như ranking-sync: đọc trạng thái lỗi thì
+      // chỉ tab Kho ODP báo lỗi, không kéo sập cả dashboard.
+      api(`/api/admin/dashboard/odp-sync`).catch(() => null),
       api(`/api/admin/dashboard/service-lock`).catch(() => null),
       // 4 endpoint phân tích (Task 6). Mỗi cái bọc .catch(() => null) để MỘT
       // endpoint lỗi — ví dụ truy vấn p95 quá nặng bị timeout — KHÔNG làm hỏng
@@ -684,7 +723,12 @@ async function fetchAllData(isBackground = false) {
       api(`/api/admin/dashboard/insights/features?timeRange=${state.timeRange}`).catch(() => null),
       api(`/api/admin/dashboard/insights/hours?timeRange=${state.timeRange}`).catch(() => null),
       api(`/api/admin/dashboard/insights/cohort?timeRange=${state.timeRange}`).catch(() => null),
-      api(`/api/admin/dashboard/insights/quality?timeRange=${state.timeRange}`).catch(() => null)
+      api(`/api/admin/dashboard/insights/quality?timeRange=${state.timeRange}`).catch(() => null),
+      // TTCDS phân quyền bọc .catch(() => null) như 4 endpoint insights: người
+      // đăng nhập không phải system owner bị 403 thì chỉ tab này báo lỗi, cả
+      // dashboard vẫn vẽ. Chưa đăng nhập thì api() đã tự mở cửa sổ xác thực.
+      api('/api/ttcds/permissions', { quiet: true }).catch(() => null),
+      api('/api/ttcds/audit?limit=50', { quiet: true }).catch(() => null)
     ]);
 
     renderOverview(overview);
@@ -695,7 +739,9 @@ async function fetchAllData(isBackground = false) {
     renderVisitedStudents(visitedData);
     renderSystem(system);
     renderRankingSync(rankingSync, rankingSyncRequestedAt);
+    renderOdpSync(odpSync);
     renderServiceLock(serviceLock, serviceLockRequestedAt);
+    renderTtcds(ttcdsPermissions, ttcdsAudit);
     state.insights = {
       ...state.insights,
       features: insightFeatures,
@@ -2568,6 +2614,130 @@ if (dom.rankingSyncToggle) {
   });
 }
 
+// Kho ODP (tab odp). Nhãn bảng tiếng Việt để người vận hành đọc số dòng theo
+// tên nghiệp vụ; khóa lạ rơi về chính khóa counts cho khớp backend.
+const ODP_TABLE_LABELS = {
+  sinh_vien: 'Sinh viên (odp_sinh_vien)',
+  tbhk: 'Điểm TB học kỳ (odp_tbhk)',
+  bang_diem: 'Bảng điểm (odp_bang_diem)',
+  diem_danh: 'Điểm danh (odp_diem_danh)',
+  thoi_khoa_bieu: 'Thời khóa biểu (odp_thoi_khoa_bieu)',
+  ren_luyen: 'Rèn luyện (odp_ren_luyen)',
+  su_kien: 'Sự kiện (odp_su_kien)',
+  mon_hoc: 'Môn học (odp_mon_hoc)'
+};
+
+const ODP_STATUS_LABELS = {
+  running: '● Đang chạy',
+  success: '● Thành công',
+  failed: '● Thất bại'
+};
+
+function renderOdpSync(data) {
+  state.odpSync = data;
+  const body = dom.odpSyncCountsBody;
+  if (!body) return;
+
+  if (!data) {
+    if (dom.odpSyncState) dom.odpSyncState.textContent = '--';
+    if (dom.odpSyncStateSub) dom.odpSyncStateSub.textContent = 'Không tải được trạng thái kho ODP.';
+    if (dom.odpSyncError) { dom.odpSyncError.textContent = ''; dom.odpSyncError.hidden = true; }
+    body.innerHTML = '<tr><td colspan="2" class="text-center-muted">Không tải được trạng thái kho ODP (cần quyền quản trị). Đăng nhập lại rồi thử lại.</td></tr>';
+    return;
+  }
+
+  const latest = data.latest_run;
+  const hour = String(data.sync_hour ?? 3).padStart(2, '0');
+  if (dom.odpSyncNextSub) dom.odpSyncNextSub.textContent = `${hour}:00 Asia/Ho_Chi_Minh`;
+  if (dom.odpSyncNext) dom.odpSyncNext.textContent = data.next_run_at ? formatDateTime(data.next_run_at) : 'Tạm dừng';
+
+  if (latest) {
+    if (dom.odpSyncState) {
+      dom.odpSyncState.textContent = ODP_STATUS_LABELS[latest.status] || `● ${latest.status}`;
+      dom.odpSyncState.className = latest.status === 'success' ? 'sys-val text-green' : 'sys-val';
+    }
+    if (dom.odpSyncStateSub) {
+      const source = latest.trigger_source === 'manual' ? 'Chạy tay' : 'Theo lịch 03:00';
+      dom.odpSyncStateSub.textContent = `${source} • bắt đầu ${formatDateTime(latest.started_at)}`;
+    }
+    if (dom.odpSyncFinished) {
+      dom.odpSyncFinished.textContent = latest.finished_at ? formatDateTime(latest.finished_at) : '--';
+    }
+    if (dom.odpSyncFinishedSub) {
+      const counts = latest.counts || {};
+      const total = Object.values(counts).reduce((sum, value) => sum + (safeNumber(value) || 0), 0);
+      dom.odpSyncFinishedSub.textContent = `${formatNumber(total)} dòng • ${Object.keys(counts).length} bảng`;
+    }
+  } else {
+    if (dom.odpSyncState) { dom.odpSyncState.textContent = '○ Chưa chạy'; dom.odpSyncState.className = 'sys-val'; }
+    if (dom.odpSyncStateSub) dom.odpSyncStateSub.textContent = 'Chưa có lần đồng bộ nào';
+    if (dom.odpSyncFinished) dom.odpSyncFinished.textContent = '--';
+    if (dom.odpSyncFinishedSub) dom.odpSyncFinishedSub.textContent = '--';
+  }
+
+  // Lỗi từng bảng (nếu có): nói rõ bảng nào giữ nguyên dữ liệu cũ.
+  if (dom.odpSyncError) {
+    if (latest && latest.error) {
+      dom.odpSyncError.textContent = `Bảng lỗi ở lần chạy gần nhất: ${latest.error}`;
+      dom.odpSyncError.hidden = false;
+    } else {
+      dom.odpSyncError.textContent = '';
+      dom.odpSyncError.hidden = true;
+    }
+  }
+
+  const counts = latest && latest.counts ? latest.counts : null;
+  const keys = counts ? Object.keys(counts) : [];
+  if (keys.length === 0) {
+    body.innerHTML = '<tr><td colspan="2" class="text-center-muted">Chưa có số liệu số dòng (chưa chạy đồng bộ lần nào).</td></tr>';
+    return;
+  }
+  body.innerHTML = keys.map((key) => `
+    <tr>
+      <td>${escapeHtml(ODP_TABLE_LABELS[key] || key)}</td>
+      <td style="text-align: right;">${escapeHtml(formatNumber(counts[key]))}</td>
+    </tr>
+  `).join('');
+}
+
+async function refreshOdpSync() {
+  try {
+    renderOdpSync(await api('/api/admin/dashboard/odp-sync', { quiet: true }));
+  } catch {
+    renderOdpSync(null);
+  }
+}
+
+if (dom.btnOdpSyncRun) {
+  dom.btnOdpSyncRun.addEventListener('click', async () => {
+    if (state.odpSyncBusy) return;
+    state.odpSyncBusy = true;
+    const originalHtml = dom.btnOdpSyncRun.innerHTML;
+    dom.btnOdpSyncRun.disabled = true;
+    dom.btnOdpSyncRun.textContent = 'Đang đồng bộ...';
+    try {
+      const data = await api('/api/admin/dashboard/odp-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (data?.skipped) {
+        showToast('Một tiến trình khác đang đồng bộ kho ODP; bỏ qua lần này.', 'info');
+      } else if (Array.isArray(data?.errors) && data.errors.length > 0) {
+        showToast(`Đồng bộ xong nhưng ${data.errors.length} bảng lỗi (giữ nguyên dữ liệu cũ).`, 'error');
+      } else {
+        showToast('Đã đồng bộ kho ODP xong.', 'success');
+      }
+      await refreshOdpSync();
+    } catch (err) {
+      showToast(err.message || 'Không chạy được đồng bộ kho ODP.', 'error');
+    } finally {
+      state.odpSyncBusy = false;
+      dom.btnOdpSyncRun.disabled = false;
+      dom.btnOdpSyncRun.innerHTML = originalHtml;
+    }
+  });
+}
+
 // Danh sách công tắc khóa dịch vụ theo nhóm (tab System).
 // Vì sao dựng động: số nhóm lấy từ API (catalog) nên thêm/bớt nhóm ở backend
 // không phải sửa markup; mỗi dòng gồm nhãn nhóm + switch + ô tiêu đề/nội dung
@@ -2745,6 +2915,139 @@ function bindServiceLockToggle(rowEl, group, label) {
     } finally {
       serviceLockToggle.disabled = false;
     }
+  });
+}
+
+/* ==========================================================================
+   TTCDS PHÂN QUYỀN (tab ttcds)
+   --------------------------------------------------------------------------
+   Bảng (MSSV, nấc view/create, người cấp, cập nhật) + form cấp/thu hồi +
+   bảng nhật ký audit mới nhất. Gọi GET/PUT /api/ttcds/permissions và
+   GET /api/ttcds/audit bằng token sẵn có của trang (helper api(), Bearer),
+   giống mọi tab khác. Backend chỉ chấp nhận nấc view|create nên "thu hồi"
+   nghĩa là hạ về view; chưa có dòng nào trong DB cũng tương đương view.
+   Fetch trong fetchAllData bọc quiet+catch nên người thiếu quyền chỉ thấy
+   trạng thái lỗi ở đúng tab này, không bật cửa sổ xác thực toàn trang.
+   ========================================================================== */
+
+function renderTtcds(permissions, audit) {
+  state.ttcds = { permissions, audit };
+  const permBody = dom.ttcdsPermissionsBody;
+  const auditBody = dom.ttcdsAuditBody;
+  if (!permBody || !auditBody) return;
+
+  const rows = Array.isArray(permissions) ? permissions : [];
+  if (dom.ttcdsPermissionsCount) dom.ttcdsPermissionsCount.textContent = String(rows.length);
+
+  if (permissions === null) {
+    permBody.innerHTML = '<tr><td colspan="5" class="text-center-muted">Không tải được danh sách phân quyền (cần quyền quản trị hệ thống). Đăng nhập lại rồi bấm Làm Mới.</td></tr>';
+  } else if (rows.length === 0) {
+    permBody.innerHTML = '<tr><td colspan="5" class="text-center-muted">Chưa có dòng phân quyền nào.</td></tr>';
+  } else {
+    permBody.innerHTML = rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.mssv)}</td>
+        <td>${escapeHtml(row.level)}</td>
+        <td>${escapeHtml(row.granted_by || '—')}</td>
+        <td>${escapeHtml(row.updated_at || row.granted_at || '—')}</td>
+        <td style="text-align: right;">
+          ${row.level === 'create'
+            ? `<button type="button" class="btn-page" data-ttcds-revoke="${escapeHtml(row.mssv)}">Thu hồi</button>`
+            : '<span class="text-center-muted">—</span>'}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const logs = Array.isArray(audit) ? audit : [];
+  if (audit === null) {
+    auditBody.innerHTML = '<tr><td colspan="6" class="text-center-muted">Không tải được nhật ký thao tác.</td></tr>';
+  } else if (logs.length === 0) {
+    auditBody.innerHTML = '<tr><td colspan="6" class="text-center-muted">Chưa có thao tác nào được ghi nhận.</td></tr>';
+  } else {
+    auditBody.innerHTML = logs.map((log) => `
+      <tr>
+        <td>${escapeHtml(log.id)}</td>
+        <td>${escapeHtml(log.actor_mssv)}</td>
+        <td>${escapeHtml(log.action)}</td>
+        <td>${escapeHtml(log.target_group_id || '—')}</td>
+        <td>${escapeHtml(log.target_mssv || '—')}</td>
+        <td>${escapeHtml(log.created_at ? formatDateTime(log.created_at) : '—')}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+async function refreshTtcds() {
+  const [permissions, audit] = await Promise.all([
+    api('/api/ttcds/permissions', { quiet: true }).catch(() => null),
+    api('/api/ttcds/audit?limit=50', { quiet: true }).catch(() => null)
+  ]);
+  renderTtcds(permissions, audit);
+}
+
+if (dom.formTtcdsGrant) {
+  dom.formTtcdsGrant.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const mssv = String(dom.inputTtcdsMssv?.value || '').trim().toUpperCase();
+    if (!mssv) {
+      showToast('Vui lòng nhập MSSV được cấp quyền.', 'error');
+      return;
+    }
+    const level = dom.selectTtcdsLevel?.value === 'create' ? 'create' : 'view';
+    const note = String(dom.inputTtcdsNote?.value || '').trim();
+    if (state.ttcdsBusy) return;
+    state.ttcdsBusy = true;
+    if (dom.btnTtcdsGrant) dom.btnTtcdsGrant.disabled = true;
+    try {
+      await api('/api/ttcds/permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mssv, level, note: note || undefined })
+      });
+      if (dom.inputTtcdsMssv) dom.inputTtcdsMssv.value = '';
+      if (dom.inputTtcdsNote) dom.inputTtcdsNote.value = '';
+      await refreshTtcds();
+      showToast('Đã cập nhật phân quyền.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Không lưu được phân quyền.', 'error');
+    } finally {
+      state.ttcdsBusy = false;
+      if (dom.btnTtcdsGrant) dom.btnTtcdsGrant.disabled = false;
+    }
+  });
+}
+
+if (dom.ttcdsPermissionsBody) {
+  // Thu hồi = PUT hạ về nấc view (backend không có endpoint xóa dòng).
+  dom.ttcdsPermissionsBody.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-ttcds-revoke]');
+    if (!button || state.ttcdsBusy) return;
+    const mssv = button.getAttribute('data-ttcds-revoke');
+    if (!mssv) return;
+    if (!window.confirm(`Thu hồi quyền tạo nhóm của ${mssv} (hạ về nấc view)?`)) return;
+    state.ttcdsBusy = true;
+    button.disabled = true;
+    try {
+      await api('/api/ttcds/permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mssv, level: 'view' })
+      });
+      await refreshTtcds();
+      showToast(`Đã thu hồi quyền tạo nhóm của ${mssv}.`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Không thu hồi được phân quyền.', 'error');
+    } finally {
+      state.ttcdsBusy = false;
+    }
+  });
+}
+
+if (dom.btnRefreshTtcds) {
+  dom.btnRefreshTtcds.addEventListener('click', async () => {
+    await refreshTtcds();
+    showToast('Đã làm mới dữ liệu phân quyền!', 'info');
   });
 }
 

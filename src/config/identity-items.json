@@ -43,7 +43,8 @@
       "manual_grantable": true,
       "source": "config",
       "capabilities": [
-        "clan:create"
+        "clan:create",
+        "ttcds:access"
       ]
     }
   },

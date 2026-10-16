@@ -24,6 +24,8 @@ export function registerAdminRoutes(router, deps = {}) {
   router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
   router.get('/admin/dashboard/ranking-sync', AdminDashboardController.getRankingSync);
   router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRankingSync);
+  router.get('/admin/dashboard/odp-sync', AdminDashboardController.getOdpSync);
+  router.post('/admin/dashboard/odp-sync', AdminDashboardController.runOdpSync);
   router.get('/admin/dashboard/service-lock', AdminDashboardController.getServiceLock);
   router.put('/admin/dashboard/service-lock', AdminDashboardController.setServiceLock);
   router.get('/admin/dashboard/insights/features', AdminDashboardController.getInsightsFeatures);

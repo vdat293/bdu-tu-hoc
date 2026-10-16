@@ -118,7 +118,27 @@ const ROUTES_ADDED_AFTER_SPLIT = new Set([
   'GET /admin/dashboard/insights/hours',
   'GET /admin/dashboard/insights/cohort',
   'GET /admin/dashboard/insights/quality',
-  'GET /admin/dashboard/insights/users/:mssv/journey'
+  'GET /admin/dashboard/insights/users/:mssv/journey',
+  // Route admin cua Task 5 (kho ODP): xem lan chay gan nhat + chay tay.
+  // Dang ky ngay sau PUT /admin/dashboard/ranking-sync, truoc service-lock.
+  'GET /admin/dashboard/odp-sync',
+  'POST /admin/dashboard/odp-sync',
+  // Route TTCDS "Sinh vien cua toi" (dot tach Task 4): 13 endpoint moi, khong co
+  // trong ban goc api.routes.js. Thieu khai bao o day lam guard route-order do;
+  // phai liet ke de guard tiep tuc bat hoan vi/mat route cua cac route cu.
+  'GET /ttcds/capabilities',
+  'GET /ttcds/groups',
+  'POST /ttcds/groups',
+  'DELETE /ttcds/groups/:id',
+  'GET /ttcds/groups/:id/members',
+  'POST /ttcds/groups/:id/members',
+  'DELETE /ttcds/groups/:id/members/:mssv',
+  'GET /ttcds/students/search',
+  'GET /ttcds/students/:mssv',
+  'GET /ttcds/students/:mssv/diem-danh',
+  'GET /ttcds/permissions',
+  'PUT /ttcds/permissions',
+  'GET /ttcds/audit'
 ]);
 
 try {

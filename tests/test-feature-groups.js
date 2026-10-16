@@ -68,8 +68,8 @@ check('OTHER_FEATURE có id other và nhãn Khác', () => {
   assert.equal(OTHER_FEATURE.label, 'Khác');
 });
 
-check('FEATURE_GROUPS đủ 11 nhóm và mỗi nhóm có apiPrefixes/pagePrefixes', () => {
-  assert.equal(FEATURE_GROUPS.length, 11);
+check('FEATURE_GROUPS đủ 12 nhóm và mỗi nhóm có apiPrefixes/pagePrefixes', () => {
+  assert.equal(FEATURE_GROUPS.length, 12);
   for (const group of FEATURE_GROUPS) {
     assert.ok(typeof group.id === 'string' && group.id.length > 0, 'nhóm thiếu id');
     assert.ok(typeof group.label === 'string' && group.label.length > 0, `nhóm ${group.id} thiếu label`);
@@ -84,7 +84,7 @@ check('ghim danh sách id và thứ tự nhóm', () => {
   // id hay đổi thứ tự sẽ trôi qua mà không test nào bắt.
   assert.deepEqual(
     FEATURE_GROUPS.map((group) => group.id),
-    ['portal', 'wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+    ['portal', 'wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games', 'ttcds']
   );
 });
 
@@ -127,12 +127,12 @@ check('mọi nhóm đều khai cờ lockable kiểu boolean', () => {
   assert.ok(FEATURE_GROUPS.every((group) => typeof group.lockable === 'boolean'));
 });
 
-check('đúng 10 nhóm lockable, giữ nguyên thứ tự khai báo', () => {
+check('đúng 11 nhóm lockable, giữ nguyên thứ tự khai báo', () => {
   // Ghim cứng danh sách: đây là tập nhóm được phép bật khoá bảo trì; đổi thứ tự
   // sẽ làm LOCKABLE_FEATURE_IDS lệch theo và đổi cả hợp đồng với tầng trên.
   assert.deepEqual(
     FEATURE_GROUPS.filter((group) => group.lockable).map((group) => group.id),
-    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games', 'ttcds']
   );
 });
 
@@ -151,7 +151,7 @@ check('LOCKABLE_FEATURE_IDS khớp đúng nhóm lockable theo thứ tự', () =>
   );
   assert.deepEqual(
     LOCKABLE_FEATURE_IDS,
-    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games']
+    ['wordfmt', 'survey', 'training', 'english', 'learning', 'community', 'clubs', 'vocab', 'grammar', 'games', 'ttcds']
   );
 });
 

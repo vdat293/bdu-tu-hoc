@@ -45,7 +45,7 @@ function response() {
   };
 }
 
-// Dựng map groups đủ 10 nhóm lockable để stub trả về shape thật.
+// Dựng map groups đủ 11 nhóm lockable để stub trả về shape thật.
 function sampleGroups(overrides = {}) {
   const groups = {};
   for (const { id } of LOCKABLE_GROUPS) {
@@ -83,7 +83,7 @@ try {
     disconnectCalls += 1;
   };
 
-  await check('GET trả groups + catalog đủ 10 nhóm lockable', async () => {
+  await check('GET trả groups + catalog đủ 11 nhóm lockable', async () => {
     stubGetAdminStatus({
       groups: sampleGroups(),
       catalog: sampleCatalog(),
@@ -94,8 +94,8 @@ try {
     await AdminDashboardController.getServiceLock({}, res);
     assert.equal(res.statusCode, 200, 'phải trả 200');
     assert.equal(res.body.result, true, 'result phải là true');
-    assert.equal(Object.keys(res.body.data.groups).length, 10, 'groups phải đủ 10 nhóm');
-    assert.equal(res.body.data.catalog.length, 10, 'catalog phải đủ 10 mục');
+    assert.equal(Object.keys(res.body.data.groups).length, 11, 'groups phải đủ 11 nhóm');
+    assert.equal(res.body.data.catalog.length, 11, 'catalog phải đủ 11 mục');
     for (const item of res.body.data.catalog) {
       assert.equal(typeof item.id, 'string', 'mỗi mục catalog phải có id chuỗi');
       assert.equal(typeof item.label, 'string', 'mỗi mục catalog phải có label chuỗi');

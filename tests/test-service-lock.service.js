@@ -70,19 +70,19 @@ function resetCalls() {
 }
 
 try {
-  await check('LOCKABLE_GROUPS khớp 10 nhóm lockable của taxonomy', async () => {
+  await check('LOCKABLE_GROUPS khớp 11 nhóm lockable của taxonomy', async () => {
     assert.deepEqual(
       LOCKABLE_GROUPS.map((g) => g.id),
       LOCKABLE_FEATURE_IDS
     );
-    assert.equal(LOCKABLE_GROUPS.length, 10);
+    assert.equal(LOCKABLE_GROUPS.length, 11);
     assert.ok(
       LOCKABLE_GROUPS.every((g) => typeof g.id === 'string' && typeof g.label === 'string')
     );
     assert.ok(!LOCKABLE_GROUPS.some((g) => g.id === 'portal'));
   });
 
-  await check('getStatus mặc định đủ 10 khoá khi chưa có bản ghi', async () => {
+  await check('getStatus mặc định đủ 11 khoá khi chưa có bản ghi', async () => {
     resetCalls();
     stubGet(null);
     const status = await ServiceLockService.getStatus();
@@ -120,11 +120,11 @@ try {
     }
   });
 
-  await check('getStatus coi bản ghi legacy như cả 10 nhóm đang khoá', async () => {
+  await check('getStatus coi bản ghi legacy như cả 11 nhóm đang khoá', async () => {
     resetCalls();
     stubGet({ locked: true, title: 'T', message: 'M' });
     const status = await ServiceLockService.getStatus();
-    assert.equal(Object.keys(status.groups).length, 10);
+    assert.equal(Object.keys(status.groups).length, 11);
     for (const id of LOCKABLE_FEATURE_IDS) {
       assert.deepEqual(status.groups[id], { locked: true, title: 'T', message: 'M' });
     }
@@ -143,7 +143,7 @@ try {
     assert.equal(data.updated_by, 'ADMIN_1');
     assert.deepEqual(data.groups.vocab, { locked: true, title: 'Bảo trì', message: 'Chờ chút' });
     assert.equal(data.groups.wordfmt.locked, false);
-    assert.equal(data.catalog.length, 10);
+    assert.equal(data.catalog.length, 11);
     assert.deepEqual(
       data.catalog.map((g) => g.id),
       LOCKABLE_FEATURE_IDS
@@ -170,7 +170,7 @@ try {
     const data = await ServiceLockService.getAdminStatus();
     assert.equal(data.groups.vocab.locked, false);
     assert.equal(data.groups.vocab.title, DEFAULT_TITLE);
-    assert.equal(data.catalog.length, 10);
+    assert.equal(data.catalog.length, 11);
     assert.equal(data.updated_at, null);
     assert.equal(data.updated_by, null);
   });
@@ -236,7 +236,7 @@ try {
     stubSet({ value: {}, updated_at: null, updated_by: 'ADMIN' });
     await ServiceLockService.setGroupStatus({ group: 'vocab', locked: false }, 'ADMIN');
     const saved = setCalls[0][1];
-    // Vì sao assert đủ 10 khoá: bản ghi cũ khóa toàn site, nếu merge chỉ ghi nhóm
+    // Vì sao assert đủ 11 khoá: bản ghi cũ khóa toàn site, nếu merge chỉ ghi nhóm
     // vừa sửa thì 9 nhóm còn lại mất trạng thái khóa (tự mở oan sau deploy).
     assert.deepEqual(Object.keys(saved.groups).sort(), [...LOCKABLE_FEATURE_IDS].sort());
     assert.equal(saved.groups.vocab.locked, false);

@@ -27,7 +27,8 @@ export const FEATURE_GROUPS = [
   { id: 'clubs', label: 'CLB & Nhóm học tập', lockable: true, apiPrefixes: ['/community/clans', '/community/polls'], pagePrefixes: ['/clans'] },
   { id: 'vocab', label: 'Luyện từ vựng', lockable: true, apiPrefixes: ['/vocab'], pagePrefixes: ['/vocab'] },
   { id: 'grammar', label: 'Luyện ngữ pháp', lockable: true, apiPrefixes: ['/grammar'], pagePrefixes: ['/grammar'] },
-  { id: 'games', label: 'Giải trí (game)', lockable: true, apiPrefixes: ['/entertainment'], pagePrefixes: [] }
+  { id: 'games', label: 'Giải trí (game)', lockable: true, apiPrefixes: ['/entertainment'], pagePrefixes: [] },
+  { id: 'ttcds', label: 'Trung tâm Chuyển đổi số', lockable: true, apiPrefixes: ['/ttcds'], pagePrefixes: ['/ttcds', '/mystudent'] }
 ];
 
 // Danh sách id các nhóm được phép khoá, giữ đúng thứ tự khai báo trong

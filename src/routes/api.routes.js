@@ -36,6 +36,7 @@ import { registerBroadcastRoutes } from './broadcast.routes.js';
 import { registerAdminRoutes } from './admin.routes.js';
 import { registerCommunityRoutes } from './community.routes.js';
 import { registerClubsRoutes } from './clubs.routes.js';
+import { registerTtcdsRoutes } from './ttcds.routes.js';
 import { registerMetaRoutes } from './meta.routes.js';
 import { registerVocabRoutes } from './vocab.routes.js';
 import { registerGrammarRoutes } from './grammar.routes.js';
@@ -60,6 +61,7 @@ registerIdentityAvatarRoutes(router);  // 6e. Avatar tự upload
 registerAdminRoutes(router);           // 6f. Admin Traffic & Logs Dashboard
 registerCommunityRoutes(router);       // 7. Góc Tự Học Số (Community)
 registerClubsRoutes(router);           // 8. CLB & Nhóm Học Tập
+registerTtcdsRoutes(router);           // 8b. Trung tâm Chuyển đổi số
 registerMetaRoutes(router);            // 9. Health, queue status, version
 registerVocabRoutes(router);           // 10. Luyện từ vựng
 registerGrammarRoutes(router);         // 11. Luyện ngữ pháp

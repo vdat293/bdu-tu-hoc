@@ -4,6 +4,7 @@ import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { IdentityAdminService } from '../../services/identity-admin.service.js';
 import { BduService } from '../../services/bdu.service.js';
 import { AcademicRankingService } from '../../services/academic-ranking.service.js';
+import { OdpSyncService } from '../../services/odp-sync.service.js';
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
 import { SystemSettingsService } from '../../services/system-settings.service.js';
 import { ServiceLockService } from '../../services/service-lock.service.js';
@@ -434,6 +435,78 @@ export const AdminDashboardController = {
     } catch (err) {
       console.error('[AdminDashboard] Lỗi updateRankingSync:', err.message);
       return res.status(500).json({ result: false, message: 'Không thể lưu cấu hình đồng bộ xếp hạng.' });
+    }
+  },
+
+  /**
+   * Kho ODP (tab riêng của /admin): lần chạy đồng bộ gần nhất từ bảng
+   * `odp_sync_runs` + giờ/lần chạy kế tiếp của lịch 03:00 (dùng chung
+   * `RankingSchedulerService`). Chỉ ĐỌC — không kích hoạt đồng bộ.
+   */
+  async getOdpSync(req, res) {
+    try {
+      // Lỗi DB ở một endpoint trạng thái không được làm trắng cả tab: trả
+      // `latest_run: null` để panel hiện "chưa có lần chạy" thay vì 500.
+      let latestRun = null;
+      try {
+        latestRun = await OdpSyncService.getLatestRun();
+      } catch (error) {
+        console.error('[AdminDashboard] Lỗi đọc odp_sync_runs:', error.message);
+      }
+      return res.json({
+        result: true,
+        data: {
+          ready: OdpSyncService.isReady(),
+          configured: isDatabaseConfigured(),
+          sync_hour: Number.parseInt(process.env.RANKING_SYNC_HOUR || '3', 10),
+          next_run_at: RankingSchedulerService.getNextRunAt(),
+          latest_run: latestRun
+        }
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getOdpSync:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể đọc trạng thái kho ODP.' });
+    }
+  },
+
+  /**
+   * Nút "Chạy ngay": kéo kho ODP thủ công (`triggerSource: 'manual'`).
+   * `OdpSyncService.sync` đã bọc advisory lock nên gọi trùng sẽ trả `skipped`;
+   * lỗi từng bảng không ném ra ngoài mà nằm trong `data.errors`.
+   */
+  async runOdpSync(req, res) {
+    try {
+      if (!isDatabaseConfigured()) {
+        return res.status(503).json({
+          result: false,
+          message: 'Chưa cấu hình database nên không chạy được đồng bộ kho ODP.'
+        });
+      }
+      const data = await OdpSyncService.sync({ triggerSource: 'manual' });
+      if (data.skipped) {
+        return res.json({
+          result: true,
+          message: 'Một tiến trình khác đang đồng bộ kho ODP; bỏ qua lần này.',
+          data
+        });
+      }
+      const errorCount = Array.isArray(data.errors) ? data.errors.length : 0;
+      return res.json({
+        result: true,
+        message: errorCount > 0
+          ? `Đồng bộ kho ODP xong nhưng ${errorCount} bảng lỗi (giữ nguyên dữ liệu cũ).`
+          : `Đã đồng bộ kho ODP xong (${Object.keys(data.counts || {}).length} bảng).`,
+        data
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi runOdpSync:', err.message);
+      const status = err.status || 500;
+      return res.status(status).json({
+        result: false,
+        message: status < 500
+          ? (err.message || 'Không chạy được đồng bộ kho ODP.')
+          : 'Không chạy được đồng bộ kho ODP.'
+      });
     }
   },
 

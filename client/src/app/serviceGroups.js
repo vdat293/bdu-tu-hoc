@@ -28,7 +28,9 @@ const ROUTE_GROUPS = [
   { prefix: '/clans', group: 'clubs' },
   { prefix: '/confession', group: 'community' },
   { prefix: '/vocab', group: 'vocab' },
-  { prefix: '/grammar', group: 'grammar' }
+  { prefix: '/grammar', group: 'grammar' },
+  { prefix: '/ttcds', group: 'ttcds' },
+  { prefix: '/mystudent', group: 'ttcds' }
 ];
 
 // Sắp giảm dần theo độ dài tiền tố để hàm tra cứu chỉ cần lấy kết quả khớp đầu tiên.

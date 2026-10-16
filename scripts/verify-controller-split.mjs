@@ -66,7 +66,22 @@ const MODULES_DIR = path.join(root, 'src', 'modules');
 const ADDED_AFTER_SPLIT = new Map([
   // getServiceStatus: them o Task 3 (cong tac khoa dich vu bao tri) de phuc vu
   // endpoint cong khai GET /api/status. Khong co trong ban goc ApiController.
-  ['getServiceStatus', 'service lock (dot 1)']
+  ['getServiceStatus', 'service lock (dot 1)'],
+  // TTCDS "Sinh vien cua toi" (dot tach Task 4): controller moi hoan toan, 13
+  // method khong co trong ban goc ApiController.
+  ['getCapabilities', 'ttcds (dot tach)'],
+  ['listGroups', 'ttcds (dot tach)'],
+  ['createGroup', 'ttcds (dot tach)'],
+  ['deleteGroup', 'ttcds (dot tach)'],
+  ['listMembers', 'ttcds (dot tach)'],
+  ['addMember', 'ttcds (dot tach)'],
+  ['removeMember', 'ttcds (dot tach)'],
+  ['searchStudents', 'ttcds (dot tach)'],
+  ['getStudent', 'ttcds (dot tach)'],
+  ['getAttendance', 'ttcds (dot tach)'],
+  ['listPermissions', 'ttcds (dot tach)'],
+  ['setPermission', 'ttcds (dot tach)'],
+  ['listAuditLogs', 'ttcds (dot tach)']
 ]);
 
 // Method bi XOA co chu dich sau dot tach (doi chieu nguoc voi ADDED o tren):

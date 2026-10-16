@@ -4,6 +4,13 @@
    with the core design system in /css/style.css and /css/showcase.css
    ========================================================================== */
 
+/* Toast của SPA neo dưới topbar để không đè menu người dùng (chip "Xin chào…").
+   Chỉ nhắm `.toast-region` — class do ToastProvider của React thêm — nên trang
+   legacy (`public/js`) và `/admin` giữ nguyên vị trí toast cũ trong style.css. */
+.toast-container.toast-region {
+  top: 84px;
+}
+
 /* Active link states for React Router NavLink */
 .sidebar .nav-item {
   text-decoration: none;

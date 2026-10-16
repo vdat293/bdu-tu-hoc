@@ -1,14 +1,4 @@
-import https from 'node:https';
-import { Buffer } from 'node:buffer';
 import { isDatabaseConfigured, query, withAdvisoryLock } from '../db/database.js';
-
-const DEFAULT_ENDPOINTS = {
-  gpa: 'https://cds.bdu.edu.vn/data/fact_bang_diem_tbhk_odp',
-  profiles: 'https://cds.bdu.edu.vn/data/fact_ho_so_sinh_vien_odp',
-  details: 'https://cds.bdu.edu.vn/data/dim_bang_diem_odp',
-  courses: 'https://cds.bdu.edu.vn/data/dim_mon_hoc_odp',
-  timetable: 'https://cds.bdu.edu.vn/data/dim_thoi_khoa_bieu_odp'
-};
 
 const SYNC_LOCK_ID = 2_030_036_021;
 const MIN_CLASS_COHORT = 25;
@@ -17,10 +7,62 @@ const SUPPORTED_FACULTIES = new Set(['TH', 'DT']);
 const STALE_RUN_HOURS = 6;
 const DEFAULT_RETENTION_RUNS = 3;
 
-function envBool(name, fallback = false) {
-  const value = process.env[name];
-  if (value === undefined) return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+/**
+ * 5 nguồn ranking đọc thẳng từ kho `odp_*` (Task 1), thay hẳn 5 lần gọi API ODP.
+ * Giữ đúng tên cột mà tầng tính điểm phía sau đọc qua `rowValue(row, ...)`.
+ *
+ * `odp_bang_diem` KHÔNG có cột `ma_mon_hoc` (migration 059); `courseCode()` vốn đã
+ * suy mã môn từ tiền tố `ma_nhom` (`INF0873_25262_01` → `INF0873`) nên dòng chi tiết
+ * chỉ cần `ma_nhom`. Tín chỉ đạt lấy từ `odp_mon_hoc.tin_chi` vì `odp_bang_diem.tin_chi`
+ * luôn NULL.
+ */
+const ODP_RANKING_SOURCES = {
+  gpa: `
+    SELECT mssv, nkhk, ma_lop, ten_sinh_vien, so_tin_chi_dat_hk,
+           so_tin_chi_dat_tich_luy, dtb_hk_he_4, dtb_hk_he_10,
+           dtb_tich_luy_he_4, dtb_tich_luy_he_10, xep_loai_hoc_ki
+    FROM odp_tbhk
+  `,
+  profiles: `
+    SELECT mssv, ten_day_du, ho_sv, ten_sv, ma_lop, ten_lop, ma_khoa, ten_khoa,
+           ma_nganh, ma_chuyen_nganh, hien_dien, nk
+    FROM odp_sinh_vien
+  `,
+  details: `
+    SELECT mssv, nkhk, ma_nhom, ten_mon_hoc, diem_hp, diem_hp_4, diem_chu_hp,
+           diem_chu_hp_4, dat_hp, tin_chi, lop, ma_khoa
+    FROM odp_bang_diem
+  `,
+  courses: `
+    SELECT ma_mon_hoc, ten_mon_hoc, tin_chi, ma_khoa, loai_mon
+    FROM odp_mon_hoc
+  `,
+  timetable: `
+    SELECT nkhk, ma_nhom, ma_mon_hoc, ma_giang_vien, tiet_bat_dau, so_tiet,
+           ngay_hoc, danh_sach_sv
+    FROM odp_thoi_khoa_bieu
+  `
+};
+
+const EMPTY_WAREHOUSE_ERROR = 'Kho ODP (odp_tbhk, odp_sinh_vien) đang rỗng — chưa chạy ingest. '
+  + 'Hãy đồng bộ kho ODP trước khi đồng bộ bảng xếp hạng.';
+
+/** Đọc 5 nguồn ranking từ kho local (thay `fetchRows` gọi API ODP). */
+async function readOdpRankingSources() {
+  const [gpa, profiles, details, courses, timetable] = await Promise.all([
+    query(ODP_RANKING_SOURCES.gpa),
+    query(ODP_RANKING_SOURCES.profiles),
+    query(ODP_RANKING_SOURCES.details),
+    query(ODP_RANKING_SOURCES.courses),
+    query(ODP_RANKING_SOURCES.timetable)
+  ]);
+  return {
+    gpaRows: gpa.rows,
+    profileRows: profiles.rows,
+    detailRows: details.rows,
+    courseRows: courses.rows,
+    timetableRows: timetable.rows
+  };
 }
 
 function studentKey(value) {
@@ -231,7 +273,12 @@ function recentActivity(gpaRows, detailRows, timetableRows, termCount = 3) {
     .sort((a, b) => b - a)
     .slice(0, termCount)
     .sort((a, b) => a - b);
-  if (!terms.length) throw new Error('Không xác định được học kỳ hoạt động từ dữ liệu CDS.');
+  if (!terms.length) {
+    throw new Error(
+      'Không xác định được học kỳ hoạt động từ kho ODP '
+      + '(kiểm tra bảng odp_tbhk/odp_thoi_khoa_bieu đã có dữ liệu chưa).'
+    );
+  }
   const activeMssv = new Set(terms.flatMap((term) => [...studentsByTerm.get(term)]));
   return { terms, activeMssv };
 }
@@ -473,69 +520,15 @@ function buildOverallRankingsForViewer(rows, viewer) {
   }));
 }
 
-function fetchRows(url, user, password) {
-  const timeout = Number.parseInt(process.env.RANKING_SYNC_TIMEOUT_MS || '180000', 10);
-  const rejectUnauthorized = !envBool('CDS_INSECURE_TLS', false);
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`,
-        Accept: 'application/json,text/plain,*/*',
-        'User-Agent': 'BDU-Hub-Ranking-Sync/1.0'
-      },
-      rejectUnauthorized,
-      timeout
-    }, (response) => {
-      let body = '';
-      response.setEncoding('utf8');
-      response.on('data', (chunk) => { body += chunk; });
-      response.on('end', () => {
-        if (response.statusCode === 401) return reject(new Error('Sai tài khoản hoặc mật khẩu CDS.'));
-        if (!response.statusCode || response.statusCode >= 400) {
-          return reject(new Error(`CDS trả HTTP ${response.statusCode} cho ${url}.`));
-        }
-        try {
-          const payload = JSON.parse(body);
-          const rows = Array.isArray(payload) ? payload : payload?.data;
-          if (!Array.isArray(rows)) throw new Error('Nguồn không trả về danh sách JSON.');
-          resolve(rows.filter((row) => row && typeof row === 'object' && !Array.isArray(row)));
-        } catch (error) {
-          reject(new Error(`JSON không hợp lệ từ ${url}: ${error.message}`));
-        }
-      });
-    });
-    request.on('timeout', () => request.destroy(new Error(`Hết thời gian tải ${url}.`)));
-    request.on('error', reject);
-  });
-}
-
 async function collectRankings() {
-  const user = process.env.CDS_USER;
-  const password = process.env.CDS_PASSWORD;
-  if (!user || !password) throw new Error('Chưa cấu hình CDS_USER và CDS_PASSWORD.');
+  const { gpaRows, profileRows, detailRows, courseRows, timetableRows } =
+    await readOdpRankingSources();
+  // Kho chưa ingest lần nào: báo rõ kho rỗng thay vì lỗi mạng/nguồn mơ hồ.
+  if (gpaRows.length === 0 && profileRows.length === 0) {
+    throw new Error(EMPTY_WAREHOUSE_ERROR);
+  }
 
-  const urls = Object.fromEntries(
-    Object.entries(DEFAULT_ENDPOINTS).map(([key, fallback]) => [
-      key,
-      process.env[`CDS_${key.toUpperCase()}_URL`] || fallback
-    ])
-  );
-  const required = await Promise.all([
-    fetchRows(urls.gpa, user, password),
-    fetchRows(urls.profiles, user, password)
-  ]);
   const warnings = [];
-  const optional = await Promise.all(['details', 'courses', 'timetable'].map(async (key) => {
-    try {
-      return await fetchRows(urls[key], user, password);
-    } catch (error) {
-      warnings.push(`${key}: ${error.message}`);
-      return [];
-    }
-  }));
-
-  const [gpaRows, profileRows] = required;
-  const [detailRows, courseRows, timetableRows] = optional;
   const creditTotals = earnedCreditTotals(detailRows, courseRows);
   const activity = recentActivity(gpaRows, detailRows, timetableRows, 3);
   const rankingTargetNkhk = activity.terms.at(-1);
@@ -749,9 +742,8 @@ export const AcademicRankingService = {
   },
 
   isReady() {
-    return isDatabaseConfigured()
-      && Boolean(process.env.CDS_USER)
-      && Boolean(process.env.CDS_PASSWORD);
+    // Ranking đọc kho local (Task 3) nên không cần CDS_USER/CDS_PASSWORD.
+    return isDatabaseConfigured();
   },
 
   async sync(triggerSource = 'scheduler') {
@@ -922,6 +914,7 @@ export const AcademicRankingInternals = {
   rankAllStudents,
   chooseHighlightedRanking,
   buildLeaderboard,
+  collectRankings,
   retentionKeepCount,
   pruneOldRuns,
   markStaleRuns,

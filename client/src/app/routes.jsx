@@ -26,6 +26,10 @@ const GrammarPathPage = lazy(() => import('../features/grammar/GrammarPathPage.j
 const GrammarLessonPage = lazy(() => import('../features/grammar/GrammarLessonPage.jsx'));
 const ClubDirectoryPage = lazy(() => import('../features/clubs/pages/ClubDirectoryPage.jsx'));
 const ClubDetailPage = lazy(() => import('../features/clubs/pages/ClubDetailPage.jsx'));
+const TtcdsPage = lazy(() => import('../features/ttcds/TtcdsPage.jsx'));
+const TtcdsHubPage = lazy(() => import('../features/ttcds/TtcdsHubPage.jsx'));
+const TtcdsGroupPage = lazy(() => import('../features/ttcds/TtcdsGroupPage.jsx'));
+const TtcdsStudentPage = lazy(() => import('../features/ttcds/TtcdsStudentPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
@@ -61,6 +65,11 @@ export default function AppRoutes() {
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
+      <Route path="mystudent" element={<Lazy><TtcdsPage /></Lazy>} />
+      <Route path="ttcds" element={<Lazy><TtcdsHubPage /></Lazy>} />
+      <Route path="ttcds/sinh-vien-cua-toi" element={<Navigate to="/mystudent" replace />} />
+      <Route path="ttcds/groups/:id" element={<Lazy><TtcdsGroupPage /></Lazy>} />
+      <Route path="ttcds/students/:mssv" element={<Lazy><TtcdsStudentPage /></Lazy>} />
     </Route>
     {/* 404 đứng riêng một trang, không mượn khung sidebar/topbar của cổng. */}
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />

@@ -17,7 +17,7 @@
 - Group riêng tư: list mặc định `WHERE owner_mssv = me`; không xem chéo group đồng nghiệp.
 - Có nametag mà chưa có dòng quyền → coi như `view`; thu hồi Trung tâm = thu hồi `title:ttcds`.
 - Thứ tự đăng ký route giữ nguyên trong `src/routes/api.routes.js` (thêm sau clubs).
-- Migration mới `migrations/019_ttcds_center.sql`, chạy bằng `npm run db:migrate`.
+- Migration mới `migrations/058_ttcds_center.sql`, chạy bằng `npm run db:migrate`.
 
 ## Review Focus
 
@@ -32,7 +32,7 @@
 ### Task 1: Migration + `ttcds.service.js` (groups/members/permissions/audit)
 
 **Files:**
-- Create: `migrations/019_ttcds_center.sql`
+- Create: `migrations/058_ttcds_center.sql`
 - Create: `src/services/ttcds.service.js`
 - Test: `tests/test-ttcds-groups.js`
 
@@ -50,10 +50,10 @@
 
 - [ ] **Step 1: Write the failing test** `tests/test-ttcds-groups.js`: tạo group K29 owner `TEST_TTCDS_OWNER`, add `22050006` + `' 24050126 '` (space/thường), assert listMembers chuẩn hóa UPPER, `listGroups` của owner khác không thấy group này, `getLevel` mặc định `'view'`, `setLevel create` rồi `getLevel` ra `'create'`; dọn dữ liệu TEST_* đầu/cuối (theo mẫu `tests/test-permission-rbac.js:33-40`).
 - [ ] **Step 2: Run test to verify it fails** Run: `node scripts/run-explicit-suite.mjs tests/test-ttcds-groups.js` Expected: FAIL (file/table chưa có).
-- [ ] **Step 3: Implement migration `migrations/019_ttcds_center.sql`** 4 bảng theo spec §4 (`ttcds_groups`, `ttcds_group_members` unique `(group_id,mssv)`, `ttcds_permissions` check `level IN ('view','create')`, `ttcds_audit_logs`) + index `(owner_mssv)`, `(mssv)`.
+- [ ] **Step 3: Implement migration `migrations/058_ttcds_center.sql`** 4 bảng theo spec §4 (`ttcds_groups`, `ttcds_group_members` unique `(group_id,mssv)`, `ttcds_permissions` check `level IN ('view','create')`, `ttcds_audit_logs`) + index `(owner_mssv)`, `(mssv)`.
 - [ ] **Step 4: Implement `TtcdsService` trong `src/services/ttcds.service.js`** đúng signatures trên; `addMember` INSERT `students(mssv) ON CONFLICT DO NOTHING` trước (copy `src/services/student.service.js: joinClan`); mọi MSSV qua `normalizeTtcdsMssv`.
 - [ ] **Step 5: Run migration + test** Run: `npm run db:migrate` rồi `node scripts/run-explicit-suite.mjs tests/test-ttcds-groups.js` Expected: PASS (hoặc SKIP sạch khi thiếu `DATABASE_URL`).
-- [ ] **Step 6: Commit** `git add migrations/019_ttcds_center.sql src/services/ttcds.service.js tests/test-ttcds-groups.js; git commit -m "feat(ttcds): groups/members/permissions service + migration 019"`
+- [ ] **Step 6: Commit** `git add migrations/058_ttcds_center.sql src/services/ttcds.service.js tests/test-ttcds-groups.js; git commit -m "feat(ttcds): groups/members/permissions service + migration 058"`
 
 ### Task 2: Gating `ttcds:access` + level check
 
