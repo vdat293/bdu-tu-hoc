@@ -58,3 +58,8 @@ export async function getTtcdsStudent(token, mssv, { signal } = {}) {
   const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}`, { token, signal, defaultMessage: 'Không thể tải thông tin sinh viên.' });
   return unwrap(data, data);
 }
+
+export async function getTtcdsAttendance(token, mssv, { signal } = {}) {
+  const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}/diem-danh`, { token, signal, defaultMessage: 'Không thể tải nhật ký điểm danh.' });
+  return unwrap(data, data);
+}

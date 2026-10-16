@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   addTtcdsGroupMember: vi.fn(),
   removeTtcdsGroupMember: vi.fn(),
   getTtcdsStudent: vi.fn(),
+  getTtcdsAttendance: vi.fn(),
   searchTtcdsStudents: vi.fn()
 }));
 
@@ -444,12 +445,10 @@ describe('TTCDS frontend', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Thời khóa biểu' }));
     const tkbPanel = within(screen.getByRole('tabpanel'));
-    const tkbTable = tkbPanel.getByRole('table');
-    expect(tkbTable.parentElement).toHaveClass('table-scroll');
+    expect(tkbPanel.queryByRole('table')).toBeNull();
     expect(tkbPanel.getByText('Nhập môn')).toBeInTheDocument();
-    const tkbHeaders = within(tkbTable).getAllByRole('columnheader');
-    expect(tkbHeaders.length).toBeGreaterThan(0);
-    expect(tkbHeaders.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+    expect(tkbPanel.getByText(/Tuần 31\/08–06\/09/)).toBeInTheDocument();
+    expect(tkbPanel.getByText('Đã học')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Sự kiện' }));
     const eventPanel = within(screen.getByRole('tabpanel'));
@@ -458,6 +457,56 @@ describe('TTCDS frontend', () => {
     expect(eventPanel.getByText('Chào tân SV')).toBeInTheDocument();
     const eventHeaders = within(eventTable).getAllByRole('columnheader');
     expect(eventHeaders.every((cell) => cell.getAttribute('scope') === 'col')).toBe(true);
+  });
+
+  it('renders overview charts for gpa line, weekly attendance line and term combo', async () => {
+    const chartFixture = {
+      ...detailFixture,
+      gpa_hoc_ky: [
+        { nkhk: 24251, dtb_tich_luy_he_10: 7.5, dtb_hk_he_10: 7.5 },
+        { nkhk: 24252, dtb_tich_luy_he_10: 8.0, dtb_hk_he_10: 8.2 }
+      ],
+      diem_danh: [
+        { nkhk: 24251, di_hoc: 18, vang: 2 },
+        { nkhk: 24252, di_hoc: 20, vang: 0 }
+      ]
+    };
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(chartFixture);
+    mocks.getTtcdsAttendance.mockResolvedValue({
+      tong_so_buoi: 6,
+      so_buoi_vang: 1,
+      nhat_ky: [
+        { ngay: '2026-09-01', buoi: 1, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-03', buoi: 2, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-08', buoi: 1, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-10', buoi: 2, diem_danh: 'Vắng', co_mat: false },
+        { ngay: '2026-09-10', buoi: 3, diem_danh: null, co_mat: false },
+        { ngay: 'not-a-date', buoi: 1, diem_danh: 'Có mặt', co_mat: true }
+      ]
+    });
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    expect(await screen.findByText('Điểm trung bình tích lũy')).toBeInTheDocument();
+    expect(document.querySelector('#ttcdsGpaLine')).not.toBeNull();
+    expect(screen.getByText('Tỷ lệ chuyên cần theo tuần')).toBeInTheDocument();
+    expect(document.querySelector('#ttcdsAttendanceWeek')).not.toBeNull();
+    expect(screen.getByText(/Chuyên cần & điểm trung bình theo học kỳ/)).toBeInTheDocument();
+    expect(document.querySelector('#ttcdsTermCombo')).not.toBeNull();
+  });
+
+  it('hides the weekly chart on attendance 404 but keeps stat tiles and gpa', async () => {
+    const err = new Error('Không tìm thấy nhật ký điểm danh.');
+    err.status = 404;
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    mocks.getTtcdsAttendance.mockRejectedValue(err);
+    renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
+
+    expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
+    expect(document.querySelector('#ttcdsAttendanceWeek')).toBeNull();
+    expect(screen.getByText('Chưa có dữ liệu điểm danh theo tuần')).toBeInTheDocument();
+    expect(document.querySelector('#ttcdsGpaLine')).not.toBeNull();
   });
 
   it('turns a 404 student load into a back link plus a list action', async () => {

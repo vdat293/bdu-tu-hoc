@@ -326,6 +326,25 @@
 /* Tab TTCDS giữ pattern hiện tại, chỉ gọn khoảng cách. */
 #tab-ttcds .club-tabs, #tab-ttcds-group .club-tabs, #tab-ttcds-student .club-tabs { gap: 6px; }
 
+/* Biểu đồ tab Tổng quan TTCDS (chart.js, cùng ngôn ngữ Dashboard). */
+.ttcds-chart-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); margin-top: 12px; }
+.ttcds-chart-card--wide { grid-column: 1 / -1; }
+.ttcds-chart-wrap { position: relative; height: 260px; }
+.ttcds-chart-note { margin: 0; padding: 24px 0; text-align: center; color: var(--club-muted); font-size: .85rem; }
+
+/* Đầu ngày trong tab TKB dạng card. */
+.ttcds-day-head { margin: 14px 0 8px; color: var(--club-muted); font-size: .85rem; font-weight: 700; }
+
+/* Card TKB TTCDS tái dùng class .schedule-card toàn cục; chỉ thêm chip
+   "Đã học" + làm mờ buổi quá khứ (scope theo tab để không đụng /schedule). */
+#tab-ttcds-student .schedule-card--past { opacity: .62; }
+#tab-ttcds-student .sch-status-chip.is-past { color: var(--club-muted); border-color: var(--club-line); background: transparent; }
+#tab-ttcds-student .schedule-card__eyebrow { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+#tab-ttcds-student .sch-day-badge { display: inline-flex; align-items: center; gap: 0; }
+#tab-ttcds-student .sch-day { color: var(--club-accent); font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
+#tab-ttcds-student .sch-date { margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--club-line); color: var(--club-muted); font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+#tab-ttcds-student .sch-status-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 7px; border: 1px solid var(--club-line); border-radius: 2px; color: var(--club-accent); font-size: .7rem; font-weight: 700; }
+
 /* Header nhóm TTCDS: 2 nút hành động nằm chung 1 hàng, canh đỉnh khối tiêu đề
    (container gốc display:grid nên mỗi nút rớt 1 dòng). Mobile ≤760px vẫn xếp
    chồng full-width theo rule chung của motion.css. */
