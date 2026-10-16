@@ -332,18 +332,46 @@
 .ttcds-chart-wrap { position: relative; height: 260px; }
 .ttcds-chart-note { margin: 0; padding: 24px 0; text-align: center; color: var(--club-muted); font-size: .85rem; }
 
-/* Đầu ngày trong tab TKB dạng card. */
+/* Đầu ngày trong tab TKB (khối buổi không xếp tiết). */
 .ttcds-day-head { margin: 14px 0 8px; color: var(--club-muted); font-size: .85rem; font-weight: 700; }
 
-/* Card TKB TTCDS tái dùng class .schedule-card toàn cục; chỉ thêm chip
-   "Đã học" + làm mờ buổi quá khứ (scope theo tab để không đụng /schedule). */
-#tab-ttcds-student .schedule-card--past { opacity: .62; }
-#tab-ttcds-student .sch-status-chip.is-past { color: var(--club-muted); border-color: var(--club-line); background: transparent; }
-#tab-ttcds-student .schedule-card__eyebrow { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-#tab-ttcds-student .sch-day-badge { display: inline-flex; align-items: center; gap: 0; }
-#tab-ttcds-student .sch-day { color: var(--club-accent); font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
-#tab-ttcds-student .sch-date { margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--club-line); color: var(--club-muted); font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-#tab-ttcds-student .sch-status-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 7px; border: 1px solid var(--club-line); border-radius: 2px; color: var(--club-accent); font-size: .7rem; font-weight: 700; }
+/* Lưới TKB tuần (port từ Dashboard, đổi sang biến theme portal).
+   Bảng fixed: 7 cột ngày chia đều phần còn lại, cuộn ngang màn hẹp. */
+.tkb-loc { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+.tkb-loc > div { min-width: 0; }
+.tkb-loc label { display: block; margin-bottom: 4px; color: var(--club-muted); font-size: .78rem; font-weight: 700; }
+.tkb-loc select { min-width: 230px; }
+.tkb-chon-tuan { display: flex; gap: 6px; align-items: center; }
+.tkb-chon-tuan select { flex: 1 1 auto; }
+.tkb-mui-ten { appearance: none; padding: 10px 12px; border: 1px solid var(--club-accent); border-radius: 6px; background: transparent; color: var(--club-accent); font-size: 15px; line-height: 1; cursor: pointer; }
+.tkb-mui-ten:hover:not(:disabled) { background: color-mix(in srgb, var(--club-accent) 9%, transparent); }
+.tkb-mui-ten:disabled { border-color: var(--club-line); color: var(--club-muted); cursor: default; }
+.tkb-cuon { overflow-x: auto; }
+table.tkb-luoi { table-layout: fixed; width: 100%; min-width: 1040px; font-size: 12.5px; border-collapse: separate; border-spacing: 0; }
+table.tkb-luoi col.tkb-c-tiet { width: 58px; }
+table.tkb-luoi col.tkb-c-gio { width: 64px; }
+table.tkb-luoi th, table.tkb-luoi td { padding: 5px 6px; vertical-align: top; border: 1px solid var(--club-line); }
+table.tkb-luoi tbody tr { height: 46px; }
+table.tkb-luoi thead th { background: var(--club-surface, transparent); text-align: center; font-size: 14px; font-weight: 700; white-space: nowrap; }
+table.tkb-luoi thead th .ngay { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--club-muted); }
+table.tkb-luoi .tkb-tiet, table.tkb-luoi .tkb-gio { background: var(--club-accent); border-color: var(--club-accent); color: #fff; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.tkb-luoi .tkb-tiet { width: 58px; font-weight: 600; }
+table.tkb-luoi .tkb-gio { width: 64px; font-weight: 500; }
+table.tkb-luoi .tkb-o { background: #cfe2ff; border: 2px solid var(--club-accent); padding: 4px; }
+table.tkb-luoi .tkb-trong { background: transparent; }
+.tkb-mon { overflow-wrap: anywhere; }
+.tkb-mon .ten { font-size: 12.5px; font-weight: 700; color: var(--club-ink); line-height: 1.25; }
+.tkb-mon .ten .ma { display: block; font-size: 12px; font-weight: 400; color: var(--club-muted); }
+.tkb-mon .ct { font-size: 11.5px; line-height: 1.35; }
+.tkb-mon .ct.gio { color: var(--club-accent); font-style: italic; font-variant-numeric: tabular-nums; }
+.tkb-mon .icon-gio { font-style: normal; }
+.tkb-mon .ct.cc { font-variant-numeric: tabular-nums; }
+.tkb-mon .ct.cc .nhan-xanh, .tkb-mon .ct.cc .nhan-vang, .tkb-mon .ct.cc .nhan-do { font-weight: 600; }
+.nhan-xanh { color: #2f9e44; }
+.nhan-vang { color: #d9831f; }
+.nhan-do { color: #ad171c; }
+.tkb-mon + .tkb-mon { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--club-line); }
+.tkb-note { color: var(--club-muted); font-size: .85rem; }
 
 /* Header nhóm TTCDS: 2 nút hành động nằm chung 1 hàng, canh đỉnh khối tiêu đề
    (container gốc display:grid nên mỗi nút rớt 1 dòng). Mobile ≤760px vẫn xếp

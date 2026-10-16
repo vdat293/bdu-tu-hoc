@@ -54,7 +54,8 @@ const detailFixture = {
   gpa_hoc_ky: [{ nkhk: 1, dtb_hk_he_4: 3.2, dtb_tich_luy_he_4: 3.2, so_tin_chi_dat_hk: 15, xep_loai_hoc_ki: 'Khá' }],
   diem_danh: [{ nkhk: 1, di_hoc: 18, vang: 2 }],
   bang_diem: [{ nkhk: 1, ma_mon_hoc: 'CS101', ten_mon: 'Nhập môn', so_tin_chi: 3, diem: 8.5, diem_he_4: 3.5, diem_chu: 'B+' }],
-  thoi_khoa_bieu: [{ nkhk: 1, ngay_hoc: '2026-09-01', thu: 'Thứ 2', tiet_bat_dau: 1, ten_mon: 'Nhập môn', phong: 'A101' }],
+  thoi_khoa_bieu: [{ nkhk: 1, ngay_hoc: '2026-09-01', thu: 'Thứ 2', thu_kieu_so: 2, tiet_bat_dau: 1, so_tiet: 2, ma_mon_hoc: 'CS101', ten_mon: 'Nhập môn', phong: 'A101', giang_vien: 'Thầy A' }],
+  diem_danh_mon: [{ nkhk: 1, ma_mon_hoc: 'CS101', so_buoi: 4, di_hoc: 3, vang: 1 }],
   su_kien: [{ nkhk: 1, ten_su_kien: 'Chào tân SV', ngay: '2026-09-05', loai: 'Chào đón' }],
   ren_luyen: [{ nkhk: 1, diem_ren_luyen: 85, xep_loai: 'Tốt' }]
 };
@@ -445,10 +446,16 @@ describe('TTCDS frontend', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Thời khóa biểu' }));
     const tkbPanel = within(screen.getByRole('tabpanel'));
-    expect(tkbPanel.queryByRole('table')).toBeNull();
+    expect(tkbPanel.getByLabelText('Học kỳ')).toBeInTheDocument();
+    expect(tkbPanel.getByLabelText('Tuần')).toBeInTheDocument();
+    expect(tkbPanel.getByRole('button', { name: 'Tuần trước' })).toBeInTheDocument();
+    expect(tkbPanel.getByRole('button', { name: 'Tuần sau' })).toBeInTheDocument();
+    const headers = tkbPanel.getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent)).toEqual(
+      expect.arrayContaining(['Tiết', 'Giờ', expect.stringContaining('Thứ 2')])
+    );
     expect(tkbPanel.getByText('Nhập môn')).toBeInTheDocument();
-    expect(tkbPanel.getByText(/Tuần 31\/08–06\/09/)).toBeInTheDocument();
-    expect(tkbPanel.getByText('Đã học')).toBeInTheDocument();
+    expect(tkbPanel.getByText(/Có mặt/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Sự kiện' }));
     const eventPanel = within(screen.getByRole('tabpanel'));

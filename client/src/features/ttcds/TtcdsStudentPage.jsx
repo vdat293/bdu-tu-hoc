@@ -540,111 +540,283 @@ function groupRows(items, termKey) {
   return [...map.entries()];
 }
 
-function todayKey() {
-  const now = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+// --- Tab Thời khóa biểu: lưới tuần kiểu Dashboard ---
+
+// Giờ bắt đầu tiết 1..14, khớp TKB cổng trường. Mỗi tiết 45 phút.
+const GIO_TIET = [
+  '07:00', '07:45', '08:30', '09:15', '10:00', '13:00', '13:45',
+  '14:30', '15:15', '16:00', '17:45', '18:30', '19:15', '20:00'
+];
+const THU_COLS = [1, 2, 3, 4, 5, 6, 7];
+const THU_NAMES = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7', 7: 'Chủ nhật' };
+
+function gioBatDau(tiet) {
+  return GIO_TIET[tiet - 1] ?? '';
 }
 
-// Tab TKB dạng card (cùng markup với trang /schedule): gom buổi học theo
-// (học kỳ, tuần lịch T2–CN), trong tuần gom theo ngày — hiện CẢ tuần kể cả
-// buổi đã học xong (làm mờ), không chỉ buổi sắp tới.
+function gioKetThuc(tiet, soTiet = 1) {
+  const cuoi = Math.min(tiet + Math.max(soTiet, 1) - 1, GIO_TIET.length);
+  const bd = GIO_TIET[cuoi - 1];
+  if (!bd) return '';
+  const [h, m] = bd.split(':').map(Number);
+  const total = h * 60 + m + 45;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function addDaysStr(mondayStr, days) {
+  const [y, m, d] = mondayStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+
+function fmtDayMonth(dateStr) {
+  const d = parseDay(dateStr);
+  return d ? shortDay(d) : '';
+}
+
+// thu_kieu_so của kho: 2 = Thứ 2 … 8 = Chủ nhật → ISO 1..7.
+function isoDow(item) {
+  const v = Number(item?.thu_kieu_so);
+  if (Number.isInteger(v) && v >= 2 && v <= 8) return v - 1;
+  const m = /^Thứ (\d)$/.exec(String(item?.thu ?? '').trim());
+  if (m) return Number(m[1]) - 1;
+  if (String(item?.thu ?? '').includes('Chủ nhật')) return 7;
+  return null;
+}
+
+// Nhãn nhóm gọn: `INF1063_24252_01` → `01`.
+function shortGroupLabel(maNhom) {
+  const text = String(maNhom ?? '');
+  const i = text.lastIndexOf('_');
+  return i >= 0 && i < text.length - 1 ? text.slice(i + 1) : text;
+}
+
+function attendanceClass(pct) {
+  if (pct >= 85) return 'nhan-xanh';
+  if (pct >= 75) return 'nhan-vang';
+  return 'nhan-do';
+}
+
 function TimetableTab({ detail }) {
-  const today = todayKey();
-  const weeks = useMemo(() => {
-    const sessions = Array.isArray(detail?.thoi_khoa_bieu) ? detail.thoi_khoa_bieu : [];
-    const byWeek = new Map();
-    for (const item of sessions) {
-      const day = parseDay(item?.ngay_hoc);
-      const weekKey = day ? mondayKey(day) : 'unknown';
-      const groupKey = `${item?.nkhk ?? '?'}|${weekKey}`;
-      if (!byWeek.has(groupKey)) byWeek.set(groupKey, { key: groupKey, nkhk: item?.nkhk, monday: weekKey, sessions: [] });
-      byWeek.get(groupKey).sessions.push(item);
+  const sessions = useMemo(
+    () => (Array.isArray(detail?.thoi_khoa_bieu) ? detail.thoi_khoa_bieu : []),
+    [detail]
+  );
+  const perSubject = useMemo(
+    () => (Array.isArray(detail?.diem_danh_mon) ? detail.diem_danh_mon : []),
+    [detail]
+  );
+
+  const dsKy = useMemo(
+    () => [...new Set(sessions.map((s) => Number(s?.nkhk)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b),
+    [sessions]
+  );
+  // Học kỳ mặc định là kỳ mới nhất; lựa chọn sai thì rơi về mặc định.
+  const [ky, setKy] = useState(null);
+  const nkhkChon = ky !== null && dsKy.includes(ky) ? ky : dsKy[dsKy.length - 1] ?? null;
+
+  const dsTuan = useMemo(() => {
+    const set = new Set();
+    for (const s of sessions) {
+      if (Number(s?.nkhk) !== nkhkChon) continue;
+      const day = parseDay(s?.ngay_hoc);
+      if (day) set.add(mondayKey(day));
     }
-    return [...byWeek.values()]
-      .sort((a, b) => {
-        if ((a.monday === 'unknown') !== (b.monday === 'unknown')) return a.monday === 'unknown' ? 1 : -1;
-        if (a.monday !== b.monday) return a.monday < b.monday ? -1 : 1;
-        return String(a.nkhk ?? '') < String(b.nkhk ?? '') ? -1 : 1;
-      })
-      .map((week) => {
-        const days = new Map();
-        for (const item of week.sessions) {
-          const dateKey = /^\d{4}-\d{2}-\d{2}/.test(String(item?.ngay_hoc ?? '')) ? String(item.ngay_hoc).slice(0, 10) : 'unknown';
-          if (!days.has(dateKey)) days.set(dateKey, { key: dateKey, thu: item?.thu, sessions: [] });
-          days.get(dateKey).sessions.push(item);
-        }
-        return {
-          ...week,
-          title: week.monday === 'unknown' ? 'Chưa rõ ngày học' : `Tuần ${weekRangeLabel(week.monday)}`,
-          days: [...days.values()].sort((a, b) => (a.key < b.key ? -1 : 1))
-        };
-      });
-  }, [detail]);
-  if (weeks.length === 0) return <p>Chưa có dữ liệu</p>;
+    return [...set].sort();
+  }, [sessions, nkhkChon]);
+
+  const thisMonday = mondayKey(new Date());
+  const [tuan, setTuan] = useState(null);
+  const tuanChon = tuan !== null && dsTuan.includes(tuan)
+    ? tuan
+    : dsTuan.includes(thisMonday) ? thisMonday : dsTuan[0] ?? null;
+  const iTuan = tuanChon !== null ? dsTuan.indexOf(tuanChon) : -1;
+
+  const buoiTuan = useMemo(
+    () => sessions.filter((s) => Number(s?.nkhk) === nkhkChon && (() => {
+      const day = parseDay(s?.ngay_hoc);
+      return day ? mondayKey(day) === tuanChon : false;
+    })()),
+    [sessions, nkhkChon, tuanChon]
+  );
+  // Buổi không có tiết bắt đầu không vào lưới — liệt kê riêng bên dưới.
+  const buoiCaNgay = useMemo(
+    () => sessions.filter((s) => Number(s?.nkhk) === nkhkChon && !Number(s?.tiet_bat_dau)),
+    [sessions, nkhkChon]
+  );
+  // Chuyên cần gộp theo môn của kỳ đang xem để in ngay trong ô môn.
+  const ccTheoMon = useMemo(() => {
+    const map = new Map();
+    for (const row of perSubject) {
+      if (Number(row?.nkhk) === nkhkChon && Number(row?.so_buoi) > 0 && row?.ma_mon_hoc) {
+        map.set(String(row.ma_mon_hoc), row);
+      }
+    }
+    return map;
+  }, [perSubject, nkhkChon]);
+
+  if (sessions.length === 0) return <p>Chưa có dữ liệu</p>;
+  const [termLine, termCode] = termCaption({ nkhk: nkhkChon });
   return (
-    <>
-      {weeks.map((week) => {
-        const [termLine, termCode] = termCaption({ nkhk: week.nkhk });
-        return (
-          <div className="card glass-panel ttcds-panel" key={week.key}>
-            <div className="ttcds-panel-head">
-              <h2>{week.title}</h2>
-              <p className="ttcds-panel-sub">{termLine}{termCode ? ` · ${termCode}` : ''} · {week.sessions.length} buổi học</p>
-            </div>
-            {week.days.map((day) => (
-              <div key={day.key}>
-                <h3 className="ttcds-day-head">{day.thu || '—'}{day.key !== 'unknown' ? ` · ${day.key.slice(8, 10)}/${day.key.slice(5, 7)}` : ''}</h3>
-                <div className="schedule-grid">
-                  {day.sessions.map((item, index) => {
-                    const dateKey = String(item?.ngay_hoc ?? '').slice(0, 10);
-                    const past = dateKey !== 'unknown' && dateKey < today;
-                    const tiet = Number(item?.tiet_bat_dau);
-                    const soTiet = Number(item?.so_tiet);
-                    const periods = Number.isFinite(tiet)
-                      ? `Tiết ${tiet}${Number.isFinite(soTiet) && soTiet > 1 ? `–${tiet + soTiet - 1}` : ''}`
-                      : '—';
-                    const courseCode = item?.ma_mon_hoc || '—';
-                    return (
-                      <div
-                        key={`${courseCode}-${item?.ma_nhom}-${dateKey}-${tiet}-${index}`}
-                        className={`schedule-card glass-panel${past ? ' schedule-card--past' : ''}`}
-                      >
-                        <div>
-                          <div className="schedule-card__eyebrow">
-                            <div className="sch-day-badge">
-                              <span className="sch-day">{item?.thu || '—'}</span>
-                              {day.key !== 'unknown' && <span className="sch-date">{`${day.key.slice(8, 10)}/${day.key.slice(5, 7)}`}</span>}
-                            </div>
-                            <span className={`sch-status-chip${past ? ' is-past' : ''}`}>
-                              {past ? 'Đã học' : dateKey === today ? 'Hôm nay' : 'Sắp tới'}
-                            </span>
-                          </div>
-                          <h4 className="sch-name" title={item?.ten_mon || item?.ten_mon_hoc}>{item?.ten_mon || item?.ten_mon_hoc || courseCode}</h4>
-                          <div className="sch-meta">
-                            <div className="sch-meta-item"><strong>{periods}</strong></div>
-                            {item?.phong || item?.ma_phong ? (
-                              <div className="sch-meta-item"><span className="sch-room-pill">{item.phong || item.ma_phong}</span></div>
-                            ) : null}
-                            {item?.giang_vien || item?.ten_giang_vien ? (
-                              <div className="sch-meta-item"><span>{item.giang_vien || item.ten_giang_vien}</span></div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="sch-footer">
-                          <span className="sch-code">Mã: <code>{courseCode}</code></span>
-                          {item?.ma_nhom ? <span className="badge-mini badge-pill-blue">{item.ma_nhom}</span> : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+    <div className="card glass-panel ttcds-panel">
+      <div className="ttcds-panel-head">
+        <h2>Thời khóa biểu</h2>
+        <p className="ttcds-panel-sub">Lưới theo tuần · Cột Thứ 2 – Chủ nhật, hàng Tiết 1 – 14</p>
+      </div>
+      <div className="tkb-loc">
+        <div>
+          <label htmlFor="tkb-hoc-ky">Học kỳ</label>
+          <select id="tkb-hoc-ky" value={nkhkChon ?? ''} onChange={(e) => setKy(Number(e.target.value))}>
+            {dsKy.map((k) => {
+              const [line, code] = termCaption({ nkhk: k });
+              return <option key={k} value={k}>{code ? `${line} (${code})` : line}</option>;
+            })}
+          </select>
+        </div>
+        <div className="tkb-tuan">
+          <label htmlFor="tkb-tuan">Tuần</label>
+          <div className="tkb-chon-tuan">
+            <button
+              type="button"
+              className="tkb-mui-ten"
+              aria-label="Tuần trước"
+              title="Tuần trước"
+              disabled={iTuan <= 0}
+              onClick={() => setTuan(dsTuan[iTuan - 1])}
+            >
+              ←
+            </button>
+            <select
+              id="tkb-tuan"
+              value={tuanChon ?? ''}
+              disabled={dsTuan.length === 0}
+              onChange={(e) => setTuan(e.target.value)}
+            >
+              {dsTuan.map((t, i) => (
+                <option key={t} value={t}>
+                  {`Tuần ${i + 1} [từ ngày ${fmtDayMonth(t)} đến ngày ${fmtDayMonth(addDaysStr(t, 6))}]`}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="tkb-mui-ten"
+              aria-label="Tuần sau"
+              title="Tuần sau"
+              disabled={iTuan < 0 || iTuan >= dsTuan.length - 1}
+              onClick={() => setTuan(dsTuan[iTuan + 1])}
+            >
+              →
+            </button>
           </div>
-        );
-      })}
-    </>
+        </div>
+      </div>
+
+      {buoiTuan.length === 0 ? (
+        <p className="tkb-note">Tuần này chưa có lịch học{termLine && termLine !== '—' ? ` · ${termLine}${termCode ? ` ${termCode}` : ''}` : ''}</p>
+      ) : (
+        <WeekGrid sessions={buoiTuan} monday={tuanChon} attendance={ccTheoMon} />
+      )}
+
+      {buoiCaNgay.length > 0 && (
+        <>
+          <h3 className="ttcds-day-head">Buổi không xếp theo tiết</h3>
+          <p className="tkb-note">{buoiCaNgay.map((b) => b?.ten_mon || b?.ten_mon_hoc || b?.ma_mon_hoc).filter(Boolean).join(' · ')}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Lưới tiết × thứ của đúng một tuần. Môn dài `so_tiet` tiết thì nhảy ô
+// (rowSpan), tối đa tới hàng cuối của lưới.
+function WeekGrid({ sessions, monday, attendance }) {
+  const byCell = new Map();
+  for (const item of sessions) {
+    const dow = isoDow(item);
+    const tiet = Number(item?.tiet_bat_dau);
+    if (!dow || !Number.isInteger(tiet) || tiet < 1 || tiet > 14) continue;
+    const key = `${dow}-${tiet}`;
+    if (!byCell.has(key)) byCell.set(key, []);
+    byCell.get(key).push(item);
+  }
+  const occupied = new Set();
+  return (
+    <div className="tkb-cuon">
+      <table className="tkb-luoi">
+        <colgroup>
+          <col className="tkb-c-tiet" />
+          <col className="tkb-c-gio" />
+          {THU_COLS.map((n) => <col key={n} className="tkb-c-ngay" />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="tkb-tiet">Tiết</th>
+            <th className="tkb-gio">Giờ</th>
+            {THU_COLS.map((n, i) => (
+              <th key={n} className="tkb-cot-ngay">
+                {THU_NAMES[n]}
+                <span className="ngay">({fmtDayMonth(addDaysStr(monday, i))})</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 14 }, (_, i) => i + 1).map((tiet) => (
+            <tr key={tiet}>
+              <td className="tkb-tiet">Tiết {tiet}</td>
+              <td className="tkb-gio">{gioBatDau(tiet)}</td>
+              {THU_COLS.map((dow) => {
+                const key = `${dow}-${tiet}`;
+                if (occupied.has(key)) return null;
+                const cell = byCell.get(key);
+                if (!cell || cell.length === 0) return <td key={dow} className="tkb-trong" />;
+                const soTiet = Math.max(...cell.map((b) => Number(b?.so_tiet) || 1), 1);
+                const rowSpan = Math.min(soTiet, 14 - tiet + 1);
+                const compact = rowSpan === 1;
+                for (let j = 1; j < rowSpan; j++) occupied.add(`${dow}-${tiet + j}`);
+                return (
+                  <td key={dow} rowSpan={rowSpan} className="tkb-o">
+                    {cell.map((item, index) => {
+                      const cc = item?.ma_mon_hoc ? attendance.get(String(item.ma_mon_hoc)) : undefined;
+                      const pct = cc && Number(cc.so_buoi) > 0 ? (100 * Number(cc.di_hoc)) / Number(cc.so_buoi) : null;
+                      const name = item?.ten_mon || item?.ten_mon_hoc || item?.ma_mon_hoc || '—';
+                      return (
+                        <div className="tkb-mon" key={`${item?.ma_nhom}-${index}`}>
+                          <div className="ten">
+                            {name} <span className="ma">({item?.ma_mon_hoc || '—'})</span>
+                          </div>
+                          {!compact && <div className="ct">Nhóm: {shortGroupLabel(item?.ma_nhom)}</div>}
+                          {!compact && (item?.phong || item?.ma_phong) && (
+                            <div className="ct">Phòng: {item.phong || item.ma_phong}</div>
+                          )}
+                          {!compact && (item?.giang_vien || item?.ten_giang_vien) && (
+                            <div className="ct">GV: {item.giang_vien || item.ten_giang_vien}</div>
+                          )}
+                          <div className="ct gio">
+                            <span className="icon-gio" aria-hidden="true">◷</span>{' '}
+                            {gioBatDau(tiet)} → {gioKetThuc(tiet, soTiet)}
+                          </div>
+                          {pct !== null && (
+                            <div className="ct cc">
+                              Có mặt{' '}
+                              <span className={attendanceClass(pct)}>
+                                {cc.di_hoc}/{cc.so_buoi} buổi · {Math.round(pct)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
