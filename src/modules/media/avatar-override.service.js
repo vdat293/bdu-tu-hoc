@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
-import { isDatabaseConfigured, query, transaction } from '../db/database.js';
-import { MediaStorageService } from './media-storage.service.js';
+import { isDatabaseConfigured, query, transaction } from '../../db/database.js';
+import { MediaStorageService } from '../../services/media-storage.service.js';
 
 const OUTPUT_SIZE = 512;
 const DEFAULT_MAX_SIZE_MB = 3;

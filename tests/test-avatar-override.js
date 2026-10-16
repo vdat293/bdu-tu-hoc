@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { AvatarOverrideInternals } from '../src/services/avatar-override.service.js';
+import { AvatarOverrideInternals } from '../src/modules/media/avatar-override.service.js';
 
 const source = await sharp({
   create: { width: 800, height: 400, channels: 3, background: '#2563eb' }
@@ -30,7 +30,7 @@ const migration = fs.readFileSync('migrations/017_student_avatar_overrides.sql',
 // Route định nghĩa trong file domain identity (api.routes.js chỉ còn là assembler).
 const routes = fs.readFileSync('src/routes/identity.routes.js', 'utf8');
 const identity = fs.readFileSync('src/services/identity-presentation.service.js', 'utf8');
-const avatarService = fs.readFileSync('src/services/avatar-override.service.js', 'utf8');
+const avatarService = fs.readFileSync('src/modules/media/avatar-override.service.js', 'utf8');
 const adminHtml = fs.readFileSync('public/admin-tool.html', 'utf8');
 
 assert.match(migration, /student_avatar_overrides/);

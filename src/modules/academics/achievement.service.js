@@ -1,5 +1,5 @@
-import { isDatabaseConfigured, query, transaction } from '../db/database.js';
-import { isCourseFailed } from './learning.service.js';
+import { isDatabaseConfigured, query, transaction } from '../../db/database.js';
+import { isCourseFailed } from '../../services/learning.service.js';
 
 function cleanText(value, maxLength = 500) {
   return String(value ?? '').trim().slice(0, maxLength);

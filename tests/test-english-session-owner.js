@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { EnglishExerciseService } from '../src/services/english-exercise.service.js';
+import { EnglishExerciseService } from '../src/modules/english/english-exercise.service.js';
 import { MoodleClient } from '../src/services/moodle.service.js';
 
 const originalLogin = MoodleClient.prototype.login;

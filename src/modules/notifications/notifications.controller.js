@@ -6,11 +6,11 @@
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
-import { NotificationService } from '../../services/notification.service.js';
+import { NotificationService } from './notification.service.js';
 import { NotificationPrefsService, TokenVaultService } from '../../services/notification-prefs.service.js';
 import { ScheduleSnapshotService } from '../../services/schedule-snapshot.service.js';
 import { DiscordLinkService } from '../../services/discord-link.service.js';
-import { DiscordOAuthService } from '../../services/discord-oauth.service.js';
+import { DiscordOAuthService } from './discord-oauth.service.js';
 import { query } from '../../db/database.js';
 import { safeApiErrorMessage } from '../_shared/safe-api-error.js';
 

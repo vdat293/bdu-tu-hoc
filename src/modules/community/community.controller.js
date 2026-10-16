@@ -4,7 +4,7 @@
 
 import { CommunityService } from '../../services/community.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
-import { MentionService } from '../../services/mention.service.js';
+import { MentionService } from './mention.service.js';
 import { ReminderDigestService } from '../../services/reminder-digest.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { FacebookImportService } from '../../services/facebook-import.service.js';

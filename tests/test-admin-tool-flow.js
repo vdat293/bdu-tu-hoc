@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const adminHtml = fs.readFileSync('public/admin-tool.html', 'utf8');
 const adminJs = fs.readFileSync('public/js/admin-tool.js', 'utf8');
-const avatarService = fs.readFileSync('src/services/avatar-override.service.js', 'utf8');
+const avatarService = fs.readFileSync('src/modules/media/avatar-override.service.js', 'utf8');
 
 // 1. Kiểm tra HTML của Admin Tool
 assert.match(adminHtml, /admin-login-form/, 'Phải có form đăng nhập admin');

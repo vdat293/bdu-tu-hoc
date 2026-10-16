@@ -1,5 +1,5 @@
-import { isDatabaseConfigured, query } from '../db/database.js';
-import { isAnswerCorrect } from '../utils/grammar-answers.js';
+import { isDatabaseConfigured, query } from '../../db/database.js';
+import { isAnswerCorrect } from '../../utils/grammar-answers.js';
 
 function httpError(message, status = 400) {
   const error = new Error(message);

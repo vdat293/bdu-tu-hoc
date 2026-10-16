@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { SurveyRunManager } from '../src/services/survey-run.service.js';
+import { SurveyRunManager } from '../src/modules/survey/survey-run.service.js';
 
 let resolveBackendRun;
 let executeCount = 0;

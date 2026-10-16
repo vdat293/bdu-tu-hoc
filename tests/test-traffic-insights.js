@@ -1,5 +1,5 @@
 /**
- * Test cho `src/services/traffic-insights.service.js`.
+ * Test cho `src/modules/admin/traffic-insights.service.js`.
  *
  * Phần này chỉ chốt các HÀM THUẦN (không đụng DB): tách phiên
  * (`buildSessions`), đếm chuyển trang (`summarizeTransitions`) và gom theo tính
@@ -20,7 +20,7 @@ import {
   bucketByFeature,
   featureForPath,
   TrafficInsightsService
-} from '../src/services/traffic-insights.service.js';
+} from '../src/modules/admin/traffic-insights.service.js';
 import { isDatabaseConfigured } from '../src/db/database.js';
 
 let failed = 0;

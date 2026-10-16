@@ -3,7 +3,7 @@
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
-import { GrammarService } from '../../services/grammar.service.js';
+import { GrammarService } from './grammar.service.js';
 import { allowRequest } from '../../utils/request-rate-limit.js';
 
 export const GrammarController = {

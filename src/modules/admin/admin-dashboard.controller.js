@@ -7,7 +7,7 @@ import { AcademicRankingService } from '../../services/academic-ranking.service.
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';
 import { SystemSettingsService } from '../../services/system-settings.service.js';
 import { ServiceLockService } from '../../services/service-lock.service.js';
-import { TrafficInsightsService } from '../../services/traffic-insights.service.js';
+import { TrafficInsightsService } from './traffic-insights.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { isDatabaseConfigured } from '../../db/database.js';
 

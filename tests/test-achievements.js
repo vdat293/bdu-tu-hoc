@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {
   AchievementInternals,
   extractSemesterResults
-} from '../src/services/achievement.service.js';
+} from '../src/modules/academics/achievement.service.js';
 
 const semesters = extractSemesterResults({
   data: {
@@ -75,7 +75,7 @@ assert.ok(evaluate(breakingLimitsDefinition, exactlyTwentyCredits), 'Đúng 20 t
 assert.ok(evaluate(breakingLimitsDefinition, overTwentyCredits), 'Trên 20 tín chỉ vẫn phải mở #Phá vỡ giới hạn');
 
 const migration = fs.readFileSync('migrations/010_student_achievements.sql', 'utf8');
-const achievementService = fs.readFileSync('src/services/achievement.service.js', 'utf8');
+const achievementService = fs.readFileSync('src/modules/academics/achievement.service.js', 'utf8');
 assert.match(migration, /achievement_definitions/);
 assert.match(migration, /student_achievement_unlocks/);
 assert.match(achievementService, /is_active = TRUE/);

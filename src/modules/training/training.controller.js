@@ -5,7 +5,7 @@
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
-import { TrainingScoreService, MUC5_ROLE_OPTIONS } from '../../services/training-score.service.js';
+import { TrainingScoreService, MUC5_ROLE_OPTIONS } from './training-score.service.js';
 import { TrainingCdsCredentialsService } from '../../services/training-cds-credentials.service.js';
 import { bearerToken } from '../_shared/bearer-token.js';
 import { safeApiErrorMessage } from '../_shared/safe-api-error.js';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { TrainingScoreServiceInternals } from '../src/services/training-score.service.js';
+import { TrainingScoreServiceInternals } from '../src/modules/training/training-score.service.js';
 
 const { normalizeSemesters, normalizeCriteria, detectMuc5Selection, applyMuc5Selection, describeSelection } = TrainingScoreServiceInternals;
 const { mapSemesterToCdsCode, findCriterion, normalizeCriterion, applyScores, buildMuc5Scores, buildBonusScores } = TrainingScoreServiceInternals;

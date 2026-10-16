@@ -2,7 +2,7 @@
  * Module: English (Moodle exercise automation)
  */
 
-import { EnglishExerciseService } from '../../services/english-exercise.service.js';
+import { EnglishExerciseService } from './english-exercise.service.js';
 import { PermissionService } from '../../services/permission.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { safeApiErrorMessage } from '../_shared/safe-api-error.js';

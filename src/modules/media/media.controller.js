@@ -1,6 +1,6 @@
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { IdentityAdminService } from '../../services/identity-admin.service.js';
-import { AvatarOverrideService } from '../../services/avatar-override.service.js';
+import { AvatarOverrideService } from './avatar-override.service.js';
 import { MediaUploadService } from '../../services/media-upload.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 

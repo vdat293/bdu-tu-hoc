@@ -9,7 +9,7 @@
 import { BduService } from '../../services/bdu.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { LearningService } from '../../services/learning.service.js';
-import { AchievementService } from '../../services/achievement.service.js';
+import { AchievementService } from './achievement.service.js';
 import { AcademicSnapshotService } from '../../services/academic-snapshot.service.js';
 import { AcademicRankingService } from '../../services/academic-ranking.service.js';
 import { RankingSchedulerService } from '../../services/ranking-scheduler.service.js';

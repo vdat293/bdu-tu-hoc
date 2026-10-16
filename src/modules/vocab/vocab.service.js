@@ -1,4 +1,4 @@
-import { isDatabaseConfigured, query } from '../db/database.js';
+import { isDatabaseConfigured, query } from '../../db/database.js';
 
 function httpError(message, status = 400) {
   const error = new Error(message);

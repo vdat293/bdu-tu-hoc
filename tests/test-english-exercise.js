@@ -6,7 +6,7 @@ import {
   learnEnglishAnswersFromReview,
   matchEnglishOption,
   normalizeEnglishQuestion
-} from '../src/services/english-exercise.service.js';
+} from '../src/modules/english/english-exercise.service.js';
 
 const attemptHtml = `
   <form id="responseform" action="/mod/quiz/processattempt.php">

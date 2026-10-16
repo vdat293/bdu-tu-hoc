@@ -1,4 +1,4 @@
-import { query as poolQuery } from '../db/database.js';
+import { query as poolQuery } from '../../db/database.js';
 
 const MENTION_PATTERN = /(?:^|[^A-Za-z0-9_.@-])@([A-Za-z0-9_.-]{3,32})/g;
 const MAX_MENTION_TOKENS = 10;

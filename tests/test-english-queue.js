@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { EnglishExerciseInternals } from '../src/services/english-exercise.service.js';
+import { EnglishExerciseInternals } from '../src/modules/english/english-exercise.service.js';
 
 const { EnglishExerciseQueueManager } = EnglishExerciseInternals;
 

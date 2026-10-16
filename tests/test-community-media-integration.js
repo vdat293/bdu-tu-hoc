@@ -96,7 +96,7 @@ try {
   uploadedKeys.splice(uploadedKeys.indexOf(gif.key), 1);
 
   // 6. Avatar tự upload: ảnh cũ bị xoá khi thay, ảnh mới bị xoá khi gỡ.
-  const { AvatarOverrideService } = await import('../src/services/avatar-override.service.js');
+  const { AvatarOverrideService } = await import('../src/modules/media/avatar-override.service.js');
   const avatarMssv = 'TESTAVATAR01';
   const firstAvatar = await AvatarOverrideService.upload({
     mssv: avatarMssv,

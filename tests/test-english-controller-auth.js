@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { ApiController } from '../src/controllers/api.controller.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
-import { EnglishExerciseService } from '../src/services/english-exercise.service.js';
+import { EnglishExerciseService } from '../src/modules/english/english-exercise.service.js';
 import { PermissionService } from '../src/services/permission.service.js';
 
 const originalResolve = BduIdentityService.resolveVerifiedMssv;

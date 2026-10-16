@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { VocabService } from '../src/services/vocab.service.js';
+import { VocabService } from '../src/modules/vocab/vocab.service.js';
 
 console.log('🧪 Kiểm tra vocab service...');
 

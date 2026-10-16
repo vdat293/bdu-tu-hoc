@@ -2,8 +2,8 @@
  * Module: Survey (khảo sát BDU)
  */
 
-import { SurveyService } from '../../services/survey.service.js';
-import { SurveyRunService } from '../../services/survey-run.service.js';
+import { SurveyService } from './survey.service.js';
+import { SurveyRunService } from './survey-run.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { bearerToken } from '../_shared/bearer-token.js';
 

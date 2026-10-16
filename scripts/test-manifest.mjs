@@ -6,6 +6,7 @@ export const SAFE_NODE_TESTS = [
   'test-runner-command.test.mjs',
   'test-manifest.test.mjs',
   'test-import-resolution.js',
+  'test-service-domain-paths.js',
   'test-db-maintenance-guards.mjs',
   'test-migration-ledger.mjs',
   'test-local-compose-safety.js',

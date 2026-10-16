@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { isDatabaseConfigured, query } from '../db/database.js';
+import { isDatabaseConfigured, query } from '../../db/database.js';
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();

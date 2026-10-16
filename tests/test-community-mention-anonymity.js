@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { closeDatabase, query } from '../src/db/database.js';
-import { MentionService } from '../src/services/mention.service.js';
-import { NotificationService } from '../src/services/notification.service.js';
+import { MentionService } from '../src/modules/community/mention.service.js';
+import { NotificationService } from '../src/modules/notifications/notification.service.js';
 
 if (!process.env.DATABASE_URL) {
   console.log('Skipping test-community-mention-anonymity: DATABASE_URL not configured.');

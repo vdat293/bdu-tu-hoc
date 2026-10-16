@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { SurveyServiceInternals } from '../src/services/survey.service.js';
+import { SurveyServiceInternals } from '../src/modules/survey/survey.service.js';
 
 const groups = [
   {

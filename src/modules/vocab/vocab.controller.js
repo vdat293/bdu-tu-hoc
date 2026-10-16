@@ -3,7 +3,7 @@
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
-import { VocabService } from '../../services/vocab.service.js';
+import { VocabService } from './vocab.service.js';
 
 export const VocabController = {
   // 10. Luyện từ vựng (clone luyentu: Flashcard/Quiz/Typing/Ghép cặp)

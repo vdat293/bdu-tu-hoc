@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { GrammarService, gradeGrammarResponses, gradeResponseEntries } from '../src/services/grammar.service.js';
+import { GrammarService, gradeGrammarResponses, gradeResponseEntries } from '../src/modules/grammar/grammar.service.js';
 import {
   sanitizeGrammarHtml,
   resolveCorrectAnswer,

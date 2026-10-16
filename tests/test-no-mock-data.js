@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { BduService } from '../src/services/bdu.service.js';
-import { SurveyService } from '../src/services/survey.service.js';
+import { SurveyService } from '../src/modules/survey/survey.service.js';
 
 console.log('🧪 Kiểm tra xác minh loại bỏ dữ liệu mock...');
 

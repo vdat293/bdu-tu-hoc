@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { AchievementService } from '../src/services/achievement.service.js';
+import { AchievementService } from '../src/modules/academics/achievement.service.js';
 import { closeDatabase, query } from '../src/db/database.js';
 
 const TEST_MSSV = 'CODEX_ACHIEVEMENT_TEST';

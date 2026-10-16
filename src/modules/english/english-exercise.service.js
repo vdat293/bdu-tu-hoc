@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import * as cheerio from 'cheerio';
-import { isTestEnvironment } from '../config/load-env.js';
-import { MoodleClient } from './moodle.service.js';
+import { isTestEnvironment } from '../../config/load-env.js';
+import { MoodleClient } from '../../services/moodle.service.js';
 
 if (isTestEnvironment() && !process.env.ENGLISH_ANSWERS_PATH) {
   const error = new Error('English test mode cần ENGLISH_ANSWERS_PATH trong thư mục tạm.');

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AdminDashboardController } from '../src/modules/admin/admin-dashboard.controller.js';
-import { TrafficInsightsService } from '../src/services/traffic-insights.service.js';
+import { TrafficInsightsService } from '../src/modules/admin/traffic-insights.service.js';
 
 // Test cho 5 endpoint admin /api/admin/dashboard/insights/* (Task 4).
 // Không cần DB: monkey-patch TrafficInsightsService rồi gọi thẳng handler với
