@@ -339,13 +339,13 @@
 
 /* Lưới TKB tuần (port từ Dashboard, đổi sang biến theme portal).
    Bảng fixed: 7 cột ngày chia đều phần còn lại, cuộn ngang màn hẹp. */
-.tkb-loc { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+.tkb-loc { display: flex; gap: 12px 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
 .tkb-loc > div { min-width: 0; }
-.tkb-loc label { display: block; margin-bottom: 4px; color: var(--club-muted); font-size: .78rem; font-weight: 700; }
-.tkb-loc select { min-width: 230px; }
-.tkb-chon-tuan { display: flex; gap: 6px; align-items: center; }
+.tkb-loc label { display: block; margin-bottom: 6px; color: var(--club-muted); font-size: .74rem; font-weight: 800; letter-spacing: .04em; }
+.tkb-loc select { min-width: 230px; min-height: 42px; border-radius: 10px; }
+.tkb-chon-tuan { display: flex; gap: 8px; align-items: stretch; }
 .tkb-chon-tuan select { flex: 1 1 auto; }
-.tkb-mui-ten { appearance: none; padding: 10px 12px; border: 1px solid var(--club-accent); border-radius: 6px; background: transparent; color: var(--club-accent); font-size: 15px; line-height: 1; cursor: pointer; }
+.tkb-mui-ten { appearance: none; display: inline-flex; align-items: center; justify-content: center; min-width: 46px; padding: 0 14px; border: 1px solid var(--club-accent); border-radius: 10px; background: transparent; color: var(--club-accent); font-size: 16px; line-height: 1; cursor: pointer; }
 .tkb-mui-ten:hover:not(:disabled) { background: color-mix(in srgb, var(--club-accent) 9%, transparent); }
 .tkb-mui-ten:disabled { border-color: var(--club-line); color: var(--club-muted); cursor: default; }
 .tkb-cuon { overflow-x: auto; }

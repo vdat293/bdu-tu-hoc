@@ -522,7 +522,7 @@ function TimetableTab({ detail }) {
       <div className="tkb-loc">
         <div>
           <label htmlFor="tkb-hoc-ky">Học kỳ</label>
-          <select id="tkb-hoc-ky" value={nkhkChon ?? ''} onChange={(e) => setKy(Number(e.target.value))}>
+          <select id="tkb-hoc-ky" className="form-select" value={nkhkChon ?? ''} onChange={(e) => setKy(Number(e.target.value))}>
             {dsKy.map((k) => {
               const [line, code] = termCaption({ nkhk: k });
               return <option key={k} value={k}>{code ? `${line} (${code})` : line}</option>;
@@ -544,6 +544,7 @@ function TimetableTab({ detail }) {
             </button>
             <select
               id="tkb-tuan"
+              className="form-select"
               value={tuanChon ?? ''}
               disabled={dsTuan.length === 0}
               onChange={(e) => setTuan(e.target.value)}
