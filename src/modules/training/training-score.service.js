@@ -20,11 +20,10 @@ const MUC5_GROUP = '5';
 const MUC5_PENALTY_CODE = '5.5';
 const MUC5_PENALTY_DIEM = -10;
 
-// App CDS (BDU Student) là hệ thống khác, xác thực bằng tk-mk riêng. Ta chỉ
-// dùng nó để đồng bộ tiêu chí 6.16 (hoạt động văn hóa/văn nghệ/thể thao).
-const CDS_BASE_URL = 'https://cds.bdu.edu.vn/student/api/v1';
-const CDS_LOGIN_ENDPOINT = `${CDS_BASE_URL}/odp/auth/login`;
-const CDS_TRAIN_SCORE_ENDPOINT = `${CDS_BASE_URL}/system/ren-luyen/train-score`;
+// App CDS (BDU Student) đã bỏ: điểm 6.16 lấy từ kho sự kiện ODP
+// (dim_su_kien_odp) bằng service account CDS_USER/CDS_PASSWORD, giống
+// academic-ranking.service.js. Sinh viên không nhập thêm mật khẩu nào.
+const CDS_EVENT_URL_DEFAULT = 'https://cds.bdu.edu.vn/data/dim_su_kien_odp';
 const BONUS_616_CODE = '6.16';
 
 // Thứ tự hiển thị cố định; điểm lấy theo `diem_toi_da` của cổng khi có.
@@ -222,7 +221,7 @@ function buildMuc5Scores(data, { roles = [], penalty = false } = {}) {
   return scores;
 }
 
-/** Điểm 6.16 lấy nguyên từ app sinh viên (không chặn theo điểm tối đa của tiêu chí). */
+/** Điểm 6.16 lấy từ tổng điểm cộng sự kiện ODP (không chặn theo điểm tối đa của tiêu chí). */
 function buildBonusScores(data, bonus616) {
   if (bonus616 === null || bonus616 === undefined || bonus616 === '') return {};
   const found = findQuestionInData(data, BONUS_616_CODE);
@@ -245,9 +244,9 @@ function describeSelection({ roles = [], penalty = false } = {}) {
   return penalty ? `${parts} (có vi phạm 5.5)` : parts;
 }
 
-// --- App CDS (BDU Student) ---------------------------------------------------
+// --- Kho sự kiện ODP (dim_su_kien_odp) -----------------------------------------
 // Cổng BDU mã học kỳ dạng <năm bắt đầu 4 số><kỳ> (20252 = HK2 2025-2026).
-// App CDS dùng <2 số năm bắt đầu><2 số năm kết thúc><kỳ> (25262 = 2025-2026 HK2).
+// Kho ODP dùng <2 số năm bắt đầu><2 số năm kết thúc><kỳ> (25262 = 2025-2026 HK2).
 function mapSemesterToCdsCode(hocKy) {
   const value = Number(hocKy);
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -257,103 +256,128 @@ function mapSemesterToCdsCode(hocKy) {
   return `${String(startYear).slice(-2)}${String(endYear).slice(-2)}${semester}`;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function normalizeStudentId(value) {
+  return String(value ?? '').trim().toUpperCase();
 }
 
-async function cdsLogin({ mssv, password } = {}) {
-  const numericMssv = Number(String(mssv ?? '').trim());
-  if (!Number.isFinite(numericMssv) || numericMssv <= 0) {
-    throw apiError('Không xác định được MSSV để đồng bộ app sinh viên.', 400);
+/** `danh_sach_sv` là chuỗi JSON array MSSV số; fallback tách các cụm 6-12 số. */
+function parseEventParticipants(value) {
+  const normalize = (item) => normalizeStudentId(item);
+  if (Array.isArray(value)) {
+    return [...new Set(value.map(normalize).filter(Boolean))];
   }
-  if (!password) throw apiError('Vui lòng nhập mật khẩu app sinh viên.', 400);
-
-  let response = null;
-  let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      response = await fetch(CDS_LOGIN_ENDPOINT, {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mssv: numericMssv, password: String(password) })
-      });
-      break;
-    } catch (cause) {
-      lastError = cause;
-      await sleep(400 * attempt);
-    }
-  }
-  if (!response) {
-    const error = apiError('Không thể kết nối app sinh viên.', 503);
-    error.cause = lastError;
-    throw error;
-  }
-
-  let payload = null;
-  try { payload = await response.json(); } catch { payload = null; }
-  if (response.status === 401) throw apiError(payload?.error || 'Tài khoản hoặc mật khẩu app sinh viên không đúng.', 401);
-  if (!response.ok || !payload?.access_token) {
-    throw apiError(payload?.error || payload?.message || 'App sinh viên không xử lý được đăng nhập.', response.status || 400);
-  }
-  return payload.access_token;
+  if (value === null || value === undefined) return [];
+  if (typeof value !== 'string') return parseEventParticipants(String(value));
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parseEventParticipants(parsed);
+  } catch { /* không phải JSON -> tách bằng regex bên dưới */ }
+  return [...new Set(value.match(/\d{6,12}/g) || [])];
 }
 
-// App CDS thỉnh thoảng trả lỗi tạm thời; thử lại vài lần trước khi bỏ cuộc.
-async function fetchCdsTrainScore({ token, nkhk } = {}) {
-  const url = `${CDS_TRAIN_SCORE_ENDPOINT}?nkhk=${encodeURIComponent(nkhk)}`;
-  let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    let response;
-    try {
-      response = await fetch(url, { headers: { Authorization: bearer(token), Accept: 'application/json' } });
-    } catch (cause) {
-      lastError = apiError('Không thể kết nối app sinh viên.', 503);
-      lastError.cause = cause;
-      await sleep(400 * attempt);
-      continue;
-    }
-    if (response.status === 401) throw apiError('Phiên app sinh viên không hợp lệ, vui lòng thử lại.', 401);
-    if (response.ok) {
-      const text = await response.text().catch(() => '');
-      try { return JSON.parse(text); } catch { lastError = apiError('App sinh viên trả về dữ liệu không hợp lệ.', 502); }
-    } else {
-      lastError = apiError('App sinh viên không trả về dữ liệu rèn luyện.', response.status);
-    }
-    await sleep(400 * attempt);
-  }
-  throw lastError || apiError('Không thể kết nối app sinh viên.', 503);
+function toEventPoints(value) {
+  const points = toNumber(value);
+  return points > 0 ? points : 0;
 }
 
-function findCriterion(nodes, soThuTu) {
-  const list = Array.isArray(nodes) ? nodes : [];
-  for (const node of list) {
-    if (String(node?.so_thu_tu ?? '') === String(soThuTu)) return node;
-    const found = findCriterion(node?.children, soThuTu);
-    if (found) return found;
-  }
-  return null;
+function formatEventDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${pad(date.getUTCDate())}-${pad(date.getUTCMonth() + 1)}-${date.getUTCFullYear()}`;
 }
 
-function normalizeCriterion(node) {
-  if (!node) return null;
-  const max = toNumber(node.diem_toi_da);
-  const raw = node.diem_thuc_te === null || node.diem_thuc_te === undefined ? 0 : toNumber(node.diem_thuc_te);
-  const chiTiet = node?.minh_chung?.chi_tiet;
+/** Lọc sự kiện đúng học kỳ có MSSV tham gia, cộng dồn `diem_cong`. */
+function summarizeStudentEvents(eventRows, { hocKy, mssv } = {}) {
+  const nkhk = mapSemesterToCdsCode(hocKy);
+  const student = normalizeStudentId(mssv);
+  if (!nkhk || !student) return { nkhk: nkhk || null, total: 0, events: [] };
+  const events = [];
+  for (const row of Array.isArray(eventRows) ? eventRows : []) {
+    if (String(row?.nkhk ?? '') !== String(nkhk)) continue;
+    if (!new Set(parseEventParticipants(row?.danh_sach_sv)).has(student)) continue;
+    events.push({
+      id: row?.id ?? null,
+      ten: String(row?.ten_su_kien || 'Sự kiện'),
+      diemCong: toEventPoints(row?.diem_cong),
+      ngay: formatEventDate(row?.ngay_dien_ra),
+      theLoai: row?.the_loai ?? null
+    });
+  }
+  return { nkhk, total: events.reduce((sum, event) => sum + event.diemCong, 0), events };
+}
+
+/** Dựng tiêu chí 6.16 cùng shape với API cũ để frontend khỏi đổi logic preview. */
+function buildEventsCriterion({ nkhk, total = 0, events = [] } = {}) {
+  const list = Array.isArray(events) ? events : [];
   return {
-    so: String(node.so_thu_tu ?? ''),
-    noiDung: String(node.noi_dung || ''),
-    diemToiDa: max,
-    diemThucTe: raw,
-    giaTri: raw < 0 ? 0 : Math.min(raw, max),
-    moTa: String(node?.minh_chung?.mo_ta || ''),
-    capNhatCuoi: String(node?.minh_chung?.cap_nhat_cuoi || ''),
-    minhChung: (Array.isArray(chiTiet) ? chiTiet : []).map((item) => ({
-      id: item?.id ?? null,
-      tieuDe: String(item?.tieu_de || ''),
-      giaTri: String(item?.gia_tri || ''),
-      phuDe: String(item?.phu_de || '')
+    so: BONUS_616_CODE,
+    noiDung: 'Hoạt động văn hóa/văn nghệ/thể thao (danh sách sự kiện ODP)',
+    diemToiDa: null,
+    diemThucTe: total,
+    giaTri: total,
+    moTa: `Đã tham gia ${list.length} sự kiện (học kỳ ${nkhk ?? ''}).`,
+    capNhatCuoi: new Date().toISOString(),
+    minhChung: list.map((event) => ({
+      id: event?.id ?? null,
+      tieuDe: String(event?.ten || 'Sự kiện'),
+      giaTri: `+${event?.diemCong ?? 0} điểm`,
+      phuDe: [event?.ngay, event?.theLoai].filter(Boolean).join(' · ')
     }))
   };
+}
+
+function cdsEventUrl() {
+  return process.env.CDS_EVENT_URL || CDS_EVENT_URL_DEFAULT;
+}
+
+function cdsEventCacheTtlMs() {
+  const raw = Number(process.env.CDS_EVENT_TTL_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 15 * 60 * 1000;
+}
+
+let eventsCache = { rows: null, fetchedAt: 0 };
+
+function clearEventsCache() {
+  eventsCache = { rows: null, fetchedAt: 0 };
+}
+
+async function fetchOdpEventRows() {
+  const user = process.env.CDS_USER;
+  const password = process.env.CDS_PASSWORD;
+  if (!user || !password) throw apiError('Chưa cấu hình CDS_USER và CDS_PASSWORD.', 500);
+  if (eventsCache.rows && Date.now() - eventsCache.fetchedAt < cdsEventCacheTtlMs()) {
+    return eventsCache.rows;
+  }
+  let response;
+  try {
+    response = await fetch(cdsEventUrl(), {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`,
+        Accept: 'application/json',
+        'User-Agent': 'BDU-Hub-Training-Events/1.0'
+      }
+    });
+  } catch (cause) {
+    const error = apiError('Không thể kết nối kho sự kiện CDS.', 503);
+    error.cause = cause;
+    throw error;
+  }
+  if (response.status === 401) throw apiError('Sai tài khoản hoặc mật khẩu CDS.', 500);
+  if (!response.ok) throw apiError(`Kho sự kiện CDS trả HTTP ${response.status}.`, 502);
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (cause) {
+    const error = apiError('Kho sự kiện CDS trả về dữ liệu không hợp lệ.', 502);
+    error.cause = cause;
+    throw error;
+  }
+  const rows = Array.isArray(payload) ? payload : payload?.data;
+  if (!Array.isArray(rows)) throw apiError('Kho sự kiện CDS không trả về danh sách.', 502);
+  const clean = rows.filter((row) => row && typeof row === 'object' && !Array.isArray(row));
+  eventsCache = { rows: clean, fetchedAt: Date.now() };
+  return clean;
 }
 
 export const MUC5_ROLE_OPTIONS = MUC5_ROLES.map((role) => ({ ...role }));
@@ -396,7 +420,7 @@ export const TrainingScoreService = {
   /**
    * Chấm mục 5 theo lựa chọn, giữ nguyên phần còn lại, lưu lên cổng rồi trả về
    * tổng điểm/xếp loại sau khi cổng ghi nhận. `bonus616` (nếu có) là điểm 6.16
-   * đồng bộ từ app sinh viên, đã được chặn trong khoảng hợp lệ.
+   * từ kho sự kiện ODP, đã được chặn trong khoảng hợp lệ.
    */
   async autoScore({ token, hocKy, mssv, roles, penalty, bonus616, ghiChuSv, onLog } = {}) {
     const log = (message, type = 'info') => {
@@ -423,7 +447,7 @@ export const TrainingScoreService = {
 
     log(`🎯 Mục 5 (${describeSelection(effective)}) → ${muc5 ? muc5.diem : 0}/10 điểm.`, 'muted');
     if (Object.prototype.hasOwnProperty.call(scores, BONUS_616_CODE)) {
-      log(`🎯 Tiêu chí 6.16 (đồng bộ app sinh viên) → ${scores[BONUS_616_CODE]} điểm.`, 'muted');
+      log(`🎯 Tiêu chí 6.16 (danh sách sự kiện ODP) → ${scores[BONUS_616_CODE]} điểm.`, 'muted');
     }
     log('💾 w-luuketquadgrl → đang lưu lên cổng BDU...');
 
@@ -435,22 +459,24 @@ export const TrainingScoreService = {
   },
 
   /**
-   * Đăng nhập app sinh viên bằng tk-mk sinh viên rồi đọc tiêu chí 6.16 của học kỳ.
-   * Không lưu lại mật khẩu; access_token của CDS chỉ sống trong một lần gọi.
+   * Đọc kho sự kiện ODP bằng service account rồi tính tổng điểm cộng 6.16 của
+   * học kỳ cho MSSV. Không cần mật khẩu app sinh viên.
    */
-  async syncCriterion616({ mssv, password, hocKy } = {}) {
+  async syncCriterion616({ mssv, hocKy } = {}) {
     const nkhk = mapSemesterToCdsCode(hocKy);
-    if (!nkhk) throw apiError('Học kỳ không hợp lệ để đồng bộ app sinh viên.', 400);
+    if (!nkhk) throw apiError('Học kỳ không hợp lệ để lấy danh sách sự kiện.', 400);
+    const student = normalizeStudentId(mssv);
+    if (!student) throw apiError('Không xác định được MSSV để lấy danh sách sự kiện.', 400);
 
-    const cdsToken = await cdsLogin({ mssv, password });
-    const payload = await fetchCdsTrainScore({ token: cdsToken, nkhk });
-    const node = findCriterion(payload?.chi_tiet, BONUS_616_CODE);
-    if (!node) throw apiError('App sinh viên không có tiêu chí 6.16 cho học kỳ này.', 404);
-
+    const rows = await fetchOdpEventRows();
+    if (!rows.some((row) => String(row?.nkhk ?? '') === String(nkhk))) {
+      throw apiError('Kho sự kiện chưa có dữ liệu cho học kỳ này.', 404);
+    }
+    const summary = summarizeStudentEvents(rows, { hocKy, mssv: student });
     return {
       nkhk,
-      sinhVien: payload?.sinh_vien || null,
-      criterion: normalizeCriterion(node)
+      sinhVien: null,
+      criterion: buildEventsCriterion(summary)
     };
   }
 };
@@ -467,8 +493,12 @@ export const TrainingScoreServiceInternals = {
   recomputeGroupTotal,
   describeSelection,
   mapSemesterToCdsCode,
-  findCriterion,
-  normalizeCriterion,
+  normalizeStudentId,
+  parseEventParticipants,
+  summarizeStudentEvents,
+  buildEventsCriterion,
+  formatEventDate,
+  clearEventsCache,
   MUC5_ROLES,
   MUC5_PENALTY_CODE,
   MUC5_PENALTY_DIEM,

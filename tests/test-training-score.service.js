@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { TrainingScoreServiceInternals } from '../src/modules/training/training-score.service.js';
 
 const { normalizeSemesters, normalizeCriteria, detectMuc5Selection, applyMuc5Selection, describeSelection } = TrainingScoreServiceInternals;
-const { mapSemesterToCdsCode, findCriterion, normalizeCriterion, applyScores, buildMuc5Scores, buildBonusScores } = TrainingScoreServiceInternals;
+const { mapSemesterToCdsCode, applyScores, buildMuc5Scores, buildBonusScores } = TrainingScoreServiceInternals;
+const { parseEventParticipants, summarizeStudentEvents, buildEventsCriterion, formatEventDate } = TrainingScoreServiceInternals;
 
 // --- normalizeSemesters ------------------------------------------------------
 const semesters = normalizeSemesters({
@@ -105,28 +106,39 @@ assert.equal(mapSemesterToCdsCode(20251), '25261');
 assert.equal(mapSemesterToCdsCode(20243), '24253');
 assert.equal(mapSemesterToCdsCode(''), null);
 
-// --- Tiêu chí 6.16 từ app CDS ------------------------------------------------
-const cdsTree = [{
-  so_thu_tu: '6',
-  children: [
-    { so_thu_tu: '6.15', diem_toi_da: 3, diem_thuc_te: 0 },
-    {
-      so_thu_tu: '6.16',
-      diem_toi_da: 4,
-      diem_thuc_te: 9,
-      minh_chung: { mo_ta: 'Đã tham gia 6 hoạt động.', cap_nhat_cuoi: '2026-08-19T07:55:58.193Z', chi_tiet: [{ id: 1, tieu_de: 'A', gia_tri: '+1 điểm', phu_de: '21-05-2026 - Tham dự' }] }
-    }
-  ]
-}];
-assert.equal(findCriterion(cdsTree, '6.16').diem_thuc_te, 9, 'tìm được node 6.16 trong cây');
-assert.equal(findCriterion(cdsTree, '9.9'), null);
+// --- Tiêu chí 6.16 từ kho sự kiện ODP (dim_su_kien_odp) -----------------------
+assert.deepEqual(parseEventParticipants('[24050122, 24050008]'), ['24050122', '24050008'], 'chuỗi JSON array MSSV');
+assert.deepEqual(parseEventParticipants([24050122, ' 24050008 ']), ['24050122', '24050008'], 'array số/chuỗi');
+assert.deepEqual(parseEventParticipants('24050122;24050008'), ['24050122', '24050008'], 'chuỗi phân tách');
+assert.deepEqual(parseEventParticipants(null), [], 'null -> rỗng');
+assert.deepEqual(parseEventParticipants('[not-json'), [], 'không parse được -> rỗng');
 
-const node616 = normalizeCriterion(findCriterion(cdsTree, '6.16'));
-assert.equal(node616.giaTri, 4, 'giá trị 6.16 chặn ở điểm tối đa 4');
-assert.equal(node616.diemThucTe, 9, 'vẫn giữ điểm thực tế 9 để hiển thị');
-assert.equal(node616.minhChung.length, 1);
-assert.equal(normalizeCriterion({ so_thu_tu: '6.16', diem_toi_da: 4, diem_thuc_te: null }).giaTri, 0);
-assert.equal(normalizeCriterion({ so_thu_tu: '6.16', diem_toi_da: 4, diem_thuc_te: -5 }).giaTri, 0);
+const eventRows = [
+  { id: 1, ten_su_kien: 'Seminar A', diem_cong: 1, nkhk: 25262, ngay_dien_ra: 'Sun, 16 Mar 2025 00:00:00 GMT', danh_sach_sv: '[24050122, 24050008]', the_loai: null },
+  { id: 2, ten_su_kien: 'Event B', diem_cong: 4, nkhk: 25262, ngay_dien_ra: 'Tue, 18 Mar 2025 00:00:00 GMT', danh_sach_sv: '[24050008]', the_loai: null },
+  { id: 3, ten_su_kien: 'Kỳ khác', diem_cong: 1, nkhk: 25261, ngay_dien_ra: 'Tue, 18 Mar 2025 00:00:00 GMT', danh_sach_sv: '[24050122]', the_loai: null }
+];
+const sum25262 = summarizeStudentEvents(eventRows, { hocKy: 20252, mssv: '24050122' });
+assert.equal(sum25262.nkhk, '25262', 'cổng 20252 -> nkhk ODP 25262');
+assert.equal(sum25262.total, 1, 'chỉ cộng sự kiện cùng kỳ có tên mình');
+assert.equal(sum25262.events.length, 1);
+assert.equal(sum25262.events[0].ten, 'Seminar A');
+
+const sumOther = summarizeStudentEvents(eventRows, { hocKy: 20252, mssv: '99999999' });
+assert.equal(sumOther.total, 0, 'không tham gia -> 0 điểm');
+assert.deepEqual(sumOther.events, []);
+
+const sumBad = summarizeStudentEvents(eventRows, { hocKy: '', mssv: '24050122' });
+assert.equal(sumBad.total, 0, 'học kỳ không hợp lệ -> 0 điểm');
+
+assert.equal(formatEventDate('Sun, 16 Mar 2025 00:00:00 GMT'), '16-03-2025');
+assert.equal(formatEventDate('không phải ngày'), '');
+
+const crit616 = buildEventsCriterion({ nkhk: '25262', total: 5, events: [{ id: 1, ten: 'A', diemCong: 1, ngay: '16-03-2025', theLoai: null }] });
+assert.equal(crit616.so, '6.16');
+assert.equal(crit616.diemThucTe, 5, 'giữ tổng điểm thô ODP để hiển thị');
+assert.equal(crit616.minhChung.length, 1);
+assert.match(crit616.minhChung[0].giaTri, /\+1/);
 
 // --- applyScores gộp mục 5 và 6.16 -------------------------------------------
 const withBonus = makeCriteria();

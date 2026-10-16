@@ -69,6 +69,16 @@ const ADDED_AFTER_SPLIT = new Map([
   ['getServiceStatus', 'service lock (dot 1)']
 ]);
 
+// Method bi XOA co chu dich sau dot tach (doi chieu nguoc voi ADDED o tren):
+// mat method ma khong khai bao o day thi fail; khai bao o day thi OK.
+const REMOVED_AFTER_SPLIT = new Map([
+  // getTrainingCdsCredentials + deleteTrainingCdsCredentials: bo dong bo mat
+  // khau app sinh vien; 6.16 lay tu kho su kien ODP (dim_su_kien_odp) bang
+  // service account. Migration 057 drop bang training_cds_credentials.
+  ['getTrainingCdsCredentials', 'bo dong bo app sinh vien (dim_su_kien_odp)'],
+  ['deleteTrainingCdsCredentials', 'bo dong bo app sinh vien (dim_su_kien_odp)']
+]);
+
 // Method dang `  name(req, res) {` hoac `  async name(req, res) {` o indent 2
 // ben trong object literal ApiController.
 const METHOD_RE = /^ {2}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(\s*req\s*,\s*res\s*(?:,\s*next\s*)?\)\s*\{/gm;
@@ -118,18 +128,24 @@ const extra = [...split].filter((name) => !original.has(name)).sort();
 const declaredExtra = extra.filter((name) => ADDED_AFTER_SPLIT.has(name));
 const unexpectedExtra = extra.filter((name) => !ADDED_AFTER_SPLIT.has(name));
 const staleDeclarations = [...ADDED_AFTER_SPLIT.keys()].filter((name) => !extra.includes(name)).sort();
+const declaredRemoved = missing.filter((name) => REMOVED_AFTER_SPLIT.has(name));
+const unexpectedMissing = missing.filter((name) => !REMOVED_AFTER_SPLIT.has(name));
 
 console.log(`File goc (${commit}) : ${original.size} method`);
 console.log(`File domain         : ${split.size} method trong ${fileCount} file controller`);
-console.log(`Thieu               : ${missing.length}${missing.length ? ` -> ${missing.join(', ')}` : ''}`);
+console.log(`Thieu (da khai bao xoa): ${declaredRemoved.length}${declaredRemoved.length ? ` -> ${declaredRemoved.join(', ')}` : ''}`);
+console.log(`Thieu (KHONG khai bao): ${unexpectedMissing.length}${unexpectedMissing.length ? ` -> ${unexpectedMissing.join(', ')}` : ''}`);
 console.log(`Thua (da khai bao)  : ${declaredExtra.length}${declaredExtra.length ? ` -> ${declaredExtra.join(', ')}` : ''}`);
 console.log(`Thua (chua khai bao): ${unexpectedExtra.length}${unexpectedExtra.length ? ` -> ${unexpectedExtra.join(', ')}` : ''}`);
 if (staleDeclarations.length > 0) {
   console.log(`Khai bao cu (khong con thua): ${staleDeclarations.join(', ')}`);
 }
 
-if (missing.length > 0 || unexpectedExtra.length > 0) {
+if (unexpectedMissing.length > 0 || unexpectedExtra.length > 0) {
   console.error('\nSAI LACH - tach khong trung nguyen.');
+  if (unexpectedMissing.length > 0) {
+    console.error(`Method mat phai duoc khai bao trong REMOVED_AFTER_SPLIT: ${unexpectedMissing.join(', ')}`);
+  }
   if (unexpectedExtra.length > 0) {
     console.error(`Method moi phai duoc khai bao trong ADDED_AFTER_SPLIT: ${unexpectedExtra.join(', ')}`);
   }

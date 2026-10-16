@@ -104,8 +104,6 @@ const ROUTES_ADDED_AFTER_SPLIT = new Set([
   'GET /training-score/semesters',
   'GET /training-score/criteria',
   'POST /training-score/cds-sync',
-  'GET /training-score/cds-credentials',
-  'DELETE /training-score/cds-credentials',
   'POST /training-score/submit',
   // Route them o Task 3 (cong tac khoa dich vu bao tri): endpoint cong khai de
   // client doc trang thai khoa. Khong co trong ban goc api.routes.js.

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import {
-  deleteTrainingCdsCredentials,
-  getTrainingCdsCredentials,
   getTrainingCriteria,
   getTrainingSemesters,
   submitTrainingScore,
@@ -21,7 +19,7 @@ const DEFAULT_ROLE_OPTIONS = [
   { code: '5.4', diem: 3, label: 'Thành viên CLB/đội nhóm trực thuộc Trường quản lý' }
 ];
 
-/** Dựng danh sách hoạt động (tên sự kiện + điểm cộng) từ minh chứng app sinh viên. */
+/** Dựng danh sách hoạt động (tên sự kiện + điểm cộng) từ minh chứng kho sự kiện. */
 function buildActivityLines(criterion) {
   const items = Array.isArray(criterion?.minhChung) ? criterion.minhChung : [];
   return items.map((item) => {
@@ -121,20 +119,13 @@ export default function TrainingScorePage() {
   const [penalty, setPenalty] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [cdsPassword, setCdsPassword] = useState('');
-  const [saveSync, setSaveSync] = useState(false);
-  const [cdsSaved, setCdsSaved] = useState(false);
   const [cdsSyncing, setCdsSyncing] = useState(false);
   const [cdsError, setCdsError] = useState('');
   const [cdsCriterion, setCdsCriterion] = useState(null);
   const [activityNote, setActivityNote] = useState('');
 
   const confirmRef = useRef(null);
-  const syncDialogRef = useRef(null);
-  const cdsPasswordRef = useRef(null);
   useViewportDialog(confirmOpen, () => setConfirmOpen(false), confirmRef);
-  useViewportDialog(syncModalOpen, () => setSyncModalOpen(false), syncDialogRef, cdsPasswordRef);
 
   const roleOptions = useMemo(
     () => (criteria?.roleOptions?.length ? criteria.roleOptions : DEFAULT_ROLE_OPTIONS),
@@ -195,13 +186,6 @@ export default function TrainingScorePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.token]);
 
-  useEffect(() => {
-    if (!auth.token) return;
-    getTrainingCdsCredentials(auth.token)
-      .then((data) => setCdsSaved(Boolean(data?.saved)))
-      .catch(() => setCdsSaved(false));
-  }, [auth.token]);
-
   const onSelectSemester = (event) => {
     const value = event.target.value;
     setSelectedHocKy(value);
@@ -214,41 +198,19 @@ export default function TrainingScorePage() {
     setRoles((current) => (current.includes(code) ? current.filter((item) => item !== code) : [...current, code]));
   };
 
-  const openSyncModal = () => {
-    setCdsError('');
-    setSaveSync(false);
-    setSyncModalOpen(true);
-  };
-
   const doSync = async () => {
     if (!auth.token || !selectedHocKy || cdsSyncing) return;
     setCdsSyncing(true);
     setCdsError('');
     try {
-      const payload = { hocKy: Number(selectedHocKy), saveSync: Boolean(saveSync) };
-      const typed = cdsPassword.trim();
-      if (typed) payload.cdsPassword = typed;
-      const data = await syncTraining616(auth.token, payload);
+      const data = await syncTraining616(auth.token, { hocKy: Number(selectedHocKy) });
       setCdsCriterion(data.criterion);
-      if (data.savedSync) setCdsSaved(true);
       setActivityNote((current) => mergeActivityLines(current, criteria?.summary?.ghiChuSv, buildActivityLines(data.criterion)));
-      setSyncModalOpen(false);
-      notify(`Đã đồng bộ 6.16: ${data.criterion?.diemThucTe ?? 0} điểm (${data.criterion?.minhChung?.length || 0} sự kiện).`, 'success');
+      notify(`Đã lấy 6.16: ${data.criterion?.diemThucTe ?? 0} điểm (${data.criterion?.minhChung?.length || 0} sự kiện).`, 'success');
     } catch (err) {
-      setCdsError(err.message || 'Không thể đồng bộ tiêu chí 6.16 từ app sinh viên.');
+      setCdsError(err.message || 'Không thể lấy danh sách sự kiện cho tiêu chí 6.16.');
     } finally {
       setCdsSyncing(false);
-    }
-  };
-
-  const clearSavedSync = async () => {
-    try {
-      await deleteTrainingCdsCredentials(auth.token);
-      setCdsSaved(false);
-      setCdsPassword('');
-      notify('Đã xoá mật khẩu đồng bộ đã lưu.', 'info');
-    } catch (err) {
-      setCdsError(err.message || 'Không thể xoá đồng bộ đã lưu.');
     }
   };
 
@@ -285,7 +247,18 @@ export default function TrainingScorePage() {
   };
 
   const summary = criteria?.summary;
-  const syncedOverMax = cdsCriterion && Number(cdsCriterion.diemThucTe) > Number(cdsCriterion.diemToiDa);
+  // Điểm tối đa 6.16 lấy từ cổng BDU (nguồn chặn điểm khi lưu); kho sự kiện
+  // ODP chỉ cho tổng điểm thô nên không kèm điểm tối đa.
+  const portalMax616 = summary?.groups
+    ?.find((group) => group.so === '6')
+    ?.cauHoi?.find((question) => question.so === BONUS_616_CODE)?.diemToiDa;
+  const effectiveMax616 = cdsCriterion?.diemToiDa ?? portalMax616;
+  const syncedOverMax = Boolean(
+    cdsCriterion
+    && effectiveMax616 !== null
+    && effectiveMax616 !== undefined
+    && Number(cdsCriterion.diemThucTe) > Number(effectiveMax616)
+  );
 
   return (
     <section id="tab-training-score" className="tab-pane active dgrl-page">
@@ -294,7 +267,7 @@ export default function TrainingScorePage() {
         <div className="header-split">
           <div>
             <h2 className="section-title">Tự Động Chấm Điểm Rèn Luyện</h2>
-            <p className="section-desc">Chọn học kỳ, trả lời nhanh vài câu về chức vụ (mục 5), đồng bộ tiêu chí 6.16 từ app sinh viên rồi lưu điểm rèn luyện trực tiếp qua API BDU.</p>
+            <p className="section-desc">Chọn học kỳ, trả lời nhanh vài câu về chức vụ (mục 5), lấy danh sách sự kiện cho tiêu chí 6.16 rồi lưu điểm rèn luyện trực tiếp qua API BDU.</p>
           </div>
           <span className="badge-mini badge-pill-amber">DGRL Bot</span>
         </div>
@@ -374,16 +347,17 @@ export default function TrainingScorePage() {
             <div className="dgrl-sync-row">
               <span className="dgrl-sync-status">
                 {cdsCriterion
-                  ? `Đã đồng bộ 6.16 = ${cdsCriterion.diemThucTe}đ · ${cdsCriterion.minhChung?.length || 0} sự kiện`
-                  : ''}
+                  ? `Đã lấy 6.16 = ${cdsCriterion.diemThucTe}đ · ${cdsCriterion.minhChung?.length || 0} sự kiện`
+                  : 'Tiêu chí 6.16 lấy tự động từ danh sách sự kiện.'}
               </span>
-              <button type="button" className="dgrl-sync-link" onClick={openSyncModal} disabled={submitting}>
-                Đồng bộ danh sách sự kiện
+              <button type="button" className="dgrl-sync-link" onClick={doSync} disabled={submitting || cdsSyncing}>
+                {cdsSyncing ? 'Đang lấy…' : 'Lấy danh sách sự kiện'}
               </button>
             </div>
+            {cdsError && <div className="survey-inline-error" role="alert">{cdsError}</div>}
             {syncedOverMax && (
               <div className="dgrl-cds-warn" role="alert">
-                ⚠️ Điểm từ app sinh viên ({cdsCriterion.diemThucTe}) vượt điểm tối đa của tiêu chí 6.16 ({cdsCriterion.diemToiDa}). Cổng BDU vẫn nhận nhưng CVHT/Khoa có thể chỉnh lại.
+                ⚠️ Điểm sự kiện ({cdsCriterion.diemThucTe}) vượt điểm tối đa của tiêu chí 6.16 ({effectiveMax616}). Cổng BDU vẫn nhận nhưng CVHT/Khoa có thể chỉnh lại.
               </div>
             )}
 
@@ -443,76 +417,6 @@ export default function TrainingScorePage() {
         </div>
       </div>
 
-      {syncModalOpen && (
-        <ViewportModal
-          id="modal-dgrl-sync"
-          title="Đồng bộ danh sách sự kiện"
-          labelledBy="dgrl-sync-title"
-          onClose={() => setSyncModalOpen(false)}
-          dialogRef={syncDialogRef}
-          className="dgrl-dialog"
-        >
-          <div className="dgrl-dlg-hero">
-            <div className="dgrl-dlg-hero-text">
-              <span className="dgrl-dlg-kicker">APP SINH VIÊN</span>
-              <h3 id="dgrl-sync-title" className="dgrl-dlg-title">Đăng nhập để đồng bộ</h3>
-            </div>
-            <button type="button" className="survey-modal-close" onClick={() => setSyncModalOpen(false)} aria-label="Đóng">×</button>
-          </div>
-
-          <div className="dgrl-dlg-body">
-            <div className="dgrl-callout dgrl-callout-info">
-              Điểm <strong>6.16</strong> và danh sách sự kiện nằm ở <strong>app sinh viên</strong> — tài khoản riêng với cổng thông tin.
-              Đăng nhập để đồng bộ tài khoản sinh viên của bạn trên app.
-            </div>
-
-            <div className="dgrl-form-row">
-              <label htmlFor="dgrl-sync-mssv">Mã số sinh viên</label>
-              <input id="dgrl-sync-mssv" className="dgrl-text-input" type="text" value={auth.user?.mssv || ''} disabled readOnly />
-            </div>
-
-            <div className="dgrl-form-row">
-              <label htmlFor="dgrl-cds-password">Mật khẩu app sinh viên</label>
-              <input
-                id="dgrl-cds-password"
-                ref={cdsPasswordRef}
-                className="dgrl-text-input"
-                type="password"
-                autoComplete="off"
-                placeholder={cdsSaved ? 'Để trống để dùng mật khẩu đã lưu' : 'Nhập mật khẩu app sinh viên'}
-                value={cdsPassword}
-                onChange={(event) => setCdsPassword(event.target.value)}
-                disabled={cdsSyncing}
-              />
-            </div>
-
-            <label className="dgrl-check-row">
-              <input type="checkbox" checked={saveSync} onChange={() => setSaveSync((value) => !value)} disabled={cdsSyncing} />
-              <span><strong>Lưu đồng bộ</strong> — lưu mật khẩu (mã hoá) để tự động đồng bộ cho các lần sau.</span>
-            </label>
-
-            {cdsError && <div className="dgrl-dlg-error" role="alert">{cdsError}</div>}
-
-            {cdsSaved && (
-              <div className="dgrl-saved-row">
-                <span>🔒 Đang có mật khẩu đồng bộ đã lưu trên máy chủ.</span>
-                <button type="button" className="dgrl-sync-clear" onClick={clearSavedSync} disabled={cdsSyncing}>Xoá đồng bộ</button>
-              </div>
-            )}
-          </div>
-
-          <div className="dgrl-dlg-foot">
-            <span className="dgrl-dlg-foot-note">Mật khẩu chỉ dùng để lấy token app sinh viên, không hiển thị lại.</span>
-            <div className="dgrl-dlg-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setSyncModalOpen(false)} disabled={cdsSyncing}>Huỷ</button>
-              <button type="button" className="btn btn-primary" onClick={doSync} disabled={cdsSyncing}>
-                {cdsSyncing ? 'Đang đồng bộ…' : 'Đồng bộ'}
-              </button>
-            </div>
-          </div>
-        </ViewportModal>
-      )}
-
       {confirmOpen && summary && (
         <ViewportModal
           id="modal-dgrl-confirm"
@@ -542,7 +446,7 @@ export default function TrainingScorePage() {
               </li>
               <li>
                 <span className="dgrl-dlg-row-label">Tiêu chí 6.16</span>
-                <span className="dgrl-dlg-row-value">{bonus616 !== null ? `${bonus616} điểm (từ app sinh viên)` : 'Không áp dụng'}</span>
+                <span className="dgrl-dlg-row-value">{bonus616 !== null ? `${bonus616} điểm (từ danh sách sự kiện)` : 'Không áp dụng'}</span>
               </li>
             </ul>
 

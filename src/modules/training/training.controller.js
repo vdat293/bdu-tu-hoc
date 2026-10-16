@@ -1,12 +1,12 @@
 /**
  * Module: Training score (điểm rèn luyện BDU)
  *
- * Tự chấm mục 5 rồi lưu lên cổng BDU, và đồng bộ tiêu chí 6.16 qua app sinh viên.
+ * Tự chấm mục 5 rồi lưu lên cổng BDU; tiêu chí 6.16 lấy từ kho sự kiện ODP
+ * bằng service account, sinh viên không cần nhập thêm mật khẩu.
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { TrainingScoreService, MUC5_ROLE_OPTIONS } from './training-score.service.js';
-import { TrainingCdsCredentialsService } from '../../services/training-cds-credentials.service.js';
 import { bearerToken } from '../_shared/bearer-token.js';
 import { safeApiErrorMessage } from '../_shared/safe-api-error.js';
 
@@ -66,41 +66,10 @@ export const TrainingController = {
       return res.status(err.status || 401).json({ result: false, message: 'Vui lòng đăng nhập lại cổng BDU.' });
     }
     try {
-      const providedPassword = typeof req.body?.cdsPassword === 'string' ? req.body.cdsPassword.trim() : '';
-      let password = providedPassword;
-      if (!password) password = await TrainingCdsCredentialsService.get(mssv);
-      if (!password) throw Object.assign(new Error('Chưa có mật khẩu app sinh viên. Hãy nhập mật khẩu để đồng bộ.'), { status: 400 });
-
-      const data = await TrainingScoreService.syncCriterion616({ mssv, password, hocKy: req.body?.hocKy });
-
-      // Chỉ lưu khi người dùng nhập mật khẩu mới và tích "Lưu đồng bộ".
-      const savedSync = Boolean(providedPassword && req.body?.saveSync);
-      if (savedSync) await TrainingCdsCredentialsService.save(mssv, providedPassword).catch(() => false);
-      return res.json({ result: true, data: { ...data, savedSync } });
+      const data = await TrainingScoreService.syncCriterion616({ mssv, hocKy: req.body?.hocKy });
+      return res.json({ result: true, data });
     } catch (err) {
-      // Sai mật khẩu CDS (401) không phải hết phiên BDU: trả 400 để client hiện lỗi inline.
-      const status = err.status === 401 ? 400 : (err.status || 500);
-      return res.status(status).json({ result: false, message: safeApiErrorMessage(err, 'Không thể đồng bộ tiêu chí 6.16 từ app sinh viên.') });
-    }
-  },
-
-  async getTrainingCdsCredentials(req, res) {
-    try {
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
-      const saved = await TrainingCdsCredentialsService.has(mssv).catch(() => false);
-      return res.json({ result: true, data: { saved } });
-    } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err, 'Không thể kiểm tra đồng bộ app sinh viên.') });
-    }
-  },
-
-  async deleteTrainingCdsCredentials(req, res) {
-    try {
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
-      await TrainingCdsCredentialsService.clear(mssv);
-      return res.json({ result: true, data: { saved: false } });
-    } catch (err) {
-      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err, 'Không thể xoá đồng bộ app sinh viên.') });
+      return res.status(err.status || 500).json({ result: false, message: safeApiErrorMessage(err, 'Không thể lấy danh sách sự kiện cho tiêu chí 6.16.') });
     }
   }
 };

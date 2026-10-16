@@ -62,26 +62,7 @@ export async function syncTraining616(token, payload, { signal } = {}) {
     token,
     body: payload,
     signal,
-    defaultMessage: 'Không thể đồng bộ tiêu chí 6.16 từ app sinh viên.'
-  });
-  return unwrap(data, data);
-}
-
-export async function getTrainingCdsCredentials(token, { signal } = {}) {
-  const data = await request('/api/training-score/cds-credentials', {
-    token,
-    signal,
-    defaultMessage: 'Không thể kiểm tra đồng bộ app sinh viên.'
-  });
-  return unwrap(data, data);
-}
-
-export async function deleteTrainingCdsCredentials(token, { signal } = {}) {
-  const data = await request('/api/training-score/cds-credentials', {
-    method: 'DELETE',
-    token,
-    signal,
-    defaultMessage: 'Không thể xoá đồng bộ app sinh viên.'
+    defaultMessage: 'Không thể lấy danh sách sự kiện cho tiêu chí 6.16.'
   });
   return unwrap(data, data);
 }
