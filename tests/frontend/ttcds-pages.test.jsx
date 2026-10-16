@@ -484,12 +484,13 @@ describe('TTCDS frontend', () => {
       tong_so_buoi: 6,
       so_buoi_vang: 1,
       nhat_ky: [
-        { ngay: '2026-09-01', buoi: 1, diem_danh: 'Có mặt', co_mat: true },
-        { ngay: '2026-09-03', buoi: 2, diem_danh: 'Có mặt', co_mat: true },
-        { ngay: '2026-09-08', buoi: 1, diem_danh: 'Có mặt', co_mat: true },
-        { ngay: '2026-09-10', buoi: 2, diem_danh: 'Vắng', co_mat: false },
-        { ngay: '2026-09-10', buoi: 3, diem_danh: null, co_mat: false },
-        { ngay: 'not-a-date', buoi: 1, diem_danh: 'Có mặt', co_mat: true }
+        { ngay: '2026-09-01', buoi: 1, nkhk: 24252, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-03', buoi: 2, nkhk: 24252, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-08', buoi: 1, nkhk: 24252, diem_danh: 'Có mặt', co_mat: true },
+        { ngay: '2026-09-10', buoi: 2, nkhk: 24252, diem_danh: 'Vắng', co_mat: false },
+        { ngay: '2026-09-10', buoi: 3, nkhk: 24252, diem_danh: null, co_mat: false },
+        { ngay: '2026-06-02', buoi: 1, nkhk: 24251, diem_danh: 'Vắng', co_mat: false },
+        { ngay: 'not-a-date', buoi: 1, nkhk: 24252, diem_danh: 'Có mặt', co_mat: true }
       ]
     });
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);

@@ -8,7 +8,9 @@
   display: grid;
   gap: 20px;
   min-width: 0;
-  max-width: 1160px;
+  /* Không khóa chiều rộng: trang clubs/TTCDS toàn bảng/lưới dữ liệu,
+     khóa 1160px để lại khoảng trống lớn bên phải ở màn hình rộng. */
+  max-width: none;
   padding-bottom: 32px;
 }
 

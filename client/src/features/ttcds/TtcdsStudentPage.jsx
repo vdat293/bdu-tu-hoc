@@ -18,44 +18,27 @@ function fmt(value, digits = 2) {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
 }
 
-/**
- * Mã kỳ dạng số của Dashboard (`25262` → học kỳ 2, năm 2025): 2 ký tự đầu là
- * năm (2000 + yy), ký tự thứ 5 là học kỳ — cùng công thức với `hocKyLabel`
- * của backend (`odp-sync.service.js`), viết lại cho frontend hiển thị.
- */
-function parseTermCode(nkhk) {
-  const text = String(nkhk ?? '').trim();
-  if (text.length < 5) return null;
-  const year = Number(text.slice(0, 2));
-  const hk = Number(text.charAt(4));
-  if (!Number.isInteger(year) || year <= 0) return null;
-  if (!Number.isInteger(hk) || hk < 1 || hk > 3) return { year: 2000 + year, hk: null };
-  return { year: 2000 + year, hk };
-}
-
-/**
- * Caption kỳ NHẤT QUÁN cho cả 4 ô số: `["Học kỳ 2 · 2025-2026", "mã 25262"]`.
- * Ưu tiên `hoc_ky`/`nien_khoa` API đã gộp sẵn, thiếu thì suy từ mã `nkhk`,
- * mã lạ thì giữ đúng 1 dòng theo nhãn cũ để không vỡ dữ liệu.
- */
-function termCaption(source) {
-  const nkhk = source?.nkhk;
-  const hasCode = nkhk !== null && nkhk !== undefined && String(nkhk).trim() !== '';
-  let hk = Number(source?.hoc_ky);
-  if (!Number.isInteger(hk) || hk < 1 || hk > 3) hk = null;
-  let year = Number(source?.nien_khoa);
-  if (!Number.isInteger(year) || year <= 0) year = null;
-  if ((hk === null || year === null) && hasCode) {
-    const parsed = parseTermCode(nkhk);
-    if (parsed) {
-      if (hk === null) hk = parsed.hk;
-      if (year === null) year = parsed.year;
-    }
-  }
-  if (hk !== null && year !== null) return [`Học kỳ ${hk} · ${year}-${year + 1}`, `mã ${nkhk}`];
-  if (source?.ten_hoc_ky || source?.ten_nkhk) return [source.ten_hoc_ky || source.ten_nkhk];
-  return [hasCode ? `Học kỳ ${nkhk}` : '—'];
-}
+import {
+  addDaysStr,
+  attendanceClass,
+  attendanceRate,
+  fmtDayMonth,
+  gioBatDau,
+  gioKetThuc,
+  GIO_TIET,
+  gpaSeries,
+  groupJournalByWeek,
+  isoDow,
+  latestJournalTerm,
+  mondayKey,
+  parseDay,
+  shortGroupLabel,
+  termCaption,
+  termShortLabel,
+  THU_COLS,
+  THU_NAMES,
+  weekRangeLabel
+} from './ttcdsCharts.js';
 
 function TermCaption({ source }) {
   const lines = termCaption(source);
@@ -212,11 +195,15 @@ const valueLabelPlugin = {
     const { ctx } = chart;
     const format = opts?.format || ((v) => String(v));
     const only = opts?.onlyDataset;
+    // Đông điểm thì bỏ nhãn, đọc bằng tooltip — tránh chữ đè nhau.
+    const maxLabels = Number(opts?.maxLabels) || 0;
     ctx.save();
     ctx.font = '600 10.5px Manrope, sans-serif';
     ctx.textAlign = 'center';
     chart.data.datasets.forEach((dataset, di) => {
       if (only !== undefined && di !== only) return;
+      const labelled = dataset.data.filter((v) => v !== null && v !== undefined);
+      if (maxLabels > 0 && labelled.length > maxLabels) return;
       const meta = chart.getDatasetMeta(di);
       meta.data.forEach((point, pi) => {
         const v = dataset.data[pi];
@@ -257,30 +244,6 @@ function useChartCanvas(draw, deps) {
   return ref;
 }
 
-function termShortLabel(source) {
-  const [line] = termCaption(source);
-  return line.replace('Học kỳ ', 'Kỳ ').replace(/(\d{4})-(\d{4})/, '$1');
-}
-
-function gpaNumber(term, keys) {
-  for (const key of keys) {
-    const v = Number(term?.[key]);
-    if (Number.isFinite(v)) return v;
-  }
-  return null;
-}
-
-// Ưu tiên thang 10; không có thì dùng thang 4 (giữ đúng thang, không trộn).
-function gpaSeries(terms) {
-  const rows = Array.isArray(terms) ? terms : [];
-  const he10 = rows.map((t) => gpaNumber(t, ['dtb_tich_luy_he_10', 'dtb_hk_he_10']));
-  if (he10.some((v) => v !== null)) return { values: he10, scale: 'thang 10' };
-  return {
-    values: rows.map((t) => gpaNumber(t, ['dtb_tich_luy_he_4', 'dtb_hk_he_4'])),
-    scale: 'thang 4'
-  };
-}
-
 function GpaLineCard({ terms, series }) {
   const rows = Array.isArray(terms) ? terms : [];
   const data = series && Array.isArray(series.values) ? series : gpaSeries(rows);
@@ -292,11 +255,11 @@ function GpaLineCard({ terms, series }) {
       data: {
         labels: rows.map((t) => termShortLabel(t)),
         datasets: [{
-          label: `GPA tích lũy (${series.scale})`,
-          data: series.values,
+          label: `GPA tích lũy (${data.scale})`,
+          data: data.values,
           borderColor: theme.red,
           backgroundColor: 'rgba(173, 23, 28, 0.08)',
-          tension: 0.35,
+          tension: 0,
           fill: true,
           pointRadius: 4,
           pointHoverRadius: 6
@@ -321,7 +284,7 @@ function GpaLineCard({ terms, series }) {
     <div className="card glass-panel ttcds-panel ttcds-chart-card">
       <div className="ttcds-panel-head">
         <h2>Điểm trung bình tích lũy</h2>
-        <p className="ttcds-panel-sub">{series.scale === 'thang 4' ? 'Thang 4' : 'Thang 10'} · qua các học kỳ</p>
+        <p className="ttcds-panel-sub">{data.scale === 'thang 4' ? 'Thang 4' : 'Thang 10'} · qua các học kỳ</p>
       </div>
       {valid.length === 0 ? (
         <p className="ttcds-chart-note">Chưa có dữ liệu GPA</p>
@@ -332,60 +295,15 @@ function GpaLineCard({ terms, series }) {
   );
 }
 
-function parseDay(value) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ''));
-  if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function mondayKey(day) {
-  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-function shortDay(day) {
-  return `${String(day.getDate()).padStart(2, '0')}/${String(day.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function weekRangeLabel(mondayStr) {
-  const [y, m, d] = mondayStr.split('-').map(Number);
-  const start = new Date(y, m - 1, d);
-  const end = new Date(y, m - 1, d + 6);
-  return `${shortDay(start)}–${shortDay(end)}`;
-}
-
-// Gom nhật ký điểm danh theo tuần T2–CN. Buổi chưa chấm (diem_danh null)
-// không tính vào mẫu — tuần không buổi nào đã chấm thì bỏ trống (null),
-// không vẽ 0% (kiểu Dashboard).
-function groupJournalByWeek(nhatKy) {
-  const groups = new Map();
-  for (const row of Array.isArray(nhatKy) ? nhatKy : []) {
-    const day = parseDay(row?.ngay);
-    if (!day) continue;
-    const key = mondayKey(day);
-    if (!groups.has(key)) groups.set(key, { key, sessions: [] });
-    groups.get(key).sessions.push(row);
-  }
-  return [...groups.values()]
-    .sort((a, b) => (a.key < b.key ? -1 : 1))
-    .map((group, index) => {
-      const graded = group.sessions.filter((s) => s?.diem_danh !== null && s?.diem_danh !== undefined && String(s.diem_danh).trim() !== '');
-      const present = graded.filter((s) => s?.co_mat === true).length;
-      return {
-        ...group,
-        index: index + 1,
-        total: graded.length,
-        present,
-        rate: graded.length > 0 ? (100 * present) / graded.length : null
-      };
-    });
-}
-
 function AttendanceWeekCard({ journal }) {
-  const weeks = groupJournalByWeek(journal).filter((w) => w.rate !== null);
+  // Chỉ vẽ kỳ mới nhất có nhật ký — trộn nhiều kỳ vào một trục tuần là sai
+  // ngữ nghĩa (tuần đánh số lại từ đầu mỗi kỳ).
+  const term = latestJournalTerm(journal);
+  const scoped = term === null
+    ? []
+    : (Array.isArray(journal) ? journal : []).filter((r) => Number(r?.nkhk) === term);
+  const weeks = groupJournalByWeek(scoped).filter((w) => w.rate !== null);
+  const [termLine] = term === null ? [] : termCaption({ nkhk: term });
   const ref = useChartCanvas((Chart, canvas) => {
     const theme = chartTheme();
     return new Chart(canvas, {
@@ -397,7 +315,7 @@ function AttendanceWeekCard({ journal }) {
           data: weeks.map((w) => Number(w.rate.toFixed(2))),
           borderColor: theme.red,
           backgroundColor: 'rgba(173, 23, 28, 0.08)',
-          tension: 0.35,
+          tension: 0,
           fill: true,
           pointRadius: 4,
           pointHoverRadius: 6
@@ -407,7 +325,7 @@ function AttendanceWeekCard({ journal }) {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 } } },
+          x: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 }, maxTicksLimit: 12 } },
           y: {
             min: 0,
             max: 100,
@@ -426,7 +344,7 @@ function AttendanceWeekCard({ journal }) {
               label: (item) => ` ${item.parsed.y}% có mặt`
             }
           },
-          ttcdsValueLabels: { format: (v) => `${v}` }
+          ttcdsValueLabels: { format: (v) => `${v}`, maxLabels: 12 }
         }
       },
       plugins: [valueLabelPlugin]
@@ -436,7 +354,7 @@ function AttendanceWeekCard({ journal }) {
     <div className="card glass-panel ttcds-panel ttcds-chart-card">
       <div className="ttcds-panel-head">
         <h2>Tỷ lệ chuyên cần theo tuần</h2>
-        <p className="ttcds-panel-sub">Tuần chưa đủ dữ liệu thì bỏ trống</p>
+        <p className="ttcds-panel-sub">{termLine ? `${termLine} · ` : ''}Tuần chưa đủ dữ liệu thì bỏ trống</p>
       </div>
       {weeks.length === 0 ? (
         <p className="ttcds-chart-note">Chưa có dữ liệu điểm danh theo tuần</p>
@@ -445,13 +363,6 @@ function AttendanceWeekCard({ journal }) {
       )}
     </div>
   );
-}
-
-function attendanceRate(row) {
-  const present = Number(row?.di_hoc) || 0;
-  const absent = Number(row?.vang) || 0;
-  const total = present + absent;
-  return total > 0 ? (100 * present) / total : null;
 }
 
 // Combo cột + đường theo học kỳ (kiểu Dashboard): cột % chuyên cần,
@@ -483,7 +394,7 @@ function AttendanceTermCard({ gpa, series, attendance }) {
             label: `Điểm TB tích lũy (${line.scale})`,
             data: line.values,
             borderColor: theme.red,
-            tension: 0.35,
+            tension: 0,
             pointRadius: 4,
             pointHoverRadius: 6,
             yAxisID: 'yGpa'
@@ -512,7 +423,7 @@ function AttendanceTermCard({ gpa, series, attendance }) {
         },
         plugins: {
           legend: { labels: { color: theme.text, font: { family: 'Manrope', weight: '600' } } },
-          ttcdsValueLabels: { onlyDataset: 1, format: (v) => Number(v).toFixed(2) }
+          ttcdsValueLabels: { onlyDataset: 1, format: (v) => Number(v).toFixed(2), maxLabels: 12 }
         }
       },
       plugins: [valueLabelPlugin]
@@ -541,62 +452,6 @@ function groupRows(items, termKey) {
 }
 
 // --- Tab Thời khóa biểu: lưới tuần kiểu Dashboard ---
-
-// Giờ bắt đầu tiết 1..14, khớp TKB cổng trường. Mỗi tiết 45 phút.
-const GIO_TIET = [
-  '07:00', '07:45', '08:30', '09:15', '10:00', '13:00', '13:45',
-  '14:30', '15:15', '16:00', '17:45', '18:30', '19:15', '20:00'
-];
-const THU_COLS = [1, 2, 3, 4, 5, 6, 7];
-const THU_NAMES = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7', 7: 'Chủ nhật' };
-
-function gioBatDau(tiet) {
-  return GIO_TIET[tiet - 1] ?? '';
-}
-
-function gioKetThuc(tiet, soTiet = 1) {
-  const cuoi = Math.min(tiet + Math.max(soTiet, 1) - 1, GIO_TIET.length);
-  const bd = GIO_TIET[cuoi - 1];
-  if (!bd) return '';
-  const [h, m] = bd.split(':').map(Number);
-  const total = h * 60 + m + 45;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-function addDaysStr(mondayStr, days) {
-  const [y, m, d] = mondayStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d + days);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
-}
-
-function fmtDayMonth(dateStr) {
-  const d = parseDay(dateStr);
-  return d ? shortDay(d) : '';
-}
-
-// thu_kieu_so của kho: 2 = Thứ 2 … 8 = Chủ nhật → ISO 1..7.
-function isoDow(item) {
-  const v = Number(item?.thu_kieu_so);
-  if (Number.isInteger(v) && v >= 2 && v <= 8) return v - 1;
-  const m = /^Thứ (\d)$/.exec(String(item?.thu ?? '').trim());
-  if (m) return Number(m[1]) - 1;
-  if (String(item?.thu ?? '').includes('Chủ nhật')) return 7;
-  return null;
-}
-
-// Nhãn nhóm gọn: `INF1063_24252_01` → `01`.
-function shortGroupLabel(maNhom) {
-  const text = String(maNhom ?? '');
-  const i = text.lastIndexOf('_');
-  return i >= 0 && i < text.length - 1 ? text.slice(i + 1) : text;
-}
-
-function attendanceClass(pct) {
-  if (pct >= 85) return 'nhan-xanh';
-  if (pct >= 75) return 'nhan-vang';
-  return 'nhan-do';
-}
 
 function TimetableTab({ detail }) {
   const sessions = useMemo(
