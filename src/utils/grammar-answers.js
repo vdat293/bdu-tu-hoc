@@ -50,8 +50,22 @@ export function sanitizeHtml(value) {
       const hrefMatch = attrs.match(/href\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
       let href = hrefMatch ? (hrefMatch[2] ?? hrefMatch[3] ?? hrefMatch[4] ?? '') : '';
       href = href.trim();
-      if (/^(javascript|vbscript|data):/i.test(href)) href = '';
       if (!href) return '<a>';
+      // Strict href validation: only http(s)://, mailto:, and relative targets (#, /).
+      // Reject control characters and entity-encoded schemes (javascript:, vbscript:, data:).
+      const decoded = decodeHtmlEntities(href);
+      const hasControlChars = /[\x00-\x1f\x7f-\x9f]/.test(href) || /[\x00-\x1f\x7f-\x9f]/.test(decoded);
+      const normalized = decoded.replace(/\s+/g, '').toLowerCase();
+      const isDangerousScheme = /^(javascript|vbscript|data):/.test(normalized);
+      const trimmedDecoded = decoded.trim();
+      const isAllowed =
+        !hasControlChars &&
+        !isDangerousScheme &&
+        (/^https?:\/\//i.test(trimmedDecoded) ||
+          /^mailto:/i.test(trimmedDecoded) ||
+          trimmedDecoded.startsWith('#') ||
+          trimmedDecoded.startsWith('/'));
+      if (!isAllowed) return '<a>';
       return `<a href="${href.replace(/"/g, '&quot;')}">`;
     }
     return `<${t}>`;
@@ -59,14 +73,7 @@ export function sanitizeHtml(value) {
   return html;
 }
 
-export const sanitize = sanitizeHtml;
-export const sanitizeDangerousHtml = sanitizeHtml;
-export const safeHtml = sanitizeHtml;
-export const sanitizeHTML = sanitizeHtml;
-export const sanitizeDangerousHTML = sanitizeHtml;
-export const safeHTML = sanitizeHtml;
-export const cleanHtml = sanitizeHtml;
-export const cleanHTML = sanitizeHtml;
+
 
 export function plainText(value) {
   return decodeHtmlEntities(

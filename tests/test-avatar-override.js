@@ -37,6 +37,7 @@ const adminHtml = fs.readFileSync('public/admin-tool.html', 'utf8');
 
 assert.match(migration, /student_avatar_overrides/);
 assert.match(routes, /router\.post\('\/me\/avatar'/);
+assert.match(routes, /router\.delete\('\/me\/avatar', requireVerifiedMssv/);
 assert.doesNotMatch(routes, /router\.post\('\/admin\/avatars/);
 assert.match(identity, /avatar_override_url\s*\|\|\s*row\.bdu_avatar_url/);
 assert.match(avatarService, /MediaStorageService\.putObject/);

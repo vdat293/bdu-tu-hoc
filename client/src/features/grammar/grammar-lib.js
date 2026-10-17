@@ -23,7 +23,6 @@ export {
   plainText,
   sanitizeHtml
 };
-export { sanitize, sanitizeDangerousHtml, safeHtml, sanitizeHTML, sanitizeDangerousHTML, safeHTML, cleanHtml, cleanHTML } from '../../../../src/utils/grammar-answers.js';
 
 export const GRAMMAR_TIMER_SECONDS = 60;
 

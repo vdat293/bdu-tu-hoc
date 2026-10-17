@@ -91,8 +91,7 @@ export const AvatarOverrideService = {
       SELECT students.mssv, students.full_name, students.avatar_url AS bdu_avatar_url,
              overrides.url_img, overrides.storage_key, overrides.original_filename,
              overrides.mime_type, overrides.file_size, overrides.width, overrides.height,
-             overrides.content_hash, overrides.updated_by_mssv, overrides.updated_at,
-             overrides.deleted_at
+             overrides.updated_at, overrides.deleted_at
       FROM students
       LEFT JOIN student_avatar_overrides overrides
         ON overrides.mssv = students.mssv AND overrides.deleted_at IS NULL
@@ -126,8 +125,7 @@ export const AvatarOverrideService = {
       SELECT students.mssv, students.full_name, students.avatar_url AS bdu_avatar_url,
              overrides.url_img, overrides.storage_key, overrides.original_filename,
              overrides.mime_type, overrides.file_size, overrides.width, overrides.height,
-             overrides.content_hash, overrides.updated_by_mssv, overrides.updated_at,
-             overrides.deleted_at
+             overrides.updated_at, overrides.deleted_at
       FROM student_avatar_overrides overrides
       JOIN students ON students.mssv = overrides.mssv
       WHERE overrides.deleted_at IS NULL
