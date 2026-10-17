@@ -33,14 +33,17 @@ export function decodeHtmlEntities(value) {
 
 const ALLOWED_HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'h1', 'h2', 'h3', 'a']);
 
-export function sanitizeHtml(value) {
-  let html = String(value ?? '');
-  // Loại bỏ phần tử nguy hiểm kèm nội dung.
-  html = html.replace(/<!--[\s\S]*?-->/g, '');
-  html = html.replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
-  html = html.replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*\/?>/gi, '');
-  // Xử lý mọi thẻ còn lại theo allow-list.
-  html = html.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (match, tag, attrs) => {
+// Một lượt làm sạch: gỡ comment, gỡ phần tử nguy hiểm, rồi lọc mọi thẻ còn
+// lại theo allow-list. Tách riêng để hàm public lặp tới khi bất động — nếu chỉ
+// chạy một lượt, payload kiểu `<<img src=x>img src=y onerror=alert(1)>` sẽ để
+// lại `<img src=y onerror=alert(1)>` vì regex quét chuỗi gốc, không quét phần
+// vừa ghép lại (tag reconstruction bypass).
+function sanitizeHtmlOnce(input) {
+  const html = input
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*\/?>/gi, '');
+  return html.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (match, tag, attrs) => {
     const t = tag.toLowerCase();
     if (!ALLOWED_HTML_TAGS.has(t)) return '';
     const closing = /^<\//.test(match);
@@ -52,15 +55,18 @@ export function sanitizeHtml(value) {
       href = href.trim();
       if (!href) return '<a>';
       // Strict href validation: only http(s)://, mailto:, and relative targets (#, /).
-      // Reject control characters and entity-encoded schemes (javascript:, vbscript:, data:).
+      // Reject control characters, entity-encoded schemes (javascript:, vbscript:,
+      // data:), and protocol-relative // (which escapes to an external host).
       const decoded = decodeHtmlEntities(href);
       const hasControlChars = /[\x00-\x1f\x7f-\x9f]/.test(href) || /[\x00-\x1f\x7f-\x9f]/.test(decoded);
       const normalized = decoded.replace(/\s+/g, '').toLowerCase();
       const isDangerousScheme = /^(javascript|vbscript|data):/.test(normalized);
       const trimmedDecoded = decoded.trim();
+      const isProtocolRelative = trimmedDecoded.startsWith('//');
       const isAllowed =
         !hasControlChars &&
         !isDangerousScheme &&
+        !isProtocolRelative &&
         (/^https?:\/\//i.test(trimmedDecoded) ||
           /^mailto:/i.test(trimmedDecoded) ||
           trimmedDecoded.startsWith('#') ||
@@ -70,6 +76,16 @@ export function sanitizeHtml(value) {
     }
     return `<${t}>`;
   });
+}
+
+export function sanitizeHtml(value) {
+  // Lặp lượt làm sạch tới khi output bất động để chặn tag reconstruction.
+  let html = String(value ?? '');
+  let previous;
+  do {
+    previous = html;
+    html = sanitizeHtmlOnce(html);
+  } while (html !== previous);
   return html;
 }
 

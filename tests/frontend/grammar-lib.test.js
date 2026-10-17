@@ -151,4 +151,27 @@ describe('sanitizeHtml', () => {
     expect(out).not.toContain('javascript:');
     expect(out).toContain('<a>');
   });
+
+  it('không cho tag reconstruction tạo lại thẻ bị chặn (payload 1)', () => {
+    const out = sanitizeHtml('<<img src=x>img src=y onerror=alert(1)>');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('onerror');
+  });
+
+  it('không cho tag reconstruction tạo lại thẻ bị chặn (payload 2)', () => {
+    const out = sanitizeHtml('<<div>div onmouseover=alert(1)>');
+    expect(out).not.toContain('<div');
+    expect(out).not.toContain('onmouseover');
+  });
+
+  it('từ chối href protocol-relative // (không cho thoát sang host ngoài)', () => {
+    const out = sanitizeHtml('<a href="//evil.example.com/x">x</a>');
+    expect(out).not.toContain('//evil.example.com');
+    expect(out).toContain('<a>');
+  });
+
+  it('sanitizeHtml là idempotent với payload reconstruction', () => {
+    const once = sanitizeHtml('<<img src=x>img src=y onerror=alert(1)>');
+    expect(sanitizeHtml(once)).toBe(once);
+  });
 });
