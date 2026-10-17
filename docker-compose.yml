@@ -125,8 +125,8 @@ services:
         condition: service_healthy
     # KHÔNG chạy migration ở đây. `command` kiểu "migrate && start" khiến MỖI LẦN
     # restart container (kể cả do sự cố, do reboot, do restart của người vận
-    # hành) đều chạy migration. Migration giờ chỉ chạy đúng 1 lần trong
-    # deploy/deploy.sh, sau khi backup DB đã thành công.
+    # hành) đều chạy migration. Migration giờ chỉ chạy đúng 1 lần trong bước
+    # deploy thủ công (backup → migrate), sau khi backup DB đã thành công.
     command: ["npm", "start"]
     # Cần thời gian để Node đóng server, ngắt WebSocket và drain các job đang
     # chạy. Docker mặc định chỉ cho 10s rồi SIGKILL -> client thấy socket đứt

@@ -2,7 +2,7 @@
 
 > Hệ thống backup PostgreSQL lên Cloudflare R2. Tài liệu này viết theo **đúng script đang có trong repo**; mọi tên file, tên cờ CLI và tên biến môi trường đều được đối chiếu với mã nguồn.
 >
-> Runbook deploy/rollback: [`deployment-runbook.md`](deployment-runbook.md).
+> Deploy/rollback: quy trình thủ công trên VPS, xem README mục “Triển khai Production”.
 
 ---
 
@@ -224,7 +224,7 @@ docker compose run --rm -e BDU_MAINTENANCE_ALLOW_PRODUCTION=1 bdu-hub \
 | :--- | :--- |
 | `--reason <label>` | **Bắt buộc.** Ghi vào log và vào metadata `bdu-reason` của object R2. Thiếu cờ này script in usage rồi exit 2. |
 | `--output <path>` | Ghi bản local vào đường dẫn này và **giữ lại** sau khi upload. Dạng `--output=<path>` cũng được. |
-| `--pre-deploy` | Alias thật, tương đương `--reason pre-deploy`. `deploy/deploy.sh` dùng cờ này. |
+| `--pre-deploy` | Alias thật, tương đương `--reason pre-deploy`. Bước backup trong quy trình deploy dùng cờ này. |
 | `--allow-production` | Cho phép host không nằm trong allowlist local. Vẫn cần thêm `BDU_MAINTENANCE_ALLOW_PRODUCTION=1`. |
 | `--help`, `-h` | In usage. |
 
@@ -305,7 +305,7 @@ Exit code: `0` = pass, `1` = fail. Chạy drill hỏng **không** phải sự c�
 - **Ngay sau khi đổi** `BACKUP_DATABASE_URL`, `BACKUP_R2_BUCKET`, hoặc quyền của role backup.
 - Lưu lại output `DRILL_SUMMARY` vào tài liệu sự cố / log vận hành. Một drill pass tháng trước không thay thế drill pass hôm nay.
 
-> Lưu ý: `deploy/deploy.sh` **không** tự chạy drill. Bước 2 của deploy chỉ **backup**; drill là hoạt động thủ công có chủ ý vì nó cần role `CREATEDB` mà container `bdu-hub` không được cấp.
+> Lưu ý: bước backup trong deploy **không** tự chạy drill. Deploy chỉ **backup**; drill là hoạt động thủ công có chủ ý vì nó cần role `CREATEDB` mà container `bdu-hub` không được cấp.
 
 ### 6.5. ⛔ Cảnh báo: drill KHÔNG BAO GIỜ restore vào production
 
@@ -454,8 +454,6 @@ Dòng JSON máy đọc được mà mỗi script in ra ở cuối:
 | `scripts/postgres-utils.js` | Hàng rào target DB cho mọi thao tác maintenance |
 | `scripts/db-dump.js`, `scripts/db-restore.js` | Dump/restore SQL dạng portable (không qua R2) |
 | `scripts/migration-ledger.mjs` | Ledger + advisory lock cho migration |
-| `deploy/deploy.sh` | Bước 2: backup bắt buộc trước migrate |
 | `docker-compose.yml` | Service `bdu-db-backup`, volume `./data/backups` |
 | `Dockerfile` | Cài `postgresql-client`, smoke check `pg_dump`/`pg_restore` |
 | `.env.example` | Danh sách tên biến phần "Sao lưu PostgreSQL" |
-| `docs/deployment-runbook.md` | Runbook deploy & rollback |

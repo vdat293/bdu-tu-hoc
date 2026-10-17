@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#F8FAFC" />
-  <meta name="description" content="BDU Admin Dashboard · Hệ thống giám sát lưu lượng và phân tích nhật ký máy chủ AWS EC2" />
+  <meta name="description" content="BDU Admin Dashboard · Hệ thống giám sát lưu lượng và phân tích nhật ký máy chủ VPS" />
   <title>BDU OPS Dashboard · Lưu Lượng & Giám Sát Máy Chủ</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -68,7 +68,7 @@
       <div class="sidebar-footer">
         <div class="server-status-pill">
           <span class="status-dot"></span>
-          <span class="status-text">AWS EC2 Online</span>
+          <span class="status-text">VPS Online</span>
         </div>
         <div class="admin-auth-info">
           <span class="auth-role" id="display-auth-status">Admin Key: Đã lưu</span>
@@ -87,7 +87,7 @@
           </button>
           <div class="topbar-title-block">
             <h1 class="page-title" id="page-title">Tổng Quan Lưu Lượng</h1>
-            <p class="page-subtitle">Giám sát thời gian thực lưu lượng người dùng và hiệu năng Express trên AWS EC2</p>
+            <p class="page-subtitle">Giám sát thời gian thực lưu lượng người dùng và hiệu năng Express trên VPS</p>
           </div>
         </div>
 
@@ -541,7 +541,7 @@
           <div class="panel-card">
             <div class="card-header">
               <div>
-                <h2 class="card-title">Sức Khỏe Máy Chủ AWS EC2</h2>
+                <h2 class="card-title">Sức Khỏe Máy Chủ VPS</h2>
                 <p class="card-subtitle">Node.js runtime, bộ nhớ đệm và kết nối WebSocket</p>
               </div>
               <button type="button" class="btn-purge-trigger" id="btn-open-purge-modal">
@@ -671,7 +671,7 @@
             <!-- Danh sách dùng <ul> để trình đọc màn hình nhận ra đây là 3 ý
                  riêng biệt; dấu đầu dòng do CSS vẽ lại cho giống hệt trước đây. -->
             <ul class="maintenance-info-content maintenance-info-list">
-              <li><strong>Batch Buffer Queue:</strong> Các request log được gom trong bộ nhớ RAM và định kỳ ghi xuống PostgreSQL mỗi 3 giây hoặc khi đủ 50 items. Nhờ vậy, máy chủ AWS EC2 không bị nghẽn I/O khi sinh viên tra cứu điểm/lịch học đồng thời.</li>
+              <li><strong>Batch Buffer Queue:</strong> Các request log được gom trong bộ nhớ RAM và định kỳ ghi xuống PostgreSQL mỗi 3 giây hoặc khi đủ 50 items. Nhờ vậy, máy chủ VPS không bị nghẽn I/O khi sinh viên tra cứu điểm/lịch học đồng thời.</li>
               <li><strong>Tự động loại trừ Asset tĩnh:</strong> Các file CSS, JS, ảnh và avatar có mã phản hồi thành công (&lt; 400) được tự động bỏ qua để giữ bảng log tinh gọn, tập trung 100% vào logic nghiệp vụ và người dùng.</li>
               <li><strong>Tự động Dọn Dẹp:</strong> Hệ thống tự động xóa log cũ hơn 14 ngày mỗi 24 giờ. Bạn cũng có thể chủ động bấm nút "Dọn Dẹp Log Cũ" ở góc trên để giải phóng dung lượng ngay tức thì.</li>
             </ul>
@@ -853,7 +853,7 @@
             <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
             <span>Xác Thực Quản Trị Viên</span>
           </h3>
-          <span class="modal-sub">Truy cập Admin Dashboard trên AWS EC2</span>
+          <span class="modal-sub">Truy cập Admin Dashboard trên VPS</span>
         </div>
         <button type="button" class="btn-close-modal" id="btn-close-auth-modal" style="display: none;" aria-label="Đóng cửa sổ xác thực">
           <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -893,7 +893,7 @@
             <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
             <span>Dọn Dẹp Bản Ghi Log Cũ</span>
           </h3>
-          <span class="modal-sub">Giải phóng dung lượng database trên AWS EC2</span>
+          <span class="modal-sub">Giải phóng dung lượng database trên VPS</span>
         </div>
         <button type="button" class="btn-close-modal" id="btn-close-purge-modal" aria-label="Đóng cửa sổ dọn dẹp">
           <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>

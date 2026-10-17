@@ -1,7 +1,7 @@
 /**
  * PM2 process config cho VPS đơn chạy app trực tiếp (bare-metal, không Docker).
  * Nếu VPS đang dùng Docker Compose thì KHÔNG cần file này — compose đã chạy app
- * trong container (xem README mục "Triển Khai Production").
+ * trong container (xem README mục "Triển khai Production").
  *
  * Chạy:  npx pm2 start ecosystem.config.cjs        (lần đầu)
  *        npx pm2 reload bdu-tu-hoc                 (deploy lại, zero-downtime)

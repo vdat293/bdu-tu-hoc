@@ -170,7 +170,7 @@ trong repository thành một container nguyên khối:
 
 ### Cách 1: Sử dụng Docker Compose (Khuyên dùng)
 
-Trên máy chủ (EC2) cần cài Docker Engine và Docker Compose plugin trước. Sau đó:
+Trên máy chủ (VPS) cần cài Docker Engine và Docker Compose plugin trước. Sau đó:
 
 ```bash
 cp .env.example .env
@@ -201,17 +201,15 @@ duyệt gửi `Accept-Encoding: br, gzip`. Frame WebSocket sau đó không còn 
 Chrome báo `Invalid frame header`, socket mở nhưng không nhận `hello`/`auth.ok`,
 và UI realtime rơi về polling dự phòng nên trông như "phản hồi rất chậm" so với
 môi trường local. Ứng dụng Node đã tự gắn `Cache-Control: no-transform` và
-`X-Accel-Buffering: no` vào response 101 của `/ws/community`; cấu hình proxy mẫu
-([`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile))
-cũng nên lặp lại hai header này cho request Upgrade để fix không phụ thuộc một tầng.
+`X-Accel-Buffering: no` vào response 101 của `/ws/community`; cấu hình proxy
+(Caddy/Nginx) cũng nên lặp lại hai header này cho request Upgrade để fix không
+phụ thuộc một tầng.
 
-### Reverse proxy + TLS/WSS trên EC2
+### Reverse proxy + TLS/WSS
 
-Production React được build trong image ở CI (GitHub Actions → GHCR); EC2 chỉ
-`docker compose pull` rồi `up -d --no-build`. Caddy là điểm vào duy nhất: nhận
-80/443, trình chứng chỉ Cloudflare Origin và `reverse_proxy` toàn bộ về
-`bdu-hub:3000` (xem [`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile)); client
-khi đó tự dùng `wss://sv.bdu.io.vn/ws/community`.
+Reverse proxy (Caddy/Nginx) là điểm vào duy nhất: nhận 80/443, trình chứng chỉ
+TLS (ví dụ Cloudflare Origin) và `reverse_proxy` toàn bộ về `bdu-hub:3000`;
+client khi đó tự dùng `wss://sv.bdu.io.vn/ws/community`.
 
 Giữ `WS_TRUST_PROXY=true` chỉ vì Compose bind Node tại `127.0.0.1`; không expose
 port 3000 ra Internet. Caddy tự chuyển tiếp HTTP/1.1 Upgrade và các header public
@@ -351,7 +349,7 @@ hoặc khi thắng ván, site phát hiệu ứng cinematic theo khung; danh hi�
 50) có hiệu ứng riêng — thêm danh hiệu mới chỉ cần khai báo ở
 `src/config/game-titles.js` và `public/games/js/identity.js`.
 
-Khi chạy production trên EC2:
+Khi chạy production trên VPS:
 
 1. Đặt `PUBLIC_APP_URL` là origin public đang map tới site games (ví dụ
    `https://hub.example.edu.vn` khi dùng `/games`, hoặc
@@ -442,7 +440,7 @@ rồi nạp thẳng vào PostgreSQL prod, không copy dữ liệu crawl lên má
 npm run db:migrate
 npm run grammar:import
 npm run grammar:export
-scp data/grammar-export.sql deploy@<EIP>:/opt/bdu-tu-hoc/data/
+scp data/grammar-export.sql deploy@<host>:/opt/bdu-tu-hoc/data/
 
 # Trên máy chủ
 cd ~/bdu-tu-hoc
@@ -459,12 +457,11 @@ docker run -d -p 3000:3000 --name bdu-app bdu-tu-hoc:latest
 
 ## 🚦 CI (GitHub Actions)
 
-Hai workflow nằm trong `.github/workflows/`:
+Workflow nằm trong `.github/workflows/`:
 
 | Workflow | Khi nào chạy | Việc làm |
 | :--- | :--- | :--- |
 | `ci.yml` | push hoặc PR lên `main` | Job `verify`: `npm run lint:frontend` → `npm run test:frontend` → `npm run test:node` → `npm run build:client`, rồi upload `dist/client` làm artifact (giữ 3 ngày). Job `docker`: build Docker image (`push: false`, `load: false`, cache GHA) để bắt lỗi Dockerfile trước khi triển khai. |
-| `deploy.yml` | push lên `main`, hoặc `workflow_dispatch` với input `ref` | Build và đẩy image lên GHCR (tag = 12 ký tự đầu của SHA), rồi SSH vào EC2 chạy `deploy/deploy.sh` với `DEPLOY_SHA` tương ứng. EC2 **kéo** image theo tag chứ không build tại chỗ. Chỉ deploy khi ref thuộc lịch sử `main`. |
 
 Chạy lại đúng chuỗi CI ở máy local:
 
@@ -474,30 +471,26 @@ npm run ci   # = lint:frontend && test:frontend && test:node && build:client
 
 Lưu ý: `scripts/run-command.mjs` cố ý **fail-closed trên Windows** (chỉ hỗ trợ POSIX process-group cleanup), nên CI chạy trên `ubuntu-latest`. Nếu muốn chạy `scripts/verify-controller-split.mjs` hoặc `scripts/verify-route-order.mjs` thì hai script này chạy được ở mọi OS.
 
-Secrets cho deploy: `AWS_HOST`, `AWS_USER`, `AWS_SSH_PRIVATE_KEY`, `AWS_APP_DIR`, `AWS_SSH_PORT` (tuỳ chọn). **File `.env` production không nằm trong secrets** — nó nằm trên EC2 và chỉ được đọc bởi `deploy/deploy.sh` + `docker compose` tại chỗ.
+CI **không** deploy. Deploy thực hiện thủ công trên VPS (xem mục dưới).
 
 ---
 
-## 🚀 Deploy lên EC2 (AWS)
+## 🚀 Triển khai Production (VPS đơn)
 
-Quy trình chuẩn là chạy `deploy/deploy.sh` trên EC2, không tự tay `docker compose up` (bước backup trước migrate là bắt buộc):
+Pipeline tự động cũ (GitHub Actions → GHCR → SSH EC2 qua `deploy/deploy.sh`) đã
+được gỡ cùng thư mục `aws/`, `deploy/` và `docker-compose.aws.yml`. Production
+giờ chạy trên **một VPS** bằng Docker Compose hoặc PM2 (xem mục “Đóng Gói &
+Triển Khai Production” phía trên).
 
-```bash
-cd /opt/bdu-tu-hoc && DEPLOY_SHA=$(git rev-parse HEAD) bash deploy/deploy.sh
-```
+Deploy thủ công trên VPS, đúng thứ tự và dừng ngay khi một bước fail:
 
-6 bước, dừng ngay khi một bước fail:
-
-1. **preflight** — `docker compose` OK, có `.env`, PostgreSQL phản hồi, git sạch.
-2. **backup DB** (bắt buộc) — `npm run db:backup -- --pre-deploy`. Fail ⇒ **dừng, không migrate**.
+1. **preflight** — đã có `.env`, PostgreSQL phản hồi, working tree sạch.
+2. **backup DB (bắt buộc)** — `npm run db:backup -- --pre-deploy`. Fail ⇒ **dừng, không migrate**.
 3. **migrate** — đúng 1 lần. Fail ⇒ dừng, app cũ vẫn chạy, chưa restart.
-4. **pull + up** — `docker compose pull` rồi `up -d --no-build` với `IMAGE_TAG` = 12 ký tự đầu của SHA.
-5. **healthcheck** — poll `/api/health` tối đa 90s; fail thì in hướng dẫn rollback cụ thể.
-6. In hướng dẫn rollback.
+4. **restart app** — `docker compose up -d` hoặc `npx pm2 reload bdu-tu-hoc`.
+5. **healthcheck** — poll `/api/health` tới khi 200; fail thì rollback về image/bản build trước.
 
 Migration **không** nằm trong `command` của container nữa, nên restart do sự cố hay reboot không vô tình chạy migration.
-
-Chi tiết đầy đủ (biến môi trường của `deploy.sh`, rollback, đọc log): [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
 ---
 
@@ -507,7 +500,7 @@ Production có **hai lớp** backup, cùng dựa trên `pg_dump --format=custom`
 
 | Lớp | Chạy ở đâu | Khi nào |
 | :--- | :--- | :--- |
-| **Trước mỗi deploy** | `deploy/deploy.sh` bước 2 | Tự động; backup fail thì deploy dừng |
+| **Trước mỗi deploy** | Thủ công (`npm run db:backup -- --pre-deploy`) | Bắt buộc; backup fail thì dừng, không migrate |
 | **Định kỳ** | Service Docker `bdu-db-backup` (`scripts/db-backup-scheduler.js`) | Hằng ngày theo `BACKUP_CRON` (mặc định `03:17` giờ máy) |
 
 ```bash

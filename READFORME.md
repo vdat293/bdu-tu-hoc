@@ -181,7 +181,6 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 | **`scripts/verify-controller-split.mjs`, `verify-route-order.mjs`** | Script kiểm chứng tách | `verify-controller-split.mjs` đối chiếu tập method; `verify-route-order.mjs` so router stack với bản gốc trong git HEAD. |
 | **`scripts/postgres-utils.js`** | Hàng rào an toàn DB | Allowlist host local, chặn URL có query lạ, yêu cầu `BDU_MAINTENANCE_ALLOW_PRODUCTION=1` cho remote. |
 | **`scripts/`** | Import / export dữ liệu | `import-vocab.js`, `import-grammar*.js`, `export-*.js`, `fix-vocab-pos.js`, `migrate-avatars-to-r2.js`, `sync-rankings.js`, `odp-sync.js`, `fb-import-*.js`. |
-| **`deploy/deploy.sh`** | Deploy EC2 | 6 bước: preflight → **backup DB (fail thì dừng)** → migrate 1 lần → `docker compose pull` + `up -d --no-build` (image lấy từ GHCR) → healthcheck 90s → in hướng dẫn rollback. Kèm `deploy/caddy/Caddyfile` và `deploy/caddy/certs/` (Origin Certificate). |
 
 ---
 
@@ -232,7 +231,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 - **Đổi schema database**:
   👉 Thêm file `migrations/0NN_<ten>.sql` (version chưa tồn tại, không được sửa file đã apply vì ledger kiểm checksum).
 - **Đổi quy trình deploy / backup**:
-  👉 `deploy/deploy.sh` và `scripts/db-backup*.js`; xem [`docs/deployment-runbook.md`](docs/deployment-runbook.md) và [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md).
+  👉 Deploy thủ công trên VPS (backup → migrate → restart → healthcheck, xem README mục “Triển khai Production”); backup dùng `scripts/db-backup*.js`, xem [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md).
 
 ---
 
@@ -249,7 +248,6 @@ Hợp đồng hành vi, danh sách route canonical và ranh giới legacy/React 
 | Tài liệu | Nội dung |
 | :--- | :--- |
 | [`docs/architecture.md`](docs/architecture.md) | Sơ đồ tầng, bảng 16 domain, **quy tắc bất di bất dịch** khi sửa `src/`, nợ kỹ thuật còn lại. |
-| [`docs/deployment-runbook.md`](docs/deployment-runbook.md) | Runbook deploy & rollback trên EC2. |
 | [`docs/backup-restore-runbook.md`](docs/backup-restore-runbook.md) | Runbook backup DB lên R2, retention, restore drill. |
 | [`docs/frontend-migration-baseline.md`](docs/frontend-migration-baseline.md) | Baseline hành vi frontend React. |
 | [`docs/local-test-services.md`](docs/local-test-services.md) | Dựng dịch vụ test local (PostgreSQL, R2 giả lập). |

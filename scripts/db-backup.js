@@ -93,9 +93,9 @@ function parseCli(argv) {
     } else if (arg === '--allow-production') {
       options.allowProduction = true;
     } else if (arg === '--pre-deploy') {
-      // deploy/deploy.sh gọi cờ này trước khi chạy migration. Tồn tại như một
-      // alias thật (không phải suy ra từ --reason) để deploy không phải dò
-      // --help rồi đoán xem script có hỗ trợ không.
+      // Bước backup trong quy trình deploy (backup → migrate) gọi cờ này trước
+      // khi chạy migration. Tồn tại như một alias thật (không phải suy ra từ
+      // --reason) để deploy không phải dò --help rồi đoán xem script có hỗ trợ không.
       options.reason = 'pre-deploy';
     } else if (arg === '--output') {
       const value = argv[index + 1];
