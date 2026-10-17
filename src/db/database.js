@@ -181,7 +181,9 @@ export function getPool() {
       : boolEnv('DATABASE_SSL', process.env.NODE_ENV === 'production');
     pool = new Pool({
       ...target.options,
-      max: Number.parseInt(process.env.DATABASE_POOL_MAX || '10', 10),
+      // Mặc định 20 kết nối/tiến trình. Chạy PM2 cluster thì tổng = giá trị này ×
+      // số worker, nên giữ Postgres max_connections ≥ tổng + vài kết nối phụ trợ.
+      max: Number.parseInt(process.env.DATABASE_POOL_MAX || '20', 10),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
       ssl: sslEnabled

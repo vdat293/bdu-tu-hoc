@@ -7,7 +7,6 @@ import { CommunityRealtime } from '../../services/community-realtime.service.js'
 import { MentionService } from './mention.service.js';
 import { ReminderDigestService } from '../../services/reminder-digest.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
-import { FacebookImportService } from '../../services/facebook-import.service.js';
 
 function publishMentionNotifications(created) {
   if (!Array.isArray(created)) return;
@@ -41,23 +40,6 @@ function publishMentionNotifications(created) {
 }
 
 export const CommunityController = {
-  // Kéo bài viết từ nhóm Facebook về Confession (kiểm duyệt viên)
-  async getFacebookImportStatus(req, res) {
-    return res.json({ result: true, data: FacebookImportService.getStatus() });
-  },
-
-  async runFacebookImport(req, res) {
-    try {
-      const data = await FacebookImportService.runOnce({ trigger: req.communityModeratorMssv || 'admin' });
-      return res.json({ result: true, data });
-    } catch (err) {
-      console.error('Facebook import error:', err.message);
-      return res.status(err.status || 500).json({
-        result: false,
-        message: err.message || 'Không thể kéo bài viết từ Facebook.'
-      });
-    }
-  },
 
   // 11. Góc Tự Học Số (Community Hub) & CLB
   async getCommunityPosts(req, res) {

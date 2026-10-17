@@ -28,7 +28,6 @@ import { registerLearningRoutes } from './learning.routes.js';
 import {
   registerIdentityPortalRoutes,
   registerIdentityAdminRoutes,
-  registerFacebookImportRoutes,
   registerIdentityAvatarRoutes
 } from './identity.routes.js';
 import { registerNotificationRoutes, registerReminderRoutes } from './notifications.routes.js';
@@ -55,7 +54,6 @@ registerIdentityPortalRoutes(router);  // 5b. Identity presentation + student di
 registerNotificationRoutes(router);    // 6. Thông báo tag/reply confession
 registerReminderRoutes(router);        // 6a. Nhắc lịch học opt-in
 registerIdentityAdminRoutes(router);   // 6b. Quản trị identity entitlement
-registerFacebookImportRoutes(router);  // 6c. Kéo bài Facebook về Confession
 registerBroadcastRoutes(router);       // 6d. Broadcast + admin avatars
 registerIdentityAvatarRoutes(router);  // 6e. Avatar tự upload
 registerAdminRoutes(router);           // 6f. Admin Traffic & Logs Dashboard

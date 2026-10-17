@@ -1,8 +1,23 @@
 import crypto from 'node:crypto';
+import { LRUCache } from 'lru-cache';
 import { BduService } from './bdu.service.js';
 import { currentRequest } from '../utils/request-context.js';
 
-const identities = new Map();
+// Cache token→MSSV có TRẦN (LRU) + TTL theo từng entry. Trước đây là Map không
+// giới hạn kèm cleanup() quét toàn bộ mỗi request: vừa rò rỉ bộ nhớ dài hạn
+// (mỗi token một entry, không bao giờ thu hồi nếu không đọc lại), vừa tốn O(n)
+// mỗi lần xác minh/peek. LRU giữ bộ nhớ có trần và tự loại entry hết hạn khi
+// đọc. `perf.now` ghim vào Date.now để TTL đo theo đồng hồ hệ thống (khớp hành
+// vi cũ và cho phép test điều khiển thời gian).
+const IDENTITY_CACHE_MAX = Number.parseInt(process.env.BDU_IDENTITY_CACHE_MAX || '', 10);
+const identities = new LRUCache({
+  max: Number.isSafeInteger(IDENTITY_CACHE_MAX) && IDENTITY_CACHE_MAX > 0 ? IDENTITY_CACHE_MAX : 20_000,
+  // ttlResolution: 0 → luôn gọi perf.now() thay vì đệm kết quả 1ms. Bộ đệm 1ms
+  // của lru-cache dựa trên đồng hồ THẬT nên không tương thích khi test điều khiển
+  // Date.now; đặt 0 để TTL luôn đo đúng theo perf.now (Date.now) đã cấu hình.
+  ttlResolution: 0,
+  perf: { now: () => Date.now() }
+});
 const pendingResolutions = new Map();
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RESTORED_TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -86,20 +101,15 @@ function findMssv(payload, depth = 0) {
   return '';
 }
 
-function cleanup() {
-  const now = Date.now();
-  for (const [key, identity] of identities) {
-    if (identity.expiresAt <= now) identities.delete(key);
-  }
-}
-
 export const BduIdentityService = {
   register(tokenValue, mssvValue, { expiresIn, cacheTtlMs } = {}) {
     const token = normalizeToken(tokenValue);
     const mssv = normalizeMssv(mssvValue);
     if (!token || !mssv) return;
-    cleanup();
-    identities.set(tokenKey(token), { mssv, expiresAt: tokenExpiresAt(token, expiresIn, cacheTtlMs) });
+    // TTL tương đối cho từng entry. Phiên đã hết hạn ngay (expires_in = 0) thì
+    // KHÔNG được cache, nếu không request kế tiếp sẽ dùng lại token đã chết.
+    const ttl = tokenExpiresAt(token, expiresIn, cacheTtlMs) - Date.now();
+    if (ttl > 0) identities.set(tokenKey(token), mssv, { ttl });
   },
 
   async resolveVerifiedMssv(tokenValue) {
@@ -109,12 +119,11 @@ export const BduIdentityService = {
       error.status = 401;
       throw error;
     }
-    cleanup();
     const key = tokenKey(token);
     const cached = identities.get(key);
     if (cached) {
-      markVerifiedRequest(cached.mssv);
-      return cached.mssv;
+      markVerifiedRequest(cached);
+      return cached;
     }
 
     // A reconnect storm after a deploy must not turn into dozens of identical
@@ -158,8 +167,7 @@ export const BduIdentityService = {
   peek(tokenValue) {
     const token = normalizeToken(tokenValue);
     if (!token) return null;
-    cleanup();
-    return identities.get(tokenKey(token))?.mssv || null;
+    return identities.get(tokenKey(token)) || null;
   },
 
   clear(tokenValue) {

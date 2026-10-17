@@ -18,6 +18,7 @@ import { TrafficService } from './services/traffic.service.js';
 import { ServiceLockService } from './services/service-lock.service.js';
 import { createServiceLockGuard } from './utils/service-lock-guard.js';
 import { attachRequestContext } from './utils/request-context.js';
+import { globalLimiter, authLimiter, heavyLimiter } from './utils/rate-limit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +27,6 @@ const __dirname = path.dirname(__filename);
 // đổi hành vi so với file gốc.
 const ROOT_DIR = path.resolve(__dirname, '..');
 
-const fbImportMediaDir = path.resolve(ROOT_DIR, process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import');
 const clientDistDir = path.join(ROOT_DIR, 'dist', 'client');
 const clientIndexPath = path.join(clientDistDir, 'index.html');
 const hasReactClientBuild = fs.existsSync(clientIndexPath);
@@ -35,10 +35,6 @@ const hasReactClientBuild = fs.existsSync(clientIndexPath);
 const tempDir = path.join(ROOT_DIR, 'temp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
-}
-// Ảnh kéo từ Facebook được lưu cục bộ vì URL CDN của Facebook có chữ ký hết hạn.
-if (!fs.existsSync(fbImportMediaDir)) {
-  fs.mkdirSync(fbImportMediaDir, { recursive: true, mode: 0o750 });
 }
 // Chunk cũ của các bản build trước được giữ trong volume để HTML còn cache
 // không bị 404; serve-static cần thư mục tồn tại ngay từ request đầu tiên.
@@ -84,16 +80,6 @@ export function createApp() {
       res.destroy?.();
     }
   });
-  app.use('/media/fb-import', express.static(fbImportMediaDir, {
-    dotfiles: 'deny',
-    // Tên file dạng `<index>.<ext>` có thể bị ghi đè khi bài viết được import lại
-    // nên không được immutable; browser/CDN revalidate sau một ngày.
-    maxAge: '1d',
-    redirect: false,
-    setHeaders(res) {
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-    }
-  }));
   // The React build has its own immutable namespace. Legacy public assets and
   // the standalone admin surface remain available during the migration.
   // Dist được ưu tiên; nếu tầng cache phía trước còn giữ HTML cũ, request chunk
@@ -188,6 +174,14 @@ export function createApp() {
   // apiRoutes) (để chặn mọi request /api mà không phải sửa thứ tự route bên
   // trong api.routes.js). Các path miễn trừ /health, /version, /status và
   // /admin/dashboard được guard tự bỏ qua.
+  // Rate limiting (Phase A): broad protection + stricter limits on auth and
+  // heavy endpoints. Must run before the routes so every /api call is counted.
+  app.use('/api/login', authLimiter);
+  app.use('/api/rankings', heavyLimiter);
+  app.use('/api/odp', heavyLimiter);
+  app.use('/api/vocab', heavyLimiter);
+  app.use('/api', globalLimiter);
+
   app.use('/api', createServiceLockGuard({ getStatus: () => ServiceLockService.getStatus() }));
 
   // Mount API routes
