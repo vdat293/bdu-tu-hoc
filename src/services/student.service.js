@@ -588,10 +588,24 @@ export const StudentService = {
     if (!validRoles.includes(newRole)) throw new Error('Vai trò không hợp lệ.');
 
     if (newRole === 'leader') {
-      await query('UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3', ['member', clanId, cleanRequester]);
-      await query('UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3', ['leader', clanId, cleanTarget]);
-      await query('UPDATE clans SET leader_mssv = $1, updated_at = NOW() WHERE id = $2', [cleanTarget, clanId]);
-      return { success: true, message: 'Đã chuyển giao quyền quản trị CLB thành công.' };
+      // Người phải bị hạ xuống 'member' là leader ĐANG giữ quyền (đọc trước khi
+      // cập nhật) — không phải người yêu cầu. Requester có thể là admin hệ thống
+      // hoặc chính leader hiện tại, nên không được dùng requesterMssv ở đây.
+      const currentLeaderMssv = clanRes.rows[0].leader_mssv;
+      return transaction(async (client) => {
+        if (currentLeaderMssv) {
+          await client.query(
+            'UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3',
+            ['member', clanId, currentLeaderMssv]
+          );
+        }
+        await client.query(
+          'UPDATE student_clans SET role = $1 WHERE clan_id = $2 AND mssv = $3',
+          ['leader', clanId, cleanTarget]
+        );
+        await client.query('UPDATE clans SET leader_mssv = $1, updated_at = NOW() WHERE id = $2', [cleanTarget, clanId]);
+        return { success: true, message: 'Đã chuyển giao quyền quản trị CLB thành công.' };
+      });
     }
 
     const res = await query(
