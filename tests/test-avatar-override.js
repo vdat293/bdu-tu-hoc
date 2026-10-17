@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { closeDatabase, isDatabaseConfigured, query } from '../src/db/database.js';
 import { AvatarOverrideInternals, AvatarOverrideService } from '../src/modules/media/avatar-override.service.js';
 import { MediaStorageService } from '../src/services/media-storage.service.js';
+import { requireVerifiedMssv } from '../src/routes/_shared/http-deps.js';
 
 const source = await sharp({
   create: { width: 800, height: 400, channels: 3, background: '#2563eb' }
@@ -38,6 +39,25 @@ const adminHtml = fs.readFileSync('public/admin-tool.html', 'utf8');
 assert.match(migration, /student_avatar_overrides/);
 assert.match(routes, /router\.post\('\/me\/avatar'/);
 assert.match(routes, /router\.delete\('\/me\/avatar', requireVerifiedMssv/);
+
+// Behavioral: guard rejects unauthenticated request with 401 and never calls next.
+function avatarResponse() {
+  return {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+}
+let avatarNextCalled = false;
+const avatarRes = avatarResponse();
+await requireVerifiedMssv(
+  { headers: {}, socket: {} },
+  avatarRes,
+  () => { avatarNextCalled = true; }
+);
+assert.equal(avatarRes.statusCode, 401, 'requireVerifiedMssv phải trả 401 khi thiếu auth');
+assert.equal(avatarNextCalled, false, 'requireVerifiedMssv không được gọi next khi thiếu auth');
 assert.doesNotMatch(routes, /router\.post\('\/admin\/avatars/);
 assert.match(identity, /avatar_override_url\s*\|\|\s*row\.bdu_avatar_url/);
 assert.match(avatarService, /MediaStorageService\.putObject/);
