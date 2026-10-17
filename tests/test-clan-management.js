@@ -66,6 +66,34 @@ async function runClanManagementTest() {
     assert.strictEqual(clanAfterSelfTransfer.rows[0].leader_mssv, 'TEST_LEADER', 'clans.leader_mssv phải trỏ lại TEST_LEADER');
     console.log('✅ PASSED: Leader tự nhường ngôi (self-demotion) hoạt động đúng.');
 
+    // 6b. Leader hiện tại tự thăng chính mình (requester === target) là no-op-ish
+    //     thành công: hạ rồi nâng lại đúng một người, leader_mssv không đổi.
+    const selfPromote = await StudentService.updateMemberRole(clan.id, 'TEST_LEADER', 'TEST_LEADER', 'leader');
+    assert.strictEqual(selfPromote.success, true, 'Leader tự thăng chính mình phải trả về thành công');
+    members = await StudentService.getClanMembers(clan.id);
+    const stillLeader = members.find(m => m.mssv === 'TEST_LEADER');
+    const clanAfterSelfPromote = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clan.id]);
+    assert.strictEqual(stillLeader.role, 'leader', 'Leader tự thăng chính mình vẫn giữ vai trò leader');
+    assert.strictEqual(clanAfterSelfPromote.rows[0].leader_mssv, 'TEST_LEADER', 'clans.leader_mssv không đổi khi tự thăng chính mình');
+    console.log('✅ PASSED: Leader tự thăng chính mình là no-op thành công.');
+
+    // 6c. Thành viên thường (không phải leader, không phải admin) không được
+    //     chuyển giao Bang Chủ: PermissionService.requireInClan phải chặn (403)
+    //     và không thay đổi dữ liệu.
+    await assert.rejects(
+      () => StudentService.updateMemberRole(clan.id, 'TEST_MEMBER', 'TEST_MEMBER', 'leader'),
+      (error) => error && error.status === 403,
+      'Member thường không được phép chuyển giao quyền Bang Chủ'
+    );
+    members = await StudentService.getClanMembers(clan.id);
+    const rejectedTarget = members.find(m => m.mssv === 'TEST_MEMBER');
+    const leaderAfterReject = members.find(m => m.mssv === 'TEST_LEADER');
+    const clanAfterReject = await query('SELECT leader_mssv FROM clans WHERE id = $1', [clan.id]);
+    assert.strictEqual(rejectedTarget.role, 'member', 'Yêu cầu bị từ chối không được đổi vai trò người yêu cầu');
+    assert.strictEqual(leaderAfterReject.role, 'leader', 'Yêu cầu bị từ chối không được hạ leader hiện tại');
+    assert.strictEqual(clanAfterReject.rows[0].leader_mssv, 'TEST_LEADER', 'clans.leader_mssv không đổi khi yêu cầu bị từ chối');
+    console.log('✅ PASSED: Member thường bị chặn khi cố chuyển giao Bang Chủ.');
+
     // Dọn thành viên admin tạm để các bước sau giữ nguyên số lượng thành viên.
     await StudentService.leaveClan('TEST_OWNER_001', clan.id);
 
