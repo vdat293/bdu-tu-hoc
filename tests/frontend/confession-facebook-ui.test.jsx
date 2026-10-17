@@ -119,6 +119,20 @@ describe('Confession kiểu Facebook', () => {
     expect(screen.queryByText('BDU Confession')).not.toBeInTheDocument();
   });
 
+  it('bỏ ảnh tải lỗi khỏi lưới thay vì hiện icon ảnh vỡ', async () => {
+    const { container } = renderPage();
+    await screen.findByText(post.content);
+
+    const img = container.querySelector('.fbc-photo-grid img');
+    expect(img?.getAttribute('src')).toBe('/media/fb-import/10/0.jpg');
+
+    // Media cũ (`/media/fb-import/...`) đã mất file: trình duyệt bắn lỗi tải,
+    // ảnh phải được gỡ khỏi lưới thay vì để lại icon vỡ.
+    fireEvent.error(img);
+
+    await waitFor(() => expect(container.querySelector('.fbc-photo-grid')).toBeNull());
+  });
+
   it('hiển thị bình luận dạng bong bóng, gom reply và giấu bớt câu trả lời', async () => {
     renderPage();
     const modal = await openComments();

@@ -115,8 +115,10 @@ export function ImageDraftGrid({ images, onRemove, disabled = false }) {
  * nhãn nhỏ để người đọc phân biệt với ảnh tĩnh.
  */
 export function CommentMedia({ attachments }) {
+  // Ảnh/GIF bình luận có thể trỏ media cũ đã mất; loại ảnh tải lỗi khỏi lưới.
+  const [failedUrls, setFailedUrls] = useState(() => new Set());
   const photos = (Array.isArray(attachments) ? attachments : [])
-    .filter((item) => item?.type === 'image' && item.url);
+    .filter((item) => item?.type === 'image' && item.url && !failedUrls.has(item.url));
   if (photos.length === 0) return null;
   return (
     <div className={`fbc-comment-media is-count-${Math.min(photos.length, 3)}`}>
@@ -128,7 +130,13 @@ export function CommentMedia({ attachments }) {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img src={photo.url} alt={photo.title || 'Ảnh bình luận'} loading="lazy" decoding="async" />
+          <img
+            src={photo.url}
+            alt={photo.title || 'Ảnh bình luận'}
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailedUrls((prev) => (prev.has(photo.url) ? prev : new Set(prev).add(photo.url)))}
+          />
           {photo.animated && <span className="fbc-gif-badge">GIF</span>}
         </a>
       ))}

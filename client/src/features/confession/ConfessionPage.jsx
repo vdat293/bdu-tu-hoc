@@ -316,12 +316,15 @@ function AttachmentRenderer({ attachment }) {
  * Link bài gốc Facebook không hiện thành thẻ nữa — nó nằm ở tên tác giả.
  */
 function PostAttachments({ attachments, sourceUrl = null }) {
+  // Ảnh nhập từ Facebook nằm ở `/media/fb-import/...` và có thể đã mất file;
+  // ảnh tải lỗi bị loại khỏi lưới để không hiện icon vỡ (lưới tự co lại/ẩn).
+  const [failedUrls, setFailedUrls] = useState(() => new Set());
   const list = (Array.isArray(attachments) ? attachments : [])
     .filter(Boolean)
     .filter((item) => !(sourceUrl && item.url === sourceUrl));
   if (!list.length) return null;
 
-  const photos = list.filter((item) => item.type === 'image' && item.url);
+  const photos = list.filter((item) => item.type === 'image' && item.url && !failedUrls.has(item.url));
   const others = list.filter((item) => !(item.type === 'image' && item.url));
 
   return (
@@ -336,7 +339,13 @@ function PostAttachments({ attachments, sourceUrl = null }) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <img src={photo.url} alt={photo.title || 'Ảnh bài viết'} loading="lazy" decoding="async" />
+              <img
+                src={photo.url}
+                alt={photo.title || 'Ảnh bài viết'}
+                loading="lazy"
+                decoding="async"
+                onError={() => setFailedUrls((prev) => (prev.has(photo.url) ? prev : new Set(prev).add(photo.url)))}
+              />
               {photo.animated && <span className="fbc-gif-badge">GIF</span>}
             </a>
           ))}

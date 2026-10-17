@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const TITLE_TONES = new Set(['member', 'gold', 'silver', 'bronze', 'blue', 'emerald', 'violet', 'youth', 'chatgpt', 'charm', 'ai']);
 const TITLE_RARITIES = new Set(['rare', 'epic', 'legendary', 'vip', 'youth', 'ai', 'charm']);
 const TITLE_GEM_ASSETS = new Set(['green', 'blue', 'orange', 'gold', 'pink', 'purple']);
@@ -25,7 +27,17 @@ export function getIdentityPhoto(user, presentation) {
 export function AvatarContent({ user, presentation, alt }) {
   const name = getIdentityName(user, presentation);
   const photo = getIdentityPhoto(user, presentation);
-  return photo ? <img src={photo} alt={alt || `Ảnh đại diện của ${name}`} /> : getInitials(name);
+  // Avatar cũ có thể trỏ `/media/avatars/...` đã mất file; lỗi tải thì quay về
+  // chữ cái đầu thay vì hiện icon ảnh vỡ. So sánh theo URL để tự reset khi đổi ảnh.
+  const [failedPhoto, setFailedPhoto] = useState(null);
+  if (!photo || failedPhoto === photo) return getInitials(name);
+  return (
+    <img
+      src={photo}
+      alt={alt || `Ảnh đại diện của ${name}`}
+      onError={() => setFailedPhoto(photo)}
+    />
+  );
 }
 
 export function Avatar({ user, presentation, size = 'medium' }) {
