@@ -1,18 +1,5 @@
 import { request, unwrap } from './http.js';
 
-/** Tách list MSSV paste từ textarea: phẩy / khoảng trắng / chấm phẩy, UPPER-trim, khử trùng. */
-export function parseMssvList(text) {
-  const seen = new Set();
-  const out = [];
-  for (const raw of String(text ?? '').split(/[,\s;]+/)) {
-    const mssv = raw.trim().toUpperCase();
-    if (!mssv || seen.has(mssv)) continue;
-    seen.add(mssv);
-    out.push(mssv);
-  }
-  return out;
-}
-
 export async function getTtcdsCapabilities(token, { signal } = {}) {
   const data = await request('/api/ttcds/capabilities', { token, signal, defaultMessage: 'Không thể tải quyền Trung tâm CĐS.' });
   const body = data?.data && typeof data.data === 'object' ? { ...data, ...data.data } : data;

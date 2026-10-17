@@ -249,7 +249,14 @@
 .ttcds-invite .ttcds-student-search__control .form-input { border: 0; border-radius: 0; background: transparent; }
 .ttcds-invite .ttcds-student-search__control .form-input:focus { outline: none; }
 
-.ttcds-student-search__list { max-height: 300px; min-height: 180px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border-top: 1px solid var(--club-line); }
+/* Vùng kết quả cao CỐ ĐỊNH để popup không đổi kích thước khi kết quả về ít/nhiều. */
+.ttcds-student-search__list { height: clamp(160px, 42vh, 300px); margin: 0; padding: 4px; overflow-y: auto; list-style: none; border-top: 1px solid var(--club-line); }
+.ttcds-student-search__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 10px 0; list-style: none; }
+.ttcds-student-search__chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 3px 3px 10px; border: 1px solid var(--club-line); border-radius: 999px; background: color-mix(in srgb, var(--club-accent) 10%, transparent); }
+.ttcds-student-search__chip-name { min-width: 0; overflow: hidden; color: var(--club-ink); font-size: .84rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.ttcds-student-search__chip-meta { color: var(--club-muted); font-size: .76rem; }
+.ttcds-student-search__chip-remove { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: var(--club-muted); cursor: pointer; font: inherit; line-height: 1; }
+.ttcds-student-search__chip-remove:hover { background: color-mix(in srgb, var(--club-accent) 18%, transparent); color: var(--club-ink); }
 .ttcds-student-search__option button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; border: 0; border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
 .ttcds-student-search__option.is-active button,
 .ttcds-student-search__option button:hover { background: color-mix(in srgb, var(--club-accent) 12%, transparent); }
@@ -259,11 +266,7 @@
 .ttcds-student-search__meta { color: var(--club-muted); font-size: .78rem; }
 .ttcds-student-search__empty { display: flex; align-items: center; gap: 8px; padding: 12px; color: var(--club-muted); font-size: .84rem; }
 .ttcds-student-search__hint { margin: 0; color: var(--club-muted); font-size: .78rem; }
-.ttcds-invite .ttcds-add-student__paste { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--club-line); }
-
-/* Ô thêm SV trong nhóm: khối card có viền bao quanh rõ ràng. */
-.ttcds-add-student { display: grid; gap: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--club-line); border-radius: 12px; background: var(--bg-card); }
-.ttcds-add-student__paste { display: grid; gap: 6px; color: var(--club-muted); font-size: .8rem; font-weight: 650; }
+.ttcds-invite .ttcds-add-student__submit { display: grid; gap: 12px; margin-top: 18px; }
 
 /* Hệ ô TTCDS dùng chung ("phân ô" theo Dashboard): `.ttcds-cell*` (thẻ hồ sơ) và
    `.ttcds-stat*` (4 ô số) trông y hệt nhau để không lệch tông — nhãn nhỏ IN HOA

@@ -31,7 +31,6 @@ import TtcdsHubPage from '../../client/src/features/ttcds/TtcdsHubPage.jsx';
 import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
 import { summarizeTtcdsStudent, searchMinLength } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import { navigation, filterNavigation, findRouteMeta } from '../../client/src/app/navigation.js';
-import { parseMssvList } from '../../client/src/api/ttcds.js';
 
 function renderAt(path, route, element) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -575,12 +574,6 @@ describe('TTCDS frontend', () => {
     expect(await screen.findByText('Bạn không thuộc Trung tâm Chuyển đổi số.')).toBeInTheDocument();
   });
 
-  it('parses a pasted MSSV list on commas, spaces and semicolons', () => {
-    expect(parseMssvList(' 24050126,24050006; 22050006\n24050127 ')).toEqual(
-      ['24050126', '24050006', '22050006', '24050127']
-    );
-  });
-
   it('counts 0 term events when the student has no term (label says current term)', () => {
     expect(summarizeTtcdsStudent({
       ...detailFixture,
@@ -593,7 +586,7 @@ describe('TTCDS frontend', () => {
     }).eventCount).toBe(0);
   });
 
-  it('suggests students while typing and adds the picked one immediately', async () => {
+  it('turns a picked suggestion into a chip and only adds on submit', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
     mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
     mocks.getTtcdsGroupMembers.mockResolvedValue([]);
@@ -607,6 +600,9 @@ describe('TTCDS frontend', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Thêm sinh viên' }));
 
+    // Chưa chọn ai thì chưa bấm thêm được.
+    expect(screen.getByRole('button', { name: 'Thêm vào nhóm' })).toBeDisabled();
+
     const input = await screen.findByRole('combobox', { name: /Thêm sinh viên theo tên hoặc MSSV/i });
     fireEvent.change(input, { target: { value: 'nguyen' } });
 
@@ -618,12 +614,63 @@ describe('TTCDS frontend', () => {
     expect(option).toHaveTextContent('Nguyễn Văn A');
     expect(option).toHaveTextContent('24050126');
 
+    // Chọn gợi ý = thành chip trong danh sách đã chọn, CHƯA gọi API.
     fireEvent.keyDown(input, { key: 'Enter' });
+    const chips = screen.getByRole('list', { name: 'Sinh viên đã chọn' });
+    expect(within(chips).getByText('Nguyễn Văn A')).toBeInTheDocument();
+    expect(within(chips).getByText('24050126')).toBeInTheDocument();
+    expect(mocks.addTtcdsGroupMember).not.toHaveBeenCalled();
+
+    // Bấm "Thêm vào nhóm" mới gọi API.
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào nhóm' }));
     await waitFor(() => expect(mocks.addTtcdsGroupMember).toHaveBeenCalledWith(
       'test-token',
       'g1',
       expect.objectContaining({ mssv: '24050126' })
     ));
+  });
+
+  it('keeps several picks as chips, drops one on remove, and submits only the rest', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'create' });
+    mocks.getTtcdsGroups.mockResolvedValue([{ id: 'g1', name: 'K29 Tân sinh viên', nien_khoa: 'K29' }]);
+    mocks.getTtcdsGroupMembers.mockResolvedValue([]);
+    mocks.searchTtcdsStudents.mockImplementation((token, query) => Promise.resolve({
+      ket_qua: query === 'nguyen'
+        ? [{ mssv: '24050126', ten_day_du: 'Nguyễn Văn A', ma_lop: 'K29A' }]
+        : [{ mssv: '24050006', ten_day_du: 'Trần Thị B', ma_lop: 'K29B' }]
+    }));
+    mocks.addTtcdsGroupMember.mockResolvedValue({});
+    renderAt('/ttcds/groups/g1', '/ttcds/groups/:id', <TtcdsGroupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm sinh viên' }));
+    const input = await screen.findByRole('combobox', { name: /Thêm sinh viên theo tên hoặc MSSV/i });
+
+    fireEvent.change(input, { target: { value: 'nguyen' } });
+    await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    fireEvent.change(input, { target: { value: 'tran' } });
+    await waitFor(() => expect(mocks.searchTtcdsStudents.mock.calls.length).toBeGreaterThan(1), { timeout: 2000 });
+    await screen.findByRole('option', { selected: true });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    // Hai lượt chọn → hai chip, vẫn chưa gọi API.
+    const chips = screen.getByRole('list', { name: 'Sinh viên đã chọn' });
+    expect(within(chips).getByText('Nguyễn Văn A')).toBeInTheDocument();
+    expect(within(chips).getByText('Trần Thị B')).toBeInTheDocument();
+    expect(mocks.addTtcdsGroupMember).not.toHaveBeenCalled();
+
+    // Bỏ chip thứ hai rồi mới lưu: chỉ còn MSSV của người thứ nhất.
+    fireEvent.click(within(chips).getByRole('button', { name: 'Bỏ Trần Thị B (24050006)' }));
+    expect(within(chips).queryByText('Trần Thị B')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào nhóm' }));
+    await waitFor(() => expect(mocks.addTtcdsGroupMember).toHaveBeenCalledTimes(1));
+    expect(mocks.addTtcdsGroupMember).toHaveBeenCalledWith(
+      'test-token',
+      'g1',
+      expect.objectContaining({ mssv: '24050126' })
+    );
   });
 
   it('waits for 4 digits before searching by MSSV but 2 letters for a name', async () => {
@@ -645,7 +692,8 @@ describe('TTCDS frontend', () => {
     fireEvent.change(input, { target: { value: '240' } });
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(mocks.searchTtcdsStudents).not.toHaveBeenCalled();
-    expect(screen.getByText(/Nhập ít nhất 4 số/)).toBeInTheDocument();
+    // Dưới ngưỡng thì khung kết quả để trống, không hiện gợi ý nào.
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
 
     fireEvent.change(input, { target: { value: '2405' } });
     await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
