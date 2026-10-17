@@ -59,23 +59,29 @@ async function enqueuePostMedia(client, postId, attachments) {
 /**
  * Ảnh có thể được gắn lại vào bài/bình luận khác (client gửi cùng URL/key).
  * Trước khi xoá phải chắc rằng không còn nội dung chưa xoá nào tham chiếu tới.
+ *
+ * Kiểm tra cả lô object key bằng MỘT truy vấn (trước đây là một truy vấn cho
+ * mỗi key, tức tối đa BATCH_SIZE = 100 truy vấn mỗi vòng) và chỉ trả về những
+ * key còn được bài viết/bình luận chưa xoá tham chiếu.
  */
-async function isKeyStillReferenced(key) {
+async function referencedKeys(keys) {
+  const unique = [...new Set(keys.filter((key) => typeof key === 'string' && key))];
+  if (unique.length === 0) return new Set();
   const result = await query(`
-    SELECT (
-      EXISTS (
-        SELECT 1 FROM community_posts
-        WHERE deleted_at IS NULL
-          AND attachments @> jsonb_build_array(jsonb_build_object('key', $1::text))
-      )
-      OR EXISTS (
-        SELECT 1 FROM community_post_comments
-        WHERE deleted_at IS NULL
-          AND attachments @> jsonb_build_array(jsonb_build_object('key', $1::text))
-      )
-    ) AS referenced;
-  `, [key]);
-  return Boolean(result.rows[0]?.referenced);
+    SELECT k AS object_key
+    FROM unnest($1::text[]) AS candidate(k)
+    WHERE EXISTS (
+      SELECT 1 FROM community_posts
+      WHERE deleted_at IS NULL
+        AND attachments @> jsonb_build_array(jsonb_build_object('key', k))
+    )
+    OR EXISTS (
+      SELECT 1 FROM community_post_comments
+      WHERE deleted_at IS NULL
+        AND attachments @> jsonb_build_array(jsonb_build_object('key', k))
+    );
+  `, [unique]);
+  return new Set(result.rows.map((row) => row.object_key));
 }
 
 async function runOnce({ now = new Date(), batch = BATCH_SIZE } = {}) {
@@ -93,22 +99,22 @@ async function runOnce({ now = new Date(), batch = BATCH_SIZE } = {}) {
   let deleted = 0;
   let failed = 0;
   let skipped = 0;
-  for (const row of due.rows) {
-    let referenced = true;
-    try {
-      referenced = await isKeyStillReferenced(row.object_key);
-    } catch (error) {
-      // Không kiểm tra được thì lùi lại 1 giờ, tuyệt đối không xoá nhầm.
-      await query(`
-        UPDATE media_cleanup_queue
-        SET attempts = attempts + 1, last_error = 'reference_check_failed', delete_after = NOW() + ${RETRY_DELAY_SQL}
-        WHERE id = $1;
-      `, [row.id]);
-      failed += 1;
-      continue;
-    }
 
-    if (referenced) {
+  let referenced = new Set();
+  try {
+    referenced = await referencedKeys(due.rows.map((row) => row.object_key));
+  } catch {
+    // Không kiểm tra được thì lùi cả lô lại 1 giờ, tuyệt đối không xoá nhầm.
+    const retried = await query(`
+      UPDATE media_cleanup_queue
+      SET attempts = attempts + 1, last_error = 'reference_check_failed', delete_after = NOW() + ${RETRY_DELAY_SQL}
+      WHERE id = ANY($1::bigint[]);
+    `, [due.rows.map((row) => row.id)]);
+    return { deleted: 0, failed: retried.rowCount || 0, skipped: 0 };
+  }
+
+  for (const row of due.rows) {
+    if (referenced.has(row.object_key)) {
       await query(`
         UPDATE media_cleanup_queue
         SET deleted_at = NOW(), last_error = 'still_referenced'
@@ -169,5 +175,6 @@ export const MediaCleanupInternals = {
   retentionMs,
   intervalMs,
   postMediaKeys,
-  enqueuePostMedia
+  enqueuePostMedia,
+  referencedKeys
 };
