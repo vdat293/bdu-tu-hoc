@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { BroadcastService, buildBroadcastKey, normalizeBroadcastText, BROADCAST_MAX_TEXT } from '../src/services/broadcast.service.js';
+import { ApiController } from '../src/controllers/api.controller.js';
 
 console.log('🧪 Kiểm tra broadcast thông báo cập nhật...');
 
@@ -33,6 +34,28 @@ assert.match(service, /notify_discord = TRUE AND p\.unsubscribed_at IS NULL/, 'T
 const routes = fs.readFileSync('src/routes/broadcast.routes.js', 'utf8');
 assert.match(routes, /router\.get\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route GET /admin/broadcast có kiểm quyền');
 assert.match(routes, /router\.post\('\/admin\/broadcast', ApiController\.requireIdentityAdmin/, 'Thiếu route POST /admin/broadcast có kiểm quyền');
+assert.match(routes, /router\.get\('\/admin\/avatars', ApiController\.requireIdentityAdmin/, 'Thieu route GET /admin/avatars co kiem quyen');
+assert.match(routes, /router\.get\('\/admin\/avatars\/:mssv', ApiController\.requireIdentityAdmin/, 'Thieu route GET /admin/avatars/:mssv co kiem quyen');
+
+// Behavioral: guard rejects unauthenticated request with 401 and never calls next.
+function broadcastResponse() {
+  return {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+}
+let broadcastNextCalled = false;
+const broadcastRes = broadcastResponse();
+await ApiController.requireIdentityAdmin(
+  { headers: {}, socket: {} },
+  broadcastRes,
+  () => { broadcastNextCalled = true; }
+);
+assert.equal(broadcastRes.statusCode, 401, 'requireIdentityAdmin phải trả 401 khi thiếu auth');
+assert.equal(broadcastNextCalled, false, 'requireIdentityAdmin không được gọi next khi thiếu auth');
+
 // Controller broadcast đã tách sang module riêng (src/modules/broadcast/).
 const controller = fs.readFileSync('src/modules/broadcast/broadcast.controller.js', 'utf8');
 assert.match(controller, /async getAdminBroadcast\(/, 'Thiếu controller getAdminBroadcast');

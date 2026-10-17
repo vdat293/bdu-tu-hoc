@@ -96,7 +96,9 @@ export const SAFE_ALIAS_TESTS = [
 export const QUARANTINED_TESTS = new Map([
   ['test-community-media-integration.js', 'Ghi DB và R2; chỉ chạy qua explicit integration wrapper.'],
   ['test-media-cleanup.js', 'Có thể xóa object R2/DB; chỉ chạy trên namespace test cô lập.'],
+  ['test-media-cleanup-batch.js', 'Ghi/xóa media_cleanup_queue + community post/comment DB; chỉ chạy trên disposable test DB.'],
   ['test-identity-catalog-crud.js', 'Sync catalog, cấp role và CRUD DB; cần disposable test DB.'],
+  ['test-identity-catalog-sync.js', 'Ghi/xóa identity_items DB; chỉ chạy trên disposable test DB.'],
   ['test-traffic-logging.js', 'Có optional DB block và hiện đang củng cố raw-secret behavior; phải rewrite trước.'],
   ['test-admin-ranking-toggle.js', 'Ghi/xóa system_settings toàn cục; cần disposable test DB.'],
   ['test-ranking-integration.js', 'Dùng TRUNCATE; chỉ chạy qua explicit integration wrapper.'],

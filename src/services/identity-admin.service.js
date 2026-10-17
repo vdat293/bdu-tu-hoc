@@ -126,38 +126,51 @@ export const IdentityAdminService = {
       const items = JSON.parse(content);
       if (!Array.isArray(items)) return { synced: 0 };
 
-      let count = 0;
+      // Gom cả catalog vào một câu INSERT ... SELECT (trước đây là một INSERT
+      // cho mỗi item). Map theo id để nếu JSON có id trùng thì bản ghi cuối
+      // cùng thắng, tránh lỗi "ON CONFLICT cannot affect row a second time".
+      const byId = new Map();
       for (const item of items) {
         if (!item.id || !item.item_type || !item.label) continue;
-        await query(`
-          INSERT INTO identity_items (
-            id, item_type, label, description, rarity, asset_key,
-            display_policy, sort_order, metadata, is_active, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, TRUE, NOW())
-          ON CONFLICT (id) DO UPDATE SET
-            label = EXCLUDED.label,
-            description = EXCLUDED.description,
-            rarity = EXCLUDED.rarity,
-            asset_key = EXCLUDED.asset_key,
-            display_policy = EXCLUDED.display_policy,
-            sort_order = EXCLUDED.sort_order,
-            metadata = identity_items.metadata || EXCLUDED.metadata,
-            updated_at = NOW()
-          WHERE COALESCE(identity_items.metadata->>'source', '') != 'admin_ui';
-        `, [
-          item.id,
-          item.item_type,
-          item.label,
-          item.description || '',
-          item.rarity || 'common',
-          item.asset_key || null,
-          item.display_policy || 'optional',
-          Number(item.sort_order) || 100,
-          JSON.stringify(item.metadata || { source: 'config' })
-        ]);
-        count++;
+        byId.set(item.id, {
+          id: item.id,
+          item_type: item.item_type,
+          label: item.label,
+          description: item.description || '',
+          rarity: item.rarity || 'common',
+          asset_key: item.asset_key || null,
+          display_policy: item.display_policy || 'optional',
+          sort_order: Number(item.sort_order) || 100,
+          metadata: item.metadata || { source: 'config' }
+        });
       }
-      return { synced: count };
+      const rows = [...byId.values()];
+      if (rows.length === 0) return { synced: 0 };
+
+      await query(`
+        INSERT INTO identity_items (
+          id, item_type, label, description, rarity, asset_key,
+          display_policy, sort_order, metadata, is_active, updated_at
+        )
+        SELECT item.id, item.item_type, item.label, item.description, item.rarity,
+               item.asset_key, item.display_policy, item.sort_order, item.metadata,
+               TRUE, NOW()
+        FROM jsonb_to_recordset($1::jsonb) AS item(
+          id TEXT, item_type TEXT, label TEXT, description TEXT, rarity TEXT,
+          asset_key TEXT, display_policy TEXT, sort_order INTEGER, metadata JSONB
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          label = EXCLUDED.label,
+          description = EXCLUDED.description,
+          rarity = EXCLUDED.rarity,
+          asset_key = EXCLUDED.asset_key,
+          display_policy = EXCLUDED.display_policy,
+          sort_order = EXCLUDED.sort_order,
+          metadata = identity_items.metadata || EXCLUDED.metadata,
+          updated_at = NOW()
+        WHERE COALESCE(identity_items.metadata->>'source', '') != 'admin_ui';
+      `, [JSON.stringify(rows)]);
+      return { synced: rows.length };
     } catch (err) {
       console.warn('[identity-catalog] Không thể đồng bộ từ JSON:', err.message);
       return { synced: 0, error: err.message };

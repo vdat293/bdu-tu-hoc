@@ -6,7 +6,7 @@ import { useAuth, useToasts } from '../../app/providers.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import GrammarRunner from './GrammarRunner.jsx';
-import { buildItems, friendlyErrorMessage } from './grammar-lib.js';
+import { buildItems, friendlyErrorMessage, sanitizeHtml } from './grammar-lib.js';
 import './grammar.css';
 
 function accuracyOf(correct, total) {
@@ -276,7 +276,7 @@ export default function GrammarLessonPage() {
             {rules.map((rule, i) => (
               <article className="gr-rule" key={rule.id}>
                 <h3 className="gr-rule-title">{rule.title || `Phần ${i + 1}`}</h3>
-                <div className="gr-rule-content" dangerouslySetInnerHTML={{ __html: rule.content }} />
+                <div className="gr-rule-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(rule.content) }} />
               </article>
             ))}
           </div>

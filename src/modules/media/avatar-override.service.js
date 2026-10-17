@@ -76,8 +76,6 @@ function mapRow(row) {
     file_size: row.file_size === null || row.file_size === undefined ? null : Number(row.file_size),
     width: row.width === null || row.width === undefined ? null : Number(row.width),
     height: row.height === null || row.height === undefined ? null : Number(row.height),
-    content_hash: row.content_hash || null,
-    updated_by_mssv: row.updated_by_mssv || null,
     updated_at: row.updated_at || null
   };
 }
@@ -93,8 +91,7 @@ export const AvatarOverrideService = {
       SELECT students.mssv, students.full_name, students.avatar_url AS bdu_avatar_url,
              overrides.url_img, overrides.storage_key, overrides.original_filename,
              overrides.mime_type, overrides.file_size, overrides.width, overrides.height,
-             overrides.content_hash, overrides.updated_by_mssv, overrides.updated_at,
-             overrides.deleted_at
+             overrides.updated_at, overrides.deleted_at
       FROM students
       LEFT JOIN student_avatar_overrides overrides
         ON overrides.mssv = students.mssv AND overrides.deleted_at IS NULL
@@ -114,8 +111,6 @@ export const AvatarOverrideService = {
         file_size: null,
         width: null,
         height: null,
-        content_hash: null,
-        updated_by_mssv: null,
         updated_at: null
       };
     }
@@ -130,8 +125,7 @@ export const AvatarOverrideService = {
       SELECT students.mssv, students.full_name, students.avatar_url AS bdu_avatar_url,
              overrides.url_img, overrides.storage_key, overrides.original_filename,
              overrides.mime_type, overrides.file_size, overrides.width, overrides.height,
-             overrides.content_hash, overrides.updated_by_mssv, overrides.updated_at,
-             overrides.deleted_at
+             overrides.updated_at, overrides.deleted_at
       FROM student_avatar_overrides overrides
       JOIN students ON students.mssv = overrides.mssv
       WHERE overrides.deleted_at IS NULL

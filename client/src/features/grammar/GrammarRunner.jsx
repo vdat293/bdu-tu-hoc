@@ -9,7 +9,8 @@ import {
   isAnswerCorrect,
   optionColumns,
   parseArrangeWords,
-  plainText
+  plainText,
+  sanitizeHtml
 } from './grammar-lib.js';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
@@ -17,7 +18,7 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 function RichText({ value, className }) {
   const html = String(value ?? '');
   if (hasHtml(html)) {
-    return <p className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+    return <p className={className} dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
   }
   return <p className={className}>{decodeHtmlEntities(html)}</p>;
 }
