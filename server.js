@@ -11,10 +11,16 @@ import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
-import { FacebookImportService } from './src/services/facebook-import.service.js';
 
 const app = createApp();
 const PORT = process.env.PORT || 3000;
+
+// PM2 cluster đặt NODE_APP_INSTANCE = 0,1,... cho từng worker. Chỉ worker 0 chạy
+// job nền: nếu mọi worker cùng startJobs() thì scheduler/poller/đồng bộ kho chạy
+// trùng lặp. Chạy 1 tiến trình (npm start / npm run dev, không qua PM2) thì biến
+// này không tồn tại → coi như worker chính.
+const WORKER_INSTANCE = process.env.NODE_APP_INSTANCE;
+const isPrimaryWorker = WORKER_INSTANCE === undefined || WORKER_INSTANCE === '0';
 
 const server = createServer(app);
 CommunityRealtime.attach(server);
@@ -30,13 +36,16 @@ server.listen(PORT, () => {
   console.log(`🌐 Server đang chạy tại: http://localhost:${PORT}`);
   console.log(`⚙️  Môi trường: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
-  startJobs();
+  if (isPrimaryWorker) {
+    startJobs();
+  } else {
+    console.log(`[server] worker phụ (instance ${WORKER_INSTANCE}) — bỏ qua job nền.`);
+  }
 });
 
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   stopJobs();
-  await FacebookImportService.stop().catch((error) => { console.error('[server] stop FB import failed:', error); });
   CommunityRealtime.close();
   await TrafficService.flush().catch((error) => { console.error('[server] flush traffic failed:', error); });
   server.close(async () => {

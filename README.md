@@ -246,8 +246,8 @@ tự xóa cache sau deploy:
   must-revalidate` (browser/CDN nhận 304 qua ETag, file đổi được phục vụ ngay).
 * `/media/r2/*` stream ảnh từ Cloudflare R2 khi chưa gắn custom domain/r2.dev
   (cache `immutable, max-age=1y`); khi có `R2_PUBLIC_BASE_URL` ảnh mới trỏ
-  thẳng CDN, URL cũ vẫn hoạt động qua proxy. `/media/fb-import` revalidate mỗi
-  ngày vì tên file có thể bị ghi đè khi bài viết được import lại.
+  thẳng CDN, URL cũ vẫn hoạt động qua proxy. (`/media/fb-import` đã gỡ cùng
+  fb-import runtime — xem mục VPS đơn chạy trực tiếp.)
 
 `npm run build:client` sinh `dist/client/build.json` và tự stamp `?v=<BUILD_ID>`
 cho CSS legacy cùng `<meta name="bdu-build">`; runtime trả `GET /api/version`
@@ -383,6 +383,37 @@ khi có shared pub/sub adapter. Compose đã đặt `deploy.replicas: 1` và
 `container_name` để phản ánh ràng buộc đó. Sau deploy, kiểm tra chỉ có một app
 container bằng `docker compose ps`; `/api/queue-status` cũng trả diagnostics
 không nhạy cảm `communityRealtime` (topology, socket clients, active rooms).
+
+### VPS đơn chạy app trực tiếp (PM2, không Docker)
+
+Nếu không dùng Docker Compose mà chạy app trực tiếp trên VPS, dùng
+`ecosystem.config.cjs`:
+
+```bash
+npm ci
+npm run build:client
+npx pm2 start ecosystem.config.cjs   # lần đầu
+npx pm2 reload bdu-tu-hoc            # deploy lại
+npx pm2 save && npx pm2 startup
+```
+
+Mặc định **đúng 1 worker** (`exec_mode: fork`) vì ràng buộc WebSocket nêu
+trên. Chỉ nâng lên 2 worker (`WEB_CONCURRENCY=2`) khi đã chấp nhận realtime trễ
+tới nhịp polling hoặc sau khi bổ sung pub/sub liên tiến trình; khi đó job nền
+vẫn chỉ chạy ở worker 0 (`NODE_APP_INSTANCE`, xem `server.js`).
+
+Một số điều chỉnh cho VPS đơn 2 vCPU / 4GB:
+
+- **Pool DB**: `DATABASE_POOL_MAX` mặc định 20 (mỗi tiến trình); tổng = giá trị
+  × số worker, giữ Postgres `max_connections` ≥ tổng + vài kết nối phụ trợ.
+- **Rate limit**: `/api` có giới hạn chung, siết chặt hơn ở `/api/login`
+  (chống dò mật khẩu) và các endpoint nặng (`/api/rankings`, `/api/odp`,
+  `/api/vocab`) — xem `src/utils/rate-limit.js`.
+- **Cache**: `SystemSettingsService` cache 5s (per-process); token BDU cache
+  theo LRU có trần (`BDU_IDENTITY_CACHE_MAX`, mặc định 20000).
+- **fb-import**: đã gỡ khỏi runtime (không còn scheduler/route/static). Service
+  và script vẫn giữ ở dạng dormant, chỉ chạy tay khi cần (`npm run fb:login`,
+  `npm run fb:import`).
 
 Sau khi app lên, chạy đồng bộ bảng xếp hạng lần đầu:
 

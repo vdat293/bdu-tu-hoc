@@ -87,6 +87,8 @@
     "chess.js": "^1.4.0",
     "discord.js": "^14.27.0",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.7.1",
+    "lru-cache": "^11.5.3",
     "multer": "^2.2.0",
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",

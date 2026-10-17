@@ -15,7 +15,6 @@ import { MediaCleanupService } from '../services/media-cleanup.service.js';
 import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
 import { TrafficService } from '../services/traffic.service.js';
-import { FacebookImportService } from '../services/facebook-import.service.js';
 import { AssetHistoryService } from '../services/asset-history.service.js';
 
 export function startJobs() {
@@ -23,7 +22,6 @@ export function startJobs() {
   ReminderSchedulerService.start();
   OutboxMailerService.start();
   TrafficService.start();
-  FacebookImportService.start();
   AssetHistoryService.start();
   MediaCleanupService.start();
   IdentityAdminService.syncCatalogFromJson().then((res) => {

@@ -6,13 +6,14 @@ import { isDatabaseConfigured, query } from '../db/database.js';
  * Ví dụ key "ranking_sync" với value { enabled: false }: tắt lịch đồng bộ
  * xếp hạng cho tới khi bật lại, không cần sửa env hay restart server.
  *
- * Cache ngắn 30 giây để scheduler/API không phải query liên tục; mọi lần ghi
- * đều xoá cache ngay nên thao tác trong /admin có hiệu lực tức thì.
- * Lưu ý: cache là per-process — hệ thống hiện chạy đúng 1 instance (xem
- * docker-compose `deploy.replicas: 1`); nếu scale ngang phải chuyển sang
- * đọc thẳng DB tại thời điểm scheduler chạy.
+ * Cache ngắn 5 giây để scheduler/API không phải query liên tục; mọi lần ghi
+ * đều xoá cache ngay nên thao tác trong /admin có hiệu lực tức thì trên worker
+ * nhận request. Cache là PER-PROCESS: khi chạy PM2 cluster nhiều worker, worker
+ * khác chỉ thấy giá trị mới sau tối đa CACHE_TTL_MS. Vì vậy TTL được giữ NGẮN
+ * (5s) để khoá bảo trì lan ra mọi worker gần như tức thời mà vẫn cắt ~99% truy
+ * vấn (guard đọc khoá này mỗi request /api).
  */
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 5_000;
 const cache = new Map();
 
 export const SystemSettingsService = {

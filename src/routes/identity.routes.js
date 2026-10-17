@@ -34,12 +34,6 @@ export function registerIdentityAdminRoutes(router) {
   router.delete('/admin/system-roles/:mssv/:role', ApiController.revokeAdminSystemRole);
 }
 
-/** Dòng 154-156: kéo bài Facebook về Confession (kiểm duyệt viên). */
-export function registerFacebookImportRoutes(router) {
-  router.get('/admin/facebook-import/status', ApiController.requireCommunityModerator, ApiController.getFacebookImportStatus);
-  router.post('/admin/facebook-import/run', ApiController.requireCommunityModerator, ApiController.runFacebookImport);
-}
-
 /** Dòng 165-167: avatar tự upload (ảnh lưu trên Cloudflare R2). */
 export function registerIdentityAvatarRoutes(router) {
   router.post('/me/avatar', requireVerifiedMssv, avatarUpload.single('avatar'), ApiController.uploadMyAvatar);

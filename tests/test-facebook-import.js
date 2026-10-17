@@ -282,14 +282,14 @@ const service = fs.readFileSync(new URL('../src/services/facebook-import.service
 assert.match(migration, /CREATE TABLE IF NOT EXISTS facebook_import_posts/);
 assert.match(migration, /facebook_import_posts_fb_post_id_unique/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS source/);
-assert.match(routes, /admin\/facebook-import\/run.*requireCommunityModerator/);
-// Siết assertion: trước đây chỉ tìm chuỗi `community:mod_access` nên khớp cả
-// `getClanMembers` ở domain clubs. Giờ ràng buộc đúng guard moderator.
+// fb-import đã bị gỡ khỏi runtime: không còn route, scheduler start, static mount
+// hay stop() trong bootstrap. Service file vẫn giữ ở dạng dormant để chạy tay qua script.
+assert.doesNotMatch(routes, /admin\/facebook-import\/run/);
 assert.match(controller, /async requireCommunityModerator\(/);
 assert.match(controller, /PermissionService\.require\(actor, 'community:mod_access'/);
-assert.match(jobsJs, /FacebookImportService\.start\(\)/);
-assert.match(serverJs, /FacebookImportService\.stop\(\)/);
-assert.match(appJs, /'\/media\/fb-import'/);
+assert.doesNotMatch(jobsJs, /FacebookImportService\.start\(\)/);
+assert.doesNotMatch(serverJs, /FacebookImportService\.stop\(\)/);
+assert.doesNotMatch(appJs, /'\/media\/fb-import'/);
 assert.match(communityService, /community:post_delete_any/);
 assert.match(service, /FB_IMPORT_PASSWORD/);
 assert.match(service, /RELOGIN_STATE_FILE/);
