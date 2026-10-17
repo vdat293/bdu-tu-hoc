@@ -86,7 +86,7 @@ Danh sách miễn trừ (so trên `req.path`, tức phần **đã bị cắt** t
 
 | Đường dẫn (sau khi cắt `/api`) | Vì sao miễn trừ |
 | :--- | :--- |
-| `/health` | `deploy/deploy.sh` poll endpoint này để biết app sống. Chặn nó ⇒ deploy tưởng app chết và tự rollback. |
+| `/health` | Bước healthcheck khi deploy poll endpoint này để biết app sống. Chặn nó ⇒ deploy tưởng app chết và tự rollback. |
 | `/version` | Banner "có bản mới" của client và `/api/version` dùng để đối chiếu build id. |
 | `/status` | Endpoint công khai mới để client biết trạng thái khóa (mục 3.5). |
 | tiền tố `/admin/dashboard` | Đã tự bảo vệ bằng `requireAdmin`; đồng thời chứa `/admin/dashboard/login` nên admin vẫn đăng nhập được trong lúc khóa. |
@@ -301,6 +301,6 @@ Ghi lại để spec của đợt đó không phải hỏi lại:
 - **Dữ liệu:** restore `data/vps_sync_20260919.sql` (85 MB, plain SQL, **không** dùng được `npm run db:restore` vì script đó cần file custom-format + manifest) → tạo DB rác `bdu_fresh` migrate 001→056 → so fingerprint để chốt mốc (bằng chứng hiện có: dump có 042 + 043, thiếu 044/045/047/052–056 ⇒ mốc nằm giữa 043 và 044) → baseline → migrate → fingerprint(`bdu_hub`) phải trùng khít fingerprint(`bdu_fresh`) mới cho app chạy.
 - **`.env`:** khoảng 70 biến; nhóm đã có ở local (`POSTGRES_*`, `CDS_*`, `DISCORD_*`, `PUBLIC_APP_URL`, `WS_*`) và nhóm phải cấp lại (`SYSTEM_OWNER_MSSV`, `R2_*`, `DISCORD_BOT_TOKEN`, `SMTP_*`, `ADMIN_DASHBOARD_KEY`, …). `NOTIFICATION_ENCRYPTION_KEY` **sinh mới được**: nó chỉ mã hoá `bdu_token_vault` (token phiên BDU) và `training_cds_credentials`, mất key cũ ⇒ người dùng đăng nhập lại, không mất dữ liệu nghiệp vụ. Media trong R2 vẫn sống vì URL được sinh lúc đọc từ biến môi trường, DB chỉ lưu key.
 - **Build:** GitHub Actions → GHCR → EC2 `docker compose pull` (t3a.small không đủ RAM để build image có Chromium + .NET); tag theo `<sha>` để rollback bằng tag.
-- **Bootstrap tách khỏi deploy:** `deploy/bootstrap-server.sh` chạy một lần (swap, Docker, clone, `.env`, restore+build DB, `up -d`); `deploy/deploy.sh` các lần sau không bao giờ chạm file dump.
+- **Bootstrap tách khỏi deploy:** bước bootstrap chạy một lần (swap, Docker, clone, `.env`, restore+build DB, `up -d`); các lần deploy sau không bao giờ chạm file dump.
 - **Không đổi code ứng dụng** trong đợt đó (đúng nghĩa đóng gói lại).
 - **Nghiệm thu đợt đó:** compose all healthy · `/api/health` + `/api/version` khớp SHA · HTTP→HTTPS + cert hợp lệ · WS `wss://` kết nối được · đăng nhập BDU thật · đếm `students`/`community_posts` khớp dump + fingerprint trùng · ảnh cũ load từ R2 · backup tạo object trên R2 + `db:backup:verify` xanh · từ Internet cổng 3000/5432 đóng · thử rollback 1 lần.

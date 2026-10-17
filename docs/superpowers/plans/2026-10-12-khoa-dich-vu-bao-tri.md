@@ -33,7 +33,7 @@
 
 Năm lớp đầu vào / chế độ lỗi dễ cắn người dùng nhất, mỗi dòng đã có test ở task tương ứng:
 
-1. **`/api/health` (và `/api/admin/dashboard/login`) lúc đang khóa phải vẫn 200.** Nếu không: `deploy/deploy.sh` tưởng app chết và tự rollback, còn admin thì không đăng nhập lại được. → Task 2, Task 3.
+1. **`/api/health` (và `/api/admin/dashboard/login`) lúc đang khóa phải vẫn 200.** Nếu không: bước healthcheck khi deploy tưởng app chết và rollback, còn admin thì không đăng nhập lại được. → Task 2, Task 3.
 2. **Body rác khi `PUT`** (`locked: "true"` dạng chuỗi, `title` null, `message` dài 10.000 ký tự). Kỳ vọng: `400`, không ghi DB, và endpoint công khai không bị bơm nội dung dài. → Task 1, Task 5.
 3. **DB lỗi hoặc chưa cấu hình `DATABASE_URL`.** Kỳ vọng: site vẫn phục vụ bình thường (fail-open), không 500 hàng loạt. → Task 1, Task 2.
 4. **So đường dẫn miễn trừ sai dạng** (`/api/health` lẫn `/health`). Kỳ vọng: cả hai dạng đều được nhận là miễn trừ, site không tự khóa chính mình. → Task 2.

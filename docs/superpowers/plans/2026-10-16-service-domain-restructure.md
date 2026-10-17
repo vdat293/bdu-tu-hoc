@@ -76,7 +76,7 @@
 ### Task 1: Dọn rác (nhóm A xoá, nhóm B giữ có bằng chứng)
 
 **Files:**
-- Xoá (toàn bộ untracked/ignored, không đụng git): `dist/`, `temp/`, `.acc/`, `.playwright-mcp/`, `.env.bak.local`, `data/backup.sql`, `data/vps_sync_*.sql`, `aws/dlm-input.generated.json`, `aws/user-data.generated.sh`, `.superpowers/` (trừ `.gitignore`), `.agents/`.
+- Xoá (toàn bộ untracked/ignored, không đụng git): `dist/`, `temp/`, `.acc/`, `.playwright-mcp/`, `.env.bak.local`, `data/backup.sql`, `data/vps_sync_*.sql`, `.superpowers/` (trừ `.gitignore`), `.agents/`.
 - Không xoá, ghi bằng chứng: `src/services/moodle.service.js` (dùng bởi `english-exercise.service.js:6` + 2 test), `src/services/identity-reward.service.js` (dùng bởi `identity-admin.service.js:4` + test), `public/css/showcase.css` (dùng bởi `public/index.html:24`, `client/index.html:17`, 4 test), `public/js/interactions.js` (dùng bởi `public/index.html:2386`, fallback SPA khi chưa có React build).
 
 **Interfaces:**
