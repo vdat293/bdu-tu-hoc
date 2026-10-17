@@ -76,8 +76,6 @@ function mapRow(row) {
     file_size: row.file_size === null || row.file_size === undefined ? null : Number(row.file_size),
     width: row.width === null || row.width === undefined ? null : Number(row.width),
     height: row.height === null || row.height === undefined ? null : Number(row.height),
-    content_hash: row.content_hash || null,
-    updated_by_mssv: row.updated_by_mssv || null,
     updated_at: row.updated_at || null
   };
 }
@@ -114,8 +112,6 @@ export const AvatarOverrideService = {
         file_size: null,
         width: null,
         height: null,
-        content_hash: null,
-        updated_by_mssv: null,
         updated_at: null
       };
     }

@@ -6,7 +6,8 @@ import {
   isAnswerCorrect,
   normalizeAnswer,
   parseArrangeWords,
-  plainText
+  plainText,
+  sanitizeHtml
 } from '../../../../src/utils/grammar-answers.js';
 
 // Logic chấm đáp án nằm ở src/utils/grammar-answers.js để server và script
@@ -19,8 +20,10 @@ export {
   isAnswerCorrect,
   normalizeAnswer,
   parseArrangeWords,
-  plainText
+  plainText,
+  sanitizeHtml
 };
+export { sanitize, sanitizeDangerousHtml, safeHtml, sanitizeHTML, sanitizeDangerousHTML, safeHTML, cleanHtml, cleanHTML } from '../../../../src/utils/grammar-answers.js';
 
 export const GRAMMAR_TIMER_SECONDS = 60;
 

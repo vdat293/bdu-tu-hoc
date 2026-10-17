@@ -36,11 +36,11 @@ server.listen(PORT, () => {
 async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   stopJobs();
-  await FacebookImportService.stop().catch(() => {});
+  await FacebookImportService.stop().catch((error) => { console.error('[server] stop FB import failed:', error); });
   CommunityRealtime.close();
-  await TrafficService.flush().catch(() => {});
+  await TrafficService.flush().catch((error) => { console.error('[server] flush traffic failed:', error); });
   server.close(async () => {
-    await closeDatabase().catch(() => { });
+    await closeDatabase().catch((error) => { console.error('[server] close DB failed:', error); });
     process.exit(0);
   });
 }

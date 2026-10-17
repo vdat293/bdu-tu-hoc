@@ -43,5 +43,5 @@ export function registerFacebookImportRoutes(router) {
 /** Dòng 165-167: avatar tự upload (ảnh lưu trên Cloudflare R2). */
 export function registerIdentityAvatarRoutes(router) {
   router.post('/me/avatar', requireVerifiedMssv, avatarUpload.single('avatar'), ApiController.uploadMyAvatar);
-  router.delete('/me/avatar', ApiController.deleteMyAvatar);
+  router.delete('/me/avatar', requireVerifiedMssv, ApiController.deleteMyAvatar);
 }

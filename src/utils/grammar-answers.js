@@ -31,6 +31,43 @@ export function decodeHtmlEntities(value) {
   });
 }
 
+const ALLOWED_HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'h1', 'h2', 'h3', 'a']);
+
+export function sanitizeHtml(value) {
+  let html = String(value ?? '');
+  // Loại bỏ phần tử nguy hiểm kèm nội dung.
+  html = html.replace(/<!--[\s\S]*?-->/g, '');
+  html = html.replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
+  html = html.replace(/<(script|style|iframe|object|embed|svg|math)\b[^>]*\/?>/gi, '');
+  // Xử lý mọi thẻ còn lại theo allow-list.
+  html = html.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (match, tag, attrs) => {
+    const t = tag.toLowerCase();
+    if (!ALLOWED_HTML_TAGS.has(t)) return '';
+    const closing = /^<\//.test(match);
+    if (closing) return `</${t}>`;
+    if (t === 'br') return '<br>';
+    if (t === 'a') {
+      const hrefMatch = attrs.match(/href\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      let href = hrefMatch ? (hrefMatch[2] ?? hrefMatch[3] ?? hrefMatch[4] ?? '') : '';
+      href = href.trim();
+      if (/^(javascript|vbscript|data):/i.test(href)) href = '';
+      if (!href) return '<a>';
+      return `<a href="${href.replace(/"/g, '&quot;')}">`;
+    }
+    return `<${t}>`;
+  });
+  return html;
+}
+
+export const sanitize = sanitizeHtml;
+export const sanitizeDangerousHtml = sanitizeHtml;
+export const safeHtml = sanitizeHtml;
+export const sanitizeHTML = sanitizeHtml;
+export const sanitizeDangerousHTML = sanitizeHtml;
+export const safeHTML = sanitizeHtml;
+export const cleanHtml = sanitizeHtml;
+export const cleanHTML = sanitizeHtml;
+
 export function plainText(value) {
   return decodeHtmlEntities(
     String(value ?? '')

@@ -103,8 +103,8 @@ async function runAvatarOverrideServiceDbTests() {
     assert.equal(uploaded.width, 512);
     assert.equal(uploaded.height, 512);
     assert.ok(uploaded.file_size > 0, 'file_size phải là số byte dương');
-    assert.equal(uploaded.updated_by_mssv, OWNER, 'updated_by_mssv hiện diện trong payload (hành vi hiện tại)');
-    assert.ok(uploaded.content_hash, 'content_hash hiện diện trong payload (hành vi hiện tại)');
+    assert.equal(uploaded.updated_by_mssv, undefined, 'updated_by_mssv không còn hiện diện trong payload');
+    assert.equal(uploaded.content_hash, undefined, 'content_hash không còn hiện diện trong payload');
     assert.equal(storageWrites.length, 1, 'upload phải đẩy đúng 1 object lên kho lưu trữ');
 
     const storedRow = (await query(
