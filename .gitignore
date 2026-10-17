@@ -8,6 +8,9 @@ outside-src/
 .env.*
 !.env.example
 .acc
+# Thông tin đăng nhập VPS (chứa mật khẩu) - không commit
+.vps
+.vps.*
 data/*.sql
 data/*.manifest.json
 data/*.dump
