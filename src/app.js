@@ -80,28 +80,10 @@ export function createApp() {
       res.destroy?.();
     }
   });
-  // Media legacy đã lưu trong DB trước khi chuyển sang R2: `/media/avatars/<file>`
-  // (avatar cũ) và `/media/fb-import/<album>/<file>` (ảnh nhập Facebook). Chỉ ĐỌC
-  // từ thư mục cấu hình (AVATAR_STORAGE_DIR / FB_IMPORT_MEDIA_DIR) — luồng tải lên
-  // vẫn ghi thẳng R2, không ghi file runtime xuống ổ đĩa.
-  const legacyMediaMounts = [
-    ['/media/avatars', process.env.AVATAR_STORAGE_DIR || 'data/avatars'],
-    ['/media/fb-import', process.env.FB_IMPORT_MEDIA_DIR || 'data/fb-import']
-  ];
-  for (const [prefix, dir] of legacyMediaMounts) {
-    app.use(prefix, express.static(path.resolve(ROOT_DIR, dir), {
-      index: false,
-      redirect: false,
-      fallthrough: true,
-      maxAge: '7d',
-      setHeaders(res) {
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-      }
-    }));
-  }
-  // Chặn cuối cho /media/*: file thiếu/đã mất phải trả 404, TUYỆT ĐỐI không rơi
-  // vào fallback SPA — nếu không request ảnh sẽ nhận index.html (200) và browser
-  // hiện icon ảnh vỡ khắp nơi (bài viết cũ, avatar cũ).
+  // Chặn cuối cho /media/*: ảnh phải đến từ R2 (`/media/r2/*` hoặc CDN
+  // img.bdu.io.vn). Media cũ đã mất file phải trả 404, TUYỆT ĐỐI không rơi vào
+  // fallback SPA — nếu không request ảnh sẽ nhận index.html (200) và browser
+  // hiện icon ảnh vỡ khắp nơi.
   app.use('/media', (req, res) => {
     res.status(404).json({ result: false, message: 'Không tìm thấy ảnh.' });
   });
