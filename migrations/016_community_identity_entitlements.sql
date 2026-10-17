@@ -1,4 +1,7 @@
 -- Migration 016: moderation metadata and server-owned identity entitlements.
+-- RETAINED: this file is referenced by the migration ledger (version 16, applied).
+-- Its legacy index was superseded by the source-aware index in migration 048.
+-- Do NOT delete this file; doing so breaks `npm run db:migrate`.
 
 ALTER TABLE community_posts
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,

@@ -1,4 +1,7 @@
 -- Historical intermediate schema. Migration 050 folds these six entries into title items.
+-- RETAINED: this file is referenced by the migration ledger (version 49, applied).
+-- Its schema was fully folded into title items by migration 050.
+-- Do NOT delete this file; doing so breaks `npm run db:migrate`.
 ALTER TABLE identity_items
   DROP CONSTRAINT IF EXISTS identity_items_item_type_check;
 ALTER TABLE identity_items
