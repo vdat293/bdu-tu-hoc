@@ -19,10 +19,9 @@ export default function KillerSudokuPage() {
   }, [isFocusMode]);
 
   const handleReload = () => {
-    // Game nhúng same-origin nên reload thẳng contentWindow; gán lại src cho
-    // chính nó là self-assign (ESLint no-self-assign) và không nói rõ ý định.
-    const frame = iframeRef.current;
-    if (frame?.contentWindow) frame.contentWindow.location.reload();
+    if (iframeRef.current) {
+      iframeRef.current.src = iframeRef.current.src;
+    }
   };
 
   const handleFullscreen = () => {

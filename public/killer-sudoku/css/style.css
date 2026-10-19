@@ -1752,13 +1752,15 @@ body[data-theme="dark"] .pvp-player-card {
   border-color: #f59e0b;
 }
 
-.pvp-card-header {
+.pvp-card-header,
+.pvp-player-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
 }
-.pvp-player-name {
+.pvp-player-name,
+.pvp-name {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
@@ -1767,19 +1769,27 @@ body[data-theme="dark"] .pvp-player-card {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pvp-player-badge {
+.pvp-player-badge,
+.pvp-badge-tag {
   font-size: 10px;
   font-weight: 600;
   padding: 1px 5px;
   border-radius: 4px;
 }
-.pvp-me .pvp-player-badge {
+.pvp-me .pvp-player-badge,
+.pvp-badge-tag.me {
   background: #dbeafe;
   color: #1d4ed8;
 }
-.pvp-opp .pvp-player-badge {
+.pvp-opp .pvp-player-badge,
+.pvp-badge-tag.opp {
   background: #fee2e2;
   color: #b91c1c;
+}
+.pvp-mistakes {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ef4444;
 }
 
 .pvp-progress-track {
@@ -1798,14 +1808,17 @@ body[data-theme="dark"] .pvp-progress-track {
   border-radius: 999px;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.pvp-me .pvp-progress-fill {
+.pvp-me .pvp-progress-fill,
+.pvp-progress-fill.me {
   background: linear-gradient(90deg, #3b82f6, #2563eb);
 }
-.pvp-opp .pvp-progress-fill {
+.pvp-opp .pvp-progress-fill,
+.pvp-progress-fill.opp {
   background: linear-gradient(90deg, #f97316, #ef4444);
 }
 
-.pvp-card-stats {
+.pvp-card-stats,
+.pvp-cell-stat {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
@@ -1870,17 +1883,22 @@ body[data-theme="dark"] .pvp-tab-btn.active {
 }
 
 .pvp-tab-pane {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 12px;
 }
+.pvp-tab-pane.active {
+  display: flex;
+}
 
-.pvp-form-group {
+.pvp-form-group,
+.pvp-setting-item {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-.pvp-form-group label {
+.pvp-form-group label,
+.pvp-setting-item label {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -1905,11 +1923,13 @@ body[data-theme="dark"] .pvp-input {
   border-color: #334155;
 }
 
-.pvp-diff-chips {
+.pvp-diff-chips,
+.pvp-diff-select {
   display: flex;
   gap: 6px;
 }
-.pvp-diff-chip {
+.pvp-diff-chip,
+.pvp-diff-btn {
   flex: 1;
   padding: 6px 0;
   border: 1px solid rgba(0,0,0,0.12);
@@ -1921,12 +1941,14 @@ body[data-theme="dark"] .pvp-input {
   cursor: pointer;
   transition: all 0.15s;
 }
-.pvp-diff-chip.active {
+.pvp-diff-chip.active,
+.pvp-diff-btn.active {
   background: #2563eb;
   color: #ffffff;
   border-color: #2563eb;
 }
-.pvp-diff-chip:hover:not(.active) {
+.pvp-diff-chip:hover:not(.active),
+.pvp-diff-btn:hover:not(.active) {
   background: rgba(37, 99, 235, 0.08);
   color: #2563eb;
 }
@@ -2011,11 +2033,15 @@ body[data-theme="dark"] .pvp-input {
   cursor: pointer;
 }
 
-.lobby-players-list {
+.lobby-players-list,
+.pvp-lobby-players {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
-.lobby-player-slot {
+.lobby-player-slot,
+.pvp-lobby-player {
   flex: 1;
   background: var(--card-bg, #ffffff);
   border: 1px solid rgba(0,0,0,0.08);
@@ -2023,15 +2049,18 @@ body[data-theme="dark"] .pvp-input {
   padding: 10px;
   text-align: center;
 }
-body[data-theme="dark"] .lobby-player-slot {
+body[data-theme="dark"] .lobby-player-slot,
+body[data-theme="dark"] .pvp-lobby-player {
   background: #1e293b;
   border-color: #334155;
 }
-.slot-avatar {
+.slot-avatar,
+.player-avatar {
   font-size: 24px;
   margin-bottom: 4px;
 }
-.slot-name {
+.slot-name,
+.player-name {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
@@ -2039,6 +2068,11 @@ body[data-theme="dark"] .lobby-player-slot {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.pvp-lobby-vs {
+  font-weight: 900;
+  font-size: 14px;
+  color: #f59e0b;
 }
 .player-status {
   display: inline-block;
@@ -2055,7 +2089,8 @@ body[data-theme="dark"] .lobby-player-slot {
   color: #b45309;
 }
 
-.lobby-actions {
+.lobby-actions,
+.pvp-lobby-actions {
   display: flex;
   gap: 8px;
 }
