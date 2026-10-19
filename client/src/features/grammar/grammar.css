@@ -205,6 +205,12 @@ body.theme-light .gr-resume-actions > .btn-secondary:hover:not(:disabled) { back
   .gr-arrange-tools { width: 100%; margin-right: 0; }
   .gr-arrange-tools > .btn-ghost { flex: 1; }
   .gr-arrange-actions > .btn { flex: 1; min-height: 44px; }
+  /* Bảng lý thuyết 3-4 cột không bị ép nát chữ trên điện thoại: tự cuộn ngang
+     trong khung của nó, không phát sinh cuộn ngang cấp trang. */
+  .gr-rule-content table { display: block; overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+  .gr-rule-content th { white-space: nowrap; }
+  /* Grid item mặc định min-width:auto nên bị bảng 4 cột kéo rộng; cho co lại để bảng tự cuộn bên trong. */
+  .gr-rules > .gr-rule { min-width: 0; }
 }
 
 @media print {

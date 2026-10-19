@@ -174,4 +174,45 @@ describe('sanitizeHtml', () => {
     const once = sanitizeHtml('<<img src=x>img src=y onerror=alert(1)>');
     expect(sanitizeHtml(once)).toBe(once);
   });
+
+  it('giữ cấu trúc bảng lý thuyết và không làm mất strong/text', () => {
+    const input = '<table><thead><tr><th>Loại câu</th><th>Cấu trúc</th><th>Ví dụ</th></tr></thead><tbody><tr><td>Khẳng định</td><td>S + V(s/es)</td><td>I <strong>work</strong> every day.</td></tr></tbody></table>';
+    const out = sanitizeHtml(input);
+    expect(out).toContain('<table>');
+    expect(out).toContain('<thead>');
+    expect(out).toContain('<tbody>');
+    expect(out).toContain('<tr>');
+    expect(out).toContain('<th>');
+    expect(out).toContain('<td>');
+    expect(out).toContain('<strong>');
+    expect(out).toContain('I <strong>work</strong> every day.');
+  });
+
+  it('loại bỏ mọi attribute của thẻ bảng', () => {
+    const out = sanitizeHtml('<table style="color:red" onclick="alert(1)"><tr><td colspan="2">x</td></tr></table>');
+    expect(out).not.toContain('style=');
+    expect(out).not.toContain('onclick');
+    expect(out).not.toContain('colspan');
+    expect(out).not.toContain('alert');
+    expect(out).toContain('<table>');
+    expect(out).toContain('<td>');
+  });
+
+  it('chặn script trong ô bảng', () => {
+    const out = sanitizeHtml('<td><script>alert(1)</script></td>');
+    expect(out).not.toContain('script');
+    expect(out).not.toContain('alert');
+  });
+
+  it('chặn img/onerror trong ô bảng', () => {
+    const out = sanitizeHtml('<td><img src=x onerror=alert(1)></td>');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('onerror');
+  });
+
+  it('idempotent với payload bảng', () => {
+    const input = '<table style="color:red"><tr><td colspan="2">x</td></tr></table>';
+    const once = sanitizeHtml(input);
+    expect(sanitizeHtml(once)).toBe(once);
+  });
 });

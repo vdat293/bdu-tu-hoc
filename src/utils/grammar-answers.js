@@ -31,7 +31,13 @@ export function decodeHtmlEntities(value) {
   });
 }
 
-const ALLOWED_HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'h1', 'h2', 'h3', 'a']);
+// Nội dung lý thuyết ngữ pháp lưu bảng công thức trong DB (cheerio sanitizer
+// grammar-data.js cho phép table/thead/tbody/tfoot/tr/th/td/caption) và client
+// render qua dangerouslySetInnerHTML sau khi sanitize. Vì vậy allow-list phải có
+// nhóm thẻ bảng để giữ nguyên cấu trúc; mọi attribute (style, class, onX,
+// colspan, ...) vẫn bị loại như nhánh thẻ trần bên dưới để không có style/
+// event-handler lạ lọt vào DOM.
+const ALLOWED_HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'h1', 'h2', 'h3', 'a', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption']);
 
 // Một lượt làm sạch: gỡ comment, gỡ phần tử nguy hiểm, rồi lọc mọi thẻ còn
 // lại theo allow-list. Tách riêng để hàm public lặp tới khi bất động — nếu chỉ
