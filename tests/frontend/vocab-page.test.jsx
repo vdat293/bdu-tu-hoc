@@ -300,6 +300,42 @@ describe('vocab game page', () => {
     expect(await screen.findByText(/VÒNG 1\//)).toBeTruthy();
     expect(screen.getByText('Đã ghép:')).toBeTruthy();
   });
+
+  it('typing tron thu tu tu thay vi di theo thu tu API', async () => {
+    const rand = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      renderWith(allRoutes(), `/vocab/set/${SET_ID}/typing`);
+      // shuffle với Math.random = 0: từ thứ 2 của danh sách lên đầu, không giữ nguyên thứ tự API
+      expect(await screen.findByText('quyển sách')).toBeTruthy();
+      expect(screen.queryByText('quả táo')).toBeNull();
+
+      // "Chơi lại" là lượt mới: trộn lại theo giá trị ngẫu nhiên mới
+      rand.mockReturnValue(0.999);
+      fireEvent.click(screen.getByText('Chơi lại'));
+      expect(await screen.findByText('quả táo')).toBeTruthy();
+    } finally {
+      rand.mockRestore();
+    }
+  });
+
+  it('flashcard tron lai thu tu khi bam Choi lai', async () => {
+    const rand = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      renderWith(allRoutes(), `/vocab/set/${SET_ID}/flashcard`);
+      const front = () => document.querySelector('.fc-front .fc-word').textContent;
+      // shuffle với Math.random = 0 -> book, run, happy, apple
+      expect(await screen.findByText('book')).toBeTruthy();
+      fireEvent.click(screen.getByText('Tiếp ›'));
+      expect(front()).toBe('run');
+
+      // lượt mới (Math.random = 0.999) giữ đúng danh sách -> quay về apple đầu tiên
+      rand.mockReturnValue(0.999);
+      fireEvent.click(screen.getByText('Chơi lại'));
+      await waitFor(() => expect(front()).toBe('apple'));
+    } finally {
+      rand.mockRestore();
+    }
+  });
 });
 
 describe('vocab review', () => {

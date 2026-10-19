@@ -10,6 +10,21 @@ export function shuffle(arr) {
   return a;
 }
 
+/**
+ * Trộn ngẫu nhiên thứ tự từ cho mỗi lượt chơi: "Chơi lại" (mount lại) hoặc đổi bộ từ
+ * sẽ trộn lại, nên các chế độ không bao giờ chạy theo thứ tự cố định từ API.
+ * So chữ ký theo id thay vì so mảng trực tiếp — cache tiến độ (patchProgressInCache)
+ * trả mảng mới cùng nội dung sau mỗi câu trả lời, so trực tiếp sẽ trộn lại giữa lượt.
+ */
+function useShuffledWords(words, runKey = 0) {
+  const signature = `${runKey}|${words.map((w) => w.id).join('|')}`;
+  const [state, setState] = useState(() => ({ signature, pool: shuffle(words) }));
+  if (state.signature !== signature) {
+    setState({ signature, pool: shuffle(words) });
+  }
+  return state.pool;
+}
+
 function normText(value) {
   return String(value ?? '').normalize('NFC').trim().toLowerCase();
 }
@@ -180,6 +195,7 @@ function EmptyPool({ onExit }) {
 /* ============================ FLASHCARD ============================ */
 
 export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
+  const pool = useShuffledWords(words);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [direction, setDirection] = useState('en-vi');
@@ -187,8 +203,8 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
   const [feedback, setFeedback] = useState(null);
   const [saving, setSaving] = useState(false);
   const [knownCount, setKnownCount] = useState(0);
-  const total = words.length;
-  const word = words[index];
+  const total = pool.length;
+  const word = pool[index];
 
   const go = useCallback((step) => {
     setFlipped(false);
@@ -324,13 +340,15 @@ export const QUIZ_MODE_META = {
 export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onReplay, onExit }) {
   const { later, clear } = useTimeouts();
   const [localMode, setLocalMode] = useState(quizMode);
+  const [runKey, setRunKey] = useState(0);
+  const pool = useShuffledWords(words, runKey);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const total = words.length;
-  const word = words[index];
+  const total = pool.length;
+  const word = pool[index];
   const usesTerms = localMode === 'meaning-word' || localMode === 'context';
 
   const indexRef = useRef(index);
@@ -397,7 +415,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
     const answer = labelOf(word);
     const seen = new Set([normText(answer)]);
     const distractors = [];
-    for (const candidate of shuffle(words)) {
+    for (const candidate of shuffle(pool)) {
       if (candidate.id === word.id) continue;
       const label = labelOf(candidate);
       const dedupeKey = normText(label);
@@ -410,7 +428,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
     }
     return shuffle([{ label: answer, correct: true }, ...distractors])
       .map((opt, i) => ({ ...opt, key: `${i}-${opt.label}` }));
-  }, [word, words, usesTerms]);
+  }, [word, pool, usesTerms]);
 
   const timer = useCountdown(30, `${localMode}-${index}`, () => {
     if (!word || revealed) return;
@@ -469,6 +487,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
       onToggleDirection={meta.toggle ? () => {
         cancelPendingAdvance();
         setLocalMode((m) => (m === 'word-meaning' ? 'meaning-word' : 'word-meaning'));
+        setRunKey((k) => k + 1);
         lastAdvancedIndexRef.current = -1;
         setIndex(0); setScore(0); setCorrectCount(0); setPicked(null); setRevealed(false);
       } : undefined}
@@ -512,6 +531,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
 
 export function TypingGame({ words, onProgress, onReplay, onExit }) {
   const { later } = useTimeouts();
+  const pool = useShuffledWords(words);
   const [direction, setDirection] = useState('vi-en');
   const [index, setIndex] = useState(0);
   const [value, setValue] = useState('');
@@ -520,8 +540,8 @@ export function TypingGame({ words, onProgress, onReplay, onExit }) {
   const [showExample, setShowExample] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
-  const total = words.length;
-  const word = words[index];
+  const total = pool.length;
+  const word = pool[index];
 
   const advance = useCallback(() => {
     setResult(null);
@@ -638,15 +658,15 @@ const MATCH_HEARTS = 5;
 
 export function MatchGame({ words, onProgress, onReplay, onExit }) {
   const { later } = useTimeouts();
+  const pool = useShuffledWords(words);
   const rounds = useMemo(() => {
-    const pool = shuffle(words);
     const chunks = [];
     for (let i = 0; i < pool.length; i += ROUND_SIZE) {
       const chunk = pool.slice(i, i + ROUND_SIZE);
       if (chunk.length >= 2) chunks.push(chunk);
     }
     return chunks;
-  }, [words]);
+  }, [pool]);
 
   const [roundIdx, setRoundIdx] = useState(0);
   const [done, setDone] = useState([]);
