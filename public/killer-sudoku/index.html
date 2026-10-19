@@ -31,6 +31,9 @@
           <button type="button" id="btnRandomLevel" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; font-weight: 600; border-radius: 8px;" title="Chuyển ngay sang một ván ngẫu nhiên mới">
             🎲 Ván Mới
           </button>
+          <button type="button" id="btnOpenPvP" class="btn btn-primary" style="padding: 3px 9px; font-size: 11px; font-weight: 700; border-radius: 8px; background: linear-gradient(135deg, #ef4444, #f97316); border: none; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35); color: #fff;" title="Đấu đối kháng Solo nhiều người cùng lúc qua WebSocket">
+            ⚔️ Đấu Solo
+          </button>
         </div>
 
         <div class="header-right">
@@ -89,8 +92,38 @@
               <span class="pause-bars"></span>
             </button>
           </div>
-        </div>
       </section>
+
+      <!-- Realtime Solo PvP Match HUD -->
+      <div id="pvpHudBar" class="pvp-hud-bar hidden">
+        <div class="pvp-player-card pvp-me">
+          <div class="pvp-player-info">
+            <span class="pvp-badge-tag me">BẠN</span>
+            <span id="pvpMyName" class="pvp-name">Tôi</span>
+            <span id="pvpMyMistakes" class="pvp-mistakes">Lỗi: 0/3</span>
+          </div>
+          <div class="pvp-progress-track">
+            <div id="pvpMyProgress" class="pvp-progress-fill me" style="width: 0%;"></div>
+          </div>
+          <div class="pvp-cell-stat"><span id="pvpMyCells">0</span>/81 ô (<span id="pvpMyPercent">0%</span>)</div>
+        </div>
+
+        <div class="pvp-vs-badge">
+          <div class="vs-text">VS</div>
+        </div>
+
+        <div class="pvp-player-card pvp-opp">
+          <div class="pvp-player-info">
+            <span class="pvp-badge-tag opp">ĐỐI THỦ</span>
+            <span id="pvpOppName" class="pvp-name">Chờ...</span>
+            <span id="pvpOppMistakes" class="pvp-mistakes">Lỗi: 0/3</span>
+          </div>
+          <div class="pvp-progress-track">
+            <div id="pvpOppProgress" class="pvp-progress-fill opp" style="width: 0%;"></div>
+          </div>
+          <div class="pvp-cell-stat"><span id="pvpOppCells">0</span>/81 ô (<span id="pvpOppPercent">0%</span>)</div>
+        </div>
+      </div>
 
       <!-- 9x9 Sudoku Board Container -->
       <main class="board-wrapper">
@@ -461,6 +494,171 @@
     </div>
   </div>
 
+  <!-- Modal: SOLO PVP MULTIPLAYER DUEL -->
+  <div id="pvpModal" class="modal-overlay hidden">
+    <div class="modal-card pvp-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 24px;">⚔️</span>
+          <div>
+            <h2 style="font-size: 17px; margin: 0; font-weight: 700;">Đấu Solo Killer Sudoku</h2>
+            <small style="color: var(--text-muted); font-size: 11px;">Thi đấu 1v1 tốc độ qua WebSocket thời gian thực</small>
+          </div>
+        </div>
+        <button id="btnClosePvP" class="icon-btn" title="Đóng">✕</button>
+      </div>
+
+      <!-- PvP Navigation Tabs -->
+      <div class="pvp-tab-bar">
+        <button type="button" class="pvp-tab-btn active" data-pvp-tab="tabQuickMatch">⚡ Ghép Nhanh</button>
+        <button type="button" class="pvp-tab-btn" data-pvp-tab="tabCreateRoom">🏠 Tạo Phòng</button>
+        <button type="button" class="pvp-tab-btn" data-pvp-tab="tabJoinRoom">🔑 Vào Phòng</button>
+      </div>
+
+      <!-- TAB 1: QUICK MATCH -->
+      <div id="tabQuickMatch" class="pvp-tab-pane active">
+        <div class="pvp-pane-body">
+          <div class="pvp-mode-banner">
+            <div style="font-size: 32px; margin-bottom: 6px;">⚡</div>
+            <h3 style="font-size: 16px; margin-bottom: 4px;">Ghép Đôi Ngẫu Nhiên</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Tự động tìm đối thủ cùng trình độ và thi đấu trên cùng 1 đề bài!</p>
+          </div>
+
+          <div class="pvp-setting-item">
+            <label>Tên của bạn:</label>
+            <input type="text" id="pvpMyNickname" class="pvp-input" maxlength="20" placeholder="Nhập tên của bạn...">
+          </div>
+
+          <div class="pvp-setting-item">
+            <label>Độ khó trận đấu:</label>
+            <div class="pvp-diff-select">
+              <button type="button" class="pvp-diff-btn active" data-diff="easy">Dễ</button>
+              <button type="button" class="pvp-diff-btn" data-diff="medium">Vừa</button>
+              <button type="button" class="pvp-diff-btn" data-diff="hard">Khó</button>
+            </div>
+          </div>
+
+          <button type="button" id="btnStartQuickMatch" class="btn btn-primary pvp-action-btn">
+            🚀 TÌM TRẬN NGAY
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 2: CREATE ROOM -->
+      <div id="tabCreateRoom" class="pvp-tab-pane">
+        <div class="pvp-pane-body">
+          <div class="pvp-setting-item">
+            <label>Tên chủ phòng:</label>
+            <input type="text" id="pvpHostNickname" class="pvp-input" maxlength="20" placeholder="Nhập tên của bạn...">
+          </div>
+
+          <div class="pvp-setting-item">
+            <label>Chế độ đề bài:</label>
+            <div class="pvp-mode-options">
+              <label class="pvp-radio-label">
+                <input type="radio" name="pvpMapMode" value="same_map" checked>
+                <span>🧩 <strong>Cùng 1 đề</strong> (Công bằng tuyệt đối, cùng 1 map)</span>
+              </label>
+              <label class="pvp-radio-label">
+                <input type="radio" name="pvpMapMode" value="diff_map">
+                <span>🎲 <strong>Đề riêng</strong> (Mỗi người 1 đề ngẫu nhiên cùng độ khó)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pvp-setting-item">
+            <label>Độ khó phòng:</label>
+            <div class="pvp-diff-select">
+              <button type="button" class="pvp-diff-btn active" data-diff="easy">Dễ</button>
+              <button type="button" class="pvp-diff-btn" data-diff="medium">Vừa</button>
+              <button type="button" class="pvp-diff-btn" data-diff="hard">Khó</button>
+              <button type="button" class="pvp-diff-btn" data-diff="expert">Chuyên gia</button>
+            </div>
+          </div>
+
+          <button type="button" id="btnCreateRoomSubmit" class="btn btn-primary pvp-action-btn">
+            🏠 TẠO PHÒNG ĐẤU RIÊNG
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 3: JOIN ROOM -->
+      <div id="tabJoinRoom" class="pvp-tab-pane">
+        <div class="pvp-pane-body">
+          <div class="pvp-setting-item">
+            <label>Tên của bạn:</label>
+            <input type="text" id="pvpJoinNickname" class="pvp-input" maxlength="20" placeholder="Nhập tên của bạn...">
+          </div>
+
+          <div class="pvp-setting-item">
+            <label>Mã phòng (6 ký tự):</label>
+            <input type="text" id="pvpRoomCodeInput" class="pvp-input pvp-code-input" maxlength="6" placeholder="VD: KIL882">
+          </div>
+
+          <button type="button" id="btnJoinRoomSubmit" class="btn btn-primary pvp-action-btn">
+            🔑 VÀO PHÒNG NGAY
+          </button>
+        </div>
+      </div>
+
+      <!-- ROOM LOBBY WAITING SCREEN -->
+      <div id="pvpLobbyScreen" class="pvp-lobby-screen hidden">
+        <div class="pvp-lobby-header">
+          <span>MÃ PHÒNG:</span>
+          <div class="pvp-room-code-display">
+            <span id="displayRoomCode">------</span>
+            <button type="button" id="btnCopyRoomCode" class="btn-copy-code" title="Copy mã phòng">📋 Copy</button>
+          </div>
+          <small style="color: var(--text-muted);">Gửi mã này cho bạn bè để cùng so tài!</small>
+        </div>
+
+        <div class="pvp-lobby-players">
+          <div class="pvp-lobby-player me">
+            <div class="player-avatar">👤</div>
+            <span id="lobbyPlayer1Name" class="player-name">Bạn</span>
+            <span class="player-status ready">Sẵn sàng</span>
+          </div>
+
+          <div class="pvp-lobby-vs">VS</div>
+
+          <div class="pvp-lobby-player opp" id="lobbyOpponentSlot">
+            <div class="player-avatar">⏳</div>
+            <span id="lobbyPlayer2Name" class="player-name">Đang đợi đối thủ...</span>
+            <span id="lobbyPlayer2Status" class="player-status waiting">Chờ...</span>
+          </div>
+        </div>
+
+        <div class="pvp-lobby-actions">
+          <button type="button" id="btnCancelPvP" class="btn btn-secondary">Rời Phòng</button>
+          <button type="button" id="btnReadyPvP" class="btn btn-primary">SẴN SÀNG</button>
+        </div>
+      </div>
+
+      <!-- COUNTDOWN OVERLAY -->
+      <div id="pvpCountdownOverlay" class="pvp-countdown-overlay hidden">
+        <div class="countdown-circle">
+          <span id="pvpCountdownNumber">3</span>
+        </div>
+        <div class="countdown-tip">CHUẨN BỊ CHIẾN ĐẤU!</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: SOLO PVP RESULT -->
+  <div id="pvpResultModal" class="modal-overlay hidden">
+    <div class="modal-card win-card pvp-result-card">
+      <div id="pvpResultIcon" class="win-trophy-anim" style="font-size: 54px;">🏆</div>
+      <h2 id="pvpResultTitle" class="win-title">CHIẾN THẮNG!</h2>
+      <p id="pvpResultDesc" class="win-subtitle">Bạn đã giải xong trước đối thủ!</p>
+
+      <div class="win-actions" style="margin-top: 18px;">
+        <button id="btnPvPLeaveGame" class="btn btn-secondary" style="flex: 1;">Về Chơi Đơn</button>
+        <button id="btnPvPRematch" class="btn btn-primary" style="flex: 2;">Tái Đấu Ngay ➔</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Fullscreen script -->
   <script>
     function toggleFullscreen() {
@@ -473,10 +671,11 @@
   </script>
 
   <!-- Game Scripts -->
-  <script src="js/puzzles.js?v=2.2.0"></script>
-  <script src="js/solver.js?v=2.2.0"></script>
-  <script src="js/audio.js?v=2.2.0"></script>
-  <script src="js/app.js?v=2.2.0"></script>
-  <script src="js/calculator.js?v=2.2.0"></script>
+  <script src="js/puzzles.js?v=2.3.0"></script>
+  <script src="js/solver.js?v=2.3.0"></script>
+  <script src="js/audio.js?v=2.3.0"></script>
+  <script src="js/calculator.js?v=2.3.0"></script>
+  <script src="js/pvp.js?v=2.3.0"></script>
+  <script src="js/app.js?v=2.3.0"></script>
 </body>
 </html>

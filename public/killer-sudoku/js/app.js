@@ -596,6 +596,17 @@
         updateHighlights();
         updateCageInspector();
         updateNumpadCounts();
+
+        // Đồng bộ tiến độ PvP nếu đang trong trận
+        if (window.KillerSudokuPvP && window.KillerSudokuPvP.isInMatch()) {
+          let solved = 0;
+          for (let i = 0; i < 81; i++) {
+            if (state.board[i] === state.puzzle.solution[i]) solved++;
+          }
+          const pct = Math.floor((solved / 81) * 100);
+          window.KillerSudokuPvP.reportProgress(solved, pct);
+        }
+
         checkWinCondition();
 
         // Tự động chuyển con trỏ sang ô trống tiếp theo
@@ -605,6 +616,11 @@
         state.mistakes++;
         updateMistakesDisplay();
         SoundManager.playError();
+
+        // Đồng bộ lỗi PvP nếu đang trong trận
+        if (window.KillerSudokuPvP && window.KillerSudokuPvP.isInMatch()) {
+          window.KillerSudokuPvP.reportMistake(state.mistakes);
+        }
 
         const cellEl = dom.board.children[idx];
         if (cellEl) {
@@ -632,8 +648,13 @@
 
         if (state.mistakeLimit && state.mistakes >= state.maxMistakes) {
           setTimeout(() => {
-            alert('Bạn đã phạm quá 3 lỗi! Hãy thử lại màn chơi này nhé.');
-            loadLevel(state.difficulty, state.puzzleIndex);
+            if (window.KillerSudokuPvP && window.KillerSudokuPvP.isInMatch()) {
+              // Trong PvP sẽ xử lý thua trận
+              window.KillerSudokuPvP.reportMistake(state.mistakes);
+            } else {
+              alert('Bạn đã phạm quá 3 lỗi! Hãy thử lại màn chơi này nhé.');
+              loadLevel(state.difficulty, state.puzzleIndex);
+            }
           }, 550);
           return;
         }
@@ -819,7 +840,13 @@
     state.isComplete = true;
     SoundManager.playFanfare();
 
-    // Show Win Modal
+    // Nếu đang trong trận PvP -> Báo cáo hoàn thành tới WebSocket server
+    if (window.KillerSudokuPvP && window.KillerSudokuPvP.isInMatch()) {
+      window.KillerSudokuPvP.reportFinished(state.timerSeconds);
+      return;
+    }
+
+    // Show Win Modal (Single player)
     dom.winTime.textContent = dom.timerDisplay.textContent;
     dom.winMistakes.textContent = `${state.mistakes}/${state.maxMistakes}`;
     dom.winScore.textContent = Number(state.allTimeScore + 100).toLocaleString('en-US');
@@ -922,6 +949,51 @@
     dom.settingsModal.classList.add('hidden');
   }
 
+  function loadPuzzleRaw(raw, diff = 'expert') {
+    state.difficulty = diff;
+    state.puzzleIndex = 0;
+    state.puzzle = KillerEngine.parsePuzzle(raw);
+
+    // Reset game state
+    state.board = [...state.puzzle.givens];
+    state.notes = Array.from({ length: 81 }, () => new Set());
+    state.history = [];
+    state.redoStack = [];
+    state.selectedCell = state.puzzle.givens.findIndex(v => v === 0);
+    if (state.selectedCell === -1) state.selectedCell = 0;
+    state.mistakes = 0;
+    state.hintsLeft = 0; // Không dùng gợi ý trong PvP
+    state.isComplete = false;
+    state.isPaused = false;
+    state.conflicts = new Set();
+    state.lockedCells = new Set();
+    state.puzzle.givens.forEach((v, i) => {
+      if (v > 0) state.lockedCells.add(i);
+    });
+
+    dom.levelTitle.textContent = state.puzzle.id || 'PvP';
+    dom.diffDisplay.textContent = formatDiffName(diff);
+    if (dom.hintBadge) dom.hintBadge.textContent = '0';
+    updateMistakesDisplay();
+
+    renderBoard();
+    updateHighlights();
+    updateCageInspector();
+    updateNumpadCounts();
+    startTimer(true);
+  }
+
+  function loadDefaultLevel() {
+    loadLevel(state.difficulty, state.puzzleIndex);
+  }
+
+  // Export public interface for PvP / External scripts
+  window.KillerSudokuApp = {
+    loadPuzzleRaw,
+    loadDefaultLevel,
+    getState: () => state
+  };
+
   // Start app on DOMContentLoaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -930,3 +1002,4 @@
   }
 
 })();
+

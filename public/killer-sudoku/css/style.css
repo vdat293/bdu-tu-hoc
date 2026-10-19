@@ -1716,3 +1716,397 @@ body[data-theme="dark"] .preset-cage-chip {
   color: #ffffff;
 }
 
+/* ========================================================
+   PVP REALTIME SOLO MODE STYLES
+   ======================================================== */
+.pvp-hud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(245, 158, 11, 0.06));
+  border-bottom: 1.5px solid rgba(37, 99, 235, 0.15);
+  animation: pvpSlideDown 0.3s ease-out;
+}
+@keyframes pvpSlideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pvp-player-card {
+  flex: 1;
+  background: var(--card-bg, #ffffff);
+  border-radius: 8px;
+  padding: 5px 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
+  transition: all 0.2s ease;
+}
+body[data-theme="dark"] .pvp-player-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+.pvp-player-card.flash {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+  border-color: #f59e0b;
+}
+
+.pvp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.pvp-player-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pvp-player-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.pvp-me .pvp-player-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.pvp-opp .pvp-player-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.pvp-progress-track {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+body[data-theme="dark"] .pvp-progress-track {
+  background: #334155;
+}
+.pvp-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pvp-me .pvp-progress-fill {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+.pvp-opp .pvp-progress-fill {
+  background: linear-gradient(90deg, #f97316, #ef4444);
+}
+
+.pvp-card-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pvp-vs-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+/* PvP Modal & Tabs */
+.pvp-modal-card {
+  max-width: 440px;
+  width: 90%;
+  border-radius: 16px;
+  padding: 16px;
+}
+.pvp-tab-bar {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px;
+  border-radius: 10px;
+  margin: 12px 0 16px;
+}
+body[data-theme="dark"] .pvp-tab-bar {
+  background: rgba(255, 255, 255, 0.06);
+}
+.pvp-tab-btn {
+  flex: 1;
+  padding: 7px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pvp-tab-btn.active {
+  background: var(--card-bg, #ffffff);
+  color: #2563eb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+body[data-theme="dark"] .pvp-tab-btn.active {
+  background: #334155;
+  color: #60a5fa;
+}
+
+.pvp-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pvp-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pvp-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pvp-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(0,0,0,0.12);
+  background: var(--app-bg, #ffffff);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.pvp-input:focus {
+  border-color: #2563eb;
+}
+body[data-theme="dark"] .pvp-input {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.pvp-diff-chips {
+  display: flex;
+  gap: 6px;
+}
+.pvp-diff-chip {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: transparent;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pvp-diff-chip.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.pvp-diff-chip:hover:not(.active) {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+
+.pvp-radio-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+.pvp-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.pvp-primary-btn {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  transition: transform 0.1s, opacity 0.15s;
+}
+.pvp-primary-btn:hover {
+  opacity: 0.95;
+}
+.pvp-primary-btn:active {
+  transform: scale(0.98);
+}
+.pvp-primary-btn.btn-disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* PvP Lobby Screen */
+.pvp-lobby-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0;
+}
+.room-code-box {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1.5px dashed rgba(37, 99, 235, 0.4);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+}
+.code-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.code-val-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.code-val {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #2563eb;
+}
+.btn-copy {
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.lobby-players-list {
+  display: flex;
+  gap: 10px;
+}
+.lobby-player-slot {
+  flex: 1;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+}
+body[data-theme="dark"] .lobby-player-slot {
+  background: #1e293b;
+  border-color: #334155;
+}
+.slot-avatar {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.slot-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-status {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.player-status.ready {
+  background: #dcfce7;
+  color: #15803d;
+}
+.player-status.waiting {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-secondary {
+  flex: 1;
+  padding: 9px;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* PvP Countdown Overlay */
+.pvp-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s;
+}
+.countdown-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.countdown-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1px;
+}
+.countdown-num {
+  font-size: 72px;
+  font-weight: 900;
+  color: #f59e0b;
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.8);
+  animation: pulseScale 0.8s infinite;
+}
+@keyframes pulseScale {
+  0% { transform: scale(0.9); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(0.9); }
+}
+
+

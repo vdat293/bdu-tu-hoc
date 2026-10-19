@@ -9,6 +9,7 @@ import { createApp } from './src/app.js';
 import { startJobs, stopJobs } from './src/jobs/index.js';
 import { closeDatabase } from './src/db/database.js';
 import { CommunityRealtime } from './src/services/community-realtime.service.js';
+import { KillerSudokuRealtime } from './src/services/killer-sudoku-realtime.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
 
@@ -24,6 +25,7 @@ const isPrimaryWorker = WORKER_INSTANCE === undefined || WORKER_INSTANCE === '0'
 
 const server = createServer(app);
 CommunityRealtime.attach(server);
+KillerSudokuRealtime.attach(server);
 EntertainmentGameService.start({
   onEvent(event) {
     CommunityRealtime.publishGameExpiry(event);
