@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import {
   describeStudentSceneSupport,
@@ -25,11 +25,16 @@ const FAILURE_REASONS = {
 export default function AuthLayout() {
   // Cảnh 3D chỉ bật trên màn hình rộng và khi không bật giảm chuyển động; hỏng
   // WebGL hoặc chunk lỗi thì khoá luôn, không thử lại để khỏi nhấp nháy.
-  const [support, setSupport] = useState(() => describeStudentSceneSupport(window));
-  const [sceneFailure, setSceneFailure] = useState('');
-  const sceneEnabled = support === 'ok' && !sceneFailure;
+  //
+  // Riêng ?scene3d-debug là chế độ chẩn đoán: bỏ qua cổng giảm chuyển động để soi
+  // cảnh 3D trên máy đang bật reduce-motion (cổng bề rộng vẫn giữ vì panel hẹp thì
+  // không có chỗ hiển thị).
   const debugEnabled = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).has('scene3d-debug');
+  const [support, setSupport] = useState(() => describeStudentSceneSupport(window));
+  const [sceneFailure, setSceneFailure] = useState('');
+  const forced = debugEnabled && support !== 'ok';
+  const sceneEnabled = (support === 'ok' || debugEnabled) && !sceneFailure;
   const reason = sceneFailure
     ? FAILURE_REASONS[sceneFailure] ?? sceneFailure
     : SUPPORT_REASONS[support] ?? '';
@@ -45,8 +50,10 @@ export default function AuthLayout() {
   }), []);
 
   useEffect(() => {
-    if (reason) console.info(`[student-scene] cảnh 3D tắt: ${reason}`);
-  }, [reason]);
+    if (!reason) return;
+    if (forced) console.info(`[student-scene] ?scene3d-debug: bỏ qua cổng "${reason}" để bật cảnh 3D`);
+    else if (!sceneEnabled) console.info(`[student-scene] cảnh 3D tắt: ${reason}`);
+  }, [reason, forced, sceneEnabled]);
 
   const handleSceneUnsupported = useCallback((failure) => {
     setSceneFailure(failure || 'start');
@@ -62,7 +69,8 @@ export default function AuthLayout() {
           <div className="scene-brand"><span className="scene-brand-mark"><img src="/assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương" /></span><span>Binh Duong University</span></div>
           <div className="character-stage">
             {sceneEnabled ? <StudentScene onUnsupported={handleSceneUnsupported} /> : <div className="character-stage-blobs" aria-hidden="true"><CharacterStage /></div>}
-            {debugEnabled && reason && <pre className="student-scene-debug">cảnh 3D tắt: {reason}</pre>}
+            {debugEnabled && !sceneEnabled && reason && <pre className="student-scene-debug">cảnh 3D tắt: {reason}</pre>}
+            {forced && <pre className="student-scene-debug">?scene3d-debug: bỏ qua cổng &quot;{reason}&quot;</pre>}
           </div>
           <div className="scene-copy"><p className="scene-kicker">Quyền riêng tư là mặc định</p><h2>Không ai nhìn trộm đâu.</h2><p>Nhập mật khẩu và xem họ lịch sự quay đi.</p></div>
         </section>
