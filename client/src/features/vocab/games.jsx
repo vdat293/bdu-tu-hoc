@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { stripTermHints } from './vocab-text.js';
 
 export function shuffle(arr) {
   const a = [...arr];
@@ -47,12 +48,25 @@ export function PosBadge({ pos }) {
 }
 
 function useTimeouts() {
-  const timers = useRef([]);
-  useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
-  return (fn, ms) => {
-    const id = setTimeout(fn, ms);
-    timers.current.push(id);
-  };
+  const timers = useRef(new Set());
+  useEffect(() => () => {
+    timers.current.forEach(clearTimeout);
+    timers.current.clear();
+  }, []);
+  const later = useCallback((fn, ms) => {
+    const id = setTimeout(() => {
+      timers.current.delete(id);
+      fn();
+    }, ms);
+    timers.current.add(id);
+    return id;
+  }, []);
+  const clear = useCallback((id) => {
+    if (id == null) return;
+    clearTimeout(id);
+    timers.current.delete(id);
+  }, []);
+  return { later, clear };
 }
 
 function useCountdown(seconds, resetKey, onExpire) {
@@ -308,7 +322,7 @@ export const QUIZ_MODE_META = {
 };
 
 export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onReplay, onExit }) {
-  const later = useTimeouts();
+  const { later, clear } = useTimeouts();
   const [localMode, setLocalMode] = useState(quizMode);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState(null);
@@ -319,7 +333,14 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
   const word = words[index];
   const usesTerms = localMode === 'meaning-word' || localMode === 'context';
 
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const lastAdvancedIndexRef = useRef(-1);
+
   const advance = useCallback(() => {
+    // Chặn việc một câu bị tăng index hai lần (Enter + hẹn giờ tự chuyển).
+    if (lastAdvancedIndexRef.current === indexRef.current) return;
+    lastAdvancedIndexRef.current = indexRef.current;
     setPicked(null);
     setRevealed(false);
     setIndex((i) => i + 1);
@@ -327,9 +348,27 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
   const advanceRef = useRef(advance);
   advanceRef.current = advance;
 
+  const advanceTimerRef = useRef(null);
+  const cancelPendingAdvance = useCallback(() => {
+    clear(advanceTimerRef.current);
+    advanceTimerRef.current = null;
+  }, [clear]);
+  const scheduleAdvance = useCallback((ms) => {
+    cancelPendingAdvance();
+    advanceTimerRef.current = later(() => {
+      advanceTimerRef.current = null;
+      advanceRef.current();
+    }, ms);
+  }, [cancelPendingAdvance, later]);
+  const advanceNow = useCallback(() => {
+    cancelPendingAdvance();
+    advanceRef.current();
+  }, [cancelPendingAdvance]);
+
   const prompt = useMemo(() => {
     if (!word) return null;
-    if (localMode === 'meaning-word') return { label: QUIZ_MODE_META['meaning-word'].label, text: word.meaning, showMeta: false, sentence: false };
+    const meaning = stripTermHints(word.meaning, word.term);
+    if (localMode === 'meaning-word') return { label: QUIZ_MODE_META['meaning-word'].label, text: meaning, showMeta: false, sentence: false };
     if (localMode === 'context' && word.example) {
       const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const mask = (source, raw) => source.replace(new RegExp(`${esc(raw)}\\w*`, 'ig'), '______');
@@ -347,24 +386,36 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
         return { label: QUIZ_MODE_META.context.label, text, showMeta: false, sentence: true };
       }
       // Không che được từ nào trong ví dụ -> hỏi theo nghĩa để câu hỏi vẫn trả lời được.
-      return { label: QUIZ_MODE_META.context.label, text: word.meaning, showMeta: false, sentence: false };
+      return { label: QUIZ_MODE_META.context.label, text: meaning, showMeta: false, sentence: false };
     }
     return { label: QUIZ_MODE_META['word-meaning'].label, text: word.term, showMeta: true, sentence: false };
   }, [word, localMode]);
 
   const options = useMemo(() => {
     if (!word) return [];
-    const answer = usesTerms ? word.term : word.meaning;
-    const others = shuffle(
-      words.filter((w) => w.id !== word.id && (usesTerms ? w.term !== word.term : w.meaning !== word.meaning))
-    ).slice(0, 3).map((w) => (usesTerms ? w.term : w.meaning));
-    return shuffle([answer, ...others].map((label, i) => ({ key: `${i}-${label}`, label, correct: label === answer })));
+    const labelOf = usesTerms ? (w) => w.term : (w) => stripTermHints(w.meaning, w.term);
+    const answer = labelOf(word);
+    const seen = new Set([normText(answer)]);
+    const distractors = [];
+    for (const candidate of shuffle(words)) {
+      if (candidate.id === word.id) continue;
+      const label = labelOf(candidate);
+      const dedupeKey = normText(label);
+      // Bỏ phương án trùng nghĩa (dữ liệu có nhiều từ đồng nghĩa) để không có
+      // hai đáp án cùng nội dung hoặc lộ đáp án qua phần gợi ý trong ngoặc.
+      if (!label || seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      distractors.push({ label, correct: false });
+      if (distractors.length === 3) break;
+    }
+    return shuffle([{ label: answer, correct: true }, ...distractors])
+      .map((opt, i) => ({ ...opt, key: `${i}-${opt.label}` }));
   }, [word, words, usesTerms]);
 
   const timer = useCountdown(30, `${localMode}-${index}`, () => {
     if (!word || revealed) return;
     setRevealed(true);
-    later(() => advanceRef.current(), 1500);
+    scheduleAdvance(1500);
   });
 
   const choose = (opt) => {
@@ -376,14 +427,14 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
       setCorrectCount((c) => c + 1);
       onProgress?.(word.id, 'known')?.catch?.(() => {});
     }
-    later(advance, 850);
+    scheduleAdvance(850);
   };
 
   useEffect(() => {
     const onKey = (e) => {
       const n = Number(e.key);
       if (n >= 1 && n <= 4 && options[n - 1]) choose(options[n - 1]);
-      else if (e.key === 'Enter' && revealed) advance();
+      else if (e.key === 'Enter' && revealed) advanceNow();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -416,7 +467,9 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
       timerTotal={30}
       direction={meta.toggle}
       onToggleDirection={meta.toggle ? () => {
+        cancelPendingAdvance();
         setLocalMode((m) => (m === 'word-meaning' ? 'meaning-word' : 'word-meaning'));
+        lastAdvancedIndexRef.current = -1;
         setIndex(0); setScore(0); setCorrectCount(0); setPicked(null); setRevealed(false);
       } : undefined}
       onReplay={onReplay}
@@ -458,7 +511,7 @@ export function QuizGame({ words, quizMode = 'word-meaning', onProgress, onRepla
 /* ============================= TYPING ============================= */
 
 export function TypingGame({ words, onProgress, onReplay, onExit }) {
-  const later = useTimeouts();
+  const { later } = useTimeouts();
   const [direction, setDirection] = useState('vi-en');
   const [index, setIndex] = useState(0);
   const [value, setValue] = useState('');
@@ -483,7 +536,7 @@ export function TypingGame({ words, onProgress, onReplay, onExit }) {
 
   const timer = useCountdown(30, index, () => {
     if (!word) return;
-    setResult(`Hết giờ — đáp án: ${direction === 'vi-en' ? word.term : word.meaning}`);
+    setResult(`Hết giờ — đáp án: ${direction === 'vi-en' ? word.term : stripTermHints(word.meaning, word.term)}`);
     later(() => advanceRef.current(), 1400);
   });
 
@@ -502,8 +555,9 @@ export function TypingGame({ words, onProgress, onReplay, onExit }) {
     return <EmptyPool onExit={onExit} />;
   }
 
-  const promptText = direction === 'vi-en' ? word.meaning : word.term;
-  const expected = direction === 'vi-en' ? word.term : word.meaning;
+  const meaning = stripTermHints(word.meaning, word.term);
+  const promptText = direction === 'vi-en' ? meaning : word.term;
+  const expected = direction === 'vi-en' ? word.term : meaning;
   const hintReveal = hintLevel > 0 ? expected.slice(0, hintLevel) : '';
   const hintRest = Math.max(0, expected.length - hintLevel);
 
@@ -583,7 +637,7 @@ const ROUND_SIZE = 8;
 const MATCH_HEARTS = 5;
 
 export function MatchGame({ words, onProgress, onReplay, onExit }) {
-  const later = useTimeouts();
+  const { later } = useTimeouts();
   const rounds = useMemo(() => {
     const pool = shuffle(words);
     const chunks = [];
@@ -708,7 +762,7 @@ export function MatchGame({ words, onProgress, onReplay, onExit }) {
                 disabled={done.includes(w.id)}
                 onClick={() => pickMeaning(w)}
               >
-                {w.meaning}
+                {stripTermHints(w.meaning, w.term)}
               </button>
             ))}
           </div>

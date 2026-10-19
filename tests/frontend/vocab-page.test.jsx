@@ -249,6 +249,35 @@ describe('vocab game page', () => {
     expect(screen.getByText('~0 GAME', { exact: false })).toBeTruthy();
   });
 
+  it('quiz khong lo dap an qua goi y trong ngoac va khong lap phuong an', async () => {
+    mocks.getVocabWords.mockResolvedValue({
+      set: { id: SET_ID, name: 'Part 1' },
+      words: [
+        { id: '11111111-1111-4111-8111-111111111111', term: 'Hi there', pronunciation: '', pos: 'interjection', meaning: 'Xin chào(Hi, there)', example: '', progress: 'learning' },
+        { id: '22222222-2222-4222-8222-222222222222', term: 'Hi', pronunciation: '', pos: 'interjection', meaning: 'Xin chào(Hi)', example: '', progress: 'learning' },
+        { id: '33333333-3333-4333-8333-333333333333', term: 'Hello', pronunciation: '', pos: 'interjection', meaning: 'Xin chào(hello)', example: '', progress: 'learning' },
+        { id: '44444444-4444-4444-8444-444444444444', term: 'Good evening', pronunciation: '', pos: 'phrase', meaning: 'Chào buổi tối', example: '', progress: 'learning' }
+      ]
+    });
+    renderWith(allRoutes(), `/vocab/set/${SET_ID}/quiz?quiz=word-meaning`);
+    expect(await screen.findByText('Câu 1 / 4')).toBeTruthy();
+    const labels = [...document.querySelectorAll('.qz-label')].map((el) => el.textContent);
+    expect(labels).toEqual(expect.arrayContaining(['Xin chào', 'Chào buổi tối']));
+    expect(labels.filter((label) => label === 'Xin chào')).toHaveLength(1);
+    expect(labels.some((label) => /\b(hi|hello)\b/i.test(label))).toBe(false);
+  });
+
+  it('enter ngay sau khi chon dap an khong nhay qua 2 cau', async () => {
+    renderWith(allRoutes(), `/vocab/set/${SET_ID}/quiz?quiz=word-meaning`);
+    expect(await screen.findByText('Câu 1 / 4')).toBeTruthy();
+    fireEvent.click(document.querySelector('.qz-option'));
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(await screen.findByText('Câu 2 / 4')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(screen.getByText('Câu 2 / 4')).toBeTruthy();
+    expect(screen.queryByText('Câu 3 / 4')).toBeNull();
+  });
+
   it('match hien vong choi va tim', async () => {
     renderWith(allRoutes(), `/vocab/set/${SET_ID}/match`);
     expect(await screen.findByText(/VÒNG 1\//)).toBeTruthy();
