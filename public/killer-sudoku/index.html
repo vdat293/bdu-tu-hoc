@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Killer Sudoku - Máy Tính & Bản Web</title>
+  <meta name="description" content="Killer Sudoku nguyên bản từ APK với giao diện chuẩn sắc nét, màu pastel dịu mắt và máy tính chuồng (Calculator) thông minh bên phải.">
+  <link rel="stylesheet" href="css/style.css?v=2.2.0">
+</head>
+<body data-theme="pastel">
+
+  <!-- Main App Layout (Center: Game, Right: Calculator) -->
+  <div class="app-layout">
+
+    <!-- 1. Mobile Game Frame (Authentic APK Killer Sudoku UI) -->
+    <div class="mobile-frame">
+
+      <!-- Top Header -->
+      <header class="game-header">
+        <button id="btnBack" class="icon-btn" title="Chọn màn chơi">
+          <svg viewBox="0 0 24 24" class="svg-icon">
+            <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div class="header-center" style="display: flex; align-items: center; gap: 6px;">
+          <h1 id="levelTitle" class="level-number" title="Click để chọn màn chơi" style="cursor: pointer;">631</h1>
+          <button type="button" id="btnQuickPicker" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; font-weight: 600; border-radius: 8px;" title="Mở danh sách hàng trăm màn chơi theo độ khó">
+            📋 Đổi Màn
+          </button>
+          <button type="button" id="btnRandomLevel" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; font-weight: 600; border-radius: 8px;" title="Chuyển ngay sang một ván ngẫu nhiên mới">
+            🎲 Ván Mới
+          </button>
+        </div>
+
+        <div class="header-right">
+          <!-- Theme Palette Icon -->
+          <button id="btnThemeToggle" class="icon-btn" title="Đổi chủ đề màu sắc">
+            <svg viewBox="0 0 24 24" class="svg-icon">
+              <path d="M12 2C6.49 2 2 6.49 2 12c0 4.41 3.59 8 8 8 0.73 0 1.33-.6 1.33-1.33 0-.34-.14-.65-.36-.88-.23-.23-.37-.55-.37-.89 0-.74.6-1.33 1.34-1.33h1.56c3.86 0 7-3.14 7-7 0-4.97-4.26-9.5-8.5-9.57z" fill="none" stroke="currentColor" stroke-width="2"/>
+              <circle cx="6.5" cy="11.5" r="1.5" fill="currentColor"/>
+              <circle cx="9.5" cy="7.5" r="1.5" fill="currentColor"/>
+              <circle cx="14.5" cy="7.5" r="1.5" fill="currentColor"/>
+              <circle cx="17.5" cy="11.5" r="1.5" fill="currentColor"/>
+            </svg>
+          </button>
+
+          <!-- Settings Gear Icon -->
+          <button id="btnSettings" class="icon-btn" title="Cài đặt">
+            <svg viewBox="0 0 24 24" class="svg-icon">
+              <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2.2"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Status Bar (4 columns) -->
+      <section class="game-status-bar">
+        <!-- Col 1: All time score -->
+        <div class="status-col">
+          <span class="status-label">Mọi thời điểm</span>
+          <div class="status-val score-val">
+            <svg viewBox="0 0 24 24" class="trophy-icon">
+              <path d="M6 3h12v4a6 6 0 0 1-12 0V3zm-2 2h2v2a4 4 0 0 1-2-2zm16 0a4 4 0 0 1-2 2V5h2zM9 16h6v3H9v-3zm-2 3h10v2H7v-2zm5-5a5.98 5.98 0 0 0 3-1H9a5.98 5.98 0 0 0 3 1z" fill="currentColor"/>
+            </svg>
+            <span id="allTimeScoreDisplay">21,640</span>
+          </div>
+        </div>
+
+        <!-- Col 2: Difficulty -->
+        <div class="status-col">
+          <span class="status-label">Độ khó</span>
+          <span id="diffDisplay" class="status-val">Chuyên gia</span>
+        </div>
+
+        <!-- Col 3: Mistakes -->
+        <div class="status-col">
+          <span class="status-label">Lỗi</span>
+          <span id="mistakesDisplay" class="status-val">0/3</span>
+        </div>
+
+        <!-- Col 4: Time & Pause -->
+        <div class="status-col time-col">
+          <span class="status-label">Thời gian</span>
+          <div class="time-wrapper">
+            <span id="timerDisplay" class="status-val">06:22</span>
+            <button id="btnPause" class="pause-circle-btn" title="Tạm dừng">
+              <span class="pause-bars"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9x9 Sudoku Board Container -->
+      <main class="board-wrapper">
+        <div id="sudokuBoard" class="sudoku-board" tabindex="0">
+          <!-- 81 cells generated by app.js -->
+        </div>
+
+        <!-- Pause Overlay -->
+        <div id="pauseOverlay" class="pause-overlay hidden">
+          <div class="pause-box">
+            <div class="pause-icon">⏸</div>
+            <h2>Trò Chơi Tạm Dừng</h2>
+            <button id="btnResume" class="btn btn-primary" style="margin-top: 14px;">Tiếp Tục Chơi</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- Action Tools (4 round buttons with labels) -->
+      <section class="action-bar">
+        <!-- Undo -->
+        <button id="btnUndo" class="action-btn" title="Hoàn tác (Ctrl+Z hoặc U)">
+          <div class="action-icon-circle">
+            <svg viewBox="0 0 24 24" class="action-svg">
+              <path d="M9 14L4 9l5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20 20v-7a4 4 0 0 0-4-4H4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="action-label">Hoàn tác</span>
+        </button>
+
+        <!-- Erase -->
+        <button id="btnErase" class="action-btn" title="Xóa (Del hoặc Backspace)">
+          <div class="action-icon-circle">
+            <svg viewBox="0 0 24 24" class="action-svg">
+              <path d="M18 13l-5.5 5.5a2.12 2.12 0 0 1-3 0L3.5 12.5a2.12 2.12 0 0 1 0-3L9 4l9 9z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="6.5" y1="15.5" x2="16.5" y2="15.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <line x1="8.5" y1="8.5" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="action-label">Xóa</span>
+        </button>
+
+        <!-- Notes (Pencil with OFF/ON badge) -->
+        <button id="btnNotes" class="action-btn" title="Bật/Tắt Ghi chú (N)">
+          <div class="action-icon-circle pencil-circle">
+            <svg viewBox="0 0 24 24" class="action-svg">
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="notesBadge" class="badge-notes">OFF</span>
+          </div>
+          <span class="action-label">Ghi chú</span>
+        </button>
+
+        <!-- Hint (Lightbulb with count badge) -->
+        <button id="btnHint" class="action-btn" title="Gợi ý ô tiếp theo (H)">
+          <div class="action-icon-circle hint-circle">
+            <svg viewBox="0 0 24 24" class="action-svg">
+              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.5 1.5 4.5 3 6h8c1.5-1.5 3-3.5 3-6a7 7 0 0 0-7-7z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="hintBadge" class="badge-hint">1</span>
+          </div>
+          <span class="action-label">Gợi ý</span>
+        </button>
+      </section>
+
+      <!-- Bottom Keypad: Horizontal Row 1 to 9 -->
+      <footer class="keypad-row">
+        <button class="num-key" data-num="1">1</button>
+        <button class="num-key" data-num="2">2</button>
+        <button class="num-key" data-num="3">3</button>
+        <button class="num-key" data-num="4">4</button>
+        <button class="num-key" data-num="5">5</button>
+        <button class="num-key" data-num="6">6</button>
+        <button class="num-key" data-num="7">7</button>
+        <button class="num-key" data-num="8">8</button>
+        <button class="num-key" data-num="9">9</button>
+      </footer>
+
+    </div>
+
+    <!-- 2. Right Side Calculator & Combinations Helper -->
+    <aside id="killerCalculator" class="calc-sidebar">
+      <div class="calc-card">
+
+        <!-- Calculator Tabs Switcher -->
+        <div class="calc-tabs-bar">
+          <button type="button" class="calc-tab-btn active" data-tab="tabStandardCalc">
+            <span>🧮 Máy Tính Số Học</span>
+          </button>
+          <button type="button" class="calc-tab-btn" data-tab="tabCombinations">
+            <span>💡 Đề Xuất Tổ Hợp</span>
+          </button>
+        </div>
+
+        <!-- TAB 1: STANDARD CALCULATOR -->
+        <div id="tabStandardCalc" class="calc-tab-pane active">
+          <div class="std-calc-screen">
+            <div id="stdPreviousOperand" class="std-prev-operand"></div>
+            <div id="stdCurrentOperand" class="std-curr-operand">0</div>
+          </div>
+
+          <div class="std-calc-grid">
+            <button class="std-btn std-btn-fn" data-action="clear" title="Xóa toàn bộ (Esc)">C</button>
+            <button class="std-btn std-btn-fn" data-action="delete" title="Xóa lùi (Backspace)">⌫</button>
+            <button class="std-btn std-btn-op" data-action="percent" title="Phần trăm">%</button>
+            <button class="std-btn std-btn-op" data-action="divide" title="Chia">÷</button>
+
+            <button class="std-btn std-btn-num" data-num="7">7</button>
+            <button class="std-btn std-btn-num" data-num="8">8</button>
+            <button class="std-btn std-btn-num" data-num="9">9</button>
+            <button class="std-btn std-btn-op" data-action="multiply" title="Nhân">×</button>
+
+            <button class="std-btn std-btn-num" data-num="4">4</button>
+            <button class="std-btn std-btn-num" data-num="5">5</button>
+            <button class="std-btn std-btn-num" data-num="6">6</button>
+            <button class="std-btn std-btn-op" data-action="subtract" title="Trừ">−</button>
+
+            <button class="std-btn std-btn-num" data-num="1">1</button>
+            <button class="std-btn std-btn-num" data-num="2">2</button>
+            <button class="std-btn std-btn-num" data-num="3">3</button>
+            <button class="std-btn std-btn-op" data-action="add" title="Cộng">+</button>
+
+            <button class="std-btn" data-action="toggle-sign" title="Đổi dấu">±</button>
+            <button class="std-btn std-btn-num" data-num="0">0</button>
+            <button class="std-btn" data-num="." title="Dấu thập phân">.</button>
+            <button class="std-btn std-btn-eq" data-action="equals" title="Bằng (Enter)">=</button>
+          </div>
+
+          <div style="font-size: 12px; color: var(--text-secondary); text-align: center; margin-top: 4px;">
+            ⌨️ <em>Hỗ trợ phím số và bàn phím máy tính (+, −, *, /, Enter, Backspace)</em>
+          </div>
+        </div>
+
+        <!-- TAB 2: KILLER SUDOKU COMBINATIONS HELPER -->
+        <div id="tabCombinations" class="calc-tab-pane">
+          <!-- Size Selector -->
+          <div class="calc-param-row">
+            <span class="calc-param-label">Số ô trong chuồng:</span>
+            <div class="combo-size-row">
+              <button type="button" class="combo-size-pill" data-size="1">1 ô</button>
+              <button type="button" class="combo-size-pill active" data-size="2">2 ô</button>
+              <button type="button" class="combo-size-pill" data-size="3">3 ô</button>
+              <button type="button" class="combo-size-pill" data-size="4">4 ô</button>
+              <button type="button" class="combo-size-pill" data-size="5">5 ô</button>
+              <button type="button" class="combo-size-pill" data-size="6">6 ô</button>
+              <button type="button" class="combo-size-pill" data-size="7">7 ô</button>
+            </div>
+          </div>
+
+          <!-- Target Sum Row -->
+          <div class="calc-param-row">
+            <div class="sum-label-line">
+              <span class="calc-param-label">Tổng mục tiêu (Sum):</span>
+              <span id="comboRangeLabel" class="calc-range-tip">(Hợp lệ: 3 – 17)</span>
+            </div>
+            <div class="sum-controls-row">
+              <button type="button" id="btnComboMinus" class="sum-step-btn" title="Giảm tổng">−</button>
+              <input type="number" id="comboSumInput" class="sum-number-input" value="16" min="1" max="45">
+              <button type="button" id="btnComboPlus" class="sum-step-btn" title="Tăng tổng">+</button>
+              <input type="range" id="comboSumSlider" class="sum-slider" min="3" max="17" value="16">
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div class="combo-results-card">
+            <div class="combo-header-line">
+              <span class="combo-title">Tổ Hợp Khả Dĩ:</span>
+              <span id="comboCountBadge" class="combo-count-badge">1 tổ hợp</span>
+            </div>
+
+            <!-- Forced Digits Alert -->
+            <div id="comboForcedBox" class="forced-box hidden" style="margin-bottom: 10px;">
+              <span class="forced-icon">⚡</span>
+              <div>
+                <div class="forced-title">Số chắc chắn có trong chuồng:</div>
+                <div id="comboForcedDigits" class="forced-values">--</div>
+              </div>
+            </div>
+
+            <!-- List of combos -->
+            <div id="comboListWrap" class="combo-list-grid">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Quick Unique Cage Presets -->
+          <div>
+            <span style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary);">⚡ Chuồng Độc Nhất Thường Gặp:</span>
+            <div class="preset-chip-list">
+              <button type="button" class="preset-cage-chip" data-size="2" data-sum="3">2 ô = 3 (1+2)</button>
+              <button type="button" class="preset-cage-chip" data-size="2" data-sum="4">2 ô = 4 (1+3)</button>
+              <button type="button" class="preset-cage-chip" data-size="2" data-sum="16">2 ô = 16 (7+9)</button>
+              <button type="button" class="preset-cage-chip" data-size="2" data-sum="17">2 ô = 17 (8+9)</button>
+              <button type="button" class="preset-cage-chip" data-size="3" data-sum="6">3 ô = 6 (1+2+3)</button>
+              <button type="button" class="preset-cage-chip" data-size="3" data-sum="24">3 ô = 24 (7+8+9)</button>
+              <button type="button" class="preset-cage-chip" data-size="4" data-sum="10">4 ô = 10 (1+2+3+4)</button>
+              <button type="button" class="preset-cage-chip" data-size="4" data-sum="30">4 ô = 30 (6+7+8+9)</button>
+            </div>
+          </div>
+
+          <!-- Collapsible Cheat Sheet / Rule of 45 Guide -->
+          <details class="calc-cheatsheet-card">
+            <summary class="cheatsheet-summary">
+              <span>💡 Bảng Tra Cứu Chuồng Độc Nhất (Quy Tắc 45)</span>
+            </summary>
+            <div class="cheatsheet-body">
+              <div class="cs-row"><strong>2 ô:</strong> 3 (1+2), 4 (1+3), 16 (7+9), 17 (8+9)</div>
+              <div class="cs-row"><strong>3 ô:</strong> 6 (1+2+3), 7 (1+2+4), 23 (6+8+9), 24 (7+8+9)</div>
+              <div class="cs-row"><strong>4 ô:</strong> 10 (1+2+3+4), 11 (1+2+3+5), 29 (5+7+8+9), 30 (6+7+8+9)</div>
+              <div class="cs-row"><strong>5 ô:</strong> 15 (1+2+3+4+5), 35 (5+6+7+8+9)</div>
+              <div class="cs-note">📌 <em>Quy tắc 45: Tổng mọi chữ số trong 1 hàng, 1 cột hoặc 1 khối 3×3 luôn đúng bằng 45!</em></div>
+            </div>
+          </details>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Mobile Floating Button to Toggle Calculator on small screens -->
+  <button id="btnMobileCalcToggle" class="mobile-calc-float-btn" title="Mở máy tính tính chuồng">
+    <span>🧮 Máy Tính Chuồng</span>
+  </button>
+
+  <!-- Level & Difficulty Picker Modal -->
+  <div id="pickerModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Chọn Màn Chơi</h2>
+        <button id="btnClosePicker" class="modal-close-btn">&times;</button>
+      </div>
+
+      <!-- Difficulty Tabs -->
+      <div class="diff-tabs">
+        <button class="diff-tab active" data-diff="easy">Dễ</button>
+        <button class="diff-tab" data-diff="medium">Vừa</button>
+        <button class="diff-tab" data-diff="hard">Khó</button>
+        <button class="diff-tab" data-diff="expert">Chuyên Gia</button>
+        <button class="diff-tab" data-diff="daily_expert">Hằng Ngày</button>
+      </div>
+
+      <div id="pickerGrid" class="level-grid-scroll">
+        <!-- Level buttons generated by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Cài Đặt Trò Chơi</h2>
+        <button id="btnCloseSettings" class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="settings-list">
+        <!-- Theme Selection -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Giao diện màu sắc</div>
+            <div class="setting-sub">Chọn bảng màu pastel chuẩn hoặc OLED</div>
+          </div>
+          <select id="themeSelect" class="setting-select">
+            <option value="pastel">🎨 Pastel APK (Mặc định)</option>
+            <option value="dark">🌙 Tối OLED</option>
+            <option value="sepia">📜 Giấy Cổ Điển</option>
+            <option value="forest">🍵 Rừng Xanh</option>
+          </select>
+        </div>
+
+        <!-- Sound Toggle -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Hiệu ứng âm thanh</div>
+            <div class="setting-sub">Âm thanh click, điền số và chiến thắng</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="chkSound" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <!-- Limit 3 mistakes toggle -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Giới hạn 3 lỗi sai</div>
+            <div class="setting-sub">Thua cuộc khi phạm quá 3 lỗi như trong APK</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="chkMistakeLimit" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <!-- Auto remove notes -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Tự động xóa ghi chú</div>
+            <div class="setting-sub">Xóa các nháp bị xung đột khi điền số đúng</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="chkAutoRemoveNotes" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <!-- Auto fill notes button -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Tự động điền nháp</div>
+            <div class="setting-sub">Điền tất cả các khả năng hợp lệ vào ô trống</div>
+          </div>
+          <button id="btnAutoNotes" class="btn btn-secondary">⚡ Điền Ngay</button>
+        </div>
+
+        <!-- Fullscreen -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Chế độ toàn màn hình</div>
+            <div class="setting-sub">Phóng to toàn bộ màn hình máy tính</div>
+          </div>
+          <button id="btnFullscreen" class="btn btn-secondary" onclick="toggleFullscreen()">⛶ Bật / Tắt</button>
+        </div>
+      </div>
+
+      <!-- Keyboard shortcuts notice for PC -->
+      <div class="shortcuts-box">
+        <div class="shortcuts-title">Phím tắt máy tính:</div>
+        <div class="shortcuts-grid">
+          <div><kbd>1</kbd> - <kbd>9</kbd>: Điền số</div>
+          <div><kbd>N</kbd>: Ghi chú</div>
+          <div><kbd>Backspace</kbd>: Xóa</div>
+          <div><kbd>U</kbd> / <kbd>Ctrl+Z</kbd>: Hoàn tác</div>
+          <div><kbd>H</kbd>: Gợi ý</div>
+          <div><kbd>Space</kbd>: Tạm dừng</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Victory Modal -->
+  <div id="winModal" class="modal-overlay hidden">
+    <div class="modal-card win-card">
+      <div class="win-trophy-anim">🏆</div>
+      <h2 class="win-title">Chiến Thắng Tuyệt Vời!</h2>
+      <p class="win-subtitle">Bạn đã giải xong toàn bộ bàn đố Killer Sudoku!</p>
+
+      <div class="win-stats-row">
+        <div class="win-stat-col">
+          <span class="win-stat-val" id="winTime">06:22</span>
+          <span class="win-stat-lbl">Thời gian</span>
+        </div>
+        <div class="win-stat-col">
+          <span class="win-stat-val" id="winMistakes">0/3</span>
+          <span class="win-stat-lbl">Lỗi</span>
+        </div>
+        <div class="win-stat-col">
+          <span class="win-stat-val" id="winScore">21,640</span>
+          <span class="win-stat-lbl">Điểm số</span>
+        </div>
+      </div>
+
+      <div class="win-actions">
+        <button id="btnPlayAgain" class="btn btn-secondary" style="flex: 1;">Chơi Lại</button>
+        <button id="btnNextLevel" class="btn btn-primary" style="flex: 2;">Màn Tiếp Theo ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen script -->
+  <script>
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  </script>
+
+  <!-- Game Scripts -->
+  <script src="js/puzzles.js?v=2.2.0"></script>
+  <script src="js/solver.js?v=2.2.0"></script>
+  <script src="js/audio.js?v=2.2.0"></script>
+  <script src="js/app.js?v=2.2.0"></script>
+  <script src="js/calculator.js?v=2.2.0"></script>
+</body>
+</html>

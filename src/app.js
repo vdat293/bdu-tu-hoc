@@ -154,6 +154,26 @@ export function createApp() {
     res.sendFile(path.join(ROOT_DIR, 'public', 'admin-tool.html'));
   });
 
+  // Killer Sudoku Game - Standalone Web Edition
+  const sudokuSiteDir = path.join(ROOT_DIR, 'public', 'killer-sudoku');
+  app.use('/killer-sudoku', express.static(sudokuSiteDir, {
+    index: false,
+    redirect: false,
+    fallthrough: true,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+  }));
+  app.get(['/killer-sudoku', '/killer-sudoku/', '/killer-sudoku/*'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.join(sudokuSiteDir, 'index.html'));
+  });
+
   // Admin Dashboard - Standalone Traffic & Logs site (completely independent from portal)
   const adminSiteDir = path.join(ROOT_DIR, 'public', 'admin');
   app.use('/admin', express.static(adminSiteDir, {
