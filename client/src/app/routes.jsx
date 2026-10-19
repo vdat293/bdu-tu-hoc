@@ -32,6 +32,7 @@ const TtcdsGroupPage = lazy(() => import('../features/ttcds/TtcdsGroupPage.jsx')
 const TtcdsStudentPage = lazy(() => import('../features/ttcds/TtcdsStudentPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
+const KillerSudokuPage = lazy(() => import('../features/games/KillerSudokuPage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
 function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
@@ -65,6 +66,7 @@ export default function AppRoutes() {
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
       <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
+      <Route path="killer-sudoku" element={<Lazy><KillerSudokuPage /></Lazy>} />
       <Route path="mystudent" element={<Lazy><TtcdsPage /></Lazy>} />
       <Route path="ttcds" element={<Lazy><TtcdsHubPage /></Lazy>} />
       <Route path="ttcds/sinh-vien-cua-toi" element={<Navigate to="/mystudent" replace />} />
