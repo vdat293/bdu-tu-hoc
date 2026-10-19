@@ -123,8 +123,8 @@ export default function LoginPage() {
                 setPassword(event.target.value);
                 if (loginError) setLoginError('');
               }}
-              onFocus={() => document.body.classList.add('password-focused')}
-              onBlur={() => document.body.classList.remove('password-focused')}
+              onFocus={() => document.body.classList.add('password-active')}
+              onBlur={() => document.body.classList.remove('password-active')}
               autoComplete="current-password"
               aria-describedby={loginError ? 'login-error' : undefined}
               aria-invalid={Boolean(loginError)}

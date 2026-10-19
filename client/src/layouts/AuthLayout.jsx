@@ -1,11 +1,28 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { shouldUseStudentScene, watchStudentSceneSupport } from '../features/auth/studentScene/sceneGate.js';
+import StudentScene from '../features/auth/studentScene/StudentScene.jsx';
+import CharacterStage from './CharacterStage.jsx';
 
 export default function AuthLayout() {
+  // Cảnh 3D chỉ bật trên màn hình rộng và khi không bật giảm chuyển động; hỏng
+  // WebGL hoặc chunk lỗi thì khoá luôn, không thử lại để khỏi nhấp nháy.
+  const [sceneEnabled, setSceneEnabled] = useState(() => shouldUseStudentScene(window));
+  const sceneBlockedRef = useRef(false);
+
   useEffect(() => {
     document.body.classList.add('theme-light');
     document.body.classList.remove('theme-dark');
     return () => document.body.classList.remove('password-active');
+  }, []);
+
+  useEffect(() => watchStudentSceneSupport(window, (supported) => {
+    setSceneEnabled(supported && !sceneBlockedRef.current);
+  }), []);
+
+  const handleSceneUnsupported = useCallback(() => {
+    sceneBlockedRef.current = true;
+    setSceneEnabled(false);
   }, []);
 
   return <main className="view-section active">
@@ -16,11 +33,8 @@ export default function AuthLayout() {
       <div className="auth-shell">
         <section className="login-context" aria-label="Minh họa bảo mật tương tác">
           <div className="scene-brand"><span className="scene-brand-mark"><img src="/assets/images/logo-hao-quang-transparent.png" alt="Logo Đại học Bình Dương" /></span><span>Binh Duong University</span></div>
-          <div className="character-stage" aria-hidden="true">
-            <div className="character character-tall"><div className="character-face"><span className="face-eye"><span className="pupil" /></span><span className="face-eye"><span className="pupil" /></span><span className="face-mouth" /></div></div>
-            <div className="character character-dark"><div className="character-face"><span className="face-eye"><span className="pupil" /></span><span className="face-eye"><span className="pupil" /></span></div><span className="character-hand hand-left" /><span className="character-hand hand-right" /></div>
-            <div className="character character-round"><div className="character-face"><span className="face-eye"><span className="pupil" /></span><span className="face-eye"><span className="pupil" /></span><span className="face-mouth face-mouth-smile" /></div></div>
-            <div className="character character-pill"><div className="character-face"><span className="face-eye face-eye-single"><span className="pupil" /></span><span className="face-mouth face-mouth-flat" /></div></div>
+          <div className="character-stage">
+            {sceneEnabled ? <StudentScene onUnsupported={handleSceneUnsupported} /> : <div className="character-stage-blobs" aria-hidden="true"><CharacterStage /></div>}
           </div>
           <div className="scene-copy"><p className="scene-kicker">Quyền riêng tư là mặc định</p><h2>Không ai nhìn trộm đâu.</h2><p>Nhập mật khẩu và xem họ lịch sự quay đi.</p></div>
         </section>

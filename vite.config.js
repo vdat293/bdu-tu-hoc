@@ -38,6 +38,10 @@ export default defineConfig(({ command }) => ({
     outDir: '../dist/client',
     emptyOutDir: true,
     assetsDir: 'app-assets',
+    // Chunk three.js của cảnh 3D trang đăng nhập ~750KB nhưng chỉ được nạp động
+    // khi panel đủ rộng và máy có WebGL, không nằm trong bundle chính. Nâng ngưỡng
+    // cảnh báo để log build còn tín hiệu cho các chunk thật sự bị phình.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         manualChunks: {

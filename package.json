@@ -31,6 +31,7 @@
     "rankings:sync": "node scripts/sync-rankings.js",
     "odp:sync": "node scripts/odp-sync.js",
     "vocab:import": "node scripts/import-vocab.js",
+    "assets:student": "node scripts/import-student-model.mjs",
     "grammar:import": "node scripts/import-grammar.js",
     "grammar:extra:import": "node scripts/import-grammar-extra.js",
     "grammar:export": "node scripts/export-grammar.js",
@@ -97,10 +98,13 @@
     "react-dom": "^19.1.1",
     "react-router-dom": "^6.30.1",
     "sharp": "^0.34.5",
+    "three": "^0.186.1",
     "tough-cookie": "^5.0.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^5.0.2",

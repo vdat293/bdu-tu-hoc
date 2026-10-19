@@ -8,7 +8,7 @@ Cổng tiện ích học tập & tự động hóa **"All-in-One"** dành riêng
 
 Giao diện sử dụng progressive enhancement: các chức năng cốt lõi vẫn hoạt động khi trình duyệt không hỗ trợ API mới, còn trình duyệt hiện đại được bổ sung:
 
-- Interactive CSS character scene trên màn hình đăng nhập.
+- Màn hình đăng nhập có cảnh 3D three.js nạp động (nhân vật CC0 của KayKit đã đổi màu theo BDU, xem `scripts/import-student-model.mjs` và `public/assets/models/LICENSE-KayKit.txt`), bấm được vào ba lô / bàn ghế, tự rơi về blob CSS khi thiếu WebGL, màn hình hẹp hoặc bật giảm chuyển động.
 - Art-directed dashboard với nhiều lớp parallax phản hồi theo con trỏ và vị trí cuộn.
 - View Transitions khi chuyển khu vực trong dashboard.
 - Command palette bằng `Ctrl/Cmd + K`, hỗ trợ tìm kiếm tiếng Việt không dấu và từ khóa ngữ nghĩa.
