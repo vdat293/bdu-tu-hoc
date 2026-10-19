@@ -62,7 +62,14 @@ function easeInOut(value) {
 }
 
 async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, onUnsupported, debugRef, debugEnabled }) {
-  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  } catch {
+    // Máy không tạo được WebGL: báo rõ lý do để `?scene3d-debug` hiện được.
+    onUnsupported?.('webgl');
+    return () => {};
+  }
   renderer.setClearAlpha(0);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -99,7 +106,17 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
   scene.add(stage);
 
   // Mô hình + animation của nhân vật.
-  const student = await loadStudentAsset({ THREE, GLTFLoader });
+  let student;
+  try {
+    student = await loadStudentAsset({ THREE, GLTFLoader });
+  } catch {
+    // .glb không tải/không đọc được (mạng, proxy, file thiếu): trả panel về blob CSS
+    // và báo đúng lý do.
+    onUnsupported?.('model');
+    renderer.dispose();
+    if (canvas.parentNode === host) host.removeChild(canvas);
+    return () => {};
+  }
   stage.add(student.root);
   // Hook chẩn đoán khi mở kèm ?scene3d-debug: cho phép bật/tắt trạng thái mí mắt
   // và đọc số liệu ngay trong console mà không phải sửa mã.
@@ -310,7 +327,7 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
       // Lỗi trong một khung hình không được phép spam cả console lẫn GPU: dừng
       // vòng lặp và trả panel về blob CSS.
       stop();
-      onUnsupported?.();
+      onUnsupported?.('frame');
     }
   };
 
@@ -521,7 +538,7 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
   };
   const onContextLost = (event) => {
     event.preventDefault();
-    onUnsupported?.();
+    onUnsupported?.('context-lost');
   };
 
   resize();
@@ -585,12 +602,12 @@ export default function StudentScene({ onUnsupported }) {
     let notified = false;
     let teardown = null;
 
-    const fail = () => {
+    const fail = (reason) => {
       if (disposed || notified) return;
       notified = true;
       teardown?.();
       teardown = null;
-      onUnsupported?.();
+      onUnsupported?.(reason);
     };
 
     (async () => {
@@ -600,7 +617,7 @@ export default function StudentScene({ onUnsupported }) {
         THREE = await import('three');
         ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
       } catch {
-        fail();
+        fail('three-import');
         return;
       }
       if (disposed || notified) return;
@@ -616,7 +633,7 @@ export default function StudentScene({ onUnsupported }) {
           debugEnabled
         });
       } catch {
-        fail();
+        fail('start');
       }
     })();
 

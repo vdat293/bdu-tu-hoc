@@ -5,6 +5,7 @@ import { AppProviders } from '../../client/src/app/providers.jsx';
 import LoginPage from '../../client/src/features/auth/LoginPage.jsx';
 import {
   SCENE_MIN_WIDTH,
+  describeStudentSceneSupport,
   shouldUseStudentScene,
   watchStudentSceneSupport
 } from '../../client/src/features/auth/studentScene/sceneGate.js';
@@ -85,6 +86,16 @@ describe('sceneGate', () => {
     expect(onChange).toHaveBeenLastCalledWith(true);
     stop();
     expect(scope.listenerCount()).toBe(0);
+  });
+
+  it('nói rõ vì sao cảnh 3D tắt để chẩn đoán ngay tại máy người dùng', () => {
+    expect(describeStudentSceneSupport(createFakeScope({ width: 1440 }))).toBe('ok');
+    expect(describeStudentSceneSupport(createFakeScope({ width: 900 }))).toBe('narrow');
+    expect(describeStudentSceneSupport(createFakeScope({ width: 1440, reducedMotion: true }))).toBe('reduced-motion');
+    // Màn hình hẹp + giảm chuyển động: báo lý do chặn trước (hẹp) để câu chữ ổn định.
+    expect(describeStudentSceneSupport(createFakeScope({ width: 600, reducedMotion: true }))).toBe('narrow');
+    expect(describeStudentSceneSupport({})).toBe('narrow');
+    expect(describeStudentSceneSupport(undefined)).toBe('narrow');
   });
 });
 

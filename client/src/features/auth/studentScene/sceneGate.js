@@ -21,9 +21,15 @@ function queryMatches(scope, query) {
 }
 
 export function shouldUseStudentScene(scope = window) {
-  if (!queryMatches(scope, WIDTH_QUERY)) return false;
-  if (queryMatches(scope, MOTION_QUERY)) return false;
-  return true;
+  return describeStudentSceneSupport(scope) === 'ok';
+}
+
+// Lý do cổng đóng — dùng cho chẩn đoán (`?scene3d-debug`) để biết ngay vì sao
+// không có cảnh 3D thay vì đoán: 'ok' | 'narrow' | 'reduced-motion'.
+export function describeStudentSceneSupport(scope = window) {
+  if (!queryMatches(scope, WIDTH_QUERY)) return 'narrow';
+  if (queryMatches(scope, MOTION_QUERY)) return 'reduced-motion';
+  return 'ok';
 }
 
 // Gọi `onChange` mỗi khi bề rộng hoặc thiết lập giảm chuyển động đổi, trả về
