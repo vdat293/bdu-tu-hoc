@@ -5,9 +5,10 @@ export default function KillerSudokuPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleReload = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
-    }
+    // Game nhúng same-origin nên reload thẳng contentWindow; gán lại src cho
+    // chính nó là self-assign (ESLint no-self-assign) và không nói rõ ý định.
+    const frame = iframeRef.current;
+    if (frame?.contentWindow) frame.contentWindow.location.reload();
   };
 
   const handleFullscreen = () => {
