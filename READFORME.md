@@ -153,7 +153,7 @@ Back-End chạy trên nền tảng **Node.js 22 + Express 4**, đóng vai trò l
 
 | Đường dẫn | Vai trò | Chức năng cụ thể |
 | :--- | :--- | :--- |
-| **`migrations/`** | 60 file `.sql` | Đánh số `001_`…`061_` (thiếu `046` — gap có chủ đích, xem `.sdd/task-5-report.md`). Tên file phải khớp `^\d{3}_[a-z0-9][a-z0-9_-]*\.sql$`. |
+| **`migrations/`** | 61 file `.sql` | Đánh số `001_`…`062_` (thiếu `046` — gap có chủ đích, xem `.sdd/task-5-report.md`). Tên file phải khớp `^\d{3}_[a-z0-9][a-z0-9_-]*\.sql$`. |
 | **`scripts/migration-ledger.mjs`** | Ledger + khoá | Bảng `public.schema_migrations` lưu `version`, `filename`, `checksum_sha256`, `applied_at`, `execution_ms`, `applied_by`. Advisory lock `MIGRATION_LOCK_ID = 782341`, `lock_timeout = 30s`, `statement_timeout = 5min`. Từ chối checksum lệch, từ chối thiếu version giữa chừng, và **từ chối replay** nếu DB đã có schema (`students`/`academic_rankings`) mà chưa có ledger — phải baseline thủ công. |
 
 ### 4.5. Tích hợp hệ thống bên ngoài (KHÔNG có `src/integrations/`)
