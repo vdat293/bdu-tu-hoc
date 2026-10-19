@@ -46,6 +46,21 @@ if (AssetHistoryService.isEnabled() && !fs.existsSync(assetHistoryDir)) {
 export function createApp() {
   const app = express();
 
+  // Production chạy sau Caddy/Nginx/Cloudflare và Compose chỉ bind Node vào
+  // 127.0.0.1. Nếu không tin proxy, req.ip là IP của proxy cho MỌI sinh viên,
+  // khiến rate-limit trở thành một bucket dùng chung toàn trường. Cho phép tắt
+  // bằng TRUST_PROXY=false khi chạy Node trực tiếp không qua proxy.
+  const trustProxy = String(process.env.TRUST_PROXY || '').trim().toLowerCase();
+  if (trustProxy === 'false' || trustProxy === '0') {
+    app.set('trust proxy', false);
+  } else if (/^\d+$/.test(trustProxy)) {
+    app.set('trust proxy', Number(trustProxy));
+  } else if (trustProxy === 'true' || (!trustProxy && process.env.NODE_ENV === 'production')) {
+    app.set('trust proxy', true);
+  } else if (trustProxy) {
+    app.set('trust proxy', trustProxy);
+  }
+
   // Middleware
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -186,7 +201,9 @@ export function createApp() {
   app.use('/api/login', authLimiter);
   app.use('/api/rankings', heavyLimiter);
   app.use('/api/odp', heavyLimiter);
-  app.use('/api/vocab', heavyLimiter);
+  // KHÔNG áp heavyLimiter (30 request/15 phút) cho /api/vocab: mỗi lần bấm
+  // "đã thuộc" là một request hợp lệ, người dùng đánh dấu vài chục từ sẽ bị
+  // chặn với thông báo "Endpoint nặng" dù endpoint chỉ là một UPSERT nhỏ.
   app.use('/api', globalLimiter);
 
   app.use('/api', createServiceLockGuard({ getStatus: () => ServiceLockService.getStatus() }));

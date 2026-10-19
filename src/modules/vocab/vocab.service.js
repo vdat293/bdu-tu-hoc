@@ -23,6 +23,23 @@ function escapeLike(s) {
   return s.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
 
+const PROGRESS_BATCH_MAX = 200;
+
+function normalizeProgressItems(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw httpError('Danh sách từ cần lưu không hợp lệ.', 400);
+  }
+  if (items.length > PROGRESS_BATCH_MAX) {
+    throw httpError(`Chỉ lưu tối đa ${PROGRESS_BATCH_MAX} từ mỗi lần.`, 400);
+  }
+  const byWord = new Map();
+  for (const item of items) {
+    const wordId = assertUuid(item?.word_id, 'word id');
+    byWord.set(wordId, item?.status === 'known' ? 'known' : 'learning');
+  }
+  return [...byWord.entries()].map(([word_id, status]) => ({ word_id, status }));
+}
+
 export const VocabService = {
   hasDatabase() {
     return isDatabaseConfigured();
@@ -77,13 +94,26 @@ export const VocabService = {
     const slug = cleanStr(themeSlug, 128);
     if (!slug) throw httpError('Thiếu slug theme.', 400);
     const safeMssv = mssv ? String(mssv).slice(0, 32) : '';
+    // Gom count theo set trong MỘT lần quét thay vì chạy subquery tương quan
+    // cho từng set. Trước đây mỗi lần mở theme là N subquery quét
+    // vocab_progress của user, rất nặng khi bảng progress đã lớn.
     const { rows } = await query(
       `SELECT s.id, s.theme_slug, s.name, s.order_idx, s.vocab_count,
-              COALESCE((SELECT COUNT(*) FROM vocab_words w WHERE w.set_id = s.id), 0) AS crawled,
-              COALESCE((SELECT COUNT(*) FROM vocab_words w
-                        JOIN vocab_progress p ON p.word_id = w.id AND p.mssv = NULLIF($2,'') AND p.status='known'
-                        WHERE w.set_id = s.id), 0) AS known_count
-       FROM vocab_sets s WHERE s.theme_slug = $1 ORDER BY s.order_idx ASC`,
+              COALESCE(c.crawled, 0) AS crawled,
+              COALESCE(c.known_count, 0) AS known_count
+       FROM vocab_sets s
+       LEFT JOIN (
+         SELECT w.set_id,
+                COUNT(*)::int AS crawled,
+                COUNT(*) FILTER (WHERE p.status = 'known')::int AS known_count
+         FROM vocab_words w
+         JOIN vocab_sets ts ON ts.id = w.set_id
+         LEFT JOIN vocab_progress p ON p.word_id = w.id AND p.mssv = NULLIF($2, '')
+         WHERE ts.theme_slug = $1
+         GROUP BY w.set_id
+       ) c ON c.set_id = s.id
+       WHERE s.theme_slug = $1
+       ORDER BY s.order_idx ASC`,
       [slug, safeMssv]
     );
     return rows.map((r) => ({
@@ -147,34 +177,57 @@ export const VocabService = {
 
   async saveProgress(mssv, wordId, status) {
     const cleanMssv = cleanStr(mssv, 32);
-    const cleanWord = assertUuid(wordId, 'word id');
-    const st = status === 'known' ? 'known' : 'learning';
     if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
-    const exists = await query('SELECT 1 FROM vocab_words WHERE id = $1', [cleanWord]);
-    if (exists.rowCount === 0) throw httpError('Từ vựng không tồn tại.', 404);
-    if (st === 'known') {
-      // Lần đầu thuộc -> đặt mốc ôn 1 ngày. Đã thuộc sẵn thì giữ nguyên lịch ôn.
-      await query(
-        `INSERT INTO vocab_progress (mssv, word_id, status, known_at, review_stage, next_review_at, updated_at)
-         VALUES ($1, $2, 'known', NOW(), 0, NOW() + INTERVAL '1 day', NOW())
-         ON CONFLICT (mssv, word_id) DO UPDATE SET
-           status = 'known',
-           known_at = COALESCE(vocab_progress.known_at, NOW()),
-           review_stage = CASE WHEN vocab_progress.status = 'known' THEN vocab_progress.review_stage ELSE 0 END,
-           next_review_at = CASE WHEN vocab_progress.status = 'known' THEN vocab_progress.next_review_at ELSE NOW() + INTERVAL '1 day' END,
-           updated_at = NOW()`,
-        [cleanMssv, cleanWord]
-      );
-    } else {
-      await query(
-        `INSERT INTO vocab_progress (mssv, word_id, status, review_stage, updated_at)
-         VALUES ($1, $2, 'learning', 0, NOW())
-         ON CONFLICT (mssv, word_id) DO UPDATE SET
-           status = 'learning', known_at = NULL, next_review_at = NULL, review_stage = 0, updated_at = NOW()`,
-        [cleanMssv, cleanWord]
-      );
-    }
+    const cleanWord = assertUuid(wordId, 'word id');
+    await this.saveProgressBatch(cleanMssv, [{ word_id: cleanWord, status }]);
     return { ok: true };
+  },
+
+  /**
+   * Lưu nhiều từ trong MỘT câu UPSERT. UI đánh dấu "đã thuộc" liên tục sẽ gom
+   * thành một request thay vì mỗi từ một request, giảm số round-trip và tránh
+   * rate-limit/connection pool bị chiếm khi người dùng học từ đầu.
+   */
+  async saveProgressBatch(mssv, items) {
+    const cleanMssv = cleanStr(mssv, 32);
+    if (!cleanMssv) throw httpError('Thiếu mssv.', 400);
+    const list = normalizeProgressItems(items);
+    try {
+      await query(
+        `WITH incoming AS (
+           SELECT * FROM unnest($2::uuid[], $3::text[]) AS t(word_id, status)
+         )
+         INSERT INTO vocab_progress (mssv, word_id, status, known_at, review_stage, next_review_at, updated_at)
+         SELECT $1, word_id, status,
+                CASE WHEN status = 'known' THEN NOW() ELSE NULL END,
+                0,
+                CASE WHEN status = 'known' THEN NOW() + INTERVAL '1 day' ELSE NULL END,
+                NOW()
+         FROM incoming
+         ON CONFLICT (mssv, word_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           -- Giữ mốc "lần đầu thuộc" và lịch ôn nếu từ đã ở trạng thái known.
+           known_at = CASE
+             WHEN EXCLUDED.status = 'known' THEN COALESCE(vocab_progress.known_at, NOW())
+             ELSE NULL
+           END,
+           review_stage = CASE
+             WHEN EXCLUDED.status = 'known' AND vocab_progress.status = 'known' THEN vocab_progress.review_stage
+             ELSE 0
+           END,
+           next_review_at = CASE
+             WHEN EXCLUDED.status = 'known' AND vocab_progress.status = 'known' THEN vocab_progress.next_review_at
+             WHEN EXCLUDED.status = 'known' THEN NOW() + INTERVAL '1 day'
+             ELSE NULL
+           END,
+           updated_at = NOW()`,
+        [cleanMssv, list.map((item) => item.word_id), list.map((item) => item.status)]
+      );
+      return { ok: true, saved: list.length };
+    } catch (error) {
+      if (error?.code === '23503') throw httpError('Có từ vựng không tồn tại.', 404);
+      throw error;
+    }
   },
 
   /**
@@ -289,11 +342,18 @@ export const VocabService = {
     const safeMssv = mssv ? String(mssv).slice(0, 32) : '';
     const { rows } = await query(
       `SELECT s.id, s.theme_slug, s.name, s.order_idx, t.title AS theme_title, t.difficulty,
-              COALESCE((SELECT COUNT(*) FROM vocab_words w WHERE w.set_id = s.id), 0) AS crawled,
-              COALESCE((SELECT COUNT(*) FROM vocab_words w
-                        JOIN vocab_progress p ON p.word_id = w.id AND p.mssv = NULLIF($2,'') AND p.status='known'
-                        WHERE w.set_id = s.id), 0) AS known_count
-       FROM vocab_sets s JOIN vocab_themes t ON t.slug = s.theme_slug WHERE s.id = $1`,
+              COALESCE(c.crawled, 0) AS crawled,
+              COALESCE(c.known_count, 0) AS known_count
+       FROM vocab_sets s
+       JOIN vocab_themes t ON t.slug = s.theme_slug
+       LEFT JOIN (
+         SELECT COUNT(*)::int AS crawled,
+                COUNT(*) FILTER (WHERE p.status = 'known')::int AS known_count
+         FROM vocab_words w
+         LEFT JOIN vocab_progress p ON p.word_id = w.id AND p.mssv = NULLIF($2, '')
+         WHERE w.set_id = $1
+       ) c ON TRUE
+       WHERE s.id = $1`,
       [cleanId, safeMssv]
     );
     const row = rows[0];

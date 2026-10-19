@@ -18,7 +18,8 @@ export const authLimiter = rateLimit({
   message: { result: false, message: 'Quá nhiều lần đăng nhập. Vui lòng thử lại sau 15 phút.' }
 });
 
-// Limiter for heavy / expensive endpoints (ranking, ODP sync, vocab import).
+// Limiter for heavy / expensive endpoints (ranking, ODP sync). Vocab progress
+// is a per-click write and must NOT use this 30 req/15 min bucket.
 export const heavyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,

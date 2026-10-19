@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getVocabSet: vi.fn(),
   getVocabWords: vi.fn(),
   saveVocabProgress: vi.fn(),
+  saveVocabProgressBatch: vi.fn(),
   getVocabReviewSummary: vi.fn(),
   getVocabReviewWords: vi.fn(),
   reviewVocabWord: vi.fn()
@@ -148,9 +149,9 @@ describe('vocab set page', () => {
         words: list
       };
     });
-    mocks.saveVocabProgress.mockImplementation(async (_token, wordId, status) => {
-      progressed[wordId] = status;
-      return { ok: true };
+    mocks.saveVocabProgressBatch.mockImplementation(async (_token, items) => {
+      for (const item of items) progressed[item.word_id] = item.status;
+      return { ok: true, saved: items.length };
     });
   });
 
@@ -195,13 +196,29 @@ describe('vocab set page', () => {
     const callsBefore = mocks.getVocabWords.mock.calls.length;
 
     fireEvent.click(screen.getByLabelText('apple: chưa thuộc, nhấn để đánh dấu đã thuộc'));
-    await waitFor(() => expect(mocks.saveVocabProgress).toHaveBeenCalledWith('test-token', WORDS[0].id, 'known'));
+    await waitFor(() => expect(mocks.saveVocabProgressBatch).toHaveBeenCalledWith('test-token', [
+      { word_id: WORDS[0].id, status: 'known' }
+    ]), { timeout: 2500 });
 
     // dòng vẫn còn với trạng thái mới, KHÔNG refetch danh sách từ
     expect(await screen.findByLabelText('apple: đã thuộc, nhấn để chuyển về chưa thuộc')).toBeTruthy();
     expect(screen.queryByText('Đã chuyển')).toBeNull();
     expect(screen.queryByText('Hoàn tác')).toBeNull();
     expect(mocks.getVocabWords.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('gop nhieu tu danh dau lien tuc vao mot request batch', async () => {
+    renderWith(allRoutes(), `/vocab/set/${SET_ID}`);
+    await screen.findByText('apple');
+    fireEvent.click(screen.getByLabelText('apple: chưa thuộc, nhấn để đánh dấu đã thuộc'));
+    fireEvent.click(screen.getByLabelText('book: chưa thuộc, nhấn để đánh dấu đã thuộc'));
+    fireEvent.click(screen.getByLabelText('run: chưa thuộc, nhấn để đánh dấu đã thuộc'));
+    await waitFor(() => expect(mocks.saveVocabProgressBatch).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    expect(mocks.saveVocabProgressBatch).toHaveBeenCalledWith('test-token', expect.arrayContaining([
+      { word_id: WORDS[0].id, status: 'known' },
+      { word_id: WORDS[1].id, status: 'known' },
+      { word_id: WORDS[2].id, status: 'known' }
+    ]));
   });
 
   it('click vao tu mo modal chi tiet dang portal', async () => {

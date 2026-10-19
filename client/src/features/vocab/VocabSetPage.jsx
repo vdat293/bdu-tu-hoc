@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getVocabSet, getVocabSets, getVocabWords, saveVocabProgress } from '../../api/vocab.js';
+import { getVocabSet, getVocabSets, getVocabWords, saveVocabProgressBatch } from '../../api/vocab.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { PosBadge } from './games.jsx';
 import { VOCAB_MODES, QUIZ_CHOICES } from './modes.js';
-import { patchWordsCache, patchProgressInCache } from './vocab-cache.js';
+import { patchProgressInCache } from './vocab-cache.js';
 import './vocab.css';
 
 export { VOCAB_MODES, QUIZ_CHOICES };
@@ -105,6 +105,15 @@ export default function VocabSetPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
 
+  // Gom các lần bấm "đã thuộc/chưa thuộc" trong ~400ms thành một request.
+  // Trước đây mỗi từ là 1 POST + 2 GET refetch (set + sets), nên đánh dấu
+  // vài chục từ sẽ đốt rate-limit và tạo hàng trăm query đếm vào PostgreSQL.
+  const pendingProgressRef = useRef(new Map());
+  const flushTimerRef = useRef(null);
+  const maxTimerRef = useRef(null);
+  const flushingRef = useRef(false);
+  const [flushing, setFlushing] = useState(false);
+
   const [status, setStatus] = useState('all');
   const [limit, setLimit] = useState(20);
   const [order, setOrder] = useState('random');
@@ -144,39 +153,103 @@ export default function VocabSetPage() {
   const words = wordsFrom(wordsQuery.data);
   const setTotal = Number(setInfo?.crawled || setInfo?.vocab_count) || words.length;
 
-  const progressMutation = useMutation({
-    mutationFn: ({ wordId, next }) => saveVocabProgress(auth.token, wordId, next),
-    onMutate: async ({ wordId, next }) => {
-      await client.cancelQueries({ queryKey: ['vocab-words'] });
-      const snapshots = client.getQueriesData({ queryKey: ['vocab-words'] });
-      client.setQueriesData({ queryKey: ['vocab-words'] }, (old) => patchWordsCache(old, wordId, next));
-      return { snapshots };
-    },
-    onError: (error, { wordId, prev }, context) => {
-      (context?.snapshots || []).forEach(([key, data]) => client.setQueryData(key, data));
-      if (prev) {
-        setDetailWord((current) => (current && current.id === wordId ? { ...current, progress: prev } : current));
-      }
-      notify(error?.message || 'Không thể lưu tiến độ.', 'error');
-    },
-    onSuccess: (_data, { wordId, next, term }) => {
-      patchProgressInCache(client, wordId, next);
-      // Cập nhật % ở trang theme/select nhưng KHÔNG refetch danh sách từ
-      // (ORDER BY RANDOM() sẽ xáo trộn dòng và làm dòng vừa đổi biến mất).
-      client.invalidateQueries({ queryKey: ['vocab-sets'] });
-      client.invalidateQueries({ queryKey: ['vocab-theme'] });
-      client.invalidateQueries({ queryKey: ['vocab-set', setId] });
-      notify(next === 'known' ? `Đã thuộc "${term}"!` : `Đã chuyển "${term}" về chưa thuộc.`, 'success');
-    }
-  });
+  const applyProgress = useCallback((wordId, next) => {
+    patchProgressInCache(client, wordId, next);
+    setDetailWord((current) => (current && current.id === wordId ? { ...current, progress: next } : current));
+  }, [client]);
 
-  const pendingWordId = progressMutation.isPending ? progressMutation.variables?.wordId : null;
+  const flushRef = useRef(null);
+  // Gửi khi user ngừng bấm 700ms; nếu bấm liên tục thì vẫn gửi tối đa mỗi 4s
+  // để thay đổi không bị dồn vô hạn khi chưa rời trang.
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      flushRef.current?.();
+    }, 700);
+    if (!maxTimerRef.current) {
+      maxTimerRef.current = setTimeout(() => {
+        maxTimerRef.current = null;
+        if (flushTimerRef.current) {
+          clearTimeout(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        flushRef.current?.();
+      }, 4000);
+    }
+  }, []);
+
+  const flushProgress = useCallback(async () => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    if (flushingRef.current || pendingProgressRef.current.size === 0) return;
+    const items = [...pendingProgressRef.current.values()];
+    pendingProgressRef.current.clear();
+    flushingRef.current = true;
+    setFlushing(true);
+    try {
+      await saveVocabProgressBatch(
+        auth.token,
+        items.map(({ wordId, next }) => ({ word_id: wordId, status: next }))
+      );
+      // Chỉ đánh dấu stale, KHÔNG refetch ngay. Mỗi lần bấm "đã thuộc" trước
+      // đây kéo theo 2 GET đếm lại toàn bộ set/theme, rất nặng khi bảng
+      // vocab_progress lớn. Lần mở trang theme/kế tiếp sẽ tự lấy số mới.
+      client.invalidateQueries({ queryKey: ['vocab-sets'], refetchType: 'none' });
+      client.invalidateQueries({ queryKey: ['vocab-theme'], refetchType: 'none' });
+      client.invalidateQueries({ queryKey: ['vocab-set', setId], refetchType: 'none' });
+      if (items.length === 1) {
+        const item = items[0];
+        notify(item.next === 'known' ? `Đã thuộc "${item.term}"!` : `Đã chuyển "${item.term}" về chưa thuộc.`, 'success');
+      } else {
+        const knownCount = items.filter((item) => item.next === 'known').length;
+        notify(`Đã lưu ${items.length} từ (${knownCount} đã thuộc).`, 'success');
+      }
+    } catch (error) {
+      for (const item of items) applyProgress(item.wordId, item.prev);
+      notify(error?.message || 'Không thể lưu tiến độ.', 'error');
+    } finally {
+      flushingRef.current = false;
+      setFlushing(false);
+      if (pendingProgressRef.current.size > 0) scheduleFlush();
+    }
+  }, [applyProgress, auth.token, client, notify, scheduleFlush, setId]);
+  flushRef.current = flushProgress;
+
+  useEffect(() => () => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    // Rời trang trong lúc còn thay đổi chưa gửi thì vẫn lưu nốt.
+    const items = [...pendingProgressRef.current.values()];
+    pendingProgressRef.current.clear();
+    if (items.length > 0) {
+      saveVocabProgressBatch(
+        auth.token,
+        items.map(({ wordId, next }) => ({ word_id: wordId, status: next }))
+      ).catch(() => {});
+    }
+  }, [auth.token, setId]);
 
   const setWordProgress = (word, next) => {
-    if (pendingWordId) return;
-    const prev = word.progress === 'known' ? 'known' : 'learning';
-    setDetailWord((current) => (current && current.id === word.id ? { ...current, progress: next } : current));
-    progressMutation.mutate({ wordId: word.id, next, prev, term: word.term });
+    const existing = pendingProgressRef.current.get(word.id);
+    const prev = existing ? existing.prev : (word.progress === 'known' ? 'known' : 'learning');
+    pendingProgressRef.current.set(word.id, {
+      wordId: word.id, next, prev, term: word.term
+    });
+    applyProgress(word.id, next);
+    scheduleFlush();
   };
 
   const toggleProgress = (word) => {
@@ -331,7 +404,6 @@ export default function VocabSetPage() {
                           type="button"
                           className={`vocab-known-toggle ${known ? 'is-known' : ''}`}
                           onClick={(e) => { e.stopPropagation(); toggleProgress(w); }}
-                          disabled={pendingWordId === w.id}
                           aria-pressed={known}
                           aria-label={`${w.term}: ${known ? 'đã thuộc, nhấn để chuyển về chưa thuộc' : 'chưa thuộc, nhấn để đánh dấu đã thuộc'}`}
                           title={known ? 'Đã thuộc — nhấn để chuyển về chưa thuộc' : 'Chưa thuộc — nhấn để đánh dấu đã thuộc'}
@@ -358,7 +430,7 @@ export default function VocabSetPage() {
       {detailWord ? (
         <WordDetailModal
           word={detailWord}
-          pending={pendingWordId === detailWord.id}
+          pending={flushing}
           onClose={() => setDetailWord(null)}
           onToggle={toggleProgress}
         />

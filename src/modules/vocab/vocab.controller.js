@@ -100,6 +100,22 @@ export const VocabController = {
     }
   },
 
+  async saveVocabProgressBatch(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { items } = req.body || {};
+      const data = await VocabService.saveProgressBatch(mssv, items);
+      return res.json({ result: true, data });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) {
+        console.error('saveVocabProgressBatch error:', err.message);
+        return res.status(500).json({ result: false, message: 'Không thể lưu tiến độ.' });
+      }
+      return res.status(status).json({ result: false, message: err.message });
+    }
+  },
+
   // 10b. Ôn tập từ vựng theo lịch (Leitner ngày/tuần/tháng)
   async getVocabReviewSummary(req, res) {
     try {

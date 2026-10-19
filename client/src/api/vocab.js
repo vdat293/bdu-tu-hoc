@@ -40,6 +40,17 @@ export async function saveVocabProgress(token, wordId, status) {
   return unwrap(data, data);
 }
 
+export async function saveVocabProgressBatch(token, items) {
+  const data = await request('/api/vocab/progress/batch', {
+    method: 'POST', token,
+    body: {
+      items: (items || []).map(({ word_id, status }) => ({ word_id, status }))
+    },
+    defaultMessage: 'Không thể lưu tiến độ.'
+  });
+  return unwrap(data, data);
+}
+
 export async function getVocabReviewSummary(token, { signal } = {}) {
   const data = await request('/api/vocab/review/summary', { token, signal, defaultMessage: 'Không thể tải lịch ôn tập.' });
   return unwrap(data, { due_day: 0, due_week: 0, due_month: 0, mastered: 0, known_total: 0 });

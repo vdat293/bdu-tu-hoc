@@ -13,6 +13,7 @@ export function registerVocabRoutes(router, deps = {}) {
   router.get('/vocab/sets/:setId', ApiController.getVocabSet);
   router.get('/vocab/sets/:setId/words', ApiController.listVocabWords);
   router.post('/vocab/progress', ApiController.saveVocabProgress);
+  router.post('/vocab/progress/batch', ApiController.saveVocabProgressBatch);
   router.get('/vocab/review/summary', ApiController.getVocabReviewSummary);
   router.get('/vocab/review/words', ApiController.listVocabReviewWords);
   router.post('/vocab/review', ApiController.reviewVocabWord);

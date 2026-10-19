@@ -47,4 +47,16 @@ await assert.rejects(() => VocabService.listReviewWords('24050001', { bucket: 'y
 await assert.rejects(() => VocabService.reviewWord('24050001', 'not-a-uuid', 'pass'), /đúng định dạng/);
 await assert.rejects(() => VocabService.reviewWord('24050001', WORD_UUID, 'skip'), /Kết quả ôn không hợp lệ/);
 
+// 7. Validation API lưu tiến độ hàng loạt: chặn input xấu trước khi chạm DB
+await assert.rejects(() => VocabService.saveProgressBatch('', []), /Thiếu mssv/);
+await assert.rejects(() => VocabService.saveProgressBatch('24050001', []), /không hợp lệ/);
+await assert.rejects(
+  () => VocabService.saveProgressBatch('24050001', [{ word_id: 'not-a-uuid', status: 'known' }]),
+  /đúng định dạng/
+);
+await assert.rejects(
+  () => VocabService.saveProgressBatch('24050001', Array.from({ length: 201 }, () => ({ word_id: WORD_UUID, status: 'known' }))),
+  /tối đa 200/
+);
+
 console.log('✅ Vocab service + themes OK (11 themes, 361 sets, ôn tập Leitner)');
