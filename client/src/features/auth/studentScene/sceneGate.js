@@ -1,9 +1,13 @@
 // Cổng điều kiện cho cảnh 3D của trang đăng nhập.
 //
-// Cảnh three.js chỉ chạy khi màn hình rộng hơn đúng breakpoint mobile hiện có
-// (900px, xem `@media (max-width: 900px)` trong public/css/style.css) và người
-// dùng không bật giảm chuyển động. Mọi trường hợp còn lại rơi về 4 blob CSS cũ
-// để điện thoại/máy yếu giữ nguyên trải nghiệm như trước.
+// Cảnh three.js chạy khi màn hình rộng hơn đúng breakpoint mobile hiện có (900px,
+// xem `@media (max-width: 900px)` trong public/css/style.css). Màn hình hẹp rơi về
+// 4 blob CSS cũ.
+//
+// Giảm chuyển động KHÔNG tắt cảnh nữa: người bật `prefers-reduced-motion` vẫn thấy
+// cảnh 3D nhưng ở chế độ tĩnh — cảnh tự đọc `shouldReduceMotion` và bỏ hết phần
+// chuyển động (không camera trôi theo con trỏ, không phóng vật khi hover, không lật
+// trang, nhân vật đứng yên ở tư thế thay vì chạy animation).
 //
 // WebGL không kiểm tra ở đây: cảnh tự báo qua `onUnsupported` khi tạo renderer
 // thất bại, nhờ vậy không phải dựng một context dùng-một-lần chỉ để dò.
@@ -21,41 +25,33 @@ function queryMatches(scope, query) {
 }
 
 export function shouldUseStudentScene(scope = window) {
-  return describeStudentSceneSupport(scope) === 'ok';
+  return queryMatches(scope, WIDTH_QUERY);
 }
 
-// Lý do cổng đóng — dùng cho chẩn đoán (`?scene3d-debug`) để biết ngay vì sao
-// không có cảnh 3D thay vì đoán: 'ok' | 'narrow' | 'reduced-motion'.
-export function describeStudentSceneSupport(scope = window) {
-  if (!queryMatches(scope, WIDTH_QUERY)) return 'narrow';
-  if (queryMatches(scope, MOTION_QUERY)) return 'reduced-motion';
-  return 'ok';
+// Người dùng có yêu cầu giảm chuyển động không — cảnh dùng cờ này để chuyển sang
+// chế độ tĩnh.
+export function shouldReduceMotion(scope = window) {
+  return queryMatches(scope, MOTION_QUERY);
 }
 
-// Gọi `onChange` mỗi khi bề rộng hoặc thiết lập giảm chuyển động đổi, trả về
-// hàm gỡ đăng ký. Dùng cho trường hợp người dùng kéo cửa sổ qua lại breakpoint.
+// Gọi `onChange` mỗi khi bề rộng đổi (kéo cửa sổ qua lại breakpoint), trả về hàm gỡ
+// đăng ký.
 export function watchStudentSceneSupport(scope, onChange) {
   if (!scope?.matchMedia) return () => {};
-  const lists = [WIDTH_QUERY, MOTION_QUERY]
-    .map((query) => {
-      try {
-        return scope.matchMedia(query);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
-  const handler = () => onChange(shouldUseStudentScene(scope));
-  const unsubscribe = lists.map((list) => {
-    if (typeof list.addEventListener === 'function') {
-      list.addEventListener('change', handler);
-      return () => list.removeEventListener('change', handler);
-    }
-    if (typeof list.addListener === 'function') {
-      list.addListener(handler);
-      return () => list.removeListener(handler);
-    }
+  let list;
+  try {
+    list = scope.matchMedia(WIDTH_QUERY);
+  } catch {
     return () => {};
-  });
-  return () => unsubscribe.forEach((off) => off());
+  }
+  const handler = () => onChange(shouldUseStudentScene(scope));
+  if (typeof list.addEventListener === 'function') {
+    list.addEventListener('change', handler);
+    return () => list.removeEventListener('change', handler);
+  }
+  if (typeof list.addListener === 'function') {
+    list.addListener(handler);
+    return () => list.removeListener(handler);
+  }
+  return () => {};
 }

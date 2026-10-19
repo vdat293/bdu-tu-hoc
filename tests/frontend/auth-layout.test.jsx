@@ -5,7 +5,7 @@ import { AppProviders } from '../../client/src/app/providers.jsx';
 import LoginPage from '../../client/src/features/auth/LoginPage.jsx';
 import {
   SCENE_MIN_WIDTH,
-  describeStudentSceneSupport,
+  shouldReduceMotion,
   shouldUseStudentScene,
   watchStudentSceneSupport
 } from '../../client/src/features/auth/studentScene/sceneGate.js';
@@ -63,8 +63,12 @@ describe('sceneGate', () => {
     expect(shouldUseStudentScene(createFakeScope({ width: 901 }))).toBe(true);
   });
 
-  it('đóng cổng khi người dùng bật giảm chuyển động', () => {
-    expect(shouldUseStudentScene(createFakeScope({ width: 1440, reducedMotion: true }))).toBe(false);
+  it('vẫn mở cổng khi người dùng bật giảm chuyển động, nhưng cảnh chuyển sang tĩnh', () => {
+    // Giảm chuyển động không tắt cảnh nữa: cổng vẫn mở, cảnh tự đọc cờ này để bỏ
+    // hết phần chuyển động (camera trôi, hover phóng, lật trang, animation).
+    expect(shouldUseStudentScene(createFakeScope({ width: 1440, reducedMotion: true }))).toBe(true);
+    expect(shouldReduceMotion(createFakeScope({ width: 1440, reducedMotion: true }))).toBe(true);
+    expect(shouldReduceMotion(createFakeScope({ width: 1440 }))).toBe(false);
   });
 
   it('đóng cổng khi môi trường thiếu matchMedia thay vì ném lỗi', () => {
@@ -77,7 +81,7 @@ describe('sceneGate', () => {
     const scope = createFakeScope({ width: 1440 });
     const onChange = vi.fn();
     const stop = watchStudentSceneSupport(scope, onChange);
-    expect(scope.listenerCount()).toBe(2);
+    expect(scope.listenerCount()).toBe(1);
     scope.state.width = 820;
     scope.emitChange();
     expect(onChange).toHaveBeenLastCalledWith(false);
@@ -88,14 +92,10 @@ describe('sceneGate', () => {
     expect(scope.listenerCount()).toBe(0);
   });
 
-  it('nói rõ vì sao cảnh 3D tắt để chẩn đoán ngay tại máy người dùng', () => {
-    expect(describeStudentSceneSupport(createFakeScope({ width: 1440 }))).toBe('ok');
-    expect(describeStudentSceneSupport(createFakeScope({ width: 900 }))).toBe('narrow');
-    expect(describeStudentSceneSupport(createFakeScope({ width: 1440, reducedMotion: true }))).toBe('reduced-motion');
-    // Màn hình hẹp + giảm chuyển động: báo lý do chặn trước (hẹp) để câu chữ ổn định.
-    expect(describeStudentSceneSupport(createFakeScope({ width: 600, reducedMotion: true }))).toBe('narrow');
-    expect(describeStudentSceneSupport({})).toBe('narrow');
-    expect(describeStudentSceneSupport(undefined)).toBe('narrow');
+  it('cờ giảm chuyển động hỏng thì coi như không bật, không ném lỗi', () => {
+    expect(shouldReduceMotion({})).toBe(false);
+    expect(shouldReduceMotion(undefined)).toBe(false);
+    expect(shouldReduceMotion({ matchMedia: () => { throw new Error('boom'); } })).toBe(false);
   });
 });
 

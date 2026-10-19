@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { shouldReduceMotion } from './sceneGate.js';
 import { loadStudentAsset } from './studentAsset.js';
 import {
   armAwayAmount,
@@ -49,6 +50,9 @@ const MAX_PIXEL_RATIO = 2;
 
 const HOVER_SCALE = 1.045;
 const SIT_ANCHOR_X = 0.45;
+// Mốc thời gian (giây) để đặt tư thế tĩnh: lấy giữa clip cho dáng tự nhiên thay vì
+// khung hình đầu tiên.
+const STATIC_POSE_TIME = 0.5;
 
 const PROP_ACTIONS = {
   backpack: SCENE_ACTIONS.BACKPACK,
@@ -62,6 +66,8 @@ function easeInOut(value) {
 }
 
 async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, onUnsupported, debugRef, debugEnabled }) {
+  // Người dùng bật giảm chuyển động: vẫn dựng cảnh nhưng ở chế độ tĩnh.
+  const calmMotion = shouldReduceMotion();
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -206,6 +212,29 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     if (loopName) startLoop(loopName, 0.3);
   });
 
+  // Chế độ tĩnh cho người bật giảm chuyển động: đặt thẳng clip đích ở một mốc thời
+  // gian cố định rồi KHÔNG chạy mixer nữa, nên nhân vật đứng yên ở tư thế đó và mọi
+  // thay đổi trạng thái (ngồi/đứng/đeo ba lô) chỉ đổi tư thế, không diễn hoạt.
+  const applyStaticPose = (name) => {
+    const next = student.actions.get(name);
+    if (!next || next === player.currentLoop) return;
+    student.actions.forEach((action) => {
+      if (action === next) return;
+      action.stop();
+      action.enabled = false;
+    });
+    next.enabled = true;
+    next.setEffectiveTimeScale(1);
+    next.setEffectiveWeight(1);
+    next.setLoop(THREE.LoopRepeat, Infinity);
+    next.clampWhenFinished = false;
+    next.reset().play();
+    player.currentLoop = next;
+    player.enterAction = null;
+    player.pendingLoop = null;
+    student.mixer.setTime(STATIC_POSE_TIME);
+  };
+
   const parkedBackpack = SCENE_ANCHORS.backpackParked;
   const parkedBackpackPosition = new THREE.Vector3(parkedBackpack.x, parkedBackpack.y, parkedBackpack.z);
   const parkedBackpackQuaternion = new THREE.Quaternion().setFromEuler(
@@ -337,10 +366,16 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     const now = performance.now() / 1000;
     const dt = lastTick ? Math.min(now - lastTick, 0.05) : 0.016;
     lastTick = now;
-    const damp = (current, target, lambda) => THREE.MathUtils.damp(current, target, lambda, dt);
+    // Chế độ tĩnh (người dùng bật giảm chuyển động): mọi giá trị đặt thẳng tới đích
+    // thay vì đuổi dần, nhân vật đứng ở một tư thế và không có chuyển động nào.
+    const damp = calmMotion
+      ? (current, target) => target
+      : (current, target, lambda) => THREE.MathUtils.damp(current, target, lambda, dt);
 
-    pointer.x = damp(pointer.x, raw.x, 5);
-    pointer.y = damp(pointer.y, raw.y, 5);
+    // Chế độ tĩnh: bỏ hẳn phần dõi theo con trỏ (đầu, huy hiệu, camera) — mọi thay
+    // đổi tư thế chỉ đến từ trạng thái ngồi/đeo ba lô/gõ mật khẩu.
+    pointer.x = calmMotion ? 0 : damp(pointer.x, raw.x, 5);
+    pointer.y = calmMotion ? 0 : damp(pointer.y, raw.y, 5);
     player.lookAway = damp(player.lookAway, document.body.classList.contains('password-active') ? 1 : 0, 5);
 
     // Trạng thái mong muốn, có xếp hàng: muốn ngồi thì phải cởi ba lô xuống
@@ -349,7 +384,12 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     const wantSit = desired.sitting === true;
     const wantWear = desired.backpackOn === true;
 
-    if (!player.appliedSit && wantSit && player.wear < 0.18) {
+    if (calmMotion) {
+      // Tĩnh: đổi thẳng sang tư thế đích, bỏ qua các clip chuyển tiếp.
+      player.appliedSit = wantSit;
+      player.appliedWear = wantWear;
+      applyStaticPose(wantSit ? SCENE_CLIPS.SIT_IDLE : SCENE_CLIPS.IDLE);
+    } else if (!player.appliedSit && wantSit && player.wear < 0.18) {
       playTransition(SCENE_CLIPS.SIT_DOWN, SCENE_CLIPS.SIT_IDLE);
       player.appliedSit = true;
       player.appliedWear = false;
@@ -363,7 +403,7 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
       player.appliedWear = false;
     }
 
-    if (!player.currentLoop && !player.enterAction && !player.appliedSit) startLoop(SCENE_CLIPS.IDLE);
+    if (!calmMotion && !player.currentLoop && !player.enterAction && !player.appliedSit) startLoop(SCENE_CLIPS.IDLE);
 
     player.sitAmount = damp(player.sitAmount, player.appliedSit ? 1 : 0, 2.2);
     player.wear = damp(player.wear, player.appliedWear ? 1 : 0, 2.4);
@@ -373,7 +413,8 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     student.root.position.x = rootPosition.x;
     student.root.position.z = 0;
 
-    student.mixer.update(dt);
+    // Chế độ tĩnh: không chạy mixer, tư thế đã được đặt bằng applyStaticPose.
+    if (!calmMotion) student.mixer.update(dt);
     student.skinning?.update();
 
     // Góc xoay cộng thêm sau mixer: dõi theo con trỏ, cúi đầu đọc sách khi ngồi,
@@ -494,8 +535,8 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     props.book.group.quaternion.copy(workingQuaternion);
 
     // Lật trang khi đang chăm chú đọc; lúc đưa sách lên che mặt thì dừng. Nhịp thưa
-    // để không ồn ào khi nhân vật ngồi học lâu.
-    if (player.sitAmount > 0.6 && bookLift.cover < 0.2) {
+    // để không ồn ào khi nhân vật ngồi học lâu. Chế độ tĩnh thì không lật.
+    if (!calmMotion && player.sitAmount > 0.6 && bookLift.cover < 0.2) {
       player.pageCooldown = (player.pageCooldown ?? PAGE_FLIP_FIRST_DELAY) - dt;
       if (player.pageCooldown <= 0) {
         player.pageCooldown = nextPageFlipDelay();
@@ -510,12 +551,19 @@ async function startStudentScene({ THREE, GLTFLoader, host, getState, onAction, 
     props.book.page.rotation.z = player.page * Math.PI * 0.92;
 
     props.interactive.forEach(({ id, group }) => {
-      const target = id === hoveredProp ? HOVER_SCALE : 1;
+      // Chế độ tĩnh: không phóng vật khi hover (tránh chuyển động ngoài ý muốn).
+      const target = !calmMotion && id === hoveredProp ? HOVER_SCALE : 1;
       group.scale.setScalar(damp(group.scale.x, target, 9));
     });
 
-    camera.position.x = damp(camera.position.x, pointer.x * 0.4, 2.4);
-    camera.position.y = damp(camera.position.y, CAMERA_HEIGHT - pointer.y * 0.17, 2.4);
+    // Camera trôi nhẹ theo con trỏ — chế độ tĩnh giữ camera đứng yên.
+    if (calmMotion) {
+      camera.position.x = 0;
+      camera.position.y = CAMERA_HEIGHT;
+    } else {
+      camera.position.x = damp(camera.position.x, pointer.x * 0.4, 2.4);
+      camera.position.y = damp(camera.position.y, CAMERA_HEIGHT - pointer.y * 0.17, 2.4);
+    }
     camera.lookAt(lookTarget);
 
     renderer.render(scene, camera);
