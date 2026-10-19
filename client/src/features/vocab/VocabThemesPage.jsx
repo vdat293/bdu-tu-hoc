@@ -144,7 +144,7 @@ export default function VocabThemesPage() {
       ) : themes.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '48px 24px', marginTop: '20px' }}>
           <h3>Chưa có dữ liệu từ vựng</h3>
-          <p>Hệ thống đang crawl từ luyentu. Vui lòng quay lại sau khi admin chạy import.</p>
+          <p>Không tải được dữ liệu. Vui lòng thử lại sau.</p>
         </div>
       ) : (
         <div className="vocab-grid" style={{ marginTop: '20px' }}>
