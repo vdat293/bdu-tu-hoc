@@ -35,26 +35,6 @@ export async function addCoursePostComment(token, courseCode, postId, commentDat
   return unwrap(data, data);
 }
 
-export async function getCourseQuiz(token, courseCode, postId, { signal } = {}) {
-  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/posts/${encodeURIComponent(postId)}/quiz`, { token, signal, defaultMessage: 'Không thể tải bài trắc nghiệm.' });
-  return unwrap(data, data);
-}
-
-export async function startCourseQuiz(token, courseCode, postId, { restart = false } = {}) {
-  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/posts/${encodeURIComponent(postId)}/quiz/start`, { method: 'POST', token, body: { restart }, defaultMessage: 'Không thể bắt đầu làm bài trắc nghiệm.' });
-  return unwrap(data, data);
-}
-
-export async function answerCourseQuiz(token, courseCode, postId, { questionId, response }) {
-  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/posts/${encodeURIComponent(postId)}/quiz/answer`, { method: 'POST', token, body: { questionId, response }, defaultMessage: 'Không thể gửi câu trả lời.' });
-  return unwrap(data, data);
-}
-
-export async function saveCourseQuizProgress(token, courseCode, postId, { responses, completed }) {
-  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/posts/${encodeURIComponent(postId)}/quiz/progress`, { method: 'POST', token, body: { responses, completed }, defaultMessage: 'Không thể lưu tiến độ làm bài.' });
-  return unwrap(data, data);
-}
-
 export async function getQuizSets(token, courseCode, { signal } = {}) {
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/quiz-sets`, { token, signal, defaultMessage: 'Không thể tải bộ đề trắc nghiệm.' });
   return unwrap(data, data);

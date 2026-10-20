@@ -46,6 +46,7 @@ export const SAFE_NODE_TESTS = [
   'test-game-battleship.js',
   'test-game-backgammon.js',
   'test-game-titles.js',
+  'test-killer-sudoku-progress.js',
   'test-community-realtime-games.js',
   'test-facebook-import.js',
   'test-asset-history.js',

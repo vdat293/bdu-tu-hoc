@@ -336,7 +336,14 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
             <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
               Hủy
             </button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={!canSubmit || submitMutation.isPending}>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={!canSubmit || submitMutation.isPending}
+              title={!canSubmit && !submitMutation.isPending
+                ? 'Nhập tiêu đề và ít nhất một file JSON hợp lệ để tạo bộ đề.'
+                : undefined}
+            >
               {submitMutation.isPending ? 'Đang tạo...' : 'Tạo bộ đề'}
             </button>
           </div>

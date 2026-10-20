@@ -906,6 +906,49 @@ describe('QuizSetPartPage test mode runner', () => {
     expect(screen.getByText('Kho Tài Liệu')).toBeEnabled();
   });
 
+  it('keeps the breadcrumb locked during the final result refetch', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    let releaseRefetch = null;
+    let partCalls = 0;
+    mocks.getQuizPart.mockImplementation(() => {
+      partCalls += 1;
+      // Initial load + start-refetch resolve; the post-submit refetch waits so
+      // the test can observe the lock while the result is still loading.
+      if (partCalls <= 2) return Promise.resolve(makeTestPartData());
+      return new Promise((resolve) => { releaseRefetch = resolve; });
+    });
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockResolvedValue({
+      answered: 2, total_count: 2, completed_at: '2026-10-20T00:00:00Z',
+      best_correct: 2, best_total: 2, attempts: 1, correct_count: 2,
+      responses: [
+        { id: 'q1', response: 'Đáp án A' }, { id: 'q2', response: 'Đáp án D' }
+      ]
+    });
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+
+    // The submit saved but the result refetch is still in flight: the runner
+    // stays mounted and the breadcrumb stays disabled.
+    await waitFor(() => expect(mocks.getQuizPart).toHaveBeenCalledTimes(3));
+    expect(screen.getByText('Kho Tài Liệu')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Đang nộp...' })).toBeInTheDocument();
+    expect(screen.getByText('Câu hỏi số 2?')).toBeInTheDocument();
+
+    releaseRefetch(completedTestPartData());
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('Kho Tài Liệu')).toBeEnabled();
+  });
+
   it('auto-submits an empty payload on timeout and retries after a save failure', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     let partData = makeTestPartData();

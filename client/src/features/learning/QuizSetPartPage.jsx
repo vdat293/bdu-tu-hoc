@@ -83,6 +83,10 @@ export default function QuizSetPartPage() {
   }, [courseCode, setId, partIndex, mode]);
 
   const goBack = useCallback(() => {
+    // Every exit commits the left-guard, including breadcrumb clicks and the
+    // landing "Về môn" button: a completion callback that resolves afterwards
+    // must not mount the result behind the user's back.
+    leftRunnerRef.current = true;
     navigate(`/learning/${encodeURIComponent(courseCode || '')}`);
   }, [navigate, courseCode]);
 
@@ -190,7 +194,9 @@ export default function QuizSetPartPage() {
     // The exit already committed: a late completion callback must not mount
     // the result screen after the user left.
     if (leftRunnerRef.current) return;
-    setRunnerFinishing(false);
+    // Keep the breadcrumb/footer exit inert until the final refetch commits and
+    // the result screen mounts: re-enabling during the refetch would let a
+    // click race the result state.
     let nextProgress = savedProgress || null;
     let nextReview = null;
     try {
@@ -200,9 +206,14 @@ export default function QuizSetPartPage() {
     } catch {
       // Still show the result from the save response.
     }
+    if (leftRunnerRef.current) {
+      setRunnerFinishing(false);
+      return;
+    }
     setTestStarted(false);
     setResultProgress(nextProgress);
     setTestResultReview(nextReview);
+    setRunnerFinishing(false);
     client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
   }, [refetch, client, courseCode]);
 
