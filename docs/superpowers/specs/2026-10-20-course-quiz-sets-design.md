@@ -100,8 +100,9 @@ sizes[i] = base + (i < remainder ? 1 : 0)
 ```
 
 - 60/20 → `[20,20,20]`.
-- 65/20 → `[17,17,17,14]`.
+- 65/20 → `[17,16,16,16]`.
 - 65/25 → `[22,22,21]`.
+- 76/16 → `[16,15,15,15,15]`; 76/5 → 16 phần `[5×12,4×4]` (mỗi phần ≤5).
 - Không phần nào vượt max; `partCount` ≤ 20.
 - Server tính lại; không tin `part_sizes` từ client.
 - Câu hỏi được gán `partIndex` tuần tự theo thứ tự sau khi gộp.
@@ -244,7 +245,7 @@ Kết quả: điểm/%, best, attempts, review từng câu; **Làm lại**, **V�
 
 1. Không còn quiz-post/composer pill/feed filter.
 2. TTCDS tạo bộ đề từ nhiều file; config số câu tối đa/phần + phút/phần; card hiện đúng số phần.
-3. 60 câu/20 → 3 phần 20; 65/20 → 4 phần 17/17/17/14; không phần nào >25.
+3. 60 câu/20 → 3 phần 20; 65/20 → 4 phần 17/16/16/16; không phần nào >25.
 4. Card trên feed môn, có tên tác giả ở cuối; mỗi phần có Ôn tập + Kiểm tra.
 5. Ôn tập: không timer, feedback ngay, resume, xáo câu/options.
 6. Kiểm tra: timer, không feedback, chấm sau nộp, best/attempts, xáo câu/options.

@@ -47,7 +47,7 @@
 - `publicQuizSetQuestions(questions, partIndex) -> [{ id, question, options }]`
 - `normalizeQuiz`/`parseQuizJson`/`gradeQuizResponse` giữ nguyên (đáp án text).
 
-- [ ] Test split: 60/20 `[20,20,20]`; 65/20 `[17,17,17,14]`; 65/25 `[22,22,21]`; 20/25 `[20]`; max 25 reject.
+- [ ] Test split: 60/20 `[20,20,20]`; 65/20 `[17,16,16,16]`; 65/25 `[22,22,21]`; 76/16 `[16,15,15,15,15]`; 20/25 `[20]`; max 25 reject.
 - [ ] Test build: 3 file arrays merge, IDs `q1..qN`, `partIndex` đúng, `part_sizes` khớp; 0 câu/501 câu/part >25 reject; duplicate IDs ignored/reassigned.
 - [ ] Migration: drop old quiz tables/delete quiz posts/revert kind check; create `course_quiz_sets` + `course_quiz_progress` per spec; indexes.
 - [ ] Run `node tests/test-quiz-set-data.js` RED→GREEN; run migration on fresh disposable DB twice.
