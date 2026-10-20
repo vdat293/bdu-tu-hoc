@@ -88,7 +88,8 @@ export default function QuizTestRunner({
   remainingSeconds = null,
   onSubmit,
   onComplete,
-  onExit
+  onExit,
+  onFinishingChange
 }) {
   // Shuffle once per mount (each start/restart remounts via key): both the
   // question order and the options of every question. Answers store the
@@ -117,6 +118,7 @@ export default function QuizTestRunner({
   const finishAttemptRef = useRef(false);
   const onSubmitRef = useRef(onSubmit);
   const onCompleteRef = useRef(onComplete);
+  const onFinishingChangeRef = useRef(onFinishingChange);
   const questionHeadingRef = useRef(null);
   const confirmDialogRef = useRef(null);
   const confirmTriggerRef = useRef(null);
@@ -124,6 +126,7 @@ export default function QuizTestRunner({
 
   onSubmitRef.current = onSubmit;
   onCompleteRef.current = onComplete;
+  onFinishingChangeRef.current = onFinishingChange;
 
   const total = questions.length;
   const current = index >= 0 && index < total ? questions[index] : null;
@@ -264,6 +267,12 @@ export default function QuizTestRunner({
     if (remaining === 0 && !timeUp) handleTimeUp();
   }, [remaining, timeUp, handleTimeUp]);
 
+  // Mirror the finishing flag to the page while a finalization is in flight so
+  // the breadcrumb and footer exit stay inert until the result has mounted.
+  useEffect(() => {
+    onFinishingChangeRef.current?.(finishing);
+  }, [finishing]);
+
   useEffect(() => {
     setRemaining(normalizeRemaining(remainingSeconds));
   }, [remainingSeconds]);
@@ -364,8 +373,11 @@ export default function QuizTestRunner({
   // Exit waits for the flushed save to commit before leaving, so the landing
   // refetch (in onExit) never reads stale resume state. A failed save keeps
   // dirty=true and still exits; the landing then shows the last committed
-  // state and the next attempt resumes from it.
+  // state and the next attempt resumes from it. While a finalization is in
+  // flight the exit is refused: leaving mid-submit (disabled buttons aside)
+  // must never discard the mounted result afterwards.
   const handleExit = async () => {
+    if (finishing) return;
     setConfirmSubmit(false);
     try {
       await flushAutosave();
@@ -426,7 +438,7 @@ export default function QuizTestRunner({
                 Thử lưu kết quả lại
               </button>
             )}
-            <button type="button" className="btn btn-secondary" onClick={handleExit}>
+            <button type="button" className="btn btn-secondary" onClick={handleExit} disabled={finishing}>
               Quay lại
             </button>
           </div>
@@ -552,7 +564,7 @@ export default function QuizTestRunner({
               type="button"
               className="btn btn-secondary"
               onClick={handleExit}
-              disabled={showConfirm}
+              disabled={showConfirm || finishing}
             >
               Quay lại
             </button>

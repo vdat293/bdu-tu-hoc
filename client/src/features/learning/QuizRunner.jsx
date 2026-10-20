@@ -70,7 +70,8 @@ export default function QuizRunner({
   onCheckAnswer,
   onSaveProgress,
   onComplete,
-  onExit
+  onExit,
+  onFinishingChange
 }) {
   // Shuffle once per mount (each start/restart remounts via key): both the
   // question order and the options of every question. Responses store the
@@ -101,6 +102,7 @@ export default function QuizRunner({
   const finishAttemptRef = useRef(false);
   const onSaveProgressRef = useRef(onSaveProgress);
   const onCompleteRef = useRef(onComplete);
+  const onFinishingChangeRef = useRef(onFinishingChange);
   const feedbackRef = useRef(null);
   const questionHeadingRef = useRef(null);
   const confirmDialogRef = useRef(null);
@@ -109,6 +111,7 @@ export default function QuizRunner({
 
   onSaveProgressRef.current = onSaveProgress;
   onCompleteRef.current = onComplete;
+  onFinishingChangeRef.current = onFinishingChange;
 
   const total = questions.length;
   const current = index >= 0 && index < total ? questions[index] : null;
@@ -200,7 +203,16 @@ export default function QuizRunner({
     if (confirmSubmit && unansweredCount === 0) setConfirmSubmit(false);
   }, [confirmSubmit, unansweredCount]);
 
+  // Mirror the finishing flag to the page while a finalization is in flight so
+  // the breadcrumb and footer exit stay inert until the result has mounted.
+  useEffect(() => {
+    onFinishingChangeRef.current?.(finishing);
+  }, [finishing]);
+
+  // Leaving while a finalization is in flight (disabled buttons aside) must
+  // never discard the mounted result afterwards.
   const handleExit = () => {
+    if (finishing) return;
     setConfirmSubmit(false);
     onExit?.();
   };
@@ -369,7 +381,7 @@ export default function QuizRunner({
                 Thử lưu kết quả lại
               </button>
             )}
-            <button type="button" className="btn btn-secondary" onClick={handleExit}>
+            <button type="button" className="btn btn-secondary" onClick={handleExit} disabled={finishing}>
               Quay lại
             </button>
           </div>
@@ -387,7 +399,7 @@ export default function QuizRunner({
             >
               {finishing ? 'Đang nộp...' : 'Hoàn tất bài làm'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={handleExit}>
+            <button type="button" className="btn btn-secondary" onClick={handleExit} disabled={finishing}>
               Quay lại
             </button>
           </div>
@@ -536,7 +548,7 @@ export default function QuizRunner({
               type="button"
               className="btn btn-secondary"
               onClick={handleExit}
-              disabled={showConfirm}
+              disabled={showConfirm || finishing}
             >
               Quay lại
             </button>

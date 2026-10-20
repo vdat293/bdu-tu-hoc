@@ -11,7 +11,8 @@ export default function QuizReviewRunner({
   onCheckAnswer,
   onSaveProgress,
   onComplete,
-  onExit
+  onExit,
+  onFinishingChange
 }) {
   return (
     <QuizRunner
@@ -23,6 +24,7 @@ export default function QuizReviewRunner({
       onSaveProgress={onSaveProgress}
       onComplete={onComplete}
       onExit={onExit}
+      onFinishingChange={onFinishingChange}
     />
   );
 }

@@ -856,6 +856,56 @@ describe('QuizSetPartPage test mode runner', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
+  it('disables the breadcrumb and footer exit while a finalize is in flight', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makeTestPartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    let releaseSave = null;
+    mocks.saveQuizPartProgress.mockImplementation((token, code, setId, partIndex, payload) => {
+      if (payload?.completed) {
+        // Finalization never resolves until the test releases it: the runner
+        // stays locked ('finishing') in the meantime.
+        return new Promise((resolve) => { releaseSave = resolve; });
+      }
+      return Promise.resolve({ answered: 1, total_count: 2, completed_at: null });
+    });
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenCalledWith(
+      'test-token', 'CSC101', '7', 0,
+      expect.objectContaining({ completed: true })
+    ));
+
+    // Both exit paths stay inert until the result has mounted.
+    expect(screen.getByText('Kho Tài Liệu')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Quay lại' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Đang nộp...' })).toBeInTheDocument();
+    // Clicking the disabled exit must not leave the runner or refetch.
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+    expect(screen.getByText('Câu hỏi số 2?')).toBeInTheDocument();
+
+    releaseSave({
+      answered: 2, total_count: 2, completed_at: '2026-10-20T00:00:00Z',
+      best_correct: 2, best_total: 2, attempts: 1, correct_count: 2,
+      responses: [
+        { id: 'q1', response: 'Đáp án A' }, { id: 'q2', response: 'Đáp án D' }
+      ]
+    });
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    // Exits are re-enabled once the result is mounted.
+    expect(screen.getByText('Kho Tài Liệu')).toBeEnabled();
+  });
+
   it('auto-submits an empty payload on timeout and retries after a save failure', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     let partData = makeTestPartData();

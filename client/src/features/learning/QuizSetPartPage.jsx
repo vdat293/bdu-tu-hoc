@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -60,6 +60,13 @@ export default function QuizSetPartPage() {
   const [testRunProgress, setTestRunProgress] = useState(null);
   const [testRemaining, setTestRemaining] = useState(null);
   const [testResultReview, setTestResultReview] = useState(null);
+  // Mirrors the mounted runner's `finishing` flag: while a finalization is in
+  // flight every exit path (breadcrumb, footer button) stays inert so the
+  // pending submit cannot be interrupted or push a result after leaving.
+  const [runnerFinishing, setRunnerFinishing] = useState(false);
+  // Set once an exit has begun: a completion callback that resolves after the
+  // exit must not mount the result screen behind the user's back.
+  const leftRunnerRef = useRef(false);
 
   // The route element is reused when only params change: never keep a runner
   // or result from another part/mode on screen.
@@ -71,6 +78,8 @@ export default function QuizSetPartPage() {
     setTestRunProgress(null);
     setTestRemaining(null);
     setTestResultReview(null);
+    setRunnerFinishing(false);
+    leftRunnerRef.current = false;
   }, [courseCode, setId, partIndex, mode]);
 
   const goBack = useCallback(() => {
@@ -88,6 +97,9 @@ export default function QuizSetPartPage() {
       { mode, restart: Boolean(restart) }
     ),
     onSuccess: async (startData) => {
+      // A fresh start (restart or first start) invalidates any stale exit flag.
+      leftRunnerRef.current = false;
+      setRunnerFinishing(false);
       let nextProgress = startData?.restarted ? null : partQuery.data?.progress || null;
       let refreshedData = null;
       try {
@@ -161,6 +173,10 @@ export default function QuizSetPartPage() {
   );
 
   const handleComplete = useCallback((savedProgress) => {
+    // The exit already committed: a late completion callback must not mount
+    // the result screen after the user left.
+    if (leftRunnerRef.current) return;
+    setRunnerFinishing(false);
     setStarted(false);
     setResultProgress(savedProgress || null);
     refetch();
@@ -171,6 +187,10 @@ export default function QuizSetPartPage() {
   // result shows the graded progress (score/best/attempts) plus the completed
   // test answer key (`review`); fall back to the save response on refetch failure.
   const handleTestComplete = useCallback(async (savedProgress) => {
+    // The exit already committed: a late completion callback must not mount
+    // the result screen after the user left.
+    if (leftRunnerRef.current) return;
+    setRunnerFinishing(false);
     let nextProgress = savedProgress || null;
     let nextReview = null;
     try {
@@ -189,6 +209,8 @@ export default function QuizSetPartPage() {
   const handleExit = useCallback(async () => {
     // Refresh while the runner is still mounted so the landing opens with the
     // latest saved position instead of briefly showing stale resume state.
+    leftRunnerRef.current = true;
+    setRunnerFinishing(false);
     try {
       await refetch();
     } catch {
@@ -202,6 +224,8 @@ export default function QuizSetPartPage() {
   // Leaving a test attempt flushes its latest selections first (inside the
   // runner); the landing then refetches so resume state is never stale.
   const handleTestExit = useCallback(async () => {
+    leftRunnerRef.current = true;
+    setRunnerFinishing(false);
     try {
       await refetch();
     } catch {
@@ -217,7 +241,13 @@ export default function QuizSetPartPage() {
 
   const breadcrumb = (
     <nav className="quiz-page-breadcrumb" aria-label="Đường dẫn">
-      <button type="button" className="quiz-breadcrumb-link" onClick={goBack}>
+      <button
+        type="button"
+        className="quiz-breadcrumb-link"
+        onClick={goBack}
+        disabled={runnerFinishing}
+        title={runnerFinishing ? 'Đang lưu kết quả...' : undefined}
+      >
         Kho Tài Liệu
       </button>
       <span aria-hidden="true"> / </span>
@@ -314,6 +344,7 @@ export default function QuizSetPartPage() {
           onSaveProgress={handleSaveProgress}
           onComplete={handleComplete}
           onExit={handleExit}
+          onFinishingChange={setRunnerFinishing}
         />
       </div>
     );
@@ -350,6 +381,7 @@ export default function QuizSetPartPage() {
           onSubmit={handleSaveTestProgress}
           onComplete={handleTestComplete}
           onExit={handleTestExit}
+          onFinishingChange={setRunnerFinishing}
         />
       </div>
     );
