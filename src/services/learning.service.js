@@ -2,7 +2,7 @@ import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { detectSupportedResourceSource, parseDriveOrMediaUrl } from './community.service.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
 import { PermissionService } from './permission.service.js';
-import { QUIZ_MAX_BYTES, normalizeQuiz, publicQuizQuestions } from '../utils/quiz-data.js';
+import { QUIZ_MAX_BYTES, gradeQuizResponse, normalizeQuiz, publicQuizQuestions } from '../utils/quiz-data.js';
 
 const POST_KINDS = new Set(['request', 'document', 'video', 'link', 'quiz']);
 const MAX_TITLE_LENGTH = 180;
@@ -619,6 +619,132 @@ export const LearningService = {
         name: course.name
       },
       posts
+    };
+  },
+
+  async startCourseQuiz(mssv, courseCode, postId, options = {}) {
+    requireDatabase();
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    const restart = options?.restart === true;
+
+    return transaction(async (client) => {
+      // loadQuizContext xác thực quyền vào môn, loại bài và trả time limit.
+      const context = await loadQuizContext(cleanMssv, courseCode, postId, client);
+      const progressPostId = context.post.id;
+      const timeLimitSeconds = context.quiz.time_limit_seconds;
+
+      // ON CONFLICT để hai tab bấm "Bắt đầu" cùng lúc không tạo hai dòng.
+      await client.query(`
+        INSERT INTO course_quiz_progress (mssv, post_id, started_at, responses)
+        VALUES ($1, $2, NOW(), '[]'::jsonb)
+        ON CONFLICT (mssv, post_id) DO NOTHING;
+      `, [cleanMssv, progressPostId]);
+
+      let progress = (await client.query(`
+        SELECT *
+        FROM course_quiz_progress
+        WHERE mssv = $1 AND post_id = $2
+        FOR UPDATE;
+      `, [cleanMssv, progressPostId])).rows[0];
+
+      let restarted = false;
+      if (progress.completed_at && restart) {
+        // Lượt đã xong + restart: reset lượt hiện tại, giữ best/attempts.
+        progress = (await client.query(`
+          UPDATE course_quiz_progress
+          SET started_at = NOW(),
+              answered = 0,
+              correct_count = 0,
+              total_count = 0,
+              responses = '[]'::jsonb,
+              completed_at = NULL,
+              updated_at = NOW()
+          WHERE mssv = $1 AND post_id = $2
+          RETURNING *;
+        `, [cleanMssv, progressPostId])).rows[0];
+        restarted = true;
+      } else if (!progress.started_at) {
+        // Dữ liệu bất thường: có dòng nhưng chưa có mốc bắt đầu.
+        progress = (await client.query(`
+          UPDATE course_quiz_progress
+          SET started_at = NOW(), updated_at = NOW()
+          WHERE mssv = $1 AND post_id = $2
+          RETURNING *;
+        `, [cleanMssv, progressPostId])).rows[0];
+      }
+
+      // remaining_seconds dùng đồng hồ DB, không dùng giờ Node (§6.8).
+      const remainingRow = (await client.query(`
+        SELECT
+          CASE
+            WHEN $3::int = 0 THEN NULL
+            WHEN completed_at IS NOT NULL THEN 0
+            WHEN started_at IS NULL THEN $3::int
+            ELSE GREATEST(
+              0,
+              $3::int - FLOOR(EXTRACT(EPOCH FROM (NOW() - started_at)))
+            )::int
+          END AS remaining_seconds
+        FROM course_quiz_progress
+        WHERE mssv = $1 AND post_id = $2;
+      `, [cleanMssv, progressPostId, timeLimitSeconds])).rows[0];
+
+      const remaining = remainingRow.remaining_seconds == null
+        ? null
+        : Number(remainingRow.remaining_seconds);
+
+      return {
+        started_at: progress.started_at,
+        remaining_seconds: remaining,
+        expired: !progress.completed_at && timeLimitSeconds > 0 && remaining === 0,
+        restarted,
+        completed_at: progress.completed_at
+      };
+    });
+  },
+
+  async answerCourseQuiz(mssv, courseCode, postId, input = {}) {
+    requireDatabase();
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    const context = await loadQuizContext(cleanMssv, courseCode, postId);
+    const quiz = context.quiz;
+
+    // Chỉ chấm khi lượt đang làm: đã start, chưa nộp, chưa hết giờ.
+    if (!quiz.started_at) {
+      throw httpError('Bạn chưa bắt đầu làm bài trắc nghiệm này.', 409, 'QUIZ_NOT_STARTED');
+    }
+    if (quiz.completed_at) {
+      throw httpError('Bạn đã hoàn thành bài trắc nghiệm này.', 409, 'QUIZ_COMPLETED');
+    }
+    if (quiz.expired) {
+      throw httpError('Đã hết thời gian làm bài trắc nghiệm này.', 409, 'QUIZ_TIME_UP');
+    }
+
+    const questionId = String(input?.questionId ?? '').trim();
+    const question = quiz.questions.find(
+      (item) => String(item?.id ?? '') === questionId
+    );
+    if (!question) {
+      throw httpError('Câu hỏi không thuộc bài trắc nghiệm này.', 400, 'QUIZ_INVALID');
+    }
+
+    const response = String(input?.response ?? '').trim().toUpperCase();
+    const optionIndex = /^[A-F]$/.test(response) ? response.charCodeAt(0) - 65 : -1;
+    const optionCount = Array.isArray(question.options) ? question.options.length : 0;
+    if (optionIndex < 0 || optionIndex >= optionCount) {
+      const lastOption = optionCount > 0 ? String.fromCharCode(64 + optionCount) : 'A';
+      throw httpError(
+        `Đáp án phải là một lựa chọn từ A đến ${lastOption}.`,
+        400,
+        'QUIZ_INVALID'
+      );
+    }
+
+    return {
+      correct: gradeQuizResponse(question, response),
+      correct_option: String(question.correct ?? '').trim().toUpperCase(),
+      explanation: String(question.explanation ?? ''),
+      remaining_seconds: quiz.remaining_seconds
     };
   },
 

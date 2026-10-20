@@ -69,6 +69,52 @@ export const LearningController = {
     }
   },
 
+  async startCourseQuiz(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      if (!allowRequest(`course-quiz-start:${mssv}`, { limit: 120, windowMs: 10 * 60 * 1000 })) {
+        return res.status(429).json({
+          result: false,
+          code: 'RATE_LIMITED',
+          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
+        });
+      }
+      const body = req.body || {};
+      const data = await LearningService.startCourseQuiz(
+        mssv,
+        req.params.courseCode,
+        req.params.postId,
+        { restart: body.restart === true }
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendLearningError(res, err, 'Không thể bắt đầu bài trắc nghiệm.');
+    }
+  },
+
+  async answerCourseQuiz(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      if (!allowRequest(`course-quiz-answer:${mssv}`, { limit: 600, windowMs: 10 * 60 * 1000 })) {
+        return res.status(429).json({
+          result: false,
+          code: 'RATE_LIMITED',
+          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
+        });
+      }
+      const body = req.body || {};
+      const data = await LearningService.answerCourseQuiz(
+        mssv,
+        req.params.courseCode,
+        req.params.postId,
+        { questionId: body.questionId, response: body.response }
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendLearningError(res, err, 'Không thể chấm câu trả lời trắc nghiệm.');
+    }
+  },
+
   async createCourseLearningPost(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);

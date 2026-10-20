@@ -53,6 +53,14 @@ async function countQuizzes(courseId) {
   return result.rows[0].total;
 }
 
+async function readQuizProgress(postId, mssv = VIEWER) {
+  const result = await query(
+    'SELECT * FROM course_quiz_progress WHERE mssv = $1 AND post_id = $2',
+    [mssv, postId]
+  );
+  return result.rows[0] || null;
+}
+
 try {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]);
   await query('DELETE FROM identity_entitlement_grants WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]);
@@ -239,7 +247,172 @@ try {
     (err) => err.status === 403
   );
 
-  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary và hồi quy kind cũ đều hoạt động.');
+  // 9. Chưa start thì chấm câu trả 409 QUIZ_NOT_STARTED.
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'B'
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_NOT_STARTED'
+  );
+
+  // 10. Start tạo lượt mới; start lần hai khi chưa xong không reset started_at
+  //     và remaining_seconds phản ánh thời gian đã trôi qua.
+  const started = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.ok(started.started_at);
+  assert.ok(started.remaining_seconds > 590 && started.remaining_seconds <= 600);
+  assert.equal(started.restarted, false);
+  assert.equal(started.completed_at, null);
+  assert.equal(started.expired, false);
+
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '60 seconds', updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const backdatedStart = (await readQuizProgress(post.id)).started_at;
+
+  const resumed = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.equal(resumed.restarted, false);
+  assert.ok(resumed.remaining_seconds > 530 && resumed.remaining_seconds <= 540);
+  const resumedRow = await readQuizProgress(post.id);
+  assert.equal(
+    resumedRow.started_at.getTime(),
+    backdatedStart.getTime(),
+    'Start lần hai không được reset started_at của lượt đang làm'
+  );
+
+  // 11. Answer đúng/sai trả correct_option + explanation; không ghi progress.
+  const progressBeforeAnswer = await readQuizProgress(post.id);
+  const good = await LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    questionId: 'q1', response: 'b'
+  });
+  assert.equal(good.correct, true);
+  assert.equal(good.correct_option, 'B');
+  assert.equal(good.explanation, VALID_QUIZ.questions[0].explanation);
+  assert.ok(good.remaining_seconds > 530 && good.remaining_seconds <= 540);
+
+  const bad = await LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    questionId: 'q2', response: 'A'
+  });
+  assert.equal(bad.correct, false);
+  assert.equal(bad.correct_option, 'B');
+  assert.equal(bad.explanation, VALID_QUIZ.questions[1].explanation);
+
+  const progressAfterAnswer = await readQuizProgress(post.id);
+  assert.equal(progressAfterAnswer.answered, progressBeforeAnswer.answered);
+  assert.deepEqual(progressAfterAnswer.responses, progressBeforeAnswer.responses);
+
+  // 12. questionId lạ / response ngoài phạm vi / response rỗng đều là 400.
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q999', response: 'A'
+    }),
+    (err) => err.status === 400
+  );
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'Z'
+    }),
+    (err) => err.status === 400
+  );
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'E'
+    }),
+    (err) => err.status === 400
+  );
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: ''
+    }),
+    (err) => err.status === 400
+  );
+
+  // 13. Hết giờ: GET báo remaining_seconds=0/expired=true; answer bị chặn.
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '601 seconds', updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+
+  const expiredDetail = await LearningService.getCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.equal(expiredDetail.quiz.remaining_seconds, 0);
+  assert.equal(expiredDetail.quiz.expired, true);
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'B'
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
+  );
+
+  // 14. Start/answer trên bài không phải quiz trả 404 QUIZ_NOT_FOUND; người
+  //     ngoài môn bị chặn 403 trước khi đọc tiến độ.
+  await assert.rejects(
+    () => LearningService.startCourseQuiz(VIEWER, COURSE_CODE, requestPost.id),
+    (err) => err.status === 404 && err.code === 'QUIZ_NOT_FOUND'
+  );
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, requestPost.id, {
+      questionId: 'q1', response: 'A'
+    }),
+    (err) => err.status === 404 && err.code === 'QUIZ_NOT_FOUND'
+  );
+  await assert.rejects(
+    () => LearningService.startCourseQuiz(OUTSIDER, COURSE_CODE, post.id),
+    (err) => err.status === 403
+  );
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(OUTSIDER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'A'
+    }),
+    (err) => err.status === 403
+  );
+
+  // 15. Đã hoàn thành: start không restart trả nguyên trạng; restart reset lượt
+  //     hiện tại nhưng giữ best/attempts; answer sau khi xong trả 409.
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '100 seconds',
+        completed_at = NOW() - INTERVAL '10 seconds',
+        answered = 1, correct_count = 1, total_count = 2,
+        best_correct = 1, best_total = 2, attempts = 1,
+        responses = '[{"id":"q1","response":"B","correct":true}]'::jsonb,
+        updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+
+  const completedStart = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.equal(completedStart.restarted, false);
+  assert.ok(completedStart.completed_at);
+  assert.equal(completedStart.remaining_seconds, 0);
+  assert.equal(completedStart.expired, false);
+
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'B'
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_COMPLETED'
+  );
+
+  const restarted = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    restart: true
+  });
+  assert.equal(restarted.restarted, true);
+  assert.equal(restarted.completed_at, null);
+  assert.ok(restarted.remaining_seconds > 590 && restarted.remaining_seconds <= 600);
+  assert.equal(restarted.expired, false);
+
+  const reset = await readQuizProgress(post.id);
+  assert.equal(Number(reset.answered), 0);
+  assert.equal(Number(reset.correct_count), 0);
+  assert.equal(Number(reset.total_count), 0);
+  assert.deepEqual(reset.responses, []);
+  assert.equal(reset.completed_at, null);
+  assert.equal(Number(reset.best_correct), 1);
+  assert.equal(Number(reset.best_total), 2);
+  assert.equal(Number(reset.attempts), 1);
+
+  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM identity_entitlement_grants WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
