@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QuizComposerPanel from '../../client/src/features/learning/QuizComposerPanel.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 import QuizRunner from '../../client/src/features/learning/QuizRunner.jsx';
+import CourseQuizPage from '../../client/src/features/learning/CourseQuizPage.jsx';
 
 const feedMocks = vi.hoisted(() => ({
   getCoursePosts: vi.fn(),
@@ -19,6 +20,14 @@ const feedMocks = vi.hoisted(() => ({
   canAccess: { value: true }
 }));
 
+const quizPageMocks = vi.hoisted(() => ({
+  getCourseQuiz: vi.fn(),
+  startCourseQuiz: vi.fn(),
+  answerCourseQuiz: vi.fn(),
+  saveCourseQuizProgress: vi.fn(),
+  askConfirm: vi.fn()
+}));
+
 vi.mock('../../client/src/api/community.js', () => ({
   getCoursePosts: feedMocks.getCoursePosts,
   getLearningResources: feedMocks.getLearningResources,
@@ -26,7 +35,11 @@ vi.mock('../../client/src/api/community.js', () => ({
   deleteCoursePost: feedMocks.deleteCoursePost,
   toggleCoursePostLike: feedMocks.toggleCoursePostLike,
   getCoursePostComments: feedMocks.getCoursePostComments,
-  addCoursePostComment: feedMocks.addCoursePostComment
+  addCoursePostComment: feedMocks.addCoursePostComment,
+  getCourseQuiz: quizPageMocks.getCourseQuiz,
+  startCourseQuiz: quizPageMocks.startCourseQuiz,
+  answerCourseQuiz: quizPageMocks.answerCourseQuiz,
+  saveCourseQuizProgress: quizPageMocks.saveCourseQuizProgress
 }));
 
 vi.mock('../../client/src/features/ttcds/useTtcdsCapabilities.jsx', () => ({
@@ -40,7 +53,7 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
 }));
 
 vi.mock('../../client/src/components/feedback/ConfirmDialog.jsx', () => ({
-  useConfirm: () => [null, vi.fn()]
+  useConfirm: () => [null, quizPageMocks.askConfirm]
 }));
 
 const VALID_JSON = JSON.stringify({
@@ -682,5 +695,256 @@ describe('quiz runner', () => {
     expect(screen.getByText('Chọn <script>alert(1)</script>')).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
     expect(document.querySelector('script')).toBeNull();
+  });
+});
+
+describe('quiz page and result', () => {
+  const QUESTIONS = [
+    { id: 'q1', question: '1 + 1 = ?', options: ['1', '2'] },
+    { id: 'q2', question: '2 + 2 = ?', options: ['3', '4'] }
+  ];
+
+  function pagePayload(quizOverrides = {}) {
+    return {
+      course: { code: 'INFO1203', display_code: 'INFO1203', name: 'Hệ thống thông minh' },
+      post: {
+        id: 101,
+        title: 'Ôn tập Chương 1',
+        content: 'Mô tả ngắn',
+        author: { name: 'Thầy TTCDS', mssv: '22050006' }
+      },
+      quiz: {
+        question_count: 2,
+        time_limit_seconds: 600,
+        questions: QUESTIONS,
+        progress: null,
+        remaining_seconds: 600,
+        expired: false,
+        review: null,
+        ...quizOverrides
+      }
+    };
+  }
+
+  function inProgress(overrides = {}) {
+    return {
+      started_at: '2026-10-20T10:00:00.000Z',
+      answered: 1,
+      correct_count: 1,
+      total_count: 1,
+      best_correct: null,
+      best_total: null,
+      attempts: 0,
+      completed_at: null,
+      responses: [{ id: 'q1', response: 'B', correct: true }],
+      ...overrides
+    };
+  }
+
+  function completed(overrides = {}) {
+    return {
+      started_at: '2026-10-20T10:00:00.000Z',
+      answered: 1,
+      correct_count: 1,
+      total_count: 2,
+      best_correct: 1,
+      best_total: 2,
+      attempts: 1,
+      completed_at: '2026-10-20T10:05:00.000Z',
+      responses: [{ id: 'q1', response: 'B', correct: true }],
+      ...overrides
+    };
+  }
+
+  function completedReview() {
+    return [
+      { id: 'q1', correct: 'B', explanation: 'Vì 1 + 1 = 2.' },
+      { id: 'q2', correct: 'B', explanation: 'Vì 2 + 2 = 4.' }
+    ];
+  }
+
+  function renderQuizPage(entry = '/learning/INFO1203/quiz/101') {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[entry]}>
+          <Routes>
+            <Route path="/learning/:courseCode/quiz/:postId" element={<CourseQuizPage />} />
+            <Route path="/learning/:courseCode" element={<div>Không gian môn học</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  }
+
+  async function flush() {
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  beforeEach(() => {
+    for (const key of ['getCourseQuiz', 'startCourseQuiz', 'answerCourseQuiz', 'saveCourseQuizProgress']) {
+      quizPageMocks[key].mockReset();
+    }
+    quizPageMocks.askConfirm.mockReset();
+    quizPageMocks.askConfirm.mockResolvedValue(true);
+    quizPageMocks.startCourseQuiz.mockResolvedValue({
+      started_at: '2026-10-20T10:00:00.000Z',
+      remaining_seconds: 600,
+      expired: false,
+      restarted: false,
+      completed_at: null
+    });
+  });
+
+  it('shows the landing breadcrumb and starts the quiz into the runner', async () => {
+    quizPageMocks.getCourseQuiz.mockResolvedValue(pagePayload());
+    renderQuizPage();
+
+    expect(await screen.findByText('Ôn tập Chương 1')).toBeTruthy();
+    expect(screen.getByText(/Kho Tài Liệu/)).toBeTruthy();
+    expect(screen.getByText('Trắc nghiệm')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu làm bài/ }));
+    expect(await screen.findByText('1 + 1 = ?')).toBeTruthy();
+    expect(quizPageMocks.startCourseQuiz).toHaveBeenCalledWith('test-token', 'INFO1203', '101', { restart: false });
+  });
+
+  it('shows the result with score, best, attempts and review', async () => {
+    quizPageMocks.getCourseQuiz.mockResolvedValue(pagePayload({
+      progress: completed(),
+      review: completedReview(),
+      remaining_seconds: 0
+    }));
+    renderQuizPage();
+
+    expect(await screen.findByText('1/2')).toBeTruthy();
+    expect(screen.getByText(/Cao nhất 1\/2/)).toBeTruthy();
+    expect(screen.getByText(/1 lượt làm/)).toBeTruthy();
+    expect(screen.getByText('Vì 1 + 1 = 2.')).toBeTruthy();
+    expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
+    expect(screen.getByText('Chưa trả lời')).toBeTruthy();
+    expect(screen.getAllByText(/Đáp án đúng: B/)).toHaveLength(2);
+  });
+
+  it('shows resume actions for an in-progress quiz', async () => {
+    quizPageMocks.getCourseQuiz.mockResolvedValue(pagePayload({
+      progress: inProgress(),
+      remaining_seconds: 540
+    }));
+    renderQuizPage();
+
+    expect(await screen.findByText(/Đã làm 1\/2/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Làm tiếp/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Làm lại từ đầu/ })).toBeTruthy();
+  });
+
+  it('restart calls start with restart:true and remounts the runner', async () => {
+    const reset = {
+      started_at: '2026-10-20T11:00:00.000Z',
+      answered: 0,
+      correct_count: 0,
+      total_count: 0,
+      best_correct: null,
+      best_total: null,
+      attempts: 0,
+      completed_at: null,
+      responses: []
+    };
+    quizPageMocks.getCourseQuiz
+      .mockResolvedValueOnce(pagePayload({ progress: inProgress(), remaining_seconds: 540 }))
+      .mockResolvedValue(pagePayload({ progress: reset, remaining_seconds: 600 }));
+    quizPageMocks.startCourseQuiz.mockResolvedValue({
+      started_at: '2026-10-20T11:00:00.000Z',
+      remaining_seconds: 600,
+      expired: false,
+      restarted: true,
+      completed_at: null
+    });
+    renderQuizPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Làm lại từ đầu/ }));
+    expect(await screen.findByText('1 + 1 = ?')).toBeTruthy();
+    expect(quizPageMocks.askConfirm).toHaveBeenCalled();
+    expect(quizPageMocks.startCourseQuiz).toHaveBeenCalledWith('test-token', 'INFO1203', '101', { restart: true });
+  });
+
+  it('navigates back to the course space', async () => {
+    quizPageMocks.getCourseQuiz.mockResolvedValue(pagePayload());
+    renderQuizPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Về không gian môn/ }));
+    expect(await screen.findByText('Không gian môn học')).toBeTruthy();
+  });
+
+  it('shows an error with a back action on 404', async () => {
+    quizPageMocks.getCourseQuiz.mockRejectedValue(
+      Object.assign(new Error('Không tìm thấy bài trắc nghiệm trong môn học này.'), { status: 404 })
+    );
+    renderQuizPage();
+
+    expect(await screen.findByText(/Không tìm thấy bài trắc nghiệm/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Về không gian môn/ }));
+    expect(await screen.findByText('Không gian môn học')).toBeTruthy();
+  });
+
+  it('visibilitychange refetches and switches to the result when completed', async () => {
+    quizPageMocks.getCourseQuiz
+      .mockResolvedValueOnce(pagePayload({ progress: inProgress(), remaining_seconds: 540 }))
+      .mockResolvedValue(pagePayload({ progress: completed(), review: completedReview(), remaining_seconds: 0 }));
+    renderQuizPage();
+
+    expect(await screen.findByRole('button', { name: /Làm tiếp/ })).toBeTruthy();
+    expect(quizPageMocks.getCourseQuiz).toHaveBeenCalledTimes(1);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(await screen.findByText('1/2')).toBeTruthy();
+    expect(quizPageMocks.getCourseQuiz).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs the full flow from start to result through the runner', async () => {
+    const fresh = {
+      started_at: '2026-10-20T10:00:00.000Z',
+      answered: 0,
+      correct_count: 0,
+      total_count: 0,
+      best_correct: null,
+      best_total: null,
+      attempts: 0,
+      completed_at: null,
+      responses: []
+    };
+    quizPageMocks.getCourseQuiz
+      .mockResolvedValueOnce(pagePayload())
+      .mockResolvedValueOnce(pagePayload({ progress: fresh, remaining_seconds: 600 }))
+      .mockResolvedValue(pagePayload({ progress: completed(), review: completedReview(), remaining_seconds: 0 }));
+    quizPageMocks.answerCourseQuiz.mockResolvedValue({
+      correct: true,
+      correct_option: 'B',
+      explanation: 'Chính xác.',
+      remaining_seconds: 590
+    });
+    quizPageMocks.saveCourseQuizProgress.mockResolvedValue({ answered: 1, correct_count: 1 });
+    renderQuizPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Bắt đầu làm bài/ }));
+    await screen.findByText('1 + 1 = ?');
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await screen.findByText('Chính xác!');
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+
+    fireEvent.click(screen.getByRole('radio', { name: '4' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await screen.findByText('Chính xác!');
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+
+    expect(await screen.findByText('1/2')).toBeTruthy();
+    expect(quizPageMocks.answerCourseQuiz).toHaveBeenCalledWith(
+      'test-token', 'INFO1203', '101', { questionId: 'q1', response: 'B' }
+    );
+    expect(quizPageMocks.saveCourseQuizProgress).toHaveBeenLastCalledWith(
+      'test-token', 'INFO1203', '101', expect.objectContaining({ completed: true })
+    );
   });
 });

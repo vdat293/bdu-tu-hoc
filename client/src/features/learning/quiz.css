@@ -301,3 +301,206 @@ body.theme-dark .quiz-runner-error {
     order: 2;
   }
 }
+
+/* Task 12: quiz page shell, landing, result (dark-mode friendly via CSS vars). */
+.quiz-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--text-main, inherit);
+}
+.quiz-page-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+.quiz-breadcrumb-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.quiz-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.quiz-page-title {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.4;
+}
+.quiz-page-description {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.quiz-page-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.quiz-page-muted {
+  margin: 0;
+  color: var(--text-muted, inherit);
+  font-size: 0.9rem;
+}
+.quiz-page-loading {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-muted, inherit);
+}
+.quiz-page-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 12px;
+  background: var(--bg-card, transparent);
+}
+.quiz-page-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.quiz-page-rules {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.quiz-page-progress {
+  margin: 0;
+  font-weight: 600;
+}
+.quiz-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.quiz-page-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.08);
+}
+.quiz-page-error p {
+  margin: 0;
+}
+.quiz-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.quiz-result-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 20px 16px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 12px;
+  background: var(--bg-card, transparent);
+  text-align: center;
+}
+.quiz-result-score-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.quiz-result-score {
+  font-size: 2rem;
+  line-height: 1;
+}
+.quiz-result-percent {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #15803d;
+}
+body.theme-dark .quiz-result-percent {
+  color: #4ade80;
+}
+.quiz-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.quiz-result-review-title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+.quiz-result-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.quiz-result-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card, transparent);
+}
+.quiz-result-item.is-correct {
+  border-color: rgba(22, 163, 74, 0.4);
+}
+.quiz-result-item.is-wrong {
+  border-color: rgba(220, 38, 38, 0.4);
+}
+.quiz-result-question {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.quiz-result-user-answer,
+.quiz-result-correct-answer,
+.quiz-result-explanation {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.quiz-result-user-answer.is-missing {
+  font-style: italic;
+  color: var(--text-muted, inherit);
+}
+.quiz-result-correct-answer {
+  font-weight: 600;
+  color: #15803d;
+}
+body.theme-dark .quiz-result-correct-answer {
+  color: #86efac;
+}
+.quiz-result-explanation {
+  opacity: 0.9;
+}
+.quiz-result-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  .quiz-page {
+    padding: 12px;
+  }
+  .quiz-page-actions .btn,
+  .quiz-result-actions .btn {
+    flex: 1 1 100%;
+  }
+}
