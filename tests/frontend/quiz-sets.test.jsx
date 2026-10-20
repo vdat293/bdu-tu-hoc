@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getQuizSets: vi.fn(),
+  createQuizSet: vi.fn(),
   deleteQuizSet: vi.fn(),
   getCoursePosts: vi.fn(),
   createCoursePost: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../client/src/api/community.js', () => ({
   getQuizSets: mocks.getQuizSets,
+  createQuizSet: mocks.createQuizSet,
   deleteQuizSet: mocks.deleteQuizSet,
   getCoursePosts: mocks.getCoursePosts,
   createCoursePost: mocks.createCoursePost,
@@ -46,6 +48,7 @@ vi.mock('../../client/src/components/feedback/ConfirmDialog.jsx', () => ({
 import QuizSetCard from '../../client/src/features/learning/QuizSetCard.jsx';
 import QuizSetSection from '../../client/src/features/learning/QuizSetSection.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
+import QuizSetComposerModal from '../../client/src/features/learning/QuizSetComposerModal.jsx';
 
 function makeSet(overrides = {}) {
   return {
@@ -240,5 +243,108 @@ describe('CourseLearningPage without old quiz-post UI', () => {
     expect(screen.queryByText('Tạo trắc nghiệm')).not.toBeInTheDocument();
     expect(screen.queryByText('Tạo bài trắc nghiệm')).not.toBeInTheDocument();
     expect(screen.getByText(/Luận bàn \/ Hỏi đáp/)).toBeInTheDocument();
+  });
+});
+
+describe('QuizSetComposerModal', () => {
+  function makeFile(name, questionsCount) {
+    const obj = {
+      schema: 'bdu-quiz/v1',
+      title: `Title ${name}`,
+      description: `Desc ${name}`,
+      questions: Array.from({ length: questionsCount }, (_, i) => ({
+        question: `Q${i + 1} in ${name}`,
+        options: ['A', 'B'],
+        correct: 'A'
+      }))
+    };
+    return new File([JSON.stringify(obj)], name, { type: 'application/json' });
+  }
+
+  function renderModal() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <MemoryRouter initialEntries={['/']}>
+        <QueryClientProvider client={client}>
+          <QuizSetComposerModal courseCode="CSC101" token="test-token" onClose={vi.fn()} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+    return view;
+  }
+
+  it('previews 3 parts for 3 files x20 and submits all 60 questions', async () => {
+    mocks.createQuizSet.mockResolvedValue({ id: 1 });
+    renderModal();
+    const input = document.querySelector('input[type="file"]');
+    const files = [makeFile('a.json', 20), makeFile('b.json', 20), makeFile('c.json', 20)];
+    fireEvent.change(input, { target: { files } });
+    await waitFor(() => expect(screen.getByText(/3 phần/)).toBeInTheDocument());
+    expect(screen.getByText(/60/)).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Tạo bộ đề' });
+    expect(submit).not.toBeDisabled();
+    fireEvent.click(submit);
+    await waitFor(() => expect(mocks.createQuizSet).toHaveBeenCalled());
+    const payload = mocks.createQuizSet.mock.calls[0][2];
+    expect(payload.questions).toHaveLength(60);
+    expect(payload.sourceFiles).toHaveLength(3);
+    expect(payload.maxQuestionsPerPart).toBe(20);
+  });
+
+  it('shows error and disables submit for invalid JSON file', async () => {
+    renderModal();
+    const input = document.querySelector('input[type="file"]');
+    const bad = new File(['{not json'], 'bad.json', { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [bad] } });
+    await waitFor(() => expect(screen.getByText(/JSON không hợp lệ/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Tạo bộ đề' })).toBeDisabled();
+  });
+
+  it('errors when more than 10 files or file too large', async () => {
+    renderModal();
+    const input = document.querySelector('input[type="file"]');
+    const many = Array.from({ length: 11 }, (_, i) => makeFile(`f${i}.json`, 1));
+    fireEvent.change(input, { target: { files: many } });
+    await waitFor(() => expect(screen.getByText(/Tối đa 10 file/)).toBeInTheDocument());
+
+    // reset
+    cleanup();
+    renderModal();
+    const input2 = document.querySelector('input[type="file"]');
+    const bigContent = 'x'.repeat(257 * 1024);
+    const big = new File([bigContent], 'big.json', { type: 'application/json' });
+    fireEvent.change(input2, { target: { files: [big] } });
+    await waitFor(() => expect(screen.getByText(/vượt quá 256 KB/)).toBeInTheDocument());
+  });
+
+  it('updates preview when config changes to 25/45', async () => {
+    renderModal();
+    const input = document.querySelector('input[type="file"]');
+    fireEvent.change(input, { target: { files: [makeFile('a.json', 60)] } });
+    await waitFor(() => expect(screen.getByText(/3 phần/)).toBeInTheDocument());
+
+    const maxInput = screen.getByLabelText('Số câu tối đa/phần');
+    const minInput = screen.getByLabelText('Số phút/phần');
+    fireEvent.change(maxInput, { target: { value: '25' } });
+    fireEvent.change(minInput, { target: { value: '45' } });
+    await waitFor(() => expect(screen.getByText(/45 phút\/phần/)).toBeInTheDocument());
+  });
+
+  it('closes on create success', async () => {
+    const onClose = vi.fn();
+    mocks.createQuizSet.mockResolvedValue({ id: 2 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <QueryClientProvider client={client}>
+          <QuizSetComposerModal courseCode="CSC101" token="test-token" onClose={onClose} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+    const input = document.querySelector('input[type="file"]');
+    fireEvent.change(input, { target: { files: [makeFile('a.json', 5)] } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo bộ đề' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo bộ đề' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

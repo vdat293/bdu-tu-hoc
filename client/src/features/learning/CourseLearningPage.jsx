@@ -14,6 +14,7 @@ import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
 import QuizSetSection from './QuizSetSection.jsx';
+import QuizSetComposerModal from './QuizSetComposerModal.jsx';
 import './quiz.css';
 import {
   AvatarContent,
@@ -312,6 +313,7 @@ export default function CourseLearningPage() {
   const client = useQueryClient();
 
   const [showComposer, setShowComposer] = useState(false);
+  const [showQuizSetComposer, setShowQuizSetComposer] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
   const [filterKind, setFilterKind] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -544,7 +546,7 @@ export default function CourseLearningPage() {
         <QuizSetSection
           courseCode={courseCode}
           canCreate={canCreateQuizSet}
-          onCreate={() => notify('Chức năng tạo bộ đề sẽ khả dụng ở bản cập nhật tiếp theo.', 'info')}
+          onCreate={() => setShowQuizSetComposer(true)}
         />
 
         {/* Filter Toolbar & Live Search Bar */}
@@ -1001,6 +1003,9 @@ export default function CourseLearningPage() {
             </form>
           </div>
         </div>
+      )}
+      {showQuizSetComposer && (
+        <QuizSetComposerModal courseCode={courseCode} onClose={() => setShowQuizSetComposer(false)} />
       )}
       {confirmUI}
     </section>
