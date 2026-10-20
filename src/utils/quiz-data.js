@@ -196,21 +196,23 @@ export function normalizeQuiz(input) {
       }
     }
 
-    // correct
+    // correct: nội dung option (trim + case-insensitive), lưu chuỗi option gốc (canonical)
     let correct = null;
     if (typeof q.correct !== 'string') {
       pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là chuỗi.`);
-    } else {
-      const rc = q.correct.trim().toUpperCase();
-      if (!/^[A-F]$/.test(rc)) {
-        pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là A–F.`);
-      } else if (options && (rc.charCodeAt(0) - 65) >= options.length) {
-        pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là A–${String.fromCharCode(64 + (options ? options.length : 0))}.`);
-      } else if (!options) {
-        // options invalid; still accept letter range unknown; push? skip
-        correct = rc;
+    } else if (options) {
+      const wanted = cleanText(q.correct).toLocaleLowerCase('vi-VN');
+      const matched = wanted === ''
+        ? undefined
+        : options.find((opt) => opt.toLocaleLowerCase('vi-VN') === wanted);
+      if (matched === undefined) {
+        pushError(
+          errors,
+          `${qPath}.correct`,
+          `Câu ${idx + 1}: correct phải trùng một lựa chọn trong options.`
+        );
       } else {
-        correct = rc;
+        correct = matched;
       }
     }
 
@@ -333,12 +335,16 @@ export function publicQuizQuestions(questions) {
 
 export function gradeQuizResponse(question, response) {
   if (!question || !Array.isArray(question.options)) return false;
-  const r = String(response ?? '').trim().toUpperCase();
-  if (!/^[A-F]$/.test(r)) return false;
-  const idx = r.charCodeAt(0) - 65;
-  if (idx >= question.options.length) return false;
-  const correct = String(question.correct ?? '').trim().toUpperCase();
-  return r === correct;
+  if (typeof response !== 'string') return false;
+  const wanted = response.trim().toLocaleLowerCase('vi-VN');
+  if (wanted === '') return false;
+  const matched = question.options.find(
+    (opt) => typeof opt === 'string' && opt.trim().toLocaleLowerCase('vi-VN') === wanted
+  );
+  if (matched === undefined) return false;
+  if (typeof question.correct !== 'string') return false;
+  return matched.trim().toLocaleLowerCase('vi-VN')
+    === question.correct.trim().toLocaleLowerCase('vi-VN');
 }
 
 export function gradeQuizResponses(questions, responses) {
@@ -358,14 +364,18 @@ export function gradeQuizResponses(questions, responses) {
       if (!qMap.has(id)) continue;
       if (seen.has(id)) continue;
       const question = qMap.get(id);
-      const rawResp = entry.response;
-      const r = String(rawResp ?? '').trim().toUpperCase();
-      if (!/^[A-F]$/.test(r)) continue;
-      const idx = r.charCodeAt(0) - 65;
-      if (idx >= (question.options?.length || 0)) continue;
+      if (typeof entry.response !== 'string') continue;
+      const wanted = entry.response.trim().toLocaleLowerCase('vi-VN');
+      if (wanted === '') continue;
+      const matched = Array.isArray(question.options)
+        ? question.options.find(
+          (opt) => typeof opt === 'string' && opt.trim().toLocaleLowerCase('vi-VN') === wanted
+        )
+        : undefined;
+      if (matched === undefined) continue;
       seen.add(id);
-      const correct = gradeQuizResponse(question, r);
-      entries.push({ id, response: r, correct });
+      const canonical = matched.trim();
+      entries.push({ id, response: canonical, correct: gradeQuizResponse(question, canonical) });
     }
   }
   return {
@@ -398,7 +408,7 @@ export function quizTemplateJson() {
         id: 'q1',
         question: 'Cấu trúc dữ liệu nào hoạt động theo nguyên tắc LIFO?',
         options: ['Hàng đợi', 'Ngăn xếp', 'Danh sách liên kết', 'Cây nhị phân'],
-        correct: 'B',
+        correct: 'Ngăn xếp',
         explanation: 'Ngăn xếp (stack) hoạt động theo LIFO: vào sau, ra trước.'
       }
     ]

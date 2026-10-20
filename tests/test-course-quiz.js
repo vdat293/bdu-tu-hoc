@@ -50,12 +50,13 @@ assert.equal(r.ok, true, 'BOM bị bỏ');
 // CRLF normalization
 const crlf = JSON.stringify({
   schema: 'bdu-quiz/v1',
-  questions: [{ question: 'line1\r\nline2', options: ['a\r\nb', 'c'], correct: 'A' }]
+  questions: [{ question: 'line1\r\nline2', options: ['a\r\nb', 'c'], correct: 'a\r\nb' }]
 });
 r = parseQuizJson(crlf);
 assert.equal(r.ok, true);
 assert.equal(r.quiz.questions[0].question, 'line1\nline2');
 assert.equal(r.quiz.questions[0].options[0], 'a\nb');
+assert.equal(r.quiz.questions[0].correct, 'a\nb');
 
 // schema missing/wrong
 r = parseQuizJson(JSON.stringify({ questions: [{ question: 'q', options: ['a','b'], correct: 'A' }] }));
@@ -102,20 +103,53 @@ r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options:
 assert.equal(r.ok, false);
 assert.ok(r.errors.some(e => /options/.test(e.path)));
 
-// correct lowercase -> uppercase
-r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: ['a','b','c','d'], correct: 'c' }] });
+// correct khớp option khác hoa/thường + khoảng trắng -> lưu chuỗi option gốc (canonical)
+r = normalizeQuiz({
+  schema: 'bdu-quiz/v1',
+  questions: [
+    {
+      question: 'q',
+      options: [' Hàng đợi ', 'Ngăn xếp'],
+      correct: '  ngăn xếp  '
+    }
+  ]
+});
 assert.equal(r.ok, true);
-assert.equal(r.quiz.questions[0].correct, 'C');
+assert.equal(r.quiz.questions[0].correct, 'Ngăn xếp');
+assert.deepEqual(r.quiz.questions[0].options, ['Hàng đợi', 'Ngăn xếp']);
 
-// correct out of range (E for 2 options)
-r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: ['a','b'], correct: 'C' }] });
+// correct là chữ cái không trùng option -> lỗi đúng message
+r = normalizeQuiz({
+  schema: 'bdu-quiz/v1',
+  questions: [{ question: 'q', options: ['Hàng đợi', 'Ngăn xếp'], correct: 'B' }]
+});
 assert.equal(r.ok, false);
-assert.ok(r.errors.some(e => /correct/.test(e.path)));
+assert.ok(r.errors.some((e) => e.path === 'questions[0].correct'));
+assert.ok(
+  r.errors.some((e) => e.message === 'Câu 1: correct phải trùng một lựa chọn trong options.'),
+  'correct sai phải báo đúng message'
+);
 
 // correct number rejected
-r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: ['a','b'], correct: 1 }] });
+r = normalizeQuiz({
+  schema: 'bdu-quiz/v1',
+  questions: [{ question: 'q', options: ['Hàng đợi', 'Ngăn xếp'], correct: 1 }]
+});
 assert.equal(r.ok, false);
-assert.ok(r.errors.some(e => /correct/.test(e.path)));
+assert.ok(r.errors.some((e) => /correct/.test(e.path)));
+
+// correct rỗng / toàn khoảng trắng cũng bị từ chối
+for (const emptyCorrect of ['', '   ']) {
+  r = normalizeQuiz({
+    schema: 'bdu-quiz/v1',
+    questions: [{ question: 'q', options: ['Hàng đợi', 'Ngăn xếp'], correct: emptyCorrect }]
+  });
+  assert.equal(r.ok, false, `correct ${JSON.stringify(emptyCorrect)} phải bị từ chối`);
+  assert.ok(
+    r.errors.some((e) => e.message === 'Câu 1: correct phải trùng một lựa chọn trong options.'),
+    `correct ${JSON.stringify(emptyCorrect)} phải báo lỗi trùng option`
+  );
+}
 
 // id: none -> q1..qN
 r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [
@@ -160,10 +194,10 @@ r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: okQ, options:
 assert.equal(r.ok, true);
 
 const longOpt = 'a'.repeat(501);
-r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: [longOpt, 'b'], correct: 'A' }] });
+r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: [longOpt, 'b'], correct: longOpt }] });
 assert.equal(r.ok, false);
 const okOpt = 'a'.repeat(500);
-r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: [okOpt, 'b'], correct: 'A' }] });
+r = normalizeQuiz({ schema: 'bdu-quiz/v1', questions: [{ question: 'q', options: [okOpt, 'b'], correct: okOpt }] });
 assert.equal(r.ok, true);
 
 const longExp = 'a'.repeat(2001);
@@ -215,20 +249,52 @@ assert.equal(r.quiz.questions[0].question, '<script>alert(1)</script>');
 const pq = publicQuizQuestions([{ id: 'q1', question: 'Q', options: ['a','b'], correct: 'A', explanation: 'E' }]);
 assert.deepEqual(pq, [{ id: 'q1', question: 'Q', options: ['a','b'] }]);
 
-// gradeQuizResponse
-assert.equal(gradeQuizResponse({ options: ['a','b','c','d'], correct: 'B' }, 'b'), true);
-assert.equal(gradeQuizResponse({ options: ['a','b','c','d'], correct: 'B' }, 'c'), false);
-assert.equal(gradeQuizResponse({ options: ['a','b','c','d'], correct: 'B' }, ''), false);
-assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'B' }, 'C'), false);
+// gradeQuizResponse: response là nội dung option, trim + case-insensitive
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, 'B'), true);
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, '  b  '), true);
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, 'a'), false);
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, 'z'), false);
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, ''), false);
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, null), false);
+// response đúng correct nhưng không phải option hợp lệ -> false
+assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'c' }, 'c'), false);
+// chữ cái không còn là đáp án
+assert.equal(gradeQuizResponse({ options: ['Hàng đợi','Ngăn xếp'], correct: 'Ngăn xếp' }, 'B'), false);
 
-// gradeQuizResponses
+// gradeQuizResponses: response text, canonical hóa, bỏ entry không hợp lệ/trùng/lạ
 const gq = gradeQuizResponses(
-  [{ id: 'a', options: ['a','b'], correct: 'A' }, { id: 'b', options: ['a','b'], correct: 'B' }],
-  [{ id: 'a', response: 'a' }, { id: 'b', response: 'a' }, { id: 'x', response: 'a' }, { id: 'a', response: 'b' }, { id: 'b', response: 1 }, 'junk']
+  [
+    { id: 'a', options: ['a','b'], correct: 'a' },
+    { id: 'b', options: ['Hàng đợi','Ngăn xếp'], correct: 'Ngăn xếp' },
+    { id: 'c', options: ['a','b'], correct: 'b' }
+  ],
+  [
+    { id: 'a', response: 'A' },
+    { id: 'b', response: 'ngăn xếp', correct: true },
+    { id: 'x', response: 'a' },
+    { id: 'a', response: 'b' },
+    { id: 'c', response: 'z' },
+    { id: 'c', response: 'B' },
+    { id: 'b', response: 1 },
+    'junk'
+  ]
 );
-assert.deepEqual(gq.entries, [{ id: 'a', response: 'A', correct: true }, { id: 'b', response: 'A', correct: false }]);
-assert.equal(gq.answered, 2);
-assert.equal(gq.correct, 1);
+assert.deepEqual(gq.entries, [
+  { id: 'a', response: 'a', correct: true },
+  { id: 'b', response: 'Ngăn xếp', correct: true },
+  { id: 'c', response: 'b', correct: true }
+]);
+assert.equal(gq.answered, 3);
+assert.equal(gq.correct, 3);
+
+// response sai nhưng hợp lệ: giữ entry, correct=false, không tin cờ client
+const gqWrong = gradeQuizResponses(
+  [{ id: 'q1', options: ['a','b'], correct: 'b' }],
+  [{ id: 'q1', response: 'a', correct: true }]
+);
+assert.deepEqual(gqWrong.entries, [{ id: 'q1', response: 'a', correct: false }]);
+assert.equal(gqWrong.answered, 1);
+assert.equal(gqWrong.correct, 0);
 
 // remainingSeconds
 assert.equal(remainingSeconds(null, 0), null);
@@ -241,10 +307,13 @@ assert.equal(remainingSeconds(start2, 600, now), 0);
 // Date object
 assert.equal(remainingSeconds(new Date(start), 600, now), 540);
 
-// quizTemplateJson
+// quizTemplateJson: correct là nội dung option, không phải chữ cái
 const tpl = quizTemplateJson();
 const parsed = JSON.parse(tpl);
 assert.equal(parsed.schema, 'bdu-quiz/v1');
+assert.equal(typeof parsed.questions[0].correct, 'string');
+assert.ok(parsed.questions[0].options.includes(parsed.questions[0].correct), 'correct mẫu phải nằm trong options');
+assert.equal(normalizeQuiz(parsed).ok, true, 'template phải validate được');
 
 // ── Migration 064: schema assertions ──
 import { readFileSync } from 'node:fs';
