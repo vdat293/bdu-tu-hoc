@@ -66,6 +66,7 @@ export default function QuizRunner({
   questions: incomingQuestions = [],
   initialProgress = null,
   remainingSeconds = null,
+  allowEarlyFinish = true,
   onCheckAnswer,
   onSaveProgress,
   onComplete,
@@ -287,6 +288,9 @@ export default function QuizRunner({
 
   const finalize = async () => {
     if (finishedRef.current || checking || timeUpRef.current) return;
+    // Defense in depth: review cannot be completed before every question has
+    // an answer even if a future UI path calls finalize directly.
+    if (!allowEarlyFinish && responses.length < total) return;
     finishedRef.current = true;
     setConfirmSubmit(false);
     setFinishing(true);
@@ -319,6 +323,9 @@ export default function QuizRunner({
   const requestFinish = () => {
     if (finishing || checking || showConfirm || timeUpRef.current) return;
     if (unansweredCount > 0) {
+      // Review completion is rejected server-side until every question has an
+      // answer, so this mode must not ask for confirmation or finalize early.
+      if (!allowEarlyFinish) return;
       confirmTriggerRef.current = document.activeElement;
       setConfirmSubmit(true);
       return;
@@ -481,6 +488,7 @@ export default function QuizRunner({
             </section>
           )}
 
+          <div className="quiz-runner-footer-spacer" aria-hidden="true" />
           <footer className="quiz-runner-actions">
             {feedback ? (
               unansweredCount === 0 ? (
@@ -513,7 +521,7 @@ export default function QuizRunner({
               </button>
             )}
 
-            {answeredCount > 0 && unansweredCount > 0 && !timeUp && (
+            {allowEarlyFinish && answeredCount > 0 && unansweredCount > 0 && !timeUp && (
               <button
                 type="button"
                 className="btn btn-secondary"

@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   getQuizSets: vi.fn(),
   createQuizSet: vi.fn(),
   deleteQuizSet: vi.fn(),
+  getQuizPart: vi.fn(),
+  startQuizPart: vi.fn(),
+  answerQuizReview: vi.fn(),
+  saveQuizPartProgress: vi.fn(),
   getCoursePosts: vi.fn(),
   createCoursePost: vi.fn(),
   deleteCoursePost: vi.fn(),
@@ -22,6 +26,10 @@ vi.mock('../../client/src/api/community.js', () => ({
   getQuizSets: mocks.getQuizSets,
   createQuizSet: mocks.createQuizSet,
   deleteQuizSet: mocks.deleteQuizSet,
+  getQuizPart: mocks.getQuizPart,
+  startQuizPart: mocks.startQuizPart,
+  answerQuizReview: mocks.answerQuizReview,
+  saveQuizPartProgress: mocks.saveQuizPartProgress,
   getCoursePosts: mocks.getCoursePosts,
   createCoursePost: mocks.createCoursePost,
   deleteCoursePost: mocks.deleteCoursePost,
@@ -49,6 +57,7 @@ import QuizSetCard from '../../client/src/features/learning/QuizSetCard.jsx';
 import QuizSetSection from '../../client/src/features/learning/QuizSetSection.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 import QuizSetComposerModal from '../../client/src/features/learning/QuizSetComposerModal.jsx';
+import QuizSetPartPage from '../../client/src/features/learning/QuizSetPartPage.jsx';
 
 function makeSet(overrides = {}) {
   return {
@@ -86,6 +95,33 @@ function renderWithClient(ui, initialEntries = ['/']) {
     </MemoryRouter>
   );
   return { ...view, client };
+}
+
+function makePartData(overrides = {}) {
+  return {
+    set: makeSet({ question_count: 4, part_count: 2, part_sizes: [2, 2] }),
+    part: { index: 0, question_count: 2, time_limit_seconds: null },
+    questions: [
+      { id: 'q1', question: 'Câu hỏi số 1?', options: ['Đáp án A', 'Đáp án B'] },
+      { id: 'q2', question: 'Câu hỏi số 2?', options: ['Đáp án C', 'Đáp án D'] }
+    ],
+    progress: null,
+    review: null,
+    ...overrides
+  };
+}
+
+function renderPartPage(initialEntry = '/learning/CSC101/quiz-sets/7/parts/0/review') {
+  return renderWithClient(
+    <Routes>
+      <Route
+        path="/learning/:courseCode/quiz-sets/:setId/parts/:partIndex/:mode"
+        element={<QuizSetPartPage />}
+      />
+      <Route path="/learning/:courseCode" element={<div>Không gian môn</div>} />
+    </Routes>,
+    [initialEntry]
+  );
 }
 
 afterEach(() => {
@@ -346,5 +382,231 @@ describe('QuizSetComposerModal', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo bộ đề' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Tạo bộ đề' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+});
+
+describe('QuizSetPartPage review mode', () => {
+  it('loads the review landing with breadcrumb, author, part meta and resume CTA', async () => {
+    mocks.getQuizPart.mockResolvedValue(makePartData({
+      progress: {
+        answered: 1,
+        total_count: 2,
+        completed_at: null,
+        responses: [{ id: 'q1', response: 'Đáp án A', correct: true }]
+      }
+    }));
+
+    renderPartPage();
+
+    expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+    expect(screen.getByText('CSC101')).toBeInTheDocument();
+    expect(screen.getByText('Phần 1 · Ôn tập')).toBeInTheDocument();
+    expect(screen.getByText('2 câu')).toBeInTheDocument();
+    expect(screen.getByText('Không giới hạn thời gian')).toBeInTheDocument();
+    expect(screen.getByText('Đã làm 1/2')).toBeInTheDocument();
+    expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
+    expect(mocks.getQuizPart).toHaveBeenCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      expect.objectContaining({ mode: 'review' })
+    );
+  });
+
+  it('starts review, shows immediate feedback, autosaves with mode review and completes', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makePartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
+    mocks.answerQuizReview
+      .mockResolvedValueOnce({ correct: true, correct_answer: 'Đáp án A', explanation: 'Giải thích câu 1.' })
+      .mockResolvedValueOnce({ correct: false, correct_answer: 'Đáp án D', explanation: 'Giải thích câu 2.' });
+    mocks.saveQuizPartProgress.mockImplementation((token, code, setId, partIndex, payload) => Promise.resolve({
+      mode: 'review',
+      answered: payload.responses.length,
+      total_count: 2,
+      completed_at: payload.completed ? '2026-10-20T00:00:00Z' : null,
+      responses: payload.responses.map((entry) => ({ ...entry, correct: entry.id === 'q1' })),
+      correct_count: payload.responses.filter((entry) => entry.id === 'q1').length,
+      remaining_seconds: null
+    }));
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu ôn tập' }));
+
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    expect(screen.getByText('Câu 1/2')).toBeInTheDocument();
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.getQuizPart).toHaveBeenCalledTimes(2));
+    expect(mocks.startQuizPart).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'review',
+      restart: false
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
+
+    expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
+    expect(screen.getByText('Giải thích câu 1.')).toBeInTheDocument();
+    expect(mocks.answerQuizReview).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'review',
+      questionId: 'q1',
+      response: 'Đáp án A'
+    });
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      {
+        mode: 'review',
+        responses: [{ id: 'q1', response: 'Đáp án A' }],
+        completed: false
+      }
+    ));
+
+    // Review must not offer an early finish while questions remain unanswered.
+    expect(screen.queryByRole('button', { name: 'Xem kết quả' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
+    expect(await screen.findByText('Chưa chính xác.')).toBeInTheDocument();
+
+    const finish = await screen.findByRole('button', { name: 'Xem kết quả' });
+    fireEvent.click(finish);
+
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenLastCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      {
+        mode: 'review',
+        responses: [
+          { id: 'q1', response: 'Đáp án A' },
+          { id: 'q2', response: 'Đáp án D' }
+        ],
+        completed: true
+      }
+    ));
+
+    expect(await screen.findByText('Đã hoàn thành ôn tập 2/2')).toBeInTheDocument();
+    expect(screen.getByText('1/2 câu đúng')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ôn tập lại' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Về môn' })).toBeInTheDocument();
+    expect(screen.queryByText(/Cao nhất/)).not.toBeInTheDocument();
+  });
+
+  it('resumes at the first unanswered question', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makePartData({
+      progress: {
+        answered: 1,
+        total_count: 2,
+        completed_at: null,
+        responses: [{ id: 'q1', response: 'Đáp án A', correct: true }]
+      }
+    }));
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
+
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    expect(screen.getByText('Câu 2/2')).toBeInTheDocument();
+    expect(screen.queryByText('Câu hỏi số 1?')).not.toBeInTheDocument();
+  });
+
+  it('shows completed review progress on the landing and restarts with restart:true', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    const completed = makePartData({
+      progress: {
+        answered: 2,
+        total_count: 2,
+        completed_at: '2026-10-19T00:00:00Z',
+        responses: [
+          { id: 'q1', response: 'Đáp án A', correct: true },
+          { id: 'q2', response: 'Đáp án D', correct: false }
+        ]
+      }
+    });
+    const reset = makePartData();
+    mocks.getQuizPart
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValueOnce(reset);
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: true, completed_at: null });
+
+    renderPartPage();
+
+    expect(await screen.findByText('Đã làm 2/2')).toBeInTheDocument();
+    expect(screen.getByText('Đã hoàn thành')).toBeInTheDocument();
+    expect(screen.queryByText(/Cao nhất/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ôn tập lại' }));
+
+    await waitFor(() => expect(mocks.startQuizPart).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'review',
+      restart: true
+    }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+  });
+
+  it('renders a not-found branch for an invalid mode without querying', async () => {
+    renderPartPage('/learning/CSC101/quiz-sets/7/parts/0/bogus');
+
+    expect(await screen.findByText('Không tìm thấy phần của bộ đề này.')).toBeInTheDocument();
+    expect(mocks.getQuizPart).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Về môn' }));
+    expect(await screen.findByText('Không gian môn')).toBeInTheDocument();
+  });
+
+  it('renders the error branch with a back link when the part is missing', async () => {
+    mocks.getQuizPart.mockRejectedValue(Object.assign(new Error('Không tìm thấy bộ đề.'), { status: 404 }));
+
+    renderPartPage();
+
+    expect(await screen.findByText('Không tìm thấy phần của bộ đề này.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Về môn' }));
+    expect(await screen.findByText('Không gian môn')).toBeInTheDocument();
+  });
+});
+
+describe('QuizSetPartPage test mode landing', () => {
+  it('shows test meta and starts with mode test', async () => {
+    mocks.getQuizPart.mockResolvedValue(makePartData({
+      part: { index: 0, question_count: 2, time_limit_seconds: 1800 },
+      progress: {
+        answered: 0,
+        total_count: 2,
+        completed_at: null,
+        best_correct: 1,
+        best_total: 2,
+        attempts: 3,
+        responses: []
+      }
+    }));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+
+    renderPartPage('/learning/CSC101/quiz-sets/7/parts/0/test');
+
+    expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+    expect(screen.getByText('Phần 1 · Kiểm tra')).toBeInTheDocument();
+    expect(screen.getByText('30 phút')).toBeInTheDocument();
+    expect(screen.getByText('Cao nhất 1/2')).toBeInTheDocument();
+    expect(screen.getByText('3 lượt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu kiểm tra' }));
+
+    await waitFor(() => expect(mocks.startQuizPart).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'test',
+      restart: false
+    }));
+    expect(await screen.findByText('Đã bắt đầu lượt kiểm tra.')).toBeInTheDocument();
   });
 });
