@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 function sameOptionText(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const left = a.trim().toLocaleLowerCase('vi-VN');
@@ -22,6 +24,7 @@ export default function QuizSetResultView({
   restarting = false
 }) {
   const isReview = mode === 'review';
+  const headingRef = useRef(null);
   const list = Array.isArray(questions) ? questions : [];
   const responses = Array.isArray(progress?.responses) ? progress.responses : [];
   const total = Number(progress?.total_count || part?.question_count || list.length || 0);
@@ -48,13 +51,21 @@ export default function QuizSetResultView({
     }
   }
 
+  // On completion, move keyboard focus (and the viewport) to the result heading
+  // so screen-reader users hear the outcome instead of the now-removed runner.
+  useEffect(() => {
+    if (!isReview) return;
+    headingRef.current?.focus?.();
+    headingRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [isReview]);
+
   return (
     <div className="quiz-result">
       <section className="quiz-result-summary" aria-label="Kết quả bài làm">
         {isReview ? (
-          <strong className="quiz-result-complete-title">
+          <h2 className="quiz-result-complete-title" ref={headingRef} tabIndex={-1}>
             {`Đã hoàn thành ôn tập ${answered}/${total}`}
-          </strong>
+          </h2>
         ) : (
           <div className="quiz-result-score-line">
             <strong className="quiz-result-score">{`${correct}/${total}`}</strong>

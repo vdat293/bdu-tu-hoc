@@ -131,10 +131,16 @@ export default function QuizSetPartPage() {
     client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
   }, [refetch, client, courseCode]);
 
-  const handleExit = useCallback(() => {
+  const handleExit = useCallback(async () => {
+    // Refresh while the runner is still mounted so the landing opens with the
+    // latest saved position instead of briefly showing stale resume state.
+    try {
+      await refetch();
+    } catch {
+      // Still return to the landing with the last known progress.
+    }
     setStarted(false);
     setResultProgress(null);
-    refetch();
     client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
   }, [refetch, client, courseCode]);
 

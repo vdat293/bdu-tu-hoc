@@ -450,6 +450,7 @@ describe('QuizSetPartPage review mode', () => {
 
     expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
     expect(screen.getByText('Giải thích câu 1.')).toBeInTheDocument();
+    screen.getAllByRole('radio').forEach((option) => expect(option).toBeDisabled());
     expect(mocks.answerQuizReview).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
       mode: 'review',
       questionId: 'q1',
@@ -476,6 +477,11 @@ describe('QuizSetPartPage review mode', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
     expect(await screen.findByText('Chưa chính xác.')).toBeInTheDocument();
+    const lockedOptions = screen.getAllByRole('radio');
+    expect(lockedOptions).toHaveLength(2);
+    lockedOptions.forEach((option) => expect(option).toBeDisabled());
+    expect(screen.getByText('Đáp án đúng: Đáp án D')).toBeInTheDocument();
+    expect(screen.getByText('Giải thích câu 2.')).toBeInTheDocument();
 
     const finish = await screen.findByRole('button', { name: 'Xem kết quả' });
     fireEvent.click(finish);
@@ -496,6 +502,8 @@ describe('QuizSetPartPage review mode', () => {
     ));
 
     expect(await screen.findByText('Đã hoàn thành ôn tập 2/2')).toBeInTheDocument();
+    const resultHeading = screen.getByRole('heading', { name: 'Đã hoàn thành ôn tập 2/2' });
+    await waitFor(() => expect(resultHeading).toHaveFocus());
     expect(screen.getByText('1/2 câu đúng')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ôn tập lại' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Về môn' })).toBeInTheDocument();
@@ -520,6 +528,32 @@ describe('QuizSetPartPage review mode', () => {
     expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
     expect(screen.getByText('Câu 2/2')).toBeInTheDocument();
     expect(screen.queryByText('Câu hỏi số 1?')).not.toBeInTheDocument();
+  });
+
+  it('shuffles questions/options deterministically and resumes stored responses by id', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    mocks.getQuizPart.mockResolvedValue(makePartData({
+      progress: {
+        answered: 1,
+        total_count: 2,
+        completed_at: null,
+        responses: [{ id: 'q1', response: 'Đáp án A', correct: true }]
+      }
+    }));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
+
+    // () => 0 reverses both lists: [q1,q2] -> [q2,q1] and options [C,D] -> [D,C].
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    expect(screen.queryByText('Câu hỏi số 1?')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio').map((option) => option.getAttribute('aria-label')))
+      .toEqual(['Đáp án D', 'Đáp án C']);
+    // q1 is already stored as answered: the resumed question must still be q2
+    // at shuffled index 0, proving responses map by id and not by position.
+    expect(screen.getByText('Câu 1/2')).toBeInTheDocument();
   });
 
   it('shows completed review progress on the landing and restarts with restart:true', async () => {
