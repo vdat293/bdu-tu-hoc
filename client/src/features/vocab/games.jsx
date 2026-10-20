@@ -222,10 +222,18 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
     go(1);
   }, [word, saving, onProgress, go]);
 
+  const lastCheckOkAtRef = useRef(0);
   const submitGuess = useCallback(async (e) => {
     e?.preventDefault?.();
     // Sau khi đã check đúng, Enter/Check lần nữa tự chuyển sang thẻ tiếp theo.
-    if (feedback === 'ok') { go(1); return; }
+    // Bỏ qua các lời gọi trùng ngay sau khi check đúng (keydown + submit của cùng một phím Enter)
+    // để không nhảy câu ngay trong lần Enter đầu tiên.
+    if (feedback === 'ok') {
+      if (Date.now() - lastCheckOkAtRef.current < 100) return;
+      go(1);
+      lastCheckOkAtRef.current = 0;
+      return;
+    }
     const needle = normText(guess);
     if (!needle) return;
     const expected = normText(direction === 'en-vi' ? word.meaning : word.term);
@@ -234,6 +242,7 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
       setFeedback('ok');
       setFlipped(true);
       setKnownCount((c) => c + 1);
+      lastCheckOkAtRef.current = Date.now();
       await onProgress?.(word.id, 'known').catch?.(() => {});
     } else {
       setFeedback('bad');
@@ -248,7 +257,10 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
       if (e.code === 'Space') { e.preventDefault(); setFlipped((f) => !f); }
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
-      else if (e.key === 'Enter' && feedback === 'ok') go(1);
+      else if (e.key === 'Enter' && feedback === 'ok') {
+        if (Date.now() - lastCheckOkAtRef.current < 100) { /* ignore */ }
+        else { go(1); lastCheckOkAtRef.current = 0; }
+      }
       else if (e.key === 'Enter' && guess.trim() && feedback !== 'ok') submitGuess();
       else if (k === 'x' || (e.ctrlKey && k === '1')) mark(false);
       else if (k === 'c' || (e.ctrlKey && k === '2')) mark(true);
@@ -282,7 +294,12 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               e.stopPropagation();
-              if (e.key === 'Enter' && feedback === 'ok') { go(1); return; }
+              if (e.key === 'Enter' && feedback === 'ok') {
+                if (Date.now() - lastCheckOkAtRef.current < 100) return;
+                go(1);
+                lastCheckOkAtRef.current = 0;
+                return;
+              }
               setFlipped((f) => !f);
             }
           }}
@@ -311,7 +328,7 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
           <input
             value={guess}
             onChange={(e) => { setGuess(e.target.value); if (feedback) setFeedback(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitGuess(e); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submitGuess(e); } }}
             placeholder={direction === 'en-vi' ? 'Gõ nghĩa (đánh dấu đã thuộc nếu đúng)...' : 'Gõ từ tiếng Anh...'}
             aria-label={direction === 'en-vi' ? 'Gõ nghĩa tiếng Việt' : 'Gõ từ tiếng Anh'}
           />
