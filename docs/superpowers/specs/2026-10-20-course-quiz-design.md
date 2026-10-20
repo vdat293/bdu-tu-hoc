@@ -434,10 +434,12 @@ Request: `{ "restart": false }` (tùy chọn).
 
 Xử lý trong transaction, khóa dòng progress `FOR UPDATE`:
 - Chưa có dòng: INSERT `started_at=NOW()`, `responses='[]'`, `attempts=0`.
-- Có dòng, `completed_at IS NULL`: giữ nguyên.
+- Có dòng, `completed_at IS NULL`:
+  - `restart !== true`: giữ nguyên; `restarted=false`.
+  - `restart === true`: reset lượt đang làm (`started_at=NOW()`, `answered=0`, `correct_count=0`, `total_count=0`, `responses='[]'`, `completed_at=NULL`); giữ `best_correct`, `best_total`, `attempts`; `restarted=true`.
 - Có dòng, đã completed:
   - `restart !== true`: trả nguyên trạng; `restarted=false`.
-  - `restart === true`: reset `started_at=NOW()`, `answered=0`, `correct_count=0`, `total_count=0`, `responses='[]'`, `completed_at=NULL`; giữ `best_correct`, `best_total`, `attempts`.
+  - `restart === true`: reset như trên; giữ `best_correct`, `best_total`, `attempts`; `restarted=true`.
 - Nếu dòng tồn tại nhưng `started_at IS NULL` (dữ liệu bất thường): đặt `NOW()`.
 
 Rate limit `course-quiz-start:${mssv}`: 120 lượt/10 phút.

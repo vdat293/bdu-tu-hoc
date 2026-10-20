@@ -396,6 +396,7 @@ assert.equal(bad.correct_option, 'B');
 Thêm:
 - Set `started_at = NOW() - INTERVAL '601 seconds'` bằng SQL; `getCourseQuiz` trả `remaining_seconds=0`, `expired=true`; answer → 409 `QUIZ_TIME_UP`.
 - Start lần hai khi chưa hết giờ không reset `started_at`; set `started_at` lùi 60 giây, start lại, `remaining_seconds` khoảng 540.
+- Đang làm dở + `restart:true` → reset lượt hiện tại (`answered=0`, `responses=[]`, `completed_at=null`, `started_at` mới), giữ `best_*`/`attempts`; `restarted=true`. Test có thể seed responses bằng SQL vì Task 5 chưa có endpoint save.
 - `questionId` lạ → 400; `response` ngoài phạm vi → 400.
 - Post không phải quiz → 404.
 
