@@ -634,10 +634,11 @@ export const LearningService = {
       const timeLimitSeconds = context.quiz.time_limit_seconds;
 
       // ON CONFLICT để hai tab bấm "Bắt đầu" cùng lúc không tạo hai dòng.
-      await client.query(`
+      const inserted = await client.query(`
         INSERT INTO course_quiz_progress (mssv, post_id, started_at, responses)
         VALUES ($1, $2, NOW(), '[]'::jsonb)
-        ON CONFLICT (mssv, post_id) DO NOTHING;
+        ON CONFLICT (mssv, post_id) DO NOTHING
+        RETURNING mssv;
       `, [cleanMssv, progressPostId]);
 
       let progress = (await client.query(`
@@ -648,8 +649,9 @@ export const LearningService = {
       `, [cleanMssv, progressPostId])).rows[0];
 
       let restarted = false;
-      if (progress.completed_at && restart) {
-        // Lượt đã xong + restart: reset lượt hiện tại, giữ best/attempts.
+      // Đã có lượt (đang làm dở hoặc đã xong) + restart: reset lượt hiện tại,
+      // giữ best/attempts. Lượt vừa được INSERT lần đầu không tính là restart.
+      if (restart && inserted.rowCount === 0) {
         progress = (await client.query(`
           UPDATE course_quiz_progress
           SET started_at = NOW(),

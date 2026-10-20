@@ -412,7 +412,43 @@ try {
   assert.equal(Number(reset.best_total), 2);
   assert.equal(Number(reset.attempts), 1);
 
-  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer và hồi quy kind cũ đều hoạt động.');
+  // 16. Restart khi lượt đang làm dở cũng reset lượt hiện tại (§6.5/§7.5):
+  //     started_at mới, answered/responses về 0, best/attempts giữ nguyên.
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '30 seconds',
+        answered = 1, correct_count = 1, total_count = 1,
+        responses = '[{"id":"q1","response":"B","correct":true}]'::jsonb,
+        updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const inProgressBefore = await readQuizProgress(post.id);
+
+  const inProgressRestart = await LearningService.startCourseQuiz(
+    VIEWER,
+    COURSE_CODE,
+    post.id,
+    { restart: true }
+  );
+  assert.equal(inProgressRestart.restarted, true);
+  assert.equal(inProgressRestart.completed_at, null);
+  assert.ok(inProgressRestart.remaining_seconds > 590 && inProgressRestart.remaining_seconds <= 600);
+
+  const afterInProgressRestart = await LearningService.getCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.ok(
+    afterInProgressRestart.quiz.progress.started_at.getTime() > inProgressBefore.started_at.getTime(),
+    'Restart phải đặt started_at mới'
+  );
+  assert.equal(afterInProgressRestart.quiz.progress.answered, 0);
+  assert.equal(afterInProgressRestart.quiz.progress.correct_count, 0);
+  assert.equal(afterInProgressRestart.quiz.progress.total_count, 0);
+  assert.equal(afterInProgressRestart.quiz.progress.completed_at, null);
+  assert.deepEqual(afterInProgressRestart.quiz.progress.responses, []);
+  assert.equal(afterInProgressRestart.quiz.progress.best_correct, 1);
+  assert.equal(afterInProgressRestart.quiz.progress.best_total, 2);
+  assert.equal(afterInProgressRestart.quiz.progress.attempts, 1);
+
+  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, restart và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM identity_entitlement_grants WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
