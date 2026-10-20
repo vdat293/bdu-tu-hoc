@@ -441,7 +441,7 @@ export function buildQuizSet(options = {}) {
     if (partSizes.length === 0) {
       pushError(
         errors,
-        '$.questions',
+        '$.maxQuestionsPerPart',
         `Số câu vượt quá ${QUIZ_SET_MAX_PARTS} phần; hãy tăng số câu tối đa mỗi phần.`
       );
     }

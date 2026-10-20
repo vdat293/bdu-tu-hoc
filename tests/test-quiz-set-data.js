@@ -224,11 +224,11 @@ for (const badMinutes of [4, 181, 0, 30.5, '30', null, NaN]) {
   assert.ok(built.errors.some((e) => e.path === '$.minutesPerPart'));
 }
 
-// Tổng số câu vượt quá 20 phần (101 câu / max 5) -> từ chối.
+// Tổng số câu vượt quá 20 phần (101 câu / max 5) -> từ chối, báo lỗi ở config.
 built = buildQuizSet({ questions: makeQuestions(101), maxQuestionsPerPart: 5, minutesPerPart: 30 });
 assert.equal(built.ok, false);
 assert.equal(built.set, null);
-assert.ok(built.errors.some((e) => e.path === '$.questions'), 'quá 20 phần báo lỗi $.questions');
+assert.ok(built.errors.some((e) => e.path === '$.maxQuestionsPerPart'), 'quá 20 phần báo lỗi $.maxQuestionsPerPart');
 
 // Biên hợp lệ của config.
 built = buildQuizSet({ questions: makeQuestions(10), maxQuestionsPerPart: 25, minutesPerPart: 5 });
@@ -335,9 +335,23 @@ try {
 assert.match(migrationSql, /DELETE\s+FROM\s+course_posts\s+WHERE\s+kind\s*=\s*'quiz'\s*;/i);
 const dropProgressAt = migrationSql.search(/DROP\s+TABLE\s+IF\s+EXISTS\s+course_quiz_progress\s*;/i);
 const dropQuizzesAt = migrationSql.search(/DROP\s+TABLE\s+IF\s+EXISTS\s+course_quizzes\s*;/i);
-assert.ok(dropProgressAt >= 0, 'phải drop course_quiz_progress');
-assert.ok(dropQuizzesAt >= 0, 'phải drop course_quizzes');
+assert.ok(dropProgressAt >= 0, 'phải drop course_quiz_progress cũ');
+assert.ok(dropQuizzesAt >= 0, 'phải drop course_quizzes cũ');
 assert.ok(dropProgressAt < dropQuizzesAt, 'drop progress trước quizzes để không vướng FK');
+
+// Drop progress phải nằm trong DO block có guard course_quizzes, không drop vô điều kiện.
+assert.doesNotMatch(
+  migrationSql,
+  /^DROP\s+TABLE\s+IF\s+EXISTS\s+course_quiz_progress\s*;/im,
+  'không được drop course_quiz_progress vô điều kiện ở top-level'
+);
+const progressGuard = migrationSql.match(/DO\s+\$\$[\s\S]*?END\s+\$\$;/i)?.[0] ?? '';
+assert.match(
+  progressGuard,
+  /to_regclass\(\s*'public\.course_quizzes'\s*\)\s+IS\s+NOT\s+NULL/i,
+  'drop progress phải được guard bởi sự tồn tại của course_quizzes cũ'
+);
+assert.match(progressGuard, /DROP\s+TABLE\s+IF\s+EXISTS\s+course_quiz_progress\s*;/i);
 assert.match(
   migrationSql,
   /DROP\s+CONSTRAINT\s+IF\s+EXISTS\s+course_posts_kind_check/i,

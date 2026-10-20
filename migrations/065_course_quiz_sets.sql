@@ -9,7 +9,16 @@
 -- §3.1: dọn quiz-post cũ (feature chưa deploy, chỉ có dữ liệu test).
 DELETE FROM course_posts WHERE kind = 'quiz';
 
-DROP TABLE IF EXISTS course_quiz_progress;
+-- Chỉ drop progress cũ khi schema quiz-post cũ còn tồn tại. Nếu chạy lại 065
+-- trực tiếp, course_quizzes đã biến mất nên KHÔNG được drop course_quiz_progress
+-- mới (sẽ làm mất tiến độ đã lưu).
+DO $$
+BEGIN
+  IF to_regclass('public.course_quizzes') IS NOT NULL THEN
+    DROP TABLE IF EXISTS course_quiz_progress;
+  END IF;
+END $$;
+
 DROP TABLE IF EXISTS course_quizzes;
 
 ALTER TABLE course_posts DROP CONSTRAINT IF EXISTS course_posts_kind_check;
