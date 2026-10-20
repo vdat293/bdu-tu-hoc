@@ -2,7 +2,7 @@ import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { detectSupportedResourceSource, parseDriveOrMediaUrl } from './community.service.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
 import { PermissionService } from './permission.service.js';
-import { QUIZ_MAX_BYTES, normalizeQuiz } from '../utils/quiz-data.js';
+import { QUIZ_MAX_BYTES, normalizeQuiz, publicQuizQuestions } from '../utils/quiz-data.js';
 
 const POST_KINDS = new Set(['request', 'document', 'video', 'link', 'quiz']);
 const MAX_TITLE_LENGTH = 180;
@@ -266,6 +266,113 @@ async function enrichCourseIdentities(records) {
   });
 }
 
+/**
+ * Đọc đề quiz + tiến độ của viewer. Chỉ dùng nội bộ service để mọi endpoint
+ * quiz lấy chung một snapshot đã xác thực quyền vào môn và loại bài.
+ * remaining_seconds tính bằng NOW() của PostgreSQL (§6.8), không dùng giờ Node.
+ */
+async function loadQuizContext(mssv, courseCode, postId, db = { query }) {
+  let accessible;
+  try {
+    accessible = await findAccessibleCoursePost(mssv, courseCode, postId, db);
+  } catch (err) {
+    // Bài không tồn tại/không thuộc môn với endpoint quiz đều là QUIZ_NOT_FOUND;
+    // lỗi 403 (không có quyền vào môn) và 400 (input sai) giữ nguyên.
+    if (err.status === 404) {
+      throw httpError('Không tìm thấy bài trắc nghiệm trong môn học này.', 404, 'QUIZ_NOT_FOUND');
+    }
+    throw err;
+  }
+  if (accessible.post.kind !== 'quiz') {
+    throw httpError('Không tìm thấy bài trắc nghiệm trong môn học này.', 404, 'QUIZ_NOT_FOUND');
+  }
+
+  const result = await db.query(`
+    SELECT
+      cp.*,
+      s.full_name AS author_name,
+      (viewer_like.post_id IS NOT NULL) AS is_liked_by_viewer,
+      cq.questions,
+      cq.question_count,
+      cq.time_limit_seconds,
+      qp.started_at,
+      qp.answered,
+      qp.correct_count,
+      qp.total_count,
+      qp.best_correct,
+      qp.best_total,
+      qp.attempts,
+      qp.responses,
+      qp.completed_at,
+      CASE
+        WHEN cq.time_limit_seconds = 0 THEN NULL
+        WHEN qp.completed_at IS NOT NULL THEN 0
+        WHEN qp.started_at IS NULL THEN cq.time_limit_seconds
+        ELSE GREATEST(
+          0,
+          cq.time_limit_seconds - FLOOR(EXTRACT(EPOCH FROM (NOW() - qp.started_at)))
+        )::int
+      END AS remaining_seconds
+    FROM course_posts cp
+    JOIN students s ON s.mssv = cp.author_mssv
+    JOIN course_quizzes cq ON cq.post_id = cp.id
+    LEFT JOIN course_post_likes viewer_like
+      ON viewer_like.post_id = cp.id AND viewer_like.mssv = $2
+    LEFT JOIN course_quiz_progress qp
+      ON qp.post_id = cp.id AND qp.mssv = $2
+    WHERE cp.id = $1 AND cp.course_id = $3
+    LIMIT 1;
+  `, [accessible.postId, mssv, accessible.course.id]);
+
+  const row = result.rows[0];
+  if (!row) {
+    throw httpError('Không tìm thấy bài trắc nghiệm trong môn học này.', 404, 'QUIZ_NOT_FOUND');
+  }
+
+  const questions = Array.isArray(row.questions) ? row.questions : [];
+  const timeLimitSeconds = Number(row.time_limit_seconds || 0);
+  const startedAt = row.started_at || null;
+  const completedAt = row.completed_at || null;
+  const remaining = row.remaining_seconds == null ? null : Number(row.remaining_seconds);
+  const answered = Number(row.answered || 0);
+  const correctCount = Number(row.correct_count || 0);
+  const totalCount = Number(row.total_count || 0);
+  const bestCorrect = row.best_correct == null ? null : Number(row.best_correct);
+  const bestTotal = row.best_total == null ? null : Number(row.best_total);
+  const attempts = Number(row.attempts || 0);
+
+  return {
+    course: accessible.course,
+    post: mapPost({
+      ...row,
+      quiz_question_count: row.question_count,
+      quiz_time_limit_seconds: timeLimitSeconds,
+      quiz_answered: startedAt ? answered : null,
+      quiz_correct_count: correctCount,
+      quiz_best_correct: bestCorrect,
+      quiz_best_total: bestTotal,
+      quiz_attempts: attempts,
+      quiz_completed_at: completedAt
+    }, mssv),
+    quiz: {
+      questions,
+      question_count: Number(row.question_count || 0),
+      time_limit_seconds: timeLimitSeconds,
+      started_at: startedAt,
+      answered,
+      correct_count: correctCount,
+      total_count: totalCount,
+      best_correct: bestCorrect,
+      best_total: bestTotal,
+      attempts,
+      responses: Array.isArray(row.responses) ? row.responses : [],
+      completed_at: completedAt,
+      remaining_seconds: remaining,
+      expired: !completedAt && timeLimitSeconds > 0 && remaining === 0
+    }
+  };
+}
+
 function readQuizByteLength(value) {
   try {
     return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
@@ -512,6 +619,51 @@ export const LearningService = {
         name: course.name
       },
       posts
+    };
+  },
+
+  async getCourseQuiz(mssv, courseCode, postId) {
+    requireDatabase();
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    const context = await loadQuizContext(cleanMssv, courseCode, postId);
+    const quiz = context.quiz;
+
+    const [post] = await enrichCourseIdentities([context.post]);
+    return {
+      course: {
+        code: context.course.normalized_code,
+        display_code: context.course.display_code,
+        name: context.course.name
+      },
+      post,
+      quiz: {
+        question_count: quiz.question_count,
+        time_limit_seconds: quiz.time_limit_seconds,
+        // Không bao giờ trả snapshot gốc: chỉ id/câu hỏi/lựa chọn.
+        questions: publicQuizQuestions(quiz.questions),
+        progress: quiz.started_at
+          ? {
+              started_at: quiz.started_at,
+              answered: quiz.answered,
+              correct_count: quiz.correct_count,
+              total_count: quiz.total_count,
+              best_correct: quiz.best_correct,
+              best_total: quiz.best_total,
+              attempts: quiz.attempts,
+              completed_at: quiz.completed_at,
+              responses: quiz.responses
+            }
+          : null,
+        remaining_seconds: quiz.remaining_seconds,
+        expired: quiz.expired,
+        review: quiz.completed_at
+          ? quiz.questions.map((question) => ({
+              id: question.id,
+              correct: question.correct,
+              explanation: question.explanation || ''
+            }))
+          : null
+      }
     };
   },
 

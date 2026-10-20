@@ -53,6 +53,22 @@ export const LearningController = {
     }
   },
 
+  async getCourseQuiz(req, res) {
+    try {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization');
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await LearningService.getCourseQuiz(
+        mssv,
+        req.params.courseCode,
+        req.params.postId
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendLearningError(res, err, 'Không thể tải bài trắc nghiệm.');
+    }
+  },
+
   async createCourseLearningPost(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);

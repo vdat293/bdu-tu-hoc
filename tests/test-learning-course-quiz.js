@@ -202,6 +202,43 @@ try {
     (err) => err.status === 403
   );
 
+  // 7. GET đề: không lộ đáp án/giải thích, chưa start thì progress null và
+  //    remaining_seconds bằng time limit.
+  const detail = await LearningService.getCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.equal(detail.course.code, COURSE_CODE);
+  assert.equal(detail.post.kind, 'quiz');
+  assert.equal(detail.post.author.name, 'Tác giả kiểm thử');
+  assert.equal(detail.quiz.questions.length, 2);
+  assert.equal('correct' in detail.quiz.questions[0], false);
+  assert.equal('explanation' in detail.quiz.questions[0], false);
+  assert.equal(detail.quiz.review, null);
+  assert.equal(detail.quiz.remaining_seconds, 600);
+  assert.equal(detail.quiz.progress, null);
+  assert.equal(detail.quiz.expired, false);
+  assert.equal(JSON.stringify(detail).includes('Ngăn xếp (stack) hoạt động'), false);
+
+  // 8. Bài không phải quiz trả 404 QUIZ_NOT_FOUND; người ngoài môn và mã môn
+  //    sai đều bị chặn 403 trước khi đọc đề.
+  const requestPost = await LearningService.createCoursePost(AUTHOR, COURSE_CODE, {
+    kind: 'request', title: 'Bài hỏi đáp', content: 'Ai có tài liệu ôn tập chương 1?'
+  });
+  await assert.rejects(
+    () => LearningService.getCourseQuiz(VIEWER, COURSE_CODE, requestPost.id),
+    (err) => err.status === 404 && err.code === 'QUIZ_NOT_FOUND'
+  );
+  await assert.rejects(
+    () => LearningService.getCourseQuiz(VIEWER, COURSE_CODE, '9223372036854775807'),
+    (err) => err.status === 404 && err.code === 'QUIZ_NOT_FOUND'
+  );
+  await assert.rejects(
+    () => LearningService.getCourseQuiz(OUTSIDER, COURSE_CODE, post.id),
+    (err) => err.status === 403
+  );
+  await assert.rejects(
+    () => LearningService.getCourseQuiz(VIEWER, 'TESTQUIZ99', post.id),
+    (err) => err.status === 403
+  );
+
   console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});

@@ -14,4 +14,5 @@ export function registerLearningRoutes(router, deps = {}) {
   router.post('/learning/courses/:courseCode/posts/:postId/like', ApiController.toggleCourseLearningPostLike);
   router.get('/learning/courses/:courseCode/posts/:postId/comments', ApiController.getCourseLearningPostComments);
   router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiController.addCourseLearningPostComment);
+  router.get('/learning/courses/:courseCode/posts/:postId/quiz', ApiController.getCourseQuiz);
 }
