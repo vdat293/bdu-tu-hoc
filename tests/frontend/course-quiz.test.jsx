@@ -97,3 +97,27 @@ it('calls onInvalid when editing after valid', async () => {
   fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON + ' ' } });
   expect(onInvalid).toHaveBeenCalled();
 });
+
+it('calls onInvalid when clearing after valid', async () => {
+  vi.useFakeTimers();
+  const onInvalid = vi.fn();
+  render(<Harness onValidQuiz={vi.fn()} onInvalid={onInvalid} />);
+  fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON } });
+  await act(async () => { vi.advanceTimersByTime(400); });
+  onInvalid.mockClear();
+  fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: '' } });
+  await act(async () => { vi.advanceTimersByTime(400); });
+  expect(onInvalid).toHaveBeenCalled();
+});
+
+it('notifies onInvalid exactly once when editing valid to invalid', async () => {
+  vi.useFakeTimers();
+  const onInvalid = vi.fn();
+  render(<Harness onValidQuiz={vi.fn()} onInvalid={onInvalid} />);
+  fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON } });
+  await act(async () => { vi.advanceTimersByTime(400); });
+  onInvalid.mockClear();
+  fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON + 'oops' } });
+  await act(async () => { vi.advanceTimersByTime(400); });
+  expect(onInvalid).toHaveBeenCalledTimes(1);
+});

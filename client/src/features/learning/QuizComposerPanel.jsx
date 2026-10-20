@@ -7,6 +7,7 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
   const [quiz, setQuiz] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const wasValidRef = useRef(false);
+  const lastInvalidTextRef = useRef(null);
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -16,20 +17,28 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
       if (!text || !String(text).trim()) {
         setErrors([]);
         setQuiz(null);
+        if (wasValidRef.current) {
+          wasValidRef.current = false;
+          if (lastInvalidTextRef.current !== text) {
+            lastInvalidTextRef.current = text;
+            onInvalid?.();
+          }
+        }
         return;
       }
       if (result.ok) {
         setErrors([]);
         setQuiz(result.quiz);
         wasValidRef.current = true;
+        lastInvalidTextRef.current = null;
         onValidQuiz?.(result.quiz);
       } else {
         setErrors(result.errors || []);
         setQuiz(null);
-        if (wasValidRef.current) {
-          wasValidRef.current = false;
+        if (lastInvalidTextRef.current !== text) {
+          lastInvalidTextRef.current = text;
+          onInvalid?.();
         }
-        onInvalid?.();
       }
     }, 400);
     return () => {
@@ -41,6 +50,7 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
     const next = e.target.value;
     if (wasValidRef.current) {
       wasValidRef.current = false;
+      lastInvalidTextRef.current = next;
       onInvalid?.();
     }
     onChangeText?.(next);
