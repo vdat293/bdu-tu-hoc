@@ -448,7 +448,168 @@ try {
   assert.equal(afterInProgressRestart.quiz.progress.best_total, 2);
   assert.equal(afterInProgressRestart.quiz.progress.attempts, 1);
 
-  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, restart và hồi quy kind cũ đều hoạt động.');
+  // 17. Save progress: chưa start thì 409; merge không ghi đè đáp án cũ;
+  //     server tự chấm lại và không nhận cờ correct của client.
+  await query(
+    'DELETE FROM course_quiz_progress WHERE mssv = $1 AND post_id = $2',
+    [VIEWER, post.id]
+  );
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: false
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_NOT_STARTED'
+  );
+
+  await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW(), answered = 0, correct_count = 0, total_count = 0,
+        best_correct = NULL, best_total = NULL, attempts = 0,
+        responses = '[]'::jsonb, completed_at = NULL
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+
+  const first = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'B' }],
+    completed: false
+  });
+  assert.equal(first.answered, 1);
+  assert.equal(first.correct_count, 1);
+  assert.equal(first.total_count, 1);
+  assert.equal(first.best_correct, null);
+  assert.equal(first.best_total, null);
+  assert.equal(first.attempts, 0);
+  assert.equal(first.completed_at, null);
+  assert.equal(first.already_completed, false);
+  assert.ok(first.remaining_seconds > 590 && first.remaining_seconds <= 600);
+  assert.equal(first.expired, false);
+
+  const overwrite = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'A' }],
+    completed: false
+  });
+  assert.equal(overwrite.answered, 1);
+  assert.equal(overwrite.correct_count, 1, 'Đáp án cũ q1/B phải được giữ, không bị ghi đè bởi q1/A');
+
+  // Client gửi kèm cờ correct sai vẫn phải bị server chấm lại.
+  const forged = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q2', response: 'A', correct: true }],
+    completed: false
+  });
+  assert.equal(forged.answered, 2);
+  assert.equal(forged.correct_count, 1);
+  assert.equal(forged.total_count, 2);
+
+  const second = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q2', response: 'B' }],
+    completed: false
+  });
+  assert.equal(second.answered, 2);
+  assert.equal(second.correct_count, 1);
+  assert.equal(second.total_count, 2);
+  assert.equal(second.best_correct, null);
+  assert.equal(second.attempts, 0);
+
+  const savedRow = await readQuizProgress(post.id);
+  assert.equal(Number(savedRow.answered), 2);
+  assert.equal(Number(savedRow.correct_count), 1);
+  assert.equal(Number(savedRow.total_count), 2);
+  assert.equal(savedRow.best_correct, null);
+  assert.equal(Number(savedRow.attempts), 0);
+  assert.equal(savedRow.completed_at, null);
+  assert.deepEqual(savedRow.responses, [
+    { id: 'q1', response: 'B', correct: true },
+    { id: 'q2', response: 'A', correct: false }
+  ]);
+
+  // Entry id lạ/rỗng/trùng (kể cả trùng trong cùng payload) đều bị bỏ qua.
+  const ignored = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [
+      { id: 'q999', response: 'A' },
+      { id: '', response: 'A' },
+      {},
+      null,
+      { id: 'q1', response: 'A' },
+      { id: 'q2', response: 'B' },
+      { id: 'q1', response: 'C' }
+    ],
+    completed: false
+  });
+  assert.equal(ignored.answered, 2);
+  assert.equal(ignored.correct_count, 1);
+  assert.equal(ignored.total_count, 2);
+
+  // responses không phải array hoặc vượt 100 entry → 400 QUIZ_INVALID.
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: 'q1=B',
+      completed: false
+    }),
+    (err) => err.status === 400 && err.code === 'QUIZ_INVALID'
+  );
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      completed: false
+    }),
+    (err) => err.status === 400 && err.code === 'QUIZ_INVALID'
+  );
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: Array.from({ length: 101 }, (_, index) => ({
+        id: `x${index}`,
+        response: 'A'
+      })),
+      completed: false
+    }),
+    (err) => err.status === 400 && err.code === 'QUIZ_INVALID'
+  );
+
+  // Đã hoàn thành: trả nguyên trạng, already_completed=true, không đổi
+  // responses/best/attempts (completion thuộc Task 7).
+  await query(`
+    UPDATE course_quiz_progress
+    SET completed_at = NOW() - INTERVAL '5 seconds',
+        best_correct = 1, best_total = 2, attempts = 1, updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const completedSave = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'A' }],
+    completed: false
+  });
+  assert.equal(completedSave.already_completed, true);
+  assert.ok(completedSave.completed_at);
+  assert.equal(completedSave.answered, 2);
+  assert.equal(completedSave.correct_count, 1);
+  assert.equal(completedSave.total_count, 2);
+  assert.equal(completedSave.best_correct, 1);
+  assert.equal(completedSave.best_total, 2);
+  assert.equal(completedSave.attempts, 1);
+  assert.equal(completedSave.remaining_seconds, 0);
+  assert.equal(completedSave.expired, false);
+  const completedRow = await readQuizProgress(post.id);
+  assert.deepEqual(completedRow.responses, [
+    { id: 'q1', response: 'B', correct: true },
+    { id: 'q2', response: 'A', correct: false }
+  ]);
+
+  // Hết giờ + completed:false → 409 QUIZ_TIME_UP.
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '601 seconds',
+        completed_at = NULL, updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [],
+      completed: false
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
+  );
+
+  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, save progress, restart và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM identity_entitlement_grants WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});

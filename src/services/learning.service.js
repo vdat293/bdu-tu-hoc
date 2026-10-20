@@ -2,12 +2,20 @@ import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { detectSupportedResourceSource, parseDriveOrMediaUrl } from './community.service.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
 import { PermissionService } from './permission.service.js';
-import { QUIZ_MAX_BYTES, gradeQuizResponse, normalizeQuiz, publicQuizQuestions } from '../utils/quiz-data.js';
+import {
+  QUIZ_MAX_BYTES,
+  gradeQuizResponse,
+  gradeQuizResponses,
+  normalizeQuiz,
+  publicQuizQuestions
+} from '../utils/quiz-data.js';
 
 const POST_KINDS = new Set(['request', 'document', 'video', 'link', 'quiz']);
 const MAX_TITLE_LENGTH = 180;
 const MAX_CONTENT_LENGTH = 5000;
 const MAX_COMMENT_LENGTH = 2000;
+// Giới hạn số câu trả lời mỗi lần lưu và số entry lưu được (§6.7).
+const QUIZ_MAX_RESPONSES = 100;
 
 function httpError(message, status = 400, code = null, errors = null) {
   const error = new Error(message);
@@ -748,6 +756,108 @@ export const LearningService = {
       explanation: String(question.explanation ?? ''),
       remaining_seconds: quiz.remaining_seconds
     };
+  },
+
+  async saveCourseQuizProgress(mssv, courseCode, postId, input = {}) {
+    requireDatabase();
+    const cleanMssv = String(mssv || '').trim().toUpperCase();
+    const responses = input?.responses;
+    if (!Array.isArray(responses) || responses.length > QUIZ_MAX_RESPONSES) {
+      throw httpError('Dữ liệu tiến độ trắc nghiệm không hợp lệ.', 400, 'QUIZ_INVALID');
+    }
+    // completed === true (nộp bài) được xử lý ở Task 7; ở đây luôn lưu lượt
+    // đang làm, không đổi best/attempts.
+    const wantsCompleted = input?.completed === true;
+
+    return transaction(async (client) => {
+      const context = await loadQuizContext(cleanMssv, courseCode, postId, client);
+      const progressPostId = context.post.id;
+      const timeLimitSeconds = context.quiz.time_limit_seconds;
+
+      // Khóa dòng progress của viewer; remaining_seconds tính bằng đồng hồ DB.
+      const progress = (await client.query(`
+        SELECT
+          qp.*,
+          CASE
+            WHEN $3::int = 0 THEN NULL
+            WHEN qp.completed_at IS NOT NULL THEN 0
+            WHEN qp.started_at IS NULL THEN $3::int
+            ELSE GREATEST(
+              0,
+              $3::int - FLOOR(EXTRACT(EPOCH FROM (NOW() - qp.started_at)))
+            )::int
+          END AS remaining_seconds
+        FROM course_quiz_progress qp
+        WHERE qp.mssv = $1 AND qp.post_id = $2
+        FOR UPDATE;
+      `, [cleanMssv, progressPostId, timeLimitSeconds])).rows[0];
+
+      if (!progress || !progress.started_at) {
+        throw httpError('Bạn chưa bắt đầu làm bài trắc nghiệm này.', 409, 'QUIZ_NOT_STARTED');
+      }
+
+      const remaining = progress.remaining_seconds == null
+        ? null
+        : Number(progress.remaining_seconds);
+
+      // Lượt đã hoàn thành: trả nguyên trạng, không sửa responses/best/attempts.
+      if (progress.completed_at) {
+        return {
+          answered: Number(progress.answered || 0),
+          correct_count: Number(progress.correct_count || 0),
+          total_count: Number(progress.total_count || 0),
+          best_correct: progress.best_correct == null ? null : Number(progress.best_correct),
+          best_total: progress.best_total == null ? null : Number(progress.best_total),
+          attempts: Number(progress.attempts || 0),
+          completed_at: progress.completed_at,
+          remaining_seconds: remaining,
+          expired: false,
+          already_completed: true
+        };
+      }
+
+      if (!wantsCompleted && timeLimitSeconds > 0 && remaining === 0) {
+        throw httpError('Đã hết thời gian làm bài trắc nghiệm này.', 409, 'QUIZ_TIME_UP');
+      }
+
+      // Merge: giữ đáp án đã lưu (khóa sau khi trả lời), chỉ thêm id mới còn
+      // thuộc quiz và hợp lệ; chấm lại toàn bộ bằng server, bỏ cờ correct client.
+      const stored = gradeQuizResponses(context.quiz.questions, progress.responses).entries;
+      const seen = new Set(stored.map((entry) => entry.id));
+      const additions = responses.filter(
+        (entry) => entry && !Array.isArray(entry) && typeof entry === 'object' && !seen.has(entry.id)
+      );
+      const merged = [
+        ...stored,
+        ...gradeQuizResponses(context.quiz.questions, additions).entries
+      ].slice(0, QUIZ_MAX_RESPONSES);
+
+      const answered = merged.length;
+      const correctCount = merged.filter((entry) => entry.correct).length;
+
+      await client.query(`
+        UPDATE course_quiz_progress
+        SET answered = $3,
+            correct_count = $4,
+            total_count = $3,
+            responses = $5::jsonb,
+            updated_at = NOW()
+        WHERE mssv = $1 AND post_id = $2;
+      `, [cleanMssv, progressPostId, answered, correctCount, JSON.stringify(merged)]);
+
+      return {
+        answered,
+        correct_count: correctCount,
+        total_count: answered,
+        best_correct: progress.best_correct == null ? null : Number(progress.best_correct),
+        best_total: progress.best_total == null ? null : Number(progress.best_total),
+        attempts: Number(progress.attempts || 0),
+        completed_at: null,
+        remaining_seconds: remaining,
+        expired: false,
+        already_completed: false
+      };
+    });
   },
 
   async getCourseQuiz(mssv, courseCode, postId) {

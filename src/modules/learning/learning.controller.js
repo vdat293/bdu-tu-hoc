@@ -115,6 +115,29 @@ export const LearningController = {
     }
   },
 
+  async saveCourseQuizProgress(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      if (!allowRequest(`course-quiz-save:${mssv}`, { limit: 240, windowMs: 10 * 60 * 1000 })) {
+        return res.status(429).json({
+          result: false,
+          code: 'RATE_LIMITED',
+          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
+        });
+      }
+      const body = req.body || {};
+      const data = await LearningService.saveCourseQuizProgress(
+        mssv,
+        req.params.courseCode,
+        req.params.postId,
+        { responses: body.responses, completed: body.completed }
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendLearningError(res, err, 'Không thể lưu tiến độ trắc nghiệm.');
+    }
+  },
+
   async createCourseLearningPost(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
