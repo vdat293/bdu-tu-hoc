@@ -508,7 +508,7 @@ Quy tắc:
 - Không có `answered_before`/`correct_before`: server tự tính từ dữ liệu đã lưu, không nhận điểm client khai.
 - Entry trùng id với dữ liệu đã lưu: **giữ đáp án cũ**, bỏ entry mới. Điều này khóa đáp án sau khi đã trả lời, tránh sửa điểm sau khi xem giải thích.
 - Entry không hợp lệ/id lạ/response sai: bỏ qua.
-- Giới hạn 100 entry/lần và 100 entry lưu.
+- Giới hạn 100 entry/lần và 100 entry lưu; `responses.length > 100` → `400 QUIZ_INVALID`.
 
 Xử lý trong transaction, khóa progress `FOR UPDATE`:
 1. `findAccessibleCoursePost`; post phải `kind='quiz'`; đọc `questions`, `question_count`, `time_limit_seconds`.
