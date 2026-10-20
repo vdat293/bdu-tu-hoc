@@ -4,7 +4,6 @@ import { IdentityPresentationService } from './identity-presentation.service.js'
 import { PermissionService } from './permission.service.js';
 import {
   QUIZ_MAX_BYTES,
-  gradeQuizResponse,
   gradeQuizResponses,
   normalizeQuiz,
   publicQuizQuestions
@@ -738,21 +737,25 @@ export const LearningService = {
       throw httpError('Câu hỏi không thuộc bài trắc nghiệm này.', 400, 'QUIZ_INVALID');
     }
 
-    const response = String(input?.response ?? '').trim().toUpperCase();
-    const optionIndex = /^[A-F]$/.test(response) ? response.charCodeAt(0) - 65 : -1;
-    const optionCount = Array.isArray(question.options) ? question.options.length : 0;
-    if (optionIndex < 0 || optionIndex >= optionCount) {
-      const lastOption = optionCount > 0 ? String.fromCharCode(64 + optionCount) : 'A';
+    // Response là nội dung option (trim + không phân biệt hoa/thường). Dùng
+    // chính bộ chấm shared để loại response không thuộc options và lấy lại
+    // chuỗi option canonical; không tin bất kỳ cờ correct nào từ client.
+    const graded = gradeQuizResponses(
+      [question],
+      [{ id: question.id, response: input?.response }]
+    );
+    if (graded.answered !== 1) {
       throw httpError(
-        `Đáp án phải là một lựa chọn từ A đến ${lastOption}.`,
+        'Đáp án phải là một trong các lựa chọn của câu hỏi.',
         400,
         'QUIZ_INVALID'
       );
     }
 
     return {
-      correct: gradeQuizResponse(question, response),
-      correct_option: String(question.correct ?? '').trim().toUpperCase(),
+      correct: graded.entries[0].correct,
+      // Snapshot đã lưu correct là chuỗi option gốc (canonical), không phải chữ cái.
+      correct_answer: String(question.correct ?? ''),
       explanation: String(question.explanation ?? ''),
       remaining_seconds: quiz.remaining_seconds
     };
