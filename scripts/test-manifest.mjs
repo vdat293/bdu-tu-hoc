@@ -68,6 +68,7 @@ export const SAFE_NODE_TESTS = [
   'test-new-identity-titles.js',
   'test-wordfmt-document-type-ui.js',
   'test-grammar.js',
+  'test-course-quiz.js',
   'test-broadcast.js',
   'test-profile-controller.js',
   'test-english-controller-auth.js',
