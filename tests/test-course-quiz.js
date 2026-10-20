@@ -341,6 +341,24 @@ assert.match(migrationSql, /CREATE INDEX IF NOT EXISTS/, 'index phải IF NOT EX
 // §3.1: widen kind CHECK via DO block + fixed constraint name
 assert.match(migrationSql, /DO \$\$/, 'DO block để thay CHECK kind idempotent');
 assert.match(migrationSql, /pg_constraint[\s\S]*contype\s*=\s*'c'/, 'tìm CHECK constraint của kind qua pg_constraint');
+assert.doesNotMatch(
+  migrationSql,
+  /LIKE\s+'%kind%'/i,
+  'không dùng predicate LIKE \'%kind%\' — nó cũng khớp CHECK ẩn danh của migration 007'
+);
+assert.match(
+  migrationSql,
+  /conname\s*=\s*'course_posts_kind_check'/,
+  'predicate xóa CHECK kind phải khớp theo tên course_posts_kind_check'
+);
+assert.ok(
+  migrationSql.includes("kind\\s+IN\\s*\\("),
+  'predicate phải nhận dạng danh sách kind dạng IN (...)'
+);
+assert.ok(
+  migrationSql.includes("kind\\s*=\\s*ANY\\s*\\(\\s*ARRAY"),
+  'predicate phải nhận dạng danh sách kind đã chuẩn hóa dạng = ANY (ARRAY[...])'
+);
 assert.match(
   migrationSql,
   /CHECK \(\s*kind IN \('request', 'document', 'video', 'link', 'quiz'\)\s*\)/,

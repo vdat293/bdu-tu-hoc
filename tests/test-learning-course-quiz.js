@@ -101,6 +101,33 @@ try {
     ON CONFLICT DO NOTHING;
   `, [AUTHOR]);
 
+  // 0. Bất biến schema: migration 064 chỉ thay CHECK danh sách kind và phải giữ
+  //    nguyên CHECK ẩn danh do migration 007 tạo (không được xóa nhầm).
+  const constraintRows = await query(`
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE conrelid = 'course_posts'::regclass
+      AND contype = 'c';
+  `);
+  const postConstraints = new Map(
+    constraintRows.rows.map((row) => [row.conname, row.definition])
+  );
+
+  const kindCheck = postConstraints.get('course_posts_kind_check');
+  assert.ok(kindCheck, 'course_posts_kind_check phải tồn tại sau migration 064');
+  assert.match(kindCheck, /quiz/, 'course_posts_kind_check phải cho phép kind quiz');
+
+  const anonymousCheck = postConstraints.get('course_posts_anonymous_discussion_only_check');
+  assert.ok(
+    anonymousCheck,
+    'CHECK ẩn danh của migration 007 phải còn sau migration 064'
+  );
+  assert.match(
+    anonymousCheck,
+    /is_anonymous/,
+    'CHECK ẩn danh phải tham chiếu is_anonymous'
+  );
+
   // 1. Người không có #TTCDS không được tạo quiz và không để lại dòng dở dang.
   await assert.rejects(
     () => LearningService.createCoursePost(VIEWER, COURSE_CODE, {

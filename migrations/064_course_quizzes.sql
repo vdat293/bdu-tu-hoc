@@ -4,8 +4,12 @@
 -- Không seed dữ liệu; không backfill bài đăng cũ.
 
 -- §3.1: mở rộng CHECK(kind) của course_posts thêm 'quiz'.
--- Xóa mọi CHECK constraint có tên định nghĩa 'kind' rồi thêm lại với tên cố định,
+-- Chỉ xóa CHECK danh sách kind (tên cố định hoặc định nghĩa dạng
+-- "kind IN (...)" / "kind = ANY (ARRAY[...])") rồi thêm lại với tên cố định,
 -- để chạy lại nhiều lần không bị lỗi "constraint does not exist / already exists".
+-- Tuyệt đối không dùng mẫu LIKE rộng khớp mọi định nghĩa chứa 'kind': nó cũng khớp
+-- CHECK ẩn danh của migration 007 ("NOT is_anonymous OR kind = 'request'")
+-- và sẽ xóa mất bất biến đó.
 DO $$
 DECLARE r record;
 BEGIN
@@ -14,7 +18,11 @@ BEGIN
     FROM pg_constraint
     WHERE conrelid = 'course_posts'::regclass
       AND contype = 'c'
-      AND pg_get_constraintdef(oid) LIKE '%kind%'
+      AND (
+        conname = 'course_posts_kind_check'
+        OR pg_get_constraintdef(oid) ~ 'kind\s+IN\s*\('
+        OR pg_get_constraintdef(oid) ~ 'kind\s*=\s*ANY\s*\(\s*ARRAY'
+      )
   LOOP
     EXECUTE format('ALTER TABLE course_posts DROP CONSTRAINT %I', r.conname);
   END LOOP;
