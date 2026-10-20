@@ -200,9 +200,40 @@ try {
   assert.equal(documentPost.quiz, null);
   assert.equal(documentPost.attachments.length, 1);
 
-  const feedAfterDocument = await LearningService.getCoursePosts(VIEWER, COURSE_CODE);
-  const documentInFeed = feedAfterDocument.posts.find((item) => String(item.id) === String(documentPost.id));
-  assert.equal(documentInFeed.quiz, null);
+  const videoPost = await LearningService.createCoursePost(AUTHOR, COURSE_CODE, {
+    kind: 'video',
+    title: 'Video bài giảng',
+    content: 'Video tham khảo',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+  });
+  assert.equal(videoPost.kind, 'video');
+  assert.equal(videoPost.quiz, null);
+  assert.equal(videoPost.attachments.length, 1);
+  assert.equal(videoPost.attachments[0].type, 'youtube');
+
+  const linkPost = await LearningService.createCoursePost(AUTHOR, COURSE_CODE, {
+    kind: 'link',
+    title: 'Liên kết tham khảo',
+    content: 'Mã nguồn tham khảo',
+    url: 'https://github.com/openai/openai-python'
+  });
+  assert.equal(linkPost.kind, 'link');
+  assert.equal(linkPost.quiz, null);
+  assert.equal(linkPost.attachments.length, 1);
+  assert.equal(linkPost.attachments[0].type, 'link');
+
+  const feedAfterResources = await LearningService.getCoursePosts(VIEWER, COURSE_CODE);
+  for (const [postId, kind] of [
+    [documentPost.id, 'document'],
+    [videoPost.id, 'video'],
+    [linkPost.id, 'link']
+  ]) {
+    const resourceInFeed = feedAfterResources.posts.find((item) => String(item.id) === String(postId));
+    assert.ok(resourceInFeed, `Feed phải có bài ${kind}`);
+    assert.equal(resourceInFeed.kind, kind);
+    assert.equal(resourceInFeed.quiz, null);
+    assert.equal(resourceInFeed.attachments.length, 1);
+  }
 
   // 6. Người ngoài môn không đọc được feed.
   await assert.rejects(
