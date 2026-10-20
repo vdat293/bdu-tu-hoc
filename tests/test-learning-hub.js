@@ -105,6 +105,26 @@ assert.match(learningService, /addCoursePostComment/);
 assert.match(learningService, /deleteCoursePost/);
 assert.match(learningService, /kind === 'request' && normalizeBoolean/);
 
+// Hồi quy tĩnh cho 4 kind cũ sau khi bỏ quiz-post: đúng tập kind, không còn
+// nhánh quiz/join schema cũ, và create vẫn từ chối kind ngoài tập. Test DB đầy
+// đủ cho create/feed/document/video/link nằm ở Task 10 (cần disposable DB).
+const postKindsMatch = learningService.match(/const POST_KINDS = new Set\(\[([^\]]+)\]\);/);
+assert.ok(postKindsMatch, 'POST_KINDS phải còn nguyên trong learning.service.js');
+const postKinds = [...postKindsMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+assert.deepEqual(postKinds, ['request', 'document', 'video', 'link'], 'POST_KINDS chỉ còn 4 kind cũ');
+assert.equal(postKinds.includes('quiz'), false, 'POST_KINDS không được còn quiz');
+assert.match(
+  learningService,
+  /if \(!POST_KINDS\.has\(kind\)\) throw httpError\('Loại bài đăng không hợp lệ\.'\);/,
+  'createCoursePost phải từ chối kind không nằm trong POST_KINDS'
+);
+assert.doesNotMatch(learningService, /kind === 'quiz'/, 'không còn nhánh tạo quiz-post');
+assert.doesNotMatch(
+  learningService,
+  /course_quizzes|course_quiz_progress/,
+  'không còn truy vấn schema quiz-post cũ'
+);
+
 const client = fs.readFileSync('public/js/api.js', 'utf8');
 assert.match(client, /Authorization.*Bearer.*token/s);
 assert.match(client, /toggleCourseLearningPostLike/);
@@ -116,5 +136,8 @@ const routes = fs.readFileSync('src/routes/learning.routes.js', 'utf8');
 assert.match(routes, /posts\/:postId\/like/);
 assert.match(routes, /posts\/:postId\/comments/);
 assert.match(routes, /router\.delete\('\/learning\/courses\/:courseCode\/posts\/:postId'/);
+assert.match(routes, /router\.post\('\/learning\/courses\/:courseCode\/posts', ApiController\.createCourseLearningPost\);/);
+assert.doesNotMatch(routes, /posts\/:postId\/quiz/);
+assert.match(routes, /quiz-sets\/:setId\/parts\/:partIndex\/progress/);
 
 console.log('✅ Kho học tập chỉ nhận mã/tên môn từ phản hồi BDU và phân biệt môn chưa/có điểm.');

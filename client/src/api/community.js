@@ -70,7 +70,7 @@ export async function deleteQuizSet(token, courseCode, setId) {
   return unwrap(data, data);
 }
 
-export async function getQuizSetPart(token, courseCode, setId, partIndex, { mode, signal } = {}) {
+export async function getQuizPart(token, courseCode, setId, partIndex, { mode, signal } = {}) {
   const params = new URLSearchParams();
   if (mode) params.set('mode', mode);
   const suffix = params.size ? `?${params}` : '';
@@ -78,17 +78,17 @@ export async function getQuizSetPart(token, courseCode, setId, partIndex, { mode
   return unwrap(data, data);
 }
 
-export async function startQuizSetPart(token, courseCode, setId, partIndex, { mode, restart = false } = {}) {
+export async function startQuizPart(token, courseCode, setId, partIndex, { mode, restart = false } = {}) {
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/quiz-sets/${encodeURIComponent(setId)}/parts/${encodeURIComponent(partIndex)}/start`, { method: 'POST', token, body: { mode, restart }, defaultMessage: 'Không thể bắt đầu làm phần trắc nghiệm.' });
   return unwrap(data, data);
 }
 
-export async function answerQuizSetReview(token, courseCode, setId, partIndex, { mode = 'review', questionId, response } = {}) {
+export async function answerQuizReview(token, courseCode, setId, partIndex, { mode = 'review', questionId, response } = {}) {
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/quiz-sets/${encodeURIComponent(setId)}/parts/${encodeURIComponent(partIndex)}/answer`, { method: 'POST', token, body: { mode, questionId, response }, defaultMessage: 'Không thể gửi câu trả lời.' });
   return unwrap(data, data);
 }
 
-export async function saveQuizSetProgress(token, courseCode, setId, partIndex, { mode, responses, completed }) {
+export async function saveQuizPartProgress(token, courseCode, setId, partIndex, { mode, responses, completed } = {}) {
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/quiz-sets/${encodeURIComponent(setId)}/parts/${encodeURIComponent(partIndex)}/progress`, { method: 'POST', token, body: { mode, responses, completed }, defaultMessage: 'Không thể lưu tiến độ làm bài.' });
   return unwrap(data, data);
 }

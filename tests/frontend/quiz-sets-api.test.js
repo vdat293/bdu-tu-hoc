@@ -3,10 +3,10 @@ import {
   getQuizSets,
   createQuizSet,
   deleteQuizSet,
-  getQuizSetPart,
-  startQuizSetPart,
-  answerQuizSetReview,
-  saveQuizSetProgress
+  getQuizPart,
+  startQuizPart,
+  answerQuizReview,
+  saveQuizPartProgress
 } from '../../client/src/api/community.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -43,10 +43,10 @@ describe('quiz set API', () => {
     const sets = await getQuizSets('t', COURSE);
     const created = await createQuizSet('t', COURSE, payload);
     const deleted = await deleteQuizSet('t', COURSE, SET_ID);
-    const part = await getQuizSetPart('t', COURSE, SET_ID, PART_INDEX, { mode: 'test' });
-    const started = await startQuizSetPart('t', COURSE, SET_ID, PART_INDEX, { mode: 'test', restart: true });
-    const answered = await answerQuizSetReview('t', COURSE, SET_ID, PART_INDEX, { mode: 'review', questionId: 'q1', response: 'B' });
-    const saved = await saveQuizSetProgress('t', COURSE, SET_ID, PART_INDEX, {
+    const part = await getQuizPart('t', COURSE, SET_ID, PART_INDEX, { mode: 'test' });
+    const started = await startQuizPart('t', COURSE, SET_ID, PART_INDEX, { mode: 'test', restart: true });
+    const answered = await answerQuizReview('t', COURSE, SET_ID, PART_INDEX, { mode: 'review', questionId: 'q1', response: 'B' });
+    const saved = await saveQuizPartProgress('t', COURSE, SET_ID, PART_INDEX, {
       mode: 'test',
       responses: [{ id: 'q1', response: 'B' }],
       completed: true
@@ -95,10 +95,28 @@ describe('quiz set API', () => {
       .mockResolvedValueOnce(jsonResponse({ started_at: null }))
       .mockResolvedValueOnce(jsonResponse({ correct: false })));
 
-    await startQuizSetPart('t', COURSE, SET_ID, 0, { mode: 'test' });
-    await answerQuizSetReview('t', COURSE, SET_ID, 0, { questionId: 'q1', response: 'A' });
+    await startQuizPart('t', COURSE, SET_ID, 0, { mode: 'test' });
+    await answerQuizReview('t', COURSE, SET_ID, 0, { questionId: 'q1', response: 'A' });
 
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'test', restart: false });
     expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ mode: 'review', questionId: 'q1', response: 'A' });
+  });
+
+  it('omits the mode query when getQuizPart has no mode', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ part: { index: 0 } })));
+
+    const part = await getQuizPart('t', COURSE, SET_ID, 0);
+
+    expect(fetch.mock.calls[0][0]).toBe(`/api/learning/courses/INFO%201203/quiz-sets/${SET_ID}/parts/0`);
+    expect(fetch.mock.calls[0][1].method).toBe('GET');
+    expect(part).toEqual({ part: { index: 0 } });
+  });
+
+  it('accepts omitted options when saving part progress', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ answered: 0 })));
+
+    await saveQuizPartProgress('t', COURSE, SET_ID, 0);
+
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({});
   });
 });
