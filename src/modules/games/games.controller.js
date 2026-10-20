@@ -2,6 +2,7 @@ import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { EntertainmentGameService, EntertainmentGameInternals, viewerStateFor } from '../../services/entertainment-game.service.js';
 import { KillerSudokuService } from '../../services/killer-sudoku.service.js';
+import { TtcdsService } from '../../services/ttcds.service.js';
 
 export const GamesController = {
   // 10b. Entertainment games: database-backed rooms + server-authoritative moves
@@ -196,6 +197,8 @@ export const GamesController = {
   async getKillerSudokuProgress(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      // Luật cứng section TTCDS: chỉ tag Trung tâm CĐS (ttcds:access) mới đọc tiến độ.
+      await TtcdsService.requireAccess(mssv);
       const data = await KillerSudokuService.getProgress(mssv, req.query.difficulty);
       return res.json({ result: true, data });
     } catch (err) {
@@ -210,6 +213,8 @@ export const GamesController = {
   async saveKillerSudokuProgress(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      // Luật cứng section TTCDS: chỉ tag Trung tâm CĐS (ttcds:access) mới ghi tiến độ.
+      await TtcdsService.requireAccess(mssv);
       const { difficulty, levelId, timeSeconds, mistakes } = req.body || {};
       const data = await KillerSudokuService.recordCompletion({
         mssv,

@@ -19,6 +19,8 @@ import { ServiceLockService } from './services/service-lock.service.js';
 import { createServiceLockGuard } from './utils/service-lock-guard.js';
 import { attachRequestContext } from './utils/request-context.js';
 import { globalLimiter, authLimiter, heavyLimiter } from './utils/rate-limit.js';
+import { BduIdentityService } from './services/bdu-identity.service.js';
+import { TtcdsService } from './services/ttcds.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,7 +157,34 @@ export function createApp() {
   });
 
   // Killer Sudoku Game - Standalone Web Edition
+  // Luật cứng section TTCDS: entry HTML chỉ phục vụ tag Trung tâm CĐS.
+  // Token lấy từ Authorization header (fetch) hoặc ?token= (iframe mở tab mới).
+  // Asset tĩnh (css/js/png) vẫn public để iframe sau khi qua cổng tải được;
+  // dữ liệu thật (progress API + WS PvP) đều đã chặn 403 ở tầng riêng.
+  async function requireTtcdsForSudokuEntry(req, res, next) {
+    try {
+      const headerToken = req.headers.authorization || '';
+      const queryToken = typeof req.query?.token === 'string' ? req.query.token : '';
+      const token = headerToken || queryToken;
+      if (!token) {
+        return res.status(403).json({ result: false, code: 'TTCDS_FORBIDDEN', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
+      }
+      const mssv = await BduIdentityService.resolveVerifiedMssv(token);
+      await TtcdsService.requireAccess(mssv);
+      return next();
+    } catch (err) {
+      const status = err?.status === 401 ? 401 : 403;
+      return res.status(status).json({ result: false, code: 'TTCDS_FORBIDDEN', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
+    }
+  }
   const sudokuSiteDir = path.join(ROOT_DIR, 'public', 'killer-sudoku');
+  // Chặn entry HTML TRƯỚC static để /killer-sudoku/index.html trực tiếp cũng 403.
+  app.get(['/killer-sudoku', '/killer-sudoku/', '/killer-sudoku/index.html'], requireTtcdsForSudokuEntry, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.join(sudokuSiteDir, 'index.html'));
+  });
   app.use('/killer-sudoku', express.static(sudokuSiteDir, {
     index: false,
     redirect: false,
@@ -167,7 +196,7 @@ export function createApp() {
       res.setHeader('X-Content-Type-Options', 'nosniff');
     }
   }));
-  app.get(['/killer-sudoku', '/killer-sudoku/', '/killer-sudoku/*'], (req, res) => {
+  app.get(['/killer-sudoku/*'], requireTtcdsForSudokuEntry, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

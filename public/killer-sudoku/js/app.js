@@ -909,6 +909,8 @@
   
   function getAuthToken() {
     try {
+      const queryToken = new URLSearchParams(window.location.search).get('token');
+      if (queryToken) return queryToken;
       return localStorage.getItem('bdu_token') ||
              sessionStorage.getItem('bdu_token') ||
              (window.parent && window.parent.localStorage ? window.parent.localStorage.getItem('bdu_token') : null) ||

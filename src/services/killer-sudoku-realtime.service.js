@@ -10,6 +10,8 @@ import { WebSocketServer } from 'ws';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BduIdentityService } from './bdu-identity.service.js';
+import { TtcdsService } from './ttcds.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,9 +95,31 @@ class KillerSudokuRealtimeService {
       }
     });
 
-    this.wss.on('connection', (ws) => {
+    this.wss.on('connection', (ws, request) => {
       ws.isAlive = true;
       ws.playerId = 'p_' + Math.random().toString(36).substring(2, 9);
+      // Luật cứng section TTCDS: WS chỉ phục vụ tag Trung tâm CĐS.
+      // Client gửi AUTH ngay sau khi mở socket (pvp.js tự gửi token BDU);
+      // mọi action khác trước khi AUTH thành công đều bị từ chối 403.
+      ws.ttcdsMssv = null;
+
+      // Hỗ trợ sẵn token trên query (?token=...) khi client mở socket kèm token
+      // (iframe/pvp.js). Xác thực nền, không chặn handshake để tránh flaky.
+      try {
+        const upgradeUrl = new URL(request?.url || WS_PATH, 'http://localhost');
+        const queryToken = upgradeUrl.searchParams.get('token');
+        if (queryToken) {
+          BduIdentityService.resolveVerifiedMssv(queryToken)
+            .then((mssv) => TtcdsService.requireAccess(mssv).then(() => mssv))
+            .then((mssv) => {
+              ws.ttcdsMssv = mssv;
+              jsonSend(ws, { type: 'AUTH_OK' });
+            })
+            .catch(() => {
+              jsonSend(ws, { type: 'AUTH_ERROR', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
+            });
+        }
+      } catch {}
 
       ws.on('pong', () => { ws.isAlive = true; });
 
@@ -129,7 +153,28 @@ class KillerSudokuRealtimeService {
   }
 
   handleClientMessage(ws, data) {
-    const { action, payload = {} } = data;
+    const { action, payload = {} } = data || {};
+
+    // Cổng AUTH: xác minh token BDU + tag Trung tâm CĐS, không yêu cầu đã AUTH trước.
+    if (action === 'AUTH') {
+      const token = payload?.token || payload?.authorization;
+      BduIdentityService.resolveVerifiedMssv(token)
+        .then((mssv) => TtcdsService.requireAccess(mssv).then(() => mssv))
+        .then((mssv) => {
+          ws.ttcdsMssv = mssv;
+          jsonSend(ws, { type: 'AUTH_OK' });
+        })
+        .catch(() => {
+          jsonSend(ws, { type: 'AUTH_ERROR', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
+        });
+      return;
+    }
+
+    // Luật cứng: mọi action PvP đều yêu cầu đã AUTH tag TTCDS.
+    if (!ws.ttcdsMssv) {
+      jsonSend(ws, { type: 'ERROR', code: 'TTCDS_FORBIDDEN', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
+      return;
+    }
 
     switch (action) {
       case 'CREATE_ROOM':

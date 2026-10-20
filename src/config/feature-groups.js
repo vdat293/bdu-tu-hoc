@@ -28,7 +28,7 @@ export const FEATURE_GROUPS = [
   { id: 'vocab', label: 'Luyện từ vựng', lockable: true, apiPrefixes: ['/vocab'], pagePrefixes: ['/vocab'] },
   { id: 'grammar', label: 'Luyện ngữ pháp', lockable: true, apiPrefixes: ['/grammar'], pagePrefixes: ['/grammar'] },
   { id: 'games', label: 'Giải trí (game)', lockable: true, apiPrefixes: ['/entertainment'], pagePrefixes: [] },
-  { id: 'ttcds', label: 'Trung tâm Chuyển đổi số', lockable: true, apiPrefixes: ['/ttcds'], pagePrefixes: ['/ttcds', '/mystudent'] }
+  { id: 'ttcds', label: 'Trung tâm Chuyển đổi số', lockable: true, apiPrefixes: ['/ttcds', '/games/killer-sudoku'], pagePrefixes: ['/ttcds', '/mystudent', '/killer-sudoku'] }
 ];
 
 // Danh sách id các nhóm được phép khoá, giữ đúng thứ tự khai báo trong

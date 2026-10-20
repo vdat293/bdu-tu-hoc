@@ -229,6 +229,20 @@
     if (dom.pvpModal) dom.pvpModal.classList.add('hidden');
   }
 
+  function getAuthToken() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryToken = params.get('token');
+      if (queryToken) return queryToken;
+      return localStorage.getItem('bdu_token') ||
+             sessionStorage.getItem('bdu_token') ||
+             (window.parent && window.parent.localStorage ? window.parent.localStorage.getItem('bdu_token') : null) ||
+             (window.parent && window.parent.sessionStorage ? window.parent.sessionStorage.getItem('bdu_token') : null);
+    } catch (e) {
+      return null;
+    }
+  }
+
   function connectWebSocket(onConnected) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       if (onConnected) onConnected();
@@ -236,12 +250,19 @@
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/killer-sudoku`;
+    const token = getAuthToken();
+    const wsUrl = token
+      ? `${protocol}//${window.location.host}/ws/killer-sudoku?token=${encodeURIComponent(token)}`
+      : `${protocol}//${window.location.host}/ws/killer-sudoku`;
 
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('[PvP] WebSocket connected successfully');
+      // Luật cứng TTCDS: gửi token BDU ngay để server xác minh tag Trung tâm CĐS.
+      if (token) {
+        try { ws.send(JSON.stringify({ action: 'AUTH', payload: { token } })); } catch {}
+      }
       if (onConnected) onConnected();
     };
 
@@ -281,6 +302,12 @@
     console.log('[PvP Event]', msg.type, msg);
 
     switch (msg.type) {
+      case 'AUTH_OK':
+        break;
+      case 'AUTH_ERROR':
+        alert(msg.message || 'Bạn không thuộc Trung tâm Chuyển đổi số.');
+        closeWebSocket();
+        break;
       case 'ROOM_CREATED':
       case 'ROOM_UPDATED':
         renderLobby(msg.room);
@@ -316,6 +343,7 @@
         break;
       case 'ERROR':
         alert(msg.message);
+        if (msg.code === 'TTCDS_FORBIDDEN') closeWebSocket();
         break;
       default:
         break;

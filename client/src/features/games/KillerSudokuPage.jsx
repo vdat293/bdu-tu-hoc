@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../../app/providers.jsx';
+import { TtcdsForbiddenNotice, useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
 
 export default function KillerSudokuPage() {
+  const auth = useAuth();
+  const caps = useTtcdsCapabilities();
+  const canAccess = Boolean(caps.data?.can_access);
   const iframeRef = useRef(null);
   const [isFocusMode, setIsFocusMode] = useState(() => {
     return localStorage.getItem('killer_focus_mode') === 'true';
@@ -19,8 +24,13 @@ export default function KillerSudokuPage() {
   }, [isFocusMode]);
 
   const handleReload = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
+    const frame = iframeRef.current;
+    if (!frame) return;
+    try {
+      frame.contentWindow?.location.reload();
+    } catch {
+      const src = String(frame.getAttribute('src') || frame.src || '');
+      if (src) frame.setAttribute('src', src);
     }
   };
 
@@ -35,8 +45,30 @@ export default function KillerSudokuPage() {
   };
 
   const handleOpenNewTab = () => {
-    window.open('/killer-sudoku/index.html', '_blank', 'noopener,noreferrer');
+    const tokenParam = auth.token ? `?token=${encodeURIComponent(auth.token)}` : '';
+    window.open(`/killer-sudoku/index.html${tokenParam}`, '_blank', 'noopener,noreferrer');
   };
+
+  // Luật cứng section TTCDS: chỉ ai có tag Trung tâm CĐS (ttcds:access)
+  // mới thấy và mở được Killer Sudoku. Không có quyền -> chặn ngay ở SPA,
+  // kể cả khi đoán đúng URL.
+  if (caps.isLoading) {
+    return <p>Đang kiểm tra quyền Trung tâm CĐS…</p>;
+  }
+  if (caps.isSuccess && !canAccess) return <TtcdsForbiddenNotice />;
+  if (caps.isError) {
+    return (
+      <div className="club-empty" role="alert">
+        <h2>Chưa thể kiểm tra quyền Trung tâm CĐS</h2>
+        <p>{caps.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
+        <button type="button" className="btn btn-secondary" onClick={() => caps.refetch()}>Thử lại</button>
+      </div>
+    );
+  }
+
+  const iframeSrc = auth.token
+    ? `/killer-sudoku/index.html?token=${encodeURIComponent(auth.token)}&v=2.5.0`
+    : '/killer-sudoku/index.html?v=2.5.0';
 
   return (
     <div
@@ -169,7 +201,7 @@ export default function KillerSudokuPage() {
       >
         <iframe
           ref={iframeRef}
-          src="/killer-sudoku/index.html?v=2.3.0"
+          src={iframeSrc}
           title="Killer Sudoku Deluxe"
           style={{
             width: '100%',

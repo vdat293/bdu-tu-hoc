@@ -30,7 +30,8 @@ const ROUTE_GROUPS = [
   { prefix: '/vocab', group: 'vocab' },
   { prefix: '/grammar', group: 'grammar' },
   { prefix: '/ttcds', group: 'ttcds' },
-  { prefix: '/mystudent', group: 'ttcds' }
+  { prefix: '/mystudent', group: 'ttcds' },
+  { prefix: '/killer-sudoku', group: 'ttcds' }
 ];
 
 // Sắp giảm dần theo độ dài tiền tố để hàm tra cứu chỉ cần lấy kết quả khớp đầu tiên.
