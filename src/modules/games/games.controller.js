@@ -1,6 +1,7 @@
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 import { EntertainmentGameService, EntertainmentGameInternals, viewerStateFor } from '../../services/entertainment-game.service.js';
+import { KillerSudokuService } from '../../services/killer-sudoku.service.js';
 
 export const GamesController = {
   // 10b. Entertainment games: database-backed rooms + server-authoritative moves
@@ -190,6 +191,40 @@ export const GamesController = {
       return res.json({ result: true, data });
     } catch (err) {
       return res.status(err.status || 500).json({ result: false, code: err.code || 'CHALLENGE_LOAD_FAILED', message: err.message || 'Không thể tải challenge.' });
+    }
+  },
+  async getKillerSudokuProgress(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await KillerSudokuService.getProgress(mssv, req.query.difficulty);
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({
+        result: false,
+        code: err.code || 'KILLER_SUDOKU_PROGRESS_FAILED',
+        message: err.message || 'Không thể tải tiến độ Killer Sudoku.'
+      });
+    }
+  },
+
+  async saveKillerSudokuProgress(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const { difficulty, levelId, timeSeconds, mistakes } = req.body || {};
+      const data = await KillerSudokuService.recordCompletion({
+        mssv,
+        difficulty,
+        levelId,
+        timeSeconds,
+        mistakes
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      return res.status(err.status || 500).json({
+        result: false,
+        code: err.code || 'KILLER_SUDOKU_SAVE_FAILED',
+        message: err.message || 'Không thể lưu tiến độ Killer Sudoku.'
+      });
     }
   },
 };

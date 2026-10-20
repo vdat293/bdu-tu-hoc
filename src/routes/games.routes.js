@@ -19,4 +19,8 @@ export function registerGamesRoutes(router, deps = {}) {
   router.post('/entertainment/rooms/:roomRef/challenges', ApiController.createEntertainmentChallenge);
   router.get('/entertainment/challenges/:challengeId', ApiController.getEntertainmentChallenge);
   router.post('/entertainment/challenges/:challengeId/accept', ApiController.acceptEntertainmentChallenge);
+
+  // Killer Sudoku progress
+  router.get('/games/killer-sudoku/progress', ApiController.getKillerSudokuProgress);
+  router.post('/games/killer-sudoku/progress', ApiController.saveKillerSudokuProgress);
 }

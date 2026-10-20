@@ -32,3 +32,5 @@ skills-lock.json
 
 # Scratch c?a quy tr�nh SDD (ledger, brief, review package) - kh�ng commit
 .superpowers/
+
+.tmp_*

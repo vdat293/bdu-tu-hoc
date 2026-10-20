@@ -853,6 +853,8 @@
     state.allTimeScore += 100;
     dom.allTimeScoreDisplay.textContent = Number(state.allTimeScore).toLocaleString('en-US');
 
+    recordSolvedProgress(state.difficulty, state.puzzle?.id || (state.puzzleIndex + 1), state.timerSeconds, state.mistakes);
+
     setTimeout(() => {
       dom.winModal.classList.remove('hidden');
     }, 400);
@@ -904,8 +906,91 @@
   }
 
   // Modals & Navigation
+  
+  function getAuthToken() {
+    try {
+      return localStorage.getItem('bdu_token') ||
+             sessionStorage.getItem('bdu_token') ||
+             (window.parent && window.parent.localStorage ? window.parent.localStorage.getItem('bdu_token') : null) ||
+             (window.parent && window.parent.sessionStorage ? window.parent.sessionStorage.getItem('bdu_token') : null);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function fetchSolvedProgress() {
+    const token = getAuthToken();
+    try {
+      const localData = JSON.parse(localStorage.getItem('killer_sudoku_progress') || '{}');
+      if (localData && typeof localData === 'object') {
+        state.solvedProgress = { ...localData };
+      }
+    } catch (e) {}
+
+    if (!token) return;
+
+    try {
+      const res = await fetch('/api/games/killer-sudoku/progress', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.result && json.data?.solvedByDifficulty) {
+          state.solvedProgress = { ...state.solvedProgress, ...json.data.solvedByDifficulty };
+          try {
+            localStorage.setItem('killer_sudoku_progress', JSON.stringify(state.solvedProgress));
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi tải tiến độ giải màn:', e);
+    }
+  }
+
+  async function recordSolvedProgress(diff, levelId, timeSeconds, mistakes) {
+    const d = String(diff || 'easy').toLowerCase();
+    const lvl = String(levelId || '1');
+    if (!state.solvedProgress[d]) state.solvedProgress[d] = {};
+    const prev = state.solvedProgress[d][lvl];
+    state.solvedProgress[d][lvl] = {
+      bestTimeSeconds: prev ? Math.min(prev.bestTimeSeconds || timeSeconds, timeSeconds) : timeSeconds,
+      mistakes: prev ? Math.min(prev.mistakes ?? mistakes, mistakes) : mistakes,
+      solveCount: (prev?.solveCount || 0) + 1,
+      completedAt: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem('killer_sudoku_progress', JSON.stringify(state.solvedProgress));
+    } catch (e) {}
+
+    if (dom.winProgressSaved) {
+      dom.winProgressSaved.classList.remove('hidden');
+    }
+
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      await fetch('/api/games/killer-sudoku/progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          difficulty: d,
+          levelId: lvl,
+          timeSeconds,
+          mistakes
+        })
+      });
+    } catch (e) {
+      console.warn('Lỗi lưu tiến độ lên máy chủ:', e);
+    }
+  }
+
   function openLevelPicker() {
     dom.pickerModal.classList.remove('hidden');
+    fetchSolvedProgress().then(() => renderLevelGrid(state.difficulty));
     renderLevelGrid(state.difficulty);
     SoundManager.playClick();
   }
@@ -921,6 +1006,8 @@
 
     dom.diffTabs.forEach(t => t.classList.toggle('active', t.dataset.diff === diff));
 
+    const solvedForDiff = (state.solvedProgress && state.solvedProgress[diff.toLowerCase()]) || {};
+
     // Display levels in grid
     const limit = Math.min(pool.length, 300);
     for (let i = 0; i < limit; i++) {
@@ -928,7 +1015,23 @@
       btn.className = 'lvl-btn';
       const parts = pool[i].split(';');
       const lvlId = parts[0];
-      btn.textContent = lvlId;
+
+      const solvedInfo = solvedForDiff[lvlId];
+      if (solvedInfo) {
+        btn.classList.add('solved');
+        const bestTime = solvedInfo.bestTimeSeconds;
+        let timeStr = '';
+        if (bestTime > 0) {
+          const m = Math.floor(bestTime / 60);
+          const s = bestTime % 60;
+          timeStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+        btn.innerHTML = `<span class="lvl-num">${lvlId}</span><span class="lvl-badge">✓</span>${timeStr ? `<span class="lvl-time">${timeStr}</span>` : ''}`;
+        btn.title = `Đã giải xong${timeStr ? ` (Kỷ lục: ${timeStr})` : ''}`;
+      } else {
+        btn.textContent = lvlId;
+      }
+
       if (diff === state.difficulty && i === state.puzzleIndex) {
         btn.classList.add('active');
       }
