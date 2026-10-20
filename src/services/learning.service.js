@@ -165,7 +165,7 @@ function requireDatabase() {
   }
 }
 
-async function findAccessibleCourse(mssv, courseCode, db = { query }) {
+export async function findAccessibleCourse(mssv, courseCode, db = { query }) {
   const normalizedCode = normalizeCourseCode(courseCode);
   if (!normalizedCode) throw httpError('Mã môn học không hợp lệ.');
 
