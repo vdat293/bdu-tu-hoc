@@ -765,13 +765,13 @@ export const LearningService = {
     if (!Array.isArray(responses) || responses.length > QUIZ_MAX_RESPONSES) {
       throw httpError('Dữ liệu tiến độ trắc nghiệm không hợp lệ.', 400, 'QUIZ_INVALID');
     }
-    // completed === true (nộp bài) được xử lý ở Task 7; ở đây luôn lưu lượt
-    // đang làm, không đổi best/attempts.
+    const wantsCompleted = input?.completed === true;
 
     return transaction(async (client) => {
       const context = await loadQuizContext(cleanMssv, courseCode, postId, client);
       const progressPostId = context.post.id;
       const timeLimitSeconds = context.quiz.time_limit_seconds;
+      const questionCount = context.quiz.question_count;
 
       // Khóa dòng progress của viewer; remaining_seconds tính bằng đồng hồ DB.
       const progress = (await client.query(`
@@ -815,46 +815,119 @@ export const LearningService = {
         };
       }
 
-      // Hết giờ: chặn mọi lần lưu kể cả completed:true để không ghi đáp án
-      // sau deadline; Task 7 sẽ thêm đường nộp chốt chỉ từ responses đã lưu.
-      if (timeLimitSeconds > 0 && remaining === 0) {
+      const expired = timeLimitSeconds > 0 && remaining === 0;
+
+      // Hết giờ: chỉ cho phép nộp chốt từ responses đã lưu. Mọi entry gửi
+      // kèm sau deadline đều bị từ chối, kể cả completed:true (§6.7/§7.4).
+      if (expired && (!wantsCompleted || responses.length > 0)) {
         throw httpError('Đã hết thời gian làm bài trắc nghiệm này.', 409, 'QUIZ_TIME_UP');
       }
 
       // Merge: giữ đáp án đã lưu (khóa sau khi trả lời), chỉ thêm id mới còn
       // thuộc quiz và hợp lệ; chấm lại toàn bộ bằng server, bỏ cờ correct client.
+      // Sau deadline không merge gì cả, chỉ dùng dữ liệu đã lưu.
       const stored = gradeQuizResponses(context.quiz.questions, progress.responses).entries;
-      const seen = new Set(stored.map((entry) => entry.id));
-      const additions = responses.filter(
-        (entry) => entry && !Array.isArray(entry) && typeof entry === 'object' && !seen.has(entry.id)
-      );
-      const merged = [
-        ...stored,
-        ...gradeQuizResponses(context.quiz.questions, additions).entries
-      ].slice(0, QUIZ_MAX_RESPONSES);
+      let merged = stored;
+      if (!expired) {
+        const seen = new Set(stored.map((entry) => entry.id));
+        const additions = responses.filter(
+          (entry) => entry && !Array.isArray(entry) && typeof entry === 'object' && !seen.has(entry.id)
+        );
+        merged = [
+          ...stored,
+          ...gradeQuizResponses(context.quiz.questions, additions).entries
+        ].slice(0, QUIZ_MAX_RESPONSES);
+      }
 
       const answered = merged.length;
       const correctCount = merged.filter((entry) => entry.correct).length;
 
-      await client.query(`
+      if (!wantsCompleted) {
+        await client.query(`
+          UPDATE course_quiz_progress
+          SET answered = $3,
+              correct_count = $4,
+              total_count = $3,
+              responses = $5::jsonb,
+              updated_at = NOW()
+          WHERE mssv = $1 AND post_id = $2;
+        `, [cleanMssv, progressPostId, answered, correctCount, JSON.stringify(merged)]);
+
+        return {
+          answered,
+          correct_count: correctCount,
+          total_count: answered,
+          best_correct: progress.best_correct == null ? null : Number(progress.best_correct),
+          best_total: progress.best_total == null ? null : Number(progress.best_total),
+          attempts: Number(progress.attempts || 0),
+          completed_at: null,
+          remaining_seconds: remaining,
+          expired: false,
+          already_completed: false
+        };
+      }
+
+      // Nộp sớm khi chưa trả lời câu nào bị chặn; hết giờ được phép finalize
+      // 0 câu từ dữ liệu đã lưu (§6.7/§7.4).
+      if (!expired && answered === 0) {
+        throw httpError(
+          'Hãy trả lời ít nhất một câu trước khi nộp bài.',
+          400,
+          'QUIZ_EMPTY_SUBMIT'
+        );
+      }
+
+      const totalCount = questionCount;
+      // Best so theo tỉ lệ bằng phép nhân chéo (tránh sai số float); chỉ đổi
+      // khi tốt hơn hẳn hoặc chưa có best trước đó (§6.7 step 7).
+      const previousBestCorrect = progress.best_correct == null ? null : Number(progress.best_correct);
+      const previousBestTotal = progress.best_total == null ? null : Number(progress.best_total);
+      const hasBest = previousBestCorrect != null
+        && previousBestTotal != null
+        && previousBestTotal > 0;
+      const isBetterBest = !hasBest
+        || correctCount * previousBestTotal > previousBestCorrect * totalCount;
+      const bestCorrect = isBetterBest ? correctCount : previousBestCorrect;
+      const bestTotal = isBetterBest ? totalCount : previousBestTotal;
+      // attempts chỉ tăng ở lần chuyển sang completed đầu tiên; nhánh
+      // completed_at phía trên đã trả sớm nên không bao giờ cộng lặp.
+      const attempts = Number(progress.attempts || 0) + 1;
+
+      const completedRow = (await client.query(`
         UPDATE course_quiz_progress
         SET answered = $3,
             correct_count = $4,
-            total_count = $3,
-            responses = $5::jsonb,
+            total_count = $5,
+            best_correct = $6,
+            best_total = $7,
+            attempts = $8,
+            responses = $9::jsonb,
+            completed_at = NOW(),
             updated_at = NOW()
-        WHERE mssv = $1 AND post_id = $2;
-      `, [cleanMssv, progressPostId, answered, correctCount, JSON.stringify(merged)]);
+        WHERE mssv = $1 AND post_id = $2
+        RETURNING completed_at;
+      `, [
+        cleanMssv,
+        progressPostId,
+        answered,
+        correctCount,
+        totalCount,
+        bestCorrect,
+        bestTotal,
+        attempts,
+        JSON.stringify(merged)
+      ])).rows[0];
 
       return {
         answered,
         correct_count: correctCount,
-        total_count: answered,
-        best_correct: progress.best_correct == null ? null : Number(progress.best_correct),
-        best_total: progress.best_total == null ? null : Number(progress.best_total),
-        attempts: Number(progress.attempts || 0),
-        completed_at: null,
-        remaining_seconds: remaining,
+        total_count: totalCount,
+        best_correct: bestCorrect,
+        best_total: bestTotal,
+        attempts,
+        completed_at: completedRow.completed_at,
+        // §6.8: completed_at khác NULL thì remaining = 0; không giới hạn = null.
+        remaining_seconds: timeLimitSeconds > 0 ? 0 : null,
         expired: false,
         already_completed: false
       };

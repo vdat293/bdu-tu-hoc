@@ -645,7 +645,265 @@ try {
     { id: 'q1', response: 'B', correct: true }
   ]);
 
-  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, save progress, restart và hồi quy kind cũ đều hoạt động.');
+  // 18. Hoàn thành lượt khi chưa hết giờ: merge responses mới, total_count =
+  //     question_count, attempts +1, best theo tỉ lệ, review có đáp án/giải thích.
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW(), answered = 0, correct_count = 0, total_count = 0,
+        best_correct = NULL, best_total = NULL, attempts = 0,
+        responses = '[]'::jsonb, completed_at = NULL, updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const partial = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'B' }, { id: 'q2', response: 'A' }],
+    completed: false
+  });
+  assert.equal(partial.answered, 2);
+  assert.equal(partial.correct_count, 1);
+  assert.equal(partial.total_count, 2);
+
+  const finished = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [],
+    completed: true
+  });
+  assert.ok(finished.completed_at);
+  assert.equal(finished.answered, 2);
+  assert.equal(finished.total_count, 2);
+  assert.equal(finished.correct_count, 1);
+  assert.equal(finished.best_correct, 1);
+  assert.equal(finished.best_total, 2);
+  assert.equal(finished.attempts, 1);
+  assert.equal(finished.remaining_seconds, 0);
+  assert.equal(finished.expired, false);
+  assert.equal(finished.already_completed, false);
+
+  const finishedRow = await readQuizProgress(post.id);
+  assert.ok(finishedRow.completed_at);
+  assert.equal(Number(finishedRow.answered), 2);
+  assert.equal(Number(finishedRow.correct_count), 1);
+  assert.equal(Number(finishedRow.total_count), 2);
+  assert.equal(Number(finishedRow.best_correct), 1);
+  assert.equal(Number(finishedRow.best_total), 2);
+  assert.equal(Number(finishedRow.attempts), 1);
+  assert.deepEqual(finishedRow.responses, [
+    { id: 'q1', response: 'B', correct: true },
+    { id: 'q2', response: 'A', correct: false }
+  ]);
+
+  const finishedDetail = await LearningService.getCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.ok(finishedDetail.quiz.progress.completed_at);
+  assert.equal(finishedDetail.quiz.review.length, 2);
+  assert.deepEqual(finishedDetail.quiz.review[0], {
+    id: 'q1',
+    correct: 'B',
+    explanation: VALID_QUIZ.questions[0].explanation
+  });
+  assert.deepEqual(finishedDetail.quiz.review[1], {
+    id: 'q2',
+    correct: 'B',
+    explanation: VALID_QUIZ.questions[1].explanation
+  });
+  assert.equal(finishedDetail.quiz.expired, false);
+  assert.equal(finishedDetail.quiz.remaining_seconds, 0);
+
+  // Request hoàn thành lặp lại là idempotent: không +attempts, không đổi responses.
+  const duplicate = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [],
+    completed: true
+  });
+  assert.equal(duplicate.attempts, 1);
+  assert.equal(duplicate.already_completed, true);
+  assert.ok(duplicate.completed_at);
+  assert.deepEqual((await readQuizProgress(post.id)).responses, finishedRow.responses);
+
+  await assert.rejects(
+    () => LearningService.answerCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+      questionId: 'q1', response: 'B'
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_COMPLETED'
+  );
+
+  // 19. Start không restart khi đã xong giữ nguyên trạng; restart reset lượt
+  //     nhưng giữ best/attempts và đặt started_at mới (§6.5/§7.5).
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '30 seconds', updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const beforeCompletedRestart = await readQuizProgress(post.id);
+
+  const notRestarted = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.ok(notRestarted.completed_at);
+  assert.equal(notRestarted.restarted, false);
+
+  const completedRestart = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    restart: true
+  });
+  assert.equal(completedRestart.restarted, true);
+  assert.equal(completedRestart.completed_at, null);
+  assert.equal(completedRestart.remaining_seconds > 0, true);
+  assert.ok(
+    (await readQuizProgress(post.id)).started_at.getTime() > beforeCompletedRestart.started_at.getTime(),
+    'Restart sau khi hoàn thành phải đặt started_at mới'
+  );
+
+  const afterRestart = await LearningService.getCourseQuiz(VIEWER, COURSE_CODE, post.id);
+  assert.equal(afterRestart.quiz.progress.answered, 0);
+  assert.equal(afterRestart.quiz.progress.completed_at, null);
+  assert.equal(afterRestart.quiz.progress.best_correct, 1);
+  assert.equal(afterRestart.quiz.progress.best_total, 2);
+  assert.equal(afterRestart.quiz.progress.attempts, 1);
+  assert.deepEqual(afterRestart.quiz.progress.responses, []);
+  assert.equal(afterRestart.quiz.review, null);
+  assert.equal(afterRestart.quiz.expired, false);
+
+  // 20. Nộp sớm khi chưa trả lời câu nào và chưa hết giờ → 400 QUIZ_EMPTY_SUBMIT.
+  const emptyBefore = await readQuizProgress(post.id);
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [],
+      completed: true
+    }),
+    (err) => err.status === 400 && err.code === 'QUIZ_EMPTY_SUBMIT'
+  );
+  const emptyAfter = await readQuizProgress(post.id);
+  assert.equal(emptyAfter.completed_at, null);
+  assert.equal(Number(emptyAfter.attempts), Number(emptyBefore.attempts));
+  assert.deepEqual(emptyAfter.responses, emptyBefore.responses);
+
+  // 21. Lượt 2 đúng cả 2 → best 2/2, attempts 2.
+  const secondFinish = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'B' }, { id: 'q2', response: 'B' }],
+    completed: true
+  });
+  assert.equal(secondFinish.answered, 2);
+  assert.equal(secondFinish.correct_count, 2);
+  assert.equal(secondFinish.total_count, 2);
+  assert.equal(secondFinish.best_correct, 2);
+  assert.equal(secondFinish.best_total, 2);
+  assert.equal(secondFinish.attempts, 2);
+
+  // 22. Lượt 3 sai cả 2 → best vẫn 2/2, attempts 3.
+  const thirdRestart = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    restart: true
+  });
+  assert.equal(thirdRestart.restarted, true);
+  const thirdFinish = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'A' }, { id: 'q2', response: 'A' }],
+    completed: true
+  });
+  assert.equal(thirdFinish.correct_count, 0);
+  assert.equal(thirdFinish.total_count, 2);
+  assert.equal(thirdFinish.best_correct, 2);
+  assert.equal(thirdFinish.best_total, 2);
+  assert.equal(thirdFinish.attempts, 3);
+
+  // 23. Hết giờ + 0 câu đã lưu + responses:[] vẫn finalize được; total_count =
+  //     question_count và attempts tăng.
+  const timeoutRestart = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    restart: true
+  });
+  assert.equal(timeoutRestart.restarted, true);
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '601 seconds', updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const timedOut = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [],
+    completed: true
+  });
+  assert.ok(timedOut.completed_at);
+  assert.equal(timedOut.answered, 0);
+  assert.equal(timedOut.correct_count, 0);
+  assert.equal(timedOut.total_count, 2);
+  assert.equal(timedOut.best_correct, 2);
+  assert.equal(timedOut.best_total, 2);
+  assert.equal(timedOut.attempts, 4);
+  assert.equal(timedOut.remaining_seconds, 0);
+  assert.equal(timedOut.expired, false);
+  assert.deepEqual((await readQuizProgress(post.id)).responses, []);
+
+  // 24. Sau deadline: completed:false vẫn 409; entry mới kèm completed:true
+  //     cũng 409 và không ghi gì; responses:[] finalize từ dữ liệu đã lưu.
+  const deadlineRestart = await LearningService.startCourseQuiz(VIEWER, COURSE_CODE, post.id, {
+    restart: true
+  });
+  assert.equal(deadlineRestart.restarted, true);
+  await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'B' }],
+    completed: false
+  });
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '601 seconds', updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const deadlineBefore = await readQuizProgress(post.id);
+
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [],
+      completed: false
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
+  );
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [{ id: 'q2', response: 'B' }],
+      completed: true
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
+  );
+  const deadlineAfter = await readQuizProgress(post.id);
+  assert.equal(deadlineAfter.completed_at, null);
+  assert.equal(Number(deadlineAfter.answered), Number(deadlineBefore.answered));
+  assert.equal(Number(deadlineAfter.correct_count), Number(deadlineBefore.correct_count));
+  assert.equal(Number(deadlineAfter.attempts), Number(deadlineBefore.attempts));
+  assert.deepEqual(deadlineAfter.responses, deadlineBefore.responses);
+
+  const finalized = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [],
+    completed: true
+  });
+  assert.ok(finalized.completed_at);
+  assert.equal(finalized.answered, 1);
+  assert.equal(finalized.correct_count, 1);
+  assert.equal(finalized.total_count, 2);
+  assert.equal(finalized.best_correct, 2);
+  assert.equal(finalized.best_total, 2);
+  assert.equal(finalized.attempts, 5);
+  assert.equal(finalized.remaining_seconds, 0);
+
+  // 25. Xóa bài quiz cascade xóa course_quizzes + course_quiz_progress (§6.10).
+  const quizRowsBeforeDelete = await query(
+    'SELECT COUNT(*)::int AS total FROM course_quizzes WHERE post_id = $1',
+    [post.id]
+  );
+  const progressRowsBeforeDelete = await query(
+    'SELECT COUNT(*)::int AS total FROM course_quiz_progress WHERE post_id = $1',
+    [post.id]
+  );
+  assert.equal(quizRowsBeforeDelete.rows[0].total, 1);
+  assert.equal(progressRowsBeforeDelete.rows[0].total, 1);
+
+  const deletion = await LearningService.deleteCoursePost(AUTHOR, COURSE_CODE, post.id);
+  assert.equal(deletion.deleted, true);
+  assert.equal(await countQuizzes(courseId), 0);
+  assert.equal(await query(
+    'SELECT COUNT(*)::int AS total FROM course_posts WHERE id = $1',
+    [post.id]
+  ).then((result) => result.rows[0].total), 0);
+  assert.equal(await query(
+    'SELECT COUNT(*)::int AS total FROM course_quizzes WHERE post_id = $1',
+    [post.id]
+  ).then((result) => result.rows[0].total), 0);
+  assert.equal(await query(
+    'SELECT COUNT(*)::int AS total FROM course_quiz_progress WHERE post_id = $1',
+    [post.id]
+  ).then((result) => result.rows[0].total), 0);
+
+  console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, save progress, finish/best/attempts, restart, timeout, cascade và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM identity_entitlement_grants WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
