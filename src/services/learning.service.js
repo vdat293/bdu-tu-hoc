@@ -767,7 +767,6 @@ export const LearningService = {
     }
     // completed === true (nộp bài) được xử lý ở Task 7; ở đây luôn lưu lượt
     // đang làm, không đổi best/attempts.
-    const wantsCompleted = input?.completed === true;
 
     return transaction(async (client) => {
       const context = await loadQuizContext(cleanMssv, courseCode, postId, client);
@@ -816,7 +815,9 @@ export const LearningService = {
         };
       }
 
-      if (!wantsCompleted && timeLimitSeconds > 0 && remaining === 0) {
+      // Hết giờ: chặn mọi lần lưu kể cả completed:true để không ghi đáp án
+      // sau deadline; Task 7 sẽ thêm đường nộp chốt chỉ từ responses đã lưu.
+      if (timeLimitSeconds > 0 && remaining === 0) {
         throw httpError('Đã hết thời gian làm bài trắc nghiệm này.', 409, 'QUIZ_TIME_UP');
       }
 

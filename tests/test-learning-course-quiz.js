@@ -609,6 +609,42 @@ try {
     (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
   );
 
+  // Hết giờ + completed:true cũng bị chặn: không ghi đáp án sau deadline,
+  // dòng tiến độ giữ nguyên (Task 7 sẽ thêm đường nộp chốt riêng).
+  const expiredBefore = await readQuizProgress(post.id);
+  await assert.rejects(
+    () => LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: true
+    }),
+    (err) => err.status === 409 && err.code === 'QUIZ_TIME_UP'
+  );
+  const expiredAfter = await readQuizProgress(post.id);
+  assert.equal(Number(expiredAfter.answered), Number(expiredBefore.answered));
+  assert.equal(Number(expiredAfter.correct_count), Number(expiredBefore.correct_count));
+  assert.deepEqual(expiredAfter.responses, expiredBefore.responses);
+  assert.equal(expiredAfter.completed_at, expiredBefore.completed_at);
+
+  // Trùng id trong cùng payload của câu chưa lưu: chỉ entry đầu được nhận,
+  // `answered` tăng đúng một lần. (Fixture chỉ có q1/q2 nên dùng q1 mới.)
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW(), answered = 0, correct_count = 0, total_count = 0,
+        best_correct = NULL, best_total = NULL, attempts = 0,
+        responses = '[]'::jsonb, completed_at = NULL, updated_at = NOW()
+    WHERE mssv = $1 AND post_id = $2;
+  `, [VIEWER, post.id]);
+  const dupNew = await LearningService.saveCourseQuizProgress(VIEWER, COURSE_CODE, post.id, {
+    responses: [{ id: 'q1', response: 'B' }, { id: 'q1', response: 'A' }],
+    completed: false
+  });
+  assert.equal(dupNew.answered, 1);
+  assert.equal(dupNew.correct_count, 1);
+  assert.equal(dupNew.total_count, 1);
+  assert.deepEqual((await readQuizProgress(post.id)).responses, [
+    { id: 'q1', response: 'B', correct: true }
+  ]);
+
   console.log('✓ Trắc nghiệm theo môn: quyền #TTCDS, tạo quiz, validate, feed summary, detail, start, answer, save progress, restart và hồi quy kind cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM students WHERE mssv IN ($1, $2, $3)', [AUTHOR, VIEWER, OUTSIDER]).catch(() => {});
