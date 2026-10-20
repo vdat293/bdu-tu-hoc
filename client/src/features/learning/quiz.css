@@ -583,3 +583,206 @@ body.theme-dark .quiz-result-correct-answer {
     padding: 12px 10px;
   }
 }
+
+/* Quiz sets: section + card grid above the course feed. */
+.quiz-set-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 12px;
+  background: var(--bg-card, transparent);
+  color: var(--text-main, inherit);
+  min-width: 0;
+}
+.quiz-set-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.quiz-set-section-title {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.quiz-set-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--text-muted, inherit);
+}
+.quiz-set-state p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.quiz-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+.quiz-set-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 12px;
+  background: var(--bg-card, transparent);
+  min-width: 0;
+}
+.quiz-set-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.quiz-set-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.quiz-set-card-description {
+  margin: 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-muted, inherit);
+}
+.quiz-set-card-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted, inherit);
+  overflow-wrap: anywhere;
+}
+.quiz-set-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.quiz-set-part-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  min-width: 0;
+}
+.quiz-set-part-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  min-width: 0;
+}
+.quiz-set-part-info span {
+  color: var(--text-muted, inherit);
+  font-size: 0.82rem;
+}
+.quiz-set-part-modes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.quiz-set-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.quiz-set-progress-text {
+  font-size: 0.8rem;
+  color: var(--text-muted, inherit);
+  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.quiz-set-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, var(--border, #ddd));
+  min-width: 0;
+}
+.quiz-set-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.quiz-set-author-avatar {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(127, 127, 127, 0.2);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.quiz-set-author-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.quiz-set-author-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+body.theme-dark .quiz-set-card,
+body.theme-dark .quiz-set-section,
+body.theme-dark .quiz-set-part-row {
+  border-color: var(--border-color);
+}
+@media (max-width: 560px) {
+  .quiz-set-section {
+    padding: 12px;
+  }
+  .quiz-set-grid {
+    grid-template-columns: 1fr;
+  }
+  .quiz-set-part-row {
+    width: 100%;
+  }
+  .quiz-set-part-modes .btn {
+    flex: 1 1 100%;
+  }
+  .quiz-set-section-head .btn {
+    flex: 1 1 100%;
+  }
+}
+@media (max-width: 480px) {
+  .quiz-set-card {
+    padding: 12px 10px;
+  }
+  .quiz-set-mode {
+    flex: 1 1 100%;
+  }
+}
