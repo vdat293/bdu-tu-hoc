@@ -169,7 +169,7 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
               <ul className="quiz-preview-options">
                 {q.options.map((opt, oi) => {
                   const letter = String.fromCharCode(65 + oi);
-                  const isCorrect = letter === q.correct;
+                  const isCorrect = opt === q.correct;
                   return (
                     <li key={oi} className={isCorrect ? 'quiz-option-correct' : ''}>
                       <span className="quiz-option-letter">{letter}.</span>{' '}

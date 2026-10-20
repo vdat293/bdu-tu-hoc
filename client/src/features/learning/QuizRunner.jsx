@@ -1,16 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './quiz.css';
 
+export function shuffleArray(items) {
+  const array = Array.isArray(items) ? [...items] : [];
+  for (let i = array.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function sameOptionText(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const left = a.trim().toLocaleLowerCase('vi-VN');
+  const right = b.trim().toLocaleLowerCase('vi-VN');
+  return left !== '' && left === right;
+}
+
+function canonicalOptionText(options, value) {
+  if (!Array.isArray(options) || typeof value !== 'string') return null;
+  const wanted = value.trim().toLocaleLowerCase('vi-VN');
+  if (wanted === '') return null;
+  for (const option of options) {
+    if (typeof option !== 'string') continue;
+    if (option.trim().toLocaleLowerCase('vi-VN') === wanted) return option;
+  }
+  return null;
+}
+
+function buildShuffledQuestions(questions) {
+  return shuffleArray(questions).map((question) => ({
+    ...question,
+    options: shuffleArray(question?.options)
+  }));
+}
+
 function normalizeInitialResponses(initialProgress, questions) {
   const entries = Array.isArray(initialProgress?.responses) ? initialProgress.responses : [];
-  const validIds = new Set(questions.map((question) => question.id));
+  const byId = new Map(questions.map((question) => [question.id, question]));
   const seen = new Set();
   const responses = [];
   for (const entry of entries) {
     if (!entry || typeof entry.id !== 'string' || typeof entry.response !== 'string') continue;
-    if (!validIds.has(entry.id) || seen.has(entry.id)) continue;
+    if (!byId.has(entry.id) || seen.has(entry.id)) continue;
+    const canonical = canonicalOptionText(byId.get(entry.id)?.options, entry.response);
+    if (canonical === null) continue;
     seen.add(entry.id);
-    responses.push({ id: entry.id, response: entry.response.toUpperCase() });
+    responses.push({ id: entry.id, response: canonical });
   }
   return responses;
 }
@@ -27,7 +63,7 @@ function normalizeRemaining(value) {
 }
 
 export default function QuizRunner({
-  questions = [],
+  questions: incomingQuestions = [],
   initialProgress = null,
   remainingSeconds = null,
   onCheckAnswer,
@@ -35,6 +71,11 @@ export default function QuizRunner({
   onComplete,
   onExit
 }) {
+  // Shuffle once per mount (each start/restart remounts via key): both the
+  // question order and the options of every question. Responses store the
+  // option text, so resume and autosave never depend on the display order.
+  const [shuffledQuestions] = useState(() => buildShuffledQuestions(incomingQuestions));
+  const questions = shuffledQuestions;
   const initialResponses = normalizeInitialResponses(initialProgress, questions);
   const [responses, setResponses] = useState(initialResponses);
   const [index, setIndex] = useState(() => {
@@ -168,10 +209,10 @@ export default function QuizRunner({
     setConfirmSubmit(false);
   };
 
-  const handleSelect = (letter) => {
+  const handleSelect = (optionText) => {
     setConfirmSubmit(false);
     if (locked) return;
-    setSelected(letter);
+    setSelected(optionText);
   };
 
   const handleCheck = async () => {
@@ -189,7 +230,7 @@ export default function QuizRunner({
       if (timeUpRef.current) return;
       setFeedback({
         correct: Boolean(result?.correct),
-        correct_option: result?.correct_option || '',
+        correct_answer: typeof result?.correct_answer === 'string' ? result.correct_answer : '',
         explanation: result?.explanation || ''
       });
       const entry = { id: questionId, response };
@@ -285,10 +326,6 @@ export default function QuizRunner({
     finalize();
   };
 
-  const correctOptionText = current && feedback?.correct_option
-    ? current.options?.[feedback.correct_option.charCodeAt(0) - 65]
-    : '';
-
   return (
     <div className="quiz-runner">
       <header className="quiz-runner-head">
@@ -366,8 +403,8 @@ export default function QuizRunner({
             >
               {current.options.map((option, optionIndex) => {
                 const letter = String.fromCharCode(65 + optionIndex);
-                const isSelected = selected === letter;
-                const isCorrect = Boolean(feedback) && feedback.correct_option === letter;
+                const isSelected = typeof selected === 'string' && sameOptionText(selected, option);
+                const isCorrect = Boolean(feedback) && sameOptionText(option, feedback.correct_answer);
                 const isWrong = Boolean(feedback) && isSelected && !feedback.correct;
                 const classes = ['quiz-runner-option'];
                 if (isSelected) classes.push('is-selected');
@@ -375,13 +412,13 @@ export default function QuizRunner({
                 if (isWrong) classes.push('is-wrong');
                 return (
                   <button
-                    key={`${current.id}-${letter}`}
+                    key={`${current.id}-${optionIndex}`}
                     type="button"
                     role="radio"
                     aria-checked={isSelected}
                     aria-label={String(option)}
                     className={classes.join(' ')}
-                    onClick={() => handleSelect(letter)}
+                    onClick={() => handleSelect(option)}
                     disabled={locked}
                   >
                     <span className="quiz-runner-option-letter" aria-hidden="true">{letter}</span>
@@ -401,10 +438,9 @@ export default function QuizRunner({
               ref={feedbackRef}
             >
               <strong>{feedback.correct ? 'Chính xác!' : 'Chưa chính xác.'}</strong>
-              {!feedback.correct && feedback.correct_option && (
+              {!feedback.correct && feedback.correct_answer && (
                 <p className="quiz-runner-correct-answer">
-                  Đáp án đúng: {feedback.correct_option}
-                  {correctOptionText ? `. ${correctOptionText}` : ''}
+                  Đáp án đúng: {feedback.correct_answer}
                 </p>
               )}
               {feedback.explanation && (

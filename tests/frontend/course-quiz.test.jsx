@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QuizComposerPanel from '../../client/src/features/learning/QuizComposerPanel.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
-import QuizRunner from '../../client/src/features/learning/QuizRunner.jsx';
+import QuizRunner, { shuffleArray } from '../../client/src/features/learning/QuizRunner.jsx';
 import CourseQuizPage from '../../client/src/features/learning/CourseQuizPage.jsx';
 
 const feedMocks = vi.hoisted(() => ({
@@ -60,7 +60,7 @@ const VALID_JSON = JSON.stringify({
   schema: 'bdu-quiz/v1',
   title: 'Quiz mẫu',
   questions: [
-    { question: '1 + 1 = ?', options: ['1', '2'], correct: 'B', explanation: '2' }
+    { question: '1 + 1 = ?', options: ['1', '2'], correct: '2', explanation: '2' }
   ]
 });
 
@@ -76,7 +76,7 @@ function Harness({ onValidQuiz, onInvalid = () => {} }) {
   );
 }
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 it('validates pasted JSON and emits normalized quiz', async () => {
   vi.useFakeTimers();
@@ -89,7 +89,7 @@ it('validates pasted JSON and emits normalized quiz', async () => {
   expect(onValidQuiz).toHaveBeenCalledWith(expect.objectContaining({
     schema: 'bdu-quiz/v1',
     title: 'Quiz mẫu',
-    questions: [expect.objectContaining({ id: 'q1', correct: 'B' })]
+    questions: [expect.objectContaining({ id: 'q1', correct: '2' })]
   }));
 });
 
@@ -133,11 +133,14 @@ it('downloads template as Blob', async () => {
 
 it('shows preview with correct answer highlighted', async () => {
   vi.useFakeTimers();
-  render(<Harness onValidQuiz={vi.fn()} />);
+  const { container } = render(<Harness onValidQuiz={vi.fn()} />);
   fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON } });
   await act(async () => { vi.advanceTimersByTime(400); });
   expect(screen.getByText('1 + 1 = ?')).toBeTruthy();
   expect(screen.getAllByText('2').length).toBeGreaterThan(0);
+  const highlighted = container.querySelectorAll('.quiz-option-correct');
+  expect(highlighted).toHaveLength(1);
+  expect(highlighted[0].textContent).toContain('2');
 });
 
 it('calls onInvalid when editing after valid', async () => {
@@ -201,7 +204,7 @@ describe('course feed quiz integration', () => {
       {
         question: 'Cấu trúc dữ liệu nào hoạt động theo nguyên tắc LIFO?',
         options: ['Hàng đợi', 'Ngăn xếp'],
-        correct: 'B',
+        correct: 'Ngăn xếp',
         explanation: 'Ngăn xếp (stack) là LIFO.'
       }
     ]
@@ -327,6 +330,8 @@ describe('quiz runner', () => {
   }
 
   function runner(overrides = {}) {
+    // Identity shuffle keeps the input order so navigation assertions stay deterministic.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     const props = {
       questions: [
         { id: 'q1', question: '1 + 1 = ?', options: ['1', '2'] },
@@ -336,7 +341,7 @@ describe('quiz runner', () => {
       remainingSeconds: 600,
       onCheckAnswer: vi.fn().mockResolvedValue({
         correct: true,
-        correct_option: 'B',
+        correct_answer: '2',
         explanation: '2',
         remaining_seconds: 590
       }),
@@ -350,11 +355,12 @@ describe('quiz runner', () => {
 
   it('checks an answer, locks it, and saves progress', async () => {
     const onCheckAnswer = vi.fn().mockResolvedValue({
-      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+      correct: true, correct_answer: '2', explanation: '2', remaining_seconds: 590
     });
     const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
     const onComplete = vi.fn();
 
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     render(<QuizRunner
       questions={[
         { id: 'q1', question: '1 + 1 = ?', options: ['1', '2'] },
@@ -372,18 +378,18 @@ describe('quiz runner', () => {
     fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
     await flush();
 
-    expect(onCheckAnswer).toHaveBeenCalledWith('q1', 'B');
+    expect(onCheckAnswer).toHaveBeenCalledWith('q1', '2');
     expect(screen.getByText('Chính xác!')).toBeTruthy();
     expect(screen.getByRole('radio', { name: '1' })).toBeDisabled();
     expect(onSaveProgress).toHaveBeenCalledWith({
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: false
     });
   });
 
   it('marks the wrong choice, shows the correct answer and explanation', async () => {
     const onCheckAnswer = vi.fn().mockResolvedValue({
-      correct: false, correct_option: 'B', explanation: '2 là đáp án đúng.', remaining_seconds: 580
+      correct: false, correct_answer: '2', explanation: '2 là đáp án đúng.', remaining_seconds: 580
     });
     runner({ onCheckAnswer });
 
@@ -392,7 +398,7 @@ describe('quiz runner', () => {
     await flush();
 
     expect(screen.getByText('Chưa chính xác.')).toBeTruthy();
-    expect(screen.getByText(/Đáp án đúng: B/)).toBeTruthy();
+    expect(screen.getByText(/Đáp án đúng: 2/)).toBeTruthy();
     expect(screen.getByText('2 là đáp án đúng.')).toBeTruthy();
     expect(screen.getByRole('radio', { name: '1' })).toHaveClass('is-wrong');
     expect(screen.getByRole('radio', { name: '2' })).toHaveClass('is-correct');
@@ -402,7 +408,7 @@ describe('quiz runner', () => {
 
   it('resumes at the first unanswered question', () => {
     runner({
-      initialProgress: { responses: [{ id: 'q1', response: 'B', correct: true }] }
+      initialProgress: { responses: [{ id: 'q1', response: '2', correct: true }] }
     });
 
     expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
@@ -418,8 +424,8 @@ describe('quiz runner', () => {
       onComplete,
       initialProgress: {
         responses: [
-          { id: 'q1', response: 'B', correct: true },
-          { id: 'q2', response: 'B', correct: true }
+          { id: 'q1', response: '2', correct: true },
+          { id: 'q2', response: '4', correct: true }
         ]
       }
     });
@@ -430,8 +436,8 @@ describe('quiz runner', () => {
 
     expect(onSaveProgress).toHaveBeenCalledWith({
       responses: [
-        { id: 'q1', response: 'B' },
-        { id: 'q2', response: 'B' }
+        { id: 'q1', response: '2' },
+        { id: 'q2', response: '4' }
       ],
       completed: true
     });
@@ -458,8 +464,8 @@ describe('quiz runner', () => {
 
     expect(onSaveProgress).toHaveBeenLastCalledWith({
       responses: [
-        { id: 'q1', response: 'B' },
-        { id: 'q2', response: 'B' }
+        { id: 'q1', response: '2' },
+        { id: 'q2', response: '4' }
       ],
       completed: true
     });
@@ -487,7 +493,7 @@ describe('quiz runner', () => {
     await flush();
 
     expect(onSaveProgress).toHaveBeenCalledWith({
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: true
     });
     expect(onComplete).toHaveBeenCalled();
@@ -495,7 +501,7 @@ describe('quiz runner', () => {
 
   it('traps interactions in the confirm dialog, restores focus, and never drops an answer', async () => {
     const onCheckAnswer = vi.fn().mockResolvedValue({
-      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+      correct: true, correct_answer: '2', explanation: '2', remaining_seconds: 590
     });
     const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
     const onComplete = vi.fn();
@@ -532,7 +538,7 @@ describe('quiz runner', () => {
 
     expect(onSaveProgress).toHaveBeenCalledTimes(2);
     expect(onSaveProgress).toHaveBeenLastCalledWith({
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: true
     });
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -540,7 +546,7 @@ describe('quiz runner', () => {
 
   it('falls back to an empty time-up finalize when manual submit gets QUIZ_TIME_UP', async () => {
     const onCheckAnswer = vi.fn().mockResolvedValue({
-      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+      correct: true, correct_answer: '2', explanation: '2', remaining_seconds: 590
     });
     const onSaveProgress = vi.fn()
       .mockResolvedValueOnce({ answered: 1 })
@@ -558,11 +564,11 @@ describe('quiz runner', () => {
     await flush();
 
     expect(onSaveProgress).toHaveBeenNthCalledWith(1, {
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: false
     });
     expect(onSaveProgress).toHaveBeenNthCalledWith(2, {
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: true
     });
     expect(onSaveProgress).toHaveBeenNthCalledWith(3, {
@@ -575,7 +581,7 @@ describe('quiz runner', () => {
 
   it('hands an autosave QUIZ_TIME_UP rejection to the empty finalize path', async () => {
     const onCheckAnswer = vi.fn().mockResolvedValue({
-      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+      correct: true, correct_answer: '2', explanation: '2', remaining_seconds: 590
     });
     const onSaveProgress = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error('Hết giờ'), { code: 'QUIZ_TIME_UP' }))
@@ -589,7 +595,7 @@ describe('quiz runner', () => {
     await flush();
 
     expect(onSaveProgress).toHaveBeenNthCalledWith(1, {
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: false
     });
     expect(onSaveProgress).toHaveBeenNthCalledWith(2, {
@@ -615,7 +621,7 @@ describe('quiz runner', () => {
 
     expect(onSaveProgress).toHaveBeenCalledTimes(2);
     expect(onSaveProgress).toHaveBeenLastCalledWith({
-      responses: [{ id: 'q1', response: 'B' }],
+      responses: [{ id: 'q1', response: '2' }],
       completed: true
     });
     expect(screen.queryByText(/Chưa nộp được bài/)).toBeNull();
@@ -696,6 +702,77 @@ describe('quiz runner', () => {
     expect(container.querySelector('script')).toBeNull();
     expect(document.querySelector('script')).toBeNull();
   });
+
+  it('shuffleArray keeps every item while changing the order deterministically', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    expect(shuffleArray(['a', 'b', 'c'])).toEqual(['b', 'c', 'a']);
+    expect(shuffleArray(['a', 'b', 'c']).sort()).toEqual(['a', 'b', 'c']);
+    expect(shuffleArray([])).toEqual([]);
+  });
+
+  it('shuffles question and option order per mount but not on rerender', () => {
+    const questions = [
+      { id: 'q1', question: 'Câu một?', options: ['a1', 'b1', 'c1'] },
+      { id: 'q2', question: 'Câu hai?', options: ['a2', 'b2', 'c2'] },
+      { id: 'q3', question: 'Câu ba?', options: ['a3', 'b3', 'c3'] }
+    ];
+    const baseProps = {
+      questions,
+      initialProgress: null,
+      remainingSeconds: null,
+      onCheckAnswer: vi.fn(),
+      onSaveProgress: vi.fn(),
+      onComplete: vi.fn(),
+      onExit: vi.fn()
+    };
+    const optionLabels = () => screen.getAllByRole('radio').map((el) => el.getAttribute('aria-label'));
+
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const { rerender, unmount } = render(<QuizRunner {...baseProps} />);
+    // Fisher-Yates with random()=0 rotates [q1,q2,q3] to [q2,q3,q1] and options alike.
+    expect(screen.getByText('Câu hai?')).toBeTruthy();
+    expect(optionLabels()).toEqual(['b2', 'c2', 'a2']);
+
+    // A rerender of the same mount must not reshuffle even when randomness changes.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    rerender(<QuizRunner {...baseProps} />);
+    expect(screen.getByText('Câu hai?')).toBeTruthy();
+    expect(optionLabels()).toEqual(['b2', 'c2', 'a2']);
+    unmount();
+
+    // A fresh mount with identity randomness keeps the input order instead.
+    render(<QuizRunner {...baseProps} />);
+    expect(screen.getByText('Câu một?')).toBeTruthy();
+    expect(optionLabels()).toEqual(['a1', 'b1', 'c1']);
+  });
+
+  it('treats resume responses as canonical option text without uppercasing', () => {
+    runner({
+      questions: [
+        { id: 'q1', question: 'LIFO là gì?', options: ['Hàng đợi', 'Ngăn xếp'] },
+        { id: 'q2', question: '2 + 2 = ?', options: ['3', '4'] }
+      ],
+      initialProgress: { responses: [{ id: 'q1', response: 'ngăn xếp', correct: true }] }
+    });
+
+    // q1 counts as answered even though the stored text differs in case.
+    expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
+    expect(screen.getByText(/Câu 2\/2/)).toBeTruthy();
+  });
+
+  it('skips resume responses that are not valid options', () => {
+    runner({
+      initialProgress: {
+        responses: [
+          { id: 'q1', response: 'zzz-không-phải-option', correct: true },
+          { id: 'qX-lạ', response: '2', correct: true }
+        ]
+      }
+    });
+
+    expect(screen.getByText('1 + 1 = ?')).toBeTruthy();
+    expect(screen.getByText(/Câu 1\/2/)).toBeTruthy();
+  });
 });
 
 describe('quiz page and result', () => {
@@ -736,7 +813,7 @@ describe('quiz page and result', () => {
       best_total: null,
       attempts: 0,
       completed_at: null,
-      responses: [{ id: 'q1', response: 'B', correct: true }],
+      responses: [{ id: 'q1', response: '2', correct: true }],
       ...overrides
     };
   }
@@ -751,15 +828,15 @@ describe('quiz page and result', () => {
       best_total: 2,
       attempts: 1,
       completed_at: '2026-10-20T10:05:00.000Z',
-      responses: [{ id: 'q1', response: 'B', correct: true }],
+      responses: [{ id: 'q1', response: '2', correct: true }],
       ...overrides
     };
   }
 
   function completedReview() {
     return [
-      { id: 'q1', correct: 'B', explanation: 'Vì 1 + 1 = 2.' },
-      { id: 'q2', correct: 'B', explanation: 'Vì 2 + 2 = 4.' }
+      { id: 'q1', correct: '2', explanation: 'Vì 1 + 1 = 2.' },
+      { id: 'q2', correct: '4', explanation: 'Vì 2 + 2 = 4.' }
     ];
   }
 
@@ -785,6 +862,8 @@ describe('quiz page and result', () => {
     for (const key of ['getCourseQuiz', 'startCourseQuiz', 'answerCourseQuiz', 'saveCourseQuizProgress']) {
       quizPageMocks[key].mockReset();
     }
+    // Identity shuffle keeps the input order so runner navigation stays deterministic.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     quizPageMocks.askConfirm.mockReset();
     quizPageMocks.askConfirm.mockResolvedValue(true);
     quizPageMocks.startCourseQuiz.mockResolvedValue({
@@ -823,7 +902,9 @@ describe('quiz page and result', () => {
     expect(screen.getByText('Vì 1 + 1 = 2.')).toBeTruthy();
     expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
     expect(screen.getByText('Chưa trả lời')).toBeTruthy();
-    expect(screen.getAllByText(/Đáp án đúng: B/)).toHaveLength(2);
+    expect(screen.getByText('Đáp án đúng: 2')).toBeTruthy();
+    expect(screen.getByText('Đáp án đúng: 4')).toBeTruthy();
+    expect(screen.getByText('Bạn chọn: 2')).toBeTruthy();
   });
 
   it('shows resume actions for an in-progress quiz', async () => {
@@ -919,7 +1000,7 @@ describe('quiz page and result', () => {
       .mockResolvedValue(pagePayload({ progress: completed(), review: completedReview(), remaining_seconds: 0 }));
     quizPageMocks.answerCourseQuiz.mockResolvedValue({
       correct: true,
-      correct_option: 'B',
+      correct_answer: '2',
       explanation: 'Chính xác.',
       remaining_seconds: 590
     });
@@ -941,7 +1022,7 @@ describe('quiz page and result', () => {
 
     expect(await screen.findByText('1/2')).toBeTruthy();
     expect(quizPageMocks.answerCourseQuiz).toHaveBeenCalledWith(
-      'test-token', 'INFO1203', '101', { questionId: 'q1', response: 'B' }
+      'test-token', 'INFO1203', '101', { questionId: 'q1', response: '2' }
     );
     expect(quizPageMocks.saveCourseQuizProgress).toHaveBeenLastCalledWith(
       'test-token', 'INFO1203', '101', expect.objectContaining({ completed: true })

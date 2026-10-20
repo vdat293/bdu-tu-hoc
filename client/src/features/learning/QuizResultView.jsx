@@ -1,13 +1,8 @@
-function letterToIndex(letter) {
-  if (typeof letter !== 'string' || letter.length !== 1) return -1;
-  const code = letter.toUpperCase().charCodeAt(0) - 65;
-  return code >= 0 && code < 6 ? code : -1;
-}
-
-function optionText(question, letter) {
-  const index = letterToIndex(letter);
-  const options = Array.isArray(question?.options) ? question.options : [];
-  return index >= 0 && index < options.length ? String(options[index]) : '';
+function sameOptionText(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const left = a.trim().toLocaleLowerCase('vi-VN');
+  const right = b.trim().toLocaleLowerCase('vi-VN');
+  return left !== '' && left === right;
 }
 
 export default function QuizResultView({ quiz, progress, review, onRestart, onBack }) {
@@ -22,7 +17,7 @@ export default function QuizResultView({ quiz, progress, review, onRestart, onBa
   const responsesById = new Map();
   for (const entry of Array.isArray(progress?.responses) ? progress.responses : []) {
     if (entry && typeof entry.id === 'string' && !responsesById.has(entry.id)) {
-      responsesById.set(entry.id, typeof entry.response === 'string' ? entry.response.toUpperCase() : '');
+      responsesById.set(entry.id, typeof entry.response === 'string' ? entry.response : '');
     }
   }
   const reviewById = new Map();
@@ -53,14 +48,14 @@ export default function QuizResultView({ quiz, progress, review, onRestart, onBa
         <h2 className="quiz-result-review-title">Xem lại từng câu</h2>
         <ol className="quiz-result-list">
           {questions.map((question, index) => {
-            const userLetter = responsesById.get(question.id) || '';
+            const userText = responsesById.get(question.id) || '';
             const reviewEntry = reviewById.get(question.id) || null;
-            const correctLetter = typeof reviewEntry?.correct === 'string'
-              ? reviewEntry.correct.toUpperCase()
+            const correctText = typeof reviewEntry?.correct === 'string'
+              ? reviewEntry.correct
               : '';
             const explanation = typeof reviewEntry?.explanation === 'string' ? reviewEntry.explanation : '';
-            const answered = Boolean(userLetter);
-            const isCorrect = answered && correctLetter && userLetter === correctLetter;
+            const answered = Boolean(userText);
+            const isCorrect = answered && correctText !== '' && sameOptionText(userText, correctText);
             return (
               <li
                 key={question.id || index}
@@ -72,16 +67,14 @@ export default function QuizResultView({ quiz, progress, review, onRestart, onBa
                 </p>
                 {answered ? (
                   <p className="quiz-result-user-answer">
-                    Bạn chọn: {userLetter}
-                    {optionText(question, userLetter) ? `. ${optionText(question, userLetter)}` : ''}
+                    Bạn chọn: {userText}
                   </p>
                 ) : (
                   <p className="quiz-result-user-answer is-missing">Chưa trả lời</p>
                 )}
-                {correctLetter && (
+                {correctText && (
                   <p className="quiz-result-correct-answer">
-                    Đáp án đúng: {correctLetter}
-                    {optionText(question, correctLetter) ? `. ${optionText(question, correctLetter)}` : ''}
+                    Đáp án đúng: {correctText}
                   </p>
                 )}
                 {explanation && (
