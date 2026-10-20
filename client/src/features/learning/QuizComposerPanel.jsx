@@ -7,7 +7,7 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
   const [quiz, setQuiz] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const wasValidRef = useRef(false);
-  const lastInvalidTextRef = useRef(null);
+  const notifiedInvalidRef = useRef(false);
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -19,8 +19,8 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
         setQuiz(null);
         if (wasValidRef.current) {
           wasValidRef.current = false;
-          if (lastInvalidTextRef.current !== text) {
-            lastInvalidTextRef.current = text;
+          if (!notifiedInvalidRef.current) {
+            notifiedInvalidRef.current = true;
             onInvalid?.();
           }
         }
@@ -30,13 +30,14 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
         setErrors([]);
         setQuiz(result.quiz);
         wasValidRef.current = true;
-        lastInvalidTextRef.current = null;
+        notifiedInvalidRef.current = false;
         onValidQuiz?.(result.quiz);
       } else {
         setErrors(result.errors || []);
         setQuiz(null);
-        if (lastInvalidTextRef.current !== text) {
-          lastInvalidTextRef.current = text;
+        wasValidRef.current = false;
+        if (!notifiedInvalidRef.current) {
+          notifiedInvalidRef.current = true;
           onInvalid?.();
         }
       }
@@ -50,8 +51,10 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
     const next = e.target.value;
     if (wasValidRef.current) {
       wasValidRef.current = false;
-      lastInvalidTextRef.current = next;
-      onInvalid?.();
+      if (!notifiedInvalidRef.current) {
+        notifiedInvalidRef.current = true;
+        onInvalid?.();
+      }
     }
     onChangeText?.(next);
   };
@@ -63,16 +66,34 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
       setErrors([{ path: '$', message: 'File vượt quá 256 KB.' }]);
       setQuiz(null);
       wasValidRef.current = false;
-      onInvalid?.();
+      if (!notifiedInvalidRef.current) {
+        notifiedInvalidRef.current = true;
+        onInvalid?.();
+      }
       e.target.value = '';
       return;
     }
     try {
-      const content = await file.text();
+      let content;
+      if (typeof file.text === 'function') {
+        content = await file.text();
+      } else {
+        content = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(file);
+        });
+      }
       onChangeText?.(content);
     } catch {
       setErrors([{ path: '$', message: 'Không thể đọc file.' }]);
-      onInvalid?.();
+      setQuiz(null);
+      wasValidRef.current = false;
+      if (!notifiedInvalidRef.current) {
+        notifiedInvalidRef.current = true;
+        onInvalid?.();
+      }
     }
     e.target.value = '';
   };

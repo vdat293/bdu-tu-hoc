@@ -118,6 +118,22 @@ it('notifies onInvalid exactly once when editing valid to invalid', async () => 
   await act(async () => { vi.advanceTimersByTime(400); });
   onInvalid.mockClear();
   fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON + 'oops' } });
+  // one more keystroke before debounce: should not spuriously notify due to stale valid state
+  fireEvent.change(screen.getByLabelText(/dán JSON/i), { target: { value: VALID_JSON + 'oopsx' } });
+  expect(onInvalid).toHaveBeenCalledTimes(1);
   await act(async () => { vi.advanceTimersByTime(400); });
   expect(onInvalid).toHaveBeenCalledTimes(1);
+});
+
+it('file success path keeps valid state', async () => {
+  const onValidQuiz = vi.fn();
+  render(<Harness onValidQuiz={onValidQuiz} />);
+  const file = new File([VALID_JSON], 'ok.json', { type: 'application/json' });
+  const input = document.querySelector('input[type="file"]');
+  await act(async () => {
+    fireEvent.change(input, { target: { files: [file] } });
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  await new Promise((r) => setTimeout(r, 450));
+  expect(onValidQuiz).toHaveBeenCalled();
 });
