@@ -246,4 +246,65 @@ const tpl = quizTemplateJson();
 const parsed = JSON.parse(tpl);
 assert.equal(parsed.schema, 'bdu-quiz/v1');
 
+// ── Migration 064: schema assertions ──
+import { readFileSync } from 'node:fs';
+
+const migrationPath = new URL('../migrations/064_course_quizzes.sql', import.meta.url);
+let migrationSql;
+try {
+  migrationSql = readFileSync(migrationPath, 'utf8');
+  console.log('🧪 Kiểm tra migration 064...');
+} catch (error) {
+  assert.fail('Missing migrations/064_course_quizzes.sql — tạo migration trước khi chạy test.');
+}
+
+// Must be idempotent (runner executes every file on every deploy)
+assert.match(migrationSql, /CREATE TABLE IF NOT EXISTS course_quizzes/, 'course_quizzes phải idempotent');
+assert.match(migrationSql, /CREATE TABLE IF NOT EXISTS course_quiz_progress/, 'course_quiz_progress phải idempotent');
+assert.match(migrationSql, /CREATE INDEX IF NOT EXISTS/, 'index phải IF NOT EXISTS');
+
+// §3.1: widen kind CHECK via DO block + fixed constraint name
+assert.match(migrationSql, /DO \$\$/, 'DO block để thay CHECK kind idempotent');
+assert.match(migrationSql, /pg_constraint[\s\S]*contype\s*=\s*'c'/, 'tìm CHECK constraint của kind qua pg_constraint');
+assert.match(
+  migrationSql,
+  /CHECK \(\s*kind IN \('request', 'document', 'video', 'link', 'quiz'\)\s*\)/,
+  'kind phải bao gồm quiz'
+);
+assert.match(migrationSql, /ADD CONSTRAINT course_posts_kind_check/, 'constraint name cố định');
+
+// §3.2: course_quizzes columns & constraints
+assert.match(migrationSql, /post_id BIGINT PRIMARY KEY REFERENCES course_posts\(id\) ON DELETE CASCADE/, 'PK post_id cascade');
+assert.match(migrationSql, /schema_version SMALLINT NOT NULL DEFAULT 1/, 'schema_version');
+assert.match(migrationSql, /questions JSONB NOT NULL CHECK \(jsonb_typeof\(questions\) = 'array'\)/, 'questions JSONB array');
+assert.match(migrationSql, /question_count SMALLINT NOT NULL CHECK \(question_count BETWEEN 1 AND 100\)/, 'question_count 1–100');
+assert.match(
+  migrationSql,
+  /time_limit_seconds INTEGER NOT NULL DEFAULT 0\s*\n?\s*CHECK \(time_limit_seconds = 0 OR time_limit_seconds BETWEEN 30 AND 14400\)/,
+  'time_limitSeconds 0 hoặc 30–14400'
+);
+assert.match(migrationSql, /course_quizzes_question_count_matches/, 'CHECK khớp question_count với độ dài questions');
+assert.match(migrationSql, /jsonb_array_length\(questions\)/, 'CHECK dùng jsonb_array_length');
+
+// §3.3: course_quiz_progress columns & constraints
+assert.match(migrationSql, /mssv VARCHAR\(32\) NOT NULL REFERENCES students\(mssv\) ON DELETE CASCADE/, 'FK students cascade');
+assert.match(migrationSql, /PRIMARY KEY \(mssv, post_id\)/, 'PK (mssv, post_id)');
+assert.match(migrationSql, /answered SMALLINT NOT NULL DEFAULT 0 CHECK \(answered BETWEEN 0 AND 100\)/, 'answered 0–100');
+assert.match(migrationSql, /total_count SMALLINT NOT NULL DEFAULT 0 CHECK \(total_count BETWEEN 0 AND 100\)/, 'total_count 0–100');
+assert.match(migrationSql, /attempts INTEGER NOT NULL DEFAULT 0 CHECK \(attempts >= 0\)/, 'attempts >= 0');
+assert.match(migrationSql, /responses JSONB NOT NULL DEFAULT '\[\]'::jsonb CHECK \(jsonb_typeof\(responses\) = 'array'\)/, 'responses JSONB array');
+assert.match(migrationSql, /course_quiz_progress_correct_range\s*\n\s*CHECK \(correct_count BETWEEN 0 AND answered\)/, 'correct_count <= answered');
+assert.match(
+  migrationSql,
+  /course_quiz_progress_best_range\s*\n\s*CHECK \(best_correct IS NULL OR best_total IS NULL OR best_correct BETWEEN 0 AND best_total\)/,
+  'best range'
+);
+assert.match(migrationSql, /course_quiz_progress_mssv_idx\s*\n\s*ON course_quiz_progress \(mssv, updated_at DESC\)/, 'index mssv_idx');
+assert.match(migrationSql, /course_quiz_progress_post_idx\s*\n\s*ON course_quiz_progress \(post_id\)/, 'index post_idx');
+
+// §12: no seed data
+assert.doesNotMatch(migrationSql, /^\s*INSERT INTO\b/m, 'migration không seed dữ liệu');
+
+console.log('✅ migration 064 OK');
+
 console.log('✅ quiz-data OK');
