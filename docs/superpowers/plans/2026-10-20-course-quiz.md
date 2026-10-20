@@ -610,7 +610,7 @@ Expected: FAIL vì `completed:true` chưa xử lý đúng.
 - [ ] **Step 3: Implement completion, best score, attempts**
 
 Trong `saveCourseQuizProgress`, xử lý `completed:true` theo spec §6.7:
-- `total_count = question_count`; `completed_at=NOW()`; attempts chỉ +1 lần đầu; best so theo tỉ lệ; `QUIZ_EMPTY_SUBMIT` nếu 0 câu và chưa hết giờ; request lặp trả `already_completed`; timeout với 0 câu được chấp nhận.
+- `total_count = question_count`; `completed_at=NOW()`; attempts chỉ +1 lần đầu; best so theo tỉ lệ; `QUIZ_EMPTY_SUBMIT` nếu 0 câu và chưa hết giờ; request lặp trả `already_completed`; timeout với `responses: []` được chấp nhận, còn entry mới sau hạn → 409 `QUIZ_TIME_UP`.
 - Thêm assertion `getCourseQuiz` sau khi completed trả `review` có `correct` + `explanation`.
 
 - [ ] **Step 4: Run test to verify completion passes, restart still fails**
@@ -904,7 +904,7 @@ git commit -m "feat(learning): integrate quiz posts into course feed"
 ```
 - Runner bắt đầu ở câu đầu tiên chưa có trong `initialProgress.responses`; nếu đã trả lời hết, hiện nút **Hoàn tất bài làm** thay vì câu hỏi.
 - Sau khi kiểm tra, khóa lựa chọn; autosave `completed:false`; câu cuối gọi `completed:true` rồi `onComplete`.
-- Hết giờ gọi `onSaveProgress({responses: pending, completed:true})` rồi `onComplete`.
+- Hết giờ gọi `onSaveProgress({responses: [], completed:true})` để server finalize các câu đã lưu, rồi `onComplete`. Không gửi câu mới sau hạn.
 
 - [ ] **Step 1: Write failing runner tests**
 
@@ -950,7 +950,7 @@ it('checks an answer, locks it, and saves progress', async () => {
 Thêm:
 - Chọn sai → hiện đáp án đúng (`correct_option`) + giải thích, lựa chọn sai tô đỏ.
 - Resume với `initialProgress.responses=[{id:'q1',response:'B',correct:true}]` → hiện câu 2, không hiện câu 1.
-- Hết giờ với `remainingSeconds=1` + fake timers → `onSaveProgress` nhận `completed:true` và pending responses; `onComplete` được gọi.
+- Hết giờ với `remainingSeconds=1` + fake timers → `onSaveProgress` nhận `{ responses: [], completed:true }` (không gửi câu mới sau hạn); `onComplete` được gọi.
 - Câu cuối: nút **Xem kết quả** gọi `completed:true`; nếu còn câu chưa làm, hiện confirm trước.
 - `onExit` khi bấm quay lại.
 - Câu hỏi chứa `<script>alert(1)</script>` hiển thị nguyên văn; `document.querySelector('script')` là null.

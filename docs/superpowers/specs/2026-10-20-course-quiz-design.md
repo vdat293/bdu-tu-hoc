@@ -524,6 +524,7 @@ Xử lý trong transaction, khóa progress `FOR UPDATE`:
    - Chấm lại toàn bộ merged entries bằng `gradeQuizResponse`; lưu `{ id, response, correct }` với `correct` do server tính.
 6. `answered = merged.length`; `correct_count = merged.filter(correct).length`.
 7. Nếu `completed === true`:
+   - Nếu đã hết giờ và `responses` có entry mới → `409 QUIZ_TIME_UP`; chỉ chấp nhận finalize với `responses: []` từ dữ liệu đã lưu.
    - Nếu `answered === 0` và chưa hết giờ → `400 Hãy trả lời ít nhất một câu trước khi nộp bài.`
    - `total_count = question_count`.
    - `completed_at = NOW()`.
@@ -636,7 +637,7 @@ Không đổi `deleteCoursePost`. FK `ON DELETE CASCADE` xóa `course_quizzes` v
 
 - Timer client chạy theo `remaining_seconds`; khi về 0:
   - Khóa toàn bộ lựa chọn.
-  - Gọi POST progress `{ responses: [...các câu đã kiểm tra nhưng chưa lưu], completed: true }` (gửi `[]` nếu mọi câu đã lưu).
+  - Gọi POST progress `{ responses: [], completed: true }`: server chỉ finalize các response **đã lưu**, không nhận response mới sau hạn. Client autosave ngay sau mỗi câu đã kiểm tra để giảm rủi ro mất câu cuối.
   - Server cho phép nộp dù 0 câu hoặc thiếu câu; `total_count = question_count`.
   - Hiện kết quả + thông báo "Đã hết thời gian làm bài."
 - Nếu người dùng reload sau khi hết giờ: GET trả `remaining_seconds=0`, `expired=true`; UI hiện nút **Xem kết quả** thay vì cho làm tiếp.
