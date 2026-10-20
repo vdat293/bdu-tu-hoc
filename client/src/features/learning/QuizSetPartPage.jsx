@@ -15,6 +15,7 @@ import {
 } from '../../components/identity/Identity.jsx';
 import QuizReviewRunner from './QuizReviewRunner.jsx';
 import QuizSetResultView from './QuizSetResultView.jsx';
+import QuizTestRunner from './QuizTestRunner.jsx';
 import './quiz.css';
 
 const MODES = new Set(['review', 'test']);
@@ -55,6 +56,10 @@ export default function QuizSetPartPage() {
   const [runProgress, setRunProgress] = useState(null);
   const [resultProgress, setResultProgress] = useState(null);
   const [testStarted, setTestStarted] = useState(false);
+  const [testRunKey, setTestRunKey] = useState(0);
+  const [testRunProgress, setTestRunProgress] = useState(null);
+  const [testRemaining, setTestRemaining] = useState(null);
+  const [testResultReview, setTestResultReview] = useState(null);
 
   // The route element is reused when only params change: never keep a runner
   // or result from another part/mode on screen.
@@ -63,6 +68,9 @@ export default function QuizSetPartPage() {
     setRunProgress(null);
     setResultProgress(null);
     setTestStarted(false);
+    setTestRunProgress(null);
+    setTestRemaining(null);
+    setTestResultReview(null);
   }, [courseCode, setId, partIndex, mode]);
 
   const goBack = useCallback(() => {
@@ -81,19 +89,36 @@ export default function QuizSetPartPage() {
     ),
     onSuccess: async (startData) => {
       let nextProgress = startData?.restarted ? null : partQuery.data?.progress || null;
+      let refreshedData = null;
       try {
         const refreshed = await refetch();
-        nextProgress = refreshed.data?.progress || nextProgress;
+        refreshedData = refreshed.data || null;
+        nextProgress = refreshedData?.progress || nextProgress;
       } catch {
         // The runner can still open with the last known progress; review
         // autosave/resume will reconcile from the server on the next action.
       }
       setResultProgress(null);
+      setTestResultReview(null);
       if (isReview) {
         setRunProgress(nextProgress);
         setRunKey((key) => key + 1);
         setStarted(true);
       } else {
+        // The countdown is authoritative from start (DB NOW()); the detail
+        // endpoint exposes no remaining seconds, so fall back to the part
+        // time limit only when start omits it.
+        const startRemaining = startData?.remaining_seconds;
+        const limitSeconds = Number(
+          refreshedData?.part?.time_limit_seconds ?? partQuery.data?.part?.time_limit_seconds ?? 0
+        );
+        setTestRunProgress(nextProgress);
+        setTestRemaining(
+          typeof startRemaining === 'number' && Number.isFinite(startRemaining)
+            ? startRemaining
+            : (limitSeconds > 0 ? limitSeconds : null)
+        );
+        setTestRunKey((key) => key + 1);
         setTestStarted(true);
       }
     },
@@ -124,10 +149,40 @@ export default function QuizSetPartPage() {
     [token, courseCode, setId, parsedPartIndex]
   );
 
+  const handleSaveTestProgress = useCallback(
+    (payload) => saveQuizPartProgress(
+      token,
+      courseCode,
+      setId,
+      parsedPartIndex,
+      { mode: 'test', responses: payload?.responses, completed: payload?.completed }
+    ),
+    [token, courseCode, setId, parsedPartIndex]
+  );
+
   const handleComplete = useCallback((savedProgress) => {
     setStarted(false);
     setResultProgress(savedProgress || null);
     refetch();
+    client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
+  }, [refetch, client, courseCode]);
+
+  // After the test attempt is finalized server-side, refetch the part so the
+  // result shows the graded progress (score/best/attempts) plus the completed
+  // test answer key (`review`); fall back to the save response on refetch failure.
+  const handleTestComplete = useCallback(async (savedProgress) => {
+    let nextProgress = savedProgress || null;
+    let nextReview = null;
+    try {
+      const refreshed = await refetch();
+      nextProgress = refreshed.data?.progress || nextProgress;
+      nextReview = Array.isArray(refreshed.data?.review) ? refreshed.data.review : null;
+    } catch {
+      // Still show the result from the save response.
+    }
+    setTestStarted(false);
+    setResultProgress(nextProgress);
+    setTestResultReview(nextReview);
     client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
   }, [refetch, client, courseCode]);
 
@@ -141,6 +196,20 @@ export default function QuizSetPartPage() {
     }
     setStarted(false);
     setResultProgress(null);
+    client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
+  }, [refetch, client, courseCode]);
+
+  // Leaving a test attempt flushes its latest selections first (inside the
+  // runner); the landing then refetches so resume state is never stale.
+  const handleTestExit = useCallback(async () => {
+    try {
+      await refetch();
+    } catch {
+      // Still return to the landing with the last known progress.
+    }
+    setTestStarted(false);
+    setResultProgress(null);
+    setTestResultReview(null);
     client.invalidateQueries({ queryKey: ['quiz-sets', courseCode] });
   }, [refetch, client, courseCode]);
 
@@ -268,6 +337,43 @@ export default function QuizSetPartPage() {
     );
   }
 
+  if (!isReview && testStarted) {
+    return (
+      <div className="quiz-page">
+        {breadcrumb}
+        <h1 className="quiz-page-title">{set.title}</h1>
+        <QuizTestRunner
+          key={testRunKey}
+          questions={questions}
+          initialProgress={testRunProgress}
+          remainingSeconds={testRemaining}
+          onSubmit={handleSaveTestProgress}
+          onComplete={handleTestComplete}
+          onExit={handleTestExit}
+        />
+      </div>
+    );
+  }
+
+  if (!isReview && resultData) {
+    return (
+      <div className="quiz-page">
+        {breadcrumb}
+        <h1 className="quiz-page-title">{set.title}</h1>
+        <QuizSetResultView
+          mode="test"
+          part={part}
+          questions={questions}
+          progress={resultData}
+          review={testResultReview}
+          onRestart={() => handleStart(true)}
+          onBack={goBack}
+          restarting={startMutation.isPending}
+        />
+      </div>
+    );
+  }
+
   const partNumber = Number(part.index) + 1;
   const authorName = getIdentityName(set.author, null);
   const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
@@ -351,9 +457,6 @@ export default function QuizSetPartPage() {
             </>
           )}
         </ul>
-        {!isReview && testStarted && (
-          <p className="quiz-part-notice" role="status">Đã bắt đầu lượt kiểm tra.</p>
-        )}
         <div className="quiz-page-actions">
           <button
             type="button"

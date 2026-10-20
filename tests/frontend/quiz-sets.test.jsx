@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -613,6 +613,7 @@ describe('QuizSetPartPage review mode', () => {
 
 describe('QuizSetPartPage test mode landing', () => {
   it('shows test meta and starts with mode test', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     mocks.getQuizPart.mockResolvedValue(makePartData({
       part: { index: 0, question_count: 2, time_limit_seconds: 1800 },
       progress: {
@@ -641,6 +642,327 @@ describe('QuizSetPartPage test mode landing', () => {
       mode: 'test',
       restart: false
     }));
-    expect(await screen.findByText('Đã bắt đầu lượt kiểm tra.')).toBeInTheDocument();
+    // The interim notice is replaced by the test runner: timer, palette, no feedback.
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    expect(screen.getByText('Câu 1/2')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toHaveTextContent('30:00');
+    expect(screen.getByRole('button', { name: 'Câu 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Câu 2' })).toBeInTheDocument();
+  });
+});
+
+function makeTestPartData(overrides = {}) {
+  return makePartData({
+    part: { index: 0, question_count: 2, time_limit_seconds: 1800 },
+    questions: [
+      { id: 'q1', question: 'Câu hỏi số 1?', options: ['Đáp án A', 'Đáp án B'] },
+      { id: 'q2', question: 'Câu hỏi số 2?', options: ['Đáp án C', 'Đáp án D'] }
+    ],
+    ...overrides
+  });
+}
+
+function renderTestPartPage() {
+  return renderPartPage('/learning/CSC101/quiz-sets/7/parts/0/test');
+}
+
+function completedTestPartData({ answered = 2, correctCount = 2, bestCorrect = 2, attempts = 1 } = {}) {
+  return makeTestPartData({
+    progress: {
+      answered,
+      total_count: 2,
+      completed_at: '2026-10-20T00:00:00Z',
+      best_correct: bestCorrect,
+      best_total: 2,
+      attempts,
+      responses: answered > 1
+        ? [
+          { id: 'q1', response: 'Đáp án A', correct: true },
+          { id: 'q2', response: 'Đáp án D', correct: correctCount > 1 }
+        ]
+        : answered > 0
+          ? [{ id: 'q1', response: 'Đáp án A', correct: true }]
+          : []
+    },
+    review: [
+      { id: 'q1', correct: 'Đáp án A', explanation: 'Giải thích câu 1.' },
+      { id: 'q2', correct: 'Đáp án D', explanation: 'Giải thích câu 2.' }
+    ]
+  });
+}
+
+describe('QuizSetPartPage test mode runner', () => {
+  it('selects and changes answers with no feedback and no correctness leak', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makeTestPartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockResolvedValue({ answered: 1, total_count: 2, completed_at: null });
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    expect(screen.getByRole('radio', { name: 'Đáp án A' })).toHaveAttribute('aria-checked', 'true');
+
+    // No immediate feedback and no answer key leak before completion.
+    expect(screen.queryByText('Chính xác!')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chưa chính xác.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Đáp án đúng: Đáp án A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Giải thích câu 1.')).not.toBeInTheDocument();
+
+    // The selection can still be changed before submit.
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án B' }));
+    expect(screen.getByRole('radio', { name: 'Đáp án B' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Đáp án đúng: Đáp án B')).not.toBeInTheDocument();
+  });
+
+  it('navigates prev/next, marks the palette answered and autosaves the latest answers', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makeTestPartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockResolvedValue({ answered: 1, total_count: 2, completed_at: null });
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: 'Câu trước' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    // Change before navigating: only the latest answer may be autosaved.
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án B' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      { mode: 'test', responses: [{ id: 'q1', response: 'Đáp án B' }], completed: false }
+    ));
+    // Autosaved payloads never carry a correctness flag before completion.
+    for (const call of mocks.saveQuizPartProgress.mock.calls) {
+      expect(call[4].mode).toBe('test');
+      for (const entry of call[4].responses) expect(entry).not.toHaveProperty('correct');
+    }
+
+    expect(screen.getByRole('button', { name: 'Câu 1' }).className).toMatch(/is-answered/);
+    expect(screen.getByRole('button', { name: 'Câu 2' }).className).toMatch(/is-current/);
+    expect(screen.getByRole('button', { name: 'Câu tiếp' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Câu 1' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Đáp án B' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('disables empty submit, confirms a partial submit and shows score/best/attempts/review', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    let partData = makeTestPartData();
+    mocks.getQuizPart.mockImplementation(() => Promise.resolve(partData));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockImplementation((token, code, setId, partIndex, payload) => Promise.resolve({
+      answered: payload.responses.length,
+      total_count: 2,
+      completed_at: payload.completed ? '2026-10-20T00:00:00Z' : null,
+      best_correct: payload.completed ? 1 : null,
+      best_total: payload.completed ? 2 : null,
+      attempts: payload.completed ? 1 : 0,
+      correct_count: payload.completed ? 1 : undefined,
+      responses: payload.responses.map((entry) => ({ ...entry, correct: entry.id === 'q1' }))
+    }));
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: 'Nộp bài' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    const submit = await screen.findByRole('button', { name: 'Nộp bài' });
+    await waitFor(() => expect(submit).not.toBeDisabled());
+    fireEvent.click(submit);
+
+    const dialog = await screen.findByRole('alertdialog', { name: 'Nộp bài?' });
+    expect(within(dialog).getByText(/Còn 1 câu chưa làm/)).toBeInTheDocument();
+    partData = completedTestPartData({ answered: 1, correctCount: 1, bestCorrect: 1, attempts: 1 });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nộp bài' }));
+
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      { mode: 'test', responses: [{ id: 'q1', response: 'Đáp án A' }], completed: true }
+    ));
+
+    expect(await screen.findByText('50%')).toBeInTheDocument();
+    expect(screen.getByText('1/2 câu đúng')).toBeInTheDocument();
+    expect(screen.getByText('Cao nhất 1/2')).toBeInTheDocument();
+    expect(screen.getByText('1 lượt làm')).toBeInTheDocument();
+    expect(screen.getByText('Đáp án đúng: Đáp án A')).toBeInTheDocument();
+    expect(screen.getByText('Giải thích câu 1.')).toBeInTheDocument();
+    expect(screen.getByText('Chưa trả lời')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Làm lại' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Về môn' })).toBeInTheDocument();
+  });
+
+  it('submits all answers directly and shows the full score', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    let partData = makeTestPartData();
+    mocks.getQuizPart.mockImplementation(() => Promise.resolve(partData));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockImplementation((token, code, setId, partIndex, payload) => Promise.resolve({
+      answered: payload.responses.length,
+      total_count: 2,
+      completed_at: payload.completed ? '2026-10-20T00:00:00Z' : null,
+      best_correct: payload.completed ? 2 : null,
+      best_total: payload.completed ? 2 : null,
+      attempts: payload.completed ? 1 : 0,
+      correct_count: payload.completed ? 2 : undefined,
+      responses: payload.responses.map((entry) => ({ ...entry, correct: true }))
+    }));
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
+
+    partData = completedTestPartData();
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+
+    await waitFor(() => expect(mocks.saveQuizPartProgress).toHaveBeenCalledWith(
+      'test-token',
+      'CSC101',
+      '7',
+      0,
+      {
+        mode: 'test',
+        responses: [
+          { id: 'q1', response: 'Đáp án A' },
+          { id: 'q2', response: 'Đáp án D' }
+        ],
+        completed: true
+      }
+    ));
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('2/2 câu đúng')).toBeInTheDocument();
+    expect(screen.getByText('Cao nhất 2/2')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('auto-submits an empty payload on timeout and retries after a save failure', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    let partData = makeTestPartData();
+    let timeoutSaveFailed = false;
+    mocks.getQuizPart.mockImplementation(() => Promise.resolve(partData));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockImplementation((token, code, setId, partIndex, payload) => {
+      // Only the first timeout finalize fails; autosaves and the retry succeed.
+      if (payload?.completed && !timeoutSaveFailed) {
+        timeoutSaveFailed = true;
+        return Promise.reject(new Error('Lỗi mạng.'));
+      }
+      return Promise.resolve({
+        answered: payload?.completed ? 0 : payload.responses.length,
+        total_count: 2,
+        completed_at: payload?.completed ? '2026-10-20T00:00:00Z' : null,
+        best_correct: payload?.completed ? 0 : null,
+        best_total: payload?.completed ? 2 : null,
+        attempts: payload?.completed ? 1 : 0,
+        correct_count: payload?.completed ? 0 : undefined,
+        responses: payload?.completed ? [] : payload.responses
+      });
+    });
+
+    renderTestPartPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu kiểm tra' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
+
+    // The deadline discards in-flight selections: the timeout payload is empty.
+    await waitFor(() => {
+      const completedCalls = mocks.saveQuizPartProgress.mock.calls.filter((call) => call[4]?.completed === true);
+      expect(completedCalls).toHaveLength(1);
+      expect(completedCalls[0][4]).toEqual({ mode: 'test', responses: [], completed: true });
+    }, { timeout: 5000 });
+
+    expect(await screen.findByText('Đã hết thời gian làm bài.')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa lưu được kết quả. Vui lòng thử lại.')).toBeInTheDocument();
+
+    partData = completedTestPartData({ answered: 0, correctCount: 0, bestCorrect: 0, attempts: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lưu kết quả lại' }));
+
+    await waitFor(() => {
+      const completedCalls = mocks.saveQuizPartProgress.mock.calls.filter((call) => call[4]?.completed === true);
+      expect(completedCalls).toHaveLength(2);
+    }, { timeout: 5000 });
+    expect(await screen.findByText('0/2 câu đúng')).toBeInTheDocument();
+  });
+
+  it('resumes an in-progress test at the first unanswered question', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makeTestPartData({
+      progress: {
+        answered: 1,
+        total_count: 2,
+        completed_at: null,
+        best_correct: null,
+        best_total: null,
+        attempts: 0,
+        responses: [{ id: 'q1', response: 'Đáp án A' }]
+      }
+    }));
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1700, restarted: false, completed_at: null });
+    mocks.saveQuizPartProgress.mockResolvedValue({ answered: 1, total_count: 2, completed_at: null });
+
+    renderTestPartPage();
+    expect(await screen.findByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Làm tiếp' }));
+
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toHaveTextContent('28:20');
+    fireEvent.click(screen.getByRole('button', { name: 'Câu 1' }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Đáp án A' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Đáp án đúng: Đáp án A')).not.toBeInTheDocument();
+  });
+
+  it('restarts a completed test with restart:true and opens a fresh runner', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    const completed = completedTestPartData({ answered: 2, correctCount: 2, bestCorrect: 2, attempts: 2 });
+    mocks.getQuizPart
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValue(makeTestPartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: 1800, restarted: true, completed_at: null });
+    mocks.saveQuizPartProgress.mockResolvedValue({ answered: 0, total_count: 2, completed_at: null });
+
+    renderTestPartPage();
+    expect(await screen.findByText('Cao nhất 2/2')).toBeInTheDocument();
+    expect(screen.getByText('2 lượt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Làm lại' }));
+
+    await waitFor(() => expect(mocks.startQuizPart).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'test',
+      restart: true
+    }));
+    expect(await screen.findByText('Câu hỏi số 1?')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Đáp án A' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('renders the error branch with a back link when the test part is missing', async () => {
+    mocks.getQuizPart.mockRejectedValue(Object.assign(new Error('Không tìm thấy bộ đề.'), { status: 404 }));
+
+    renderTestPartPage();
+
+    expect(await screen.findByText('Không tìm thấy phần của bộ đề này.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Về môn' }));
+    expect(await screen.findByText('Không gian môn')).toBeInTheDocument();
   });
 });
