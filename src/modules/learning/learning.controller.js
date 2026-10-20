@@ -2,7 +2,6 @@ import { BduService } from '../../services/bdu.service.js';
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { LearningService } from '../../services/learning.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
-import { allowRequest } from '../../utils/request-rate-limit.js';
 
 function sendLearningError(res, err, fallbackMessage) {
   const status = err.status || 500;
@@ -53,103 +52,10 @@ export const LearningController = {
     }
   },
 
-  async getCourseQuiz(req, res) {
-    try {
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.setHeader('Vary', 'Authorization');
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-      const data = await LearningService.getCourseQuiz(
-        mssv,
-        req.params.courseCode,
-        req.params.postId
-      );
-      return res.json({ result: true, data });
-    } catch (err) {
-      return sendLearningError(res, err, 'Không thể tải bài trắc nghiệm.');
-    }
-  },
-
-  async startCourseQuiz(req, res) {
-    try {
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-      if (!allowRequest(`course-quiz-start:${mssv}`, { limit: 120, windowMs: 10 * 60 * 1000 })) {
-        return res.status(429).json({
-          result: false,
-          code: 'RATE_LIMITED',
-          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
-        });
-      }
-      const body = req.body || {};
-      const data = await LearningService.startCourseQuiz(
-        mssv,
-        req.params.courseCode,
-        req.params.postId,
-        { restart: body.restart === true }
-      );
-      return res.json({ result: true, data });
-    } catch (err) {
-      return sendLearningError(res, err, 'Không thể bắt đầu bài trắc nghiệm.');
-    }
-  },
-
-  async answerCourseQuiz(req, res) {
-    try {
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-      if (!allowRequest(`course-quiz-answer:${mssv}`, { limit: 600, windowMs: 10 * 60 * 1000 })) {
-        return res.status(429).json({
-          result: false,
-          code: 'RATE_LIMITED',
-          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
-        });
-      }
-      const body = req.body || {};
-      const data = await LearningService.answerCourseQuiz(
-        mssv,
-        req.params.courseCode,
-        req.params.postId,
-        { questionId: body.questionId, response: body.response }
-      );
-      return res.json({ result: true, data });
-    } catch (err) {
-      return sendLearningError(res, err, 'Không thể chấm câu trả lời trắc nghiệm.');
-    }
-  },
-
-  async saveCourseQuizProgress(req, res) {
-    try {
-      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-      if (!allowRequest(`course-quiz-save:${mssv}`, { limit: 240, windowMs: 10 * 60 * 1000 })) {
-        return res.status(429).json({
-          result: false,
-          code: 'RATE_LIMITED',
-          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
-        });
-      }
-      const body = req.body || {};
-      const data = await LearningService.saveCourseQuizProgress(
-        mssv,
-        req.params.courseCode,
-        req.params.postId,
-        { responses: body.responses, completed: body.completed }
-      );
-      return res.json({ result: true, data });
-    } catch (err) {
-      return sendLearningError(res, err, 'Không thể lưu tiến độ trắc nghiệm.');
-    }
-  },
-
   async createCourseLearningPost(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const body = req.body || {};
-      if (String(body.kind || '').trim().toLowerCase() === 'quiz'
-        && !allowRequest(`course-quiz-create:${mssv}`, { limit: 20, windowMs: 60 * 60 * 1000 })) {
-        return res.status(429).json({
-          result: false,
-          code: 'RATE_LIMITED',
-          message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau.'
-        });
-      }
       const post = await LearningService.createCoursePost(
         mssv,
         req.params.courseCode,

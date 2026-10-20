@@ -14,8 +14,12 @@ export function registerLearningRoutes(router, deps = {}) {
   router.post('/learning/courses/:courseCode/posts/:postId/like', ApiController.toggleCourseLearningPostLike);
   router.get('/learning/courses/:courseCode/posts/:postId/comments', ApiController.getCourseLearningPostComments);
   router.post('/learning/courses/:courseCode/posts/:postId/comments', ApiController.addCourseLearningPostComment);
-  router.get('/learning/courses/:courseCode/posts/:postId/quiz', ApiController.getCourseQuiz);
-  router.post('/learning/courses/:courseCode/posts/:postId/quiz/start', ApiController.startCourseQuiz);
-  router.post('/learning/courses/:courseCode/posts/:postId/quiz/answer', ApiController.answerCourseQuiz);
-  router.post('/learning/courses/:courseCode/posts/:postId/quiz/progress', ApiController.saveCourseQuizProgress);
+
+  router.get('/learning/courses/:courseCode/quiz-sets', ApiController.listQuizSets);
+  router.post('/learning/courses/:courseCode/quiz-sets', ApiController.createQuizSet);
+  router.delete('/learning/courses/:courseCode/quiz-sets/:setId', ApiController.deleteQuizSet);
+  router.get('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex', ApiController.getQuizSetPart);
+  router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/start', ApiController.startQuizSetPart);
+  router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/answer', ApiController.answerQuizSetReview);
+  router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/progress', ApiController.saveQuizSetProgress);
 }
