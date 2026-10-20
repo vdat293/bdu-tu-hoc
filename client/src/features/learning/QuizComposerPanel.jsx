@@ -79,7 +79,7 @@ export default function QuizComposerPanel({ text, onChangeText, onValidQuiz, onI
         content = await file.text();
       } else {
         content = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
+          const reader = new window.FileReader();
           reader.onload = () => resolve(String(reader.result || ''));
           reader.onerror = () => reject(reader.error);
           reader.readAsText(file);
