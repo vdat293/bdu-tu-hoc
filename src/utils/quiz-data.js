@@ -10,6 +10,15 @@ export const QUIZ_MIN_OPTIONS = 2;
 export const QUIZ_MAX_OPTIONS = 6;
 export const QUIZ_DEFAULT_TIME_LIMIT = 0;
 
+export const QUIZ_SET_MAX_QUESTIONS = 500;
+export const QUIZ_SET_MAX_PARTS = 20;
+export const QUIZ_SET_MIN_PER_PART = 5;
+export const QUIZ_SET_MAX_PER_PART = 25;
+export const QUIZ_SET_DEFAULT_MAX_PER_PART = 20;
+export const QUIZ_SET_MIN_MINUTES_PER_PART = 5;
+export const QUIZ_SET_MAX_MINUTES_PER_PART = 180;
+export const QUIZ_SET_DEFAULT_MINUTES_PER_PART = 30;
+
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 function hasControlChar(value) {
@@ -62,6 +71,152 @@ function validateTimeLimit(errors, value) {
 }
 
 const ID_RE = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Chuẩn hóa + validate một câu hỏi bdu-quiz/v1.
+ * `ignoreId` dùng khi gộp nhiều file: bỏ ID gốc và cấp lại ID toàn cục sau đó.
+ */
+function normalizeQuestion(raw, idx, errors, {
+  hasAnyId = false,
+  seenIds = new Set(),
+  ignoreId = false
+} = {}) {
+  const qPath = `questions[${idx}]`;
+  if (!isPlainObject(raw)) {
+    pushError(errors, qPath, `Câu ${idx + 1}: phải là object.`);
+    return null;
+  }
+
+  // id
+  let id = undefined;
+  if (!ignoreId) {
+    if (Object.prototype.hasOwnProperty.call(raw, 'id')) {
+      if (typeof raw.id !== 'string') {
+        pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id phải là chuỗi.`);
+      } else {
+        const nid = cleanText(raw.id);
+        if (nid.length < 1 || nid.length > 64 || !ID_RE.test(nid) || hasControlChar(nid)) {
+          pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id không hợp lệ.`);
+        } else {
+          id = nid;
+        }
+      }
+    } else if (hasAnyId) {
+      pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: thiếu id.`);
+    }
+  }
+
+  // question
+  let questionText = null;
+  if (typeof raw.question !== 'string') {
+    pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question phải là chuỗi.`);
+  } else {
+    const nq = cleanText(raw.question);
+    if (nq.length < 1 || nq.length > 2000) {
+      pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question phải từ 1 đến 2000 ký tự.`);
+    } else if (hasControlChar(nq)) {
+      pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question chứa ký tự điều khiển.`);
+    } else {
+      questionText = nq;
+    }
+  }
+
+  // options
+  let options = null;
+  if (!Array.isArray(raw.options)) {
+    pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options phải là mảng.`);
+  } else {
+    if (raw.options.length < QUIZ_MIN_OPTIONS || raw.options.length > QUIZ_MAX_OPTIONS) {
+      pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options phải có ${QUIZ_MIN_OPTIONS}–${QUIZ_MAX_OPTIONS} lựa chọn.`);
+    }
+    const opts = [];
+    let optOk = true;
+    raw.options.forEach((opt, oi) => {
+      if (typeof opt !== 'string') {
+        pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] phải là chuỗi.`);
+        optOk = false;
+        return;
+      }
+      const no = cleanText(opt);
+      if (no.length < 1 || no.length > 500) {
+        pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] phải từ 1 đến 500 ký tự.`);
+        optOk = false;
+        return;
+      }
+      if (hasControlChar(no)) {
+        pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] chứa ký tự điều khiển.`);
+        optOk = false;
+        return;
+      }
+      opts.push(no);
+    });
+    if (optOk && opts.length >= QUIZ_MIN_OPTIONS && opts.length <= QUIZ_MAX_OPTIONS) {
+      // duplicate check
+      const seen = new Set();
+      let dup = false;
+      for (const o of opts) {
+        const key = o.toLocaleLowerCase('vi-VN');
+        if (seen.has(key)) { dup = true; break; }
+        seen.add(key);
+      }
+      if (dup) {
+        pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options trùng nhau.`);
+      } else {
+        options = opts;
+      }
+    }
+  }
+
+  // correct: nội dung option (trim + case-insensitive), lưu chuỗi option gốc (canonical)
+  let correct = null;
+  if (typeof raw.correct !== 'string') {
+    pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là chuỗi.`);
+  } else if (options) {
+    const matched = matchOption(options, raw.correct);
+    if (matched === null) {
+      pushError(
+        errors,
+        `${qPath}.correct`,
+        `Câu ${idx + 1}: correct phải trùng một lựa chọn trong options.`
+      );
+    } else {
+      correct = matched;
+    }
+  }
+
+  // explanation (optional)
+  let explanation = '';
+  if (raw.explanation !== undefined && raw.explanation !== null) {
+    if (typeof raw.explanation !== 'string') {
+      pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation phải là chuỗi.`);
+    } else {
+      const ne = cleanText(raw.explanation);
+      if (ne.length > 2000) {
+        pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation vượt quá 2000 ký tự.`);
+      } else if (hasControlChar(ne)) {
+        pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation chứa ký tự điều khiển.`);
+      } else {
+        explanation = ne;
+      }
+    }
+  }
+
+  if (id !== undefined) {
+    if (seenIds.has(id)) {
+      pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id trùng.`);
+    } else {
+      seenIds.add(id);
+    }
+  }
+
+  return {
+    id,
+    question: questionText,
+    options,
+    correct,
+    explanation
+  };
+}
 
 export function normalizeQuiz(input) {
   const errors = [];
@@ -125,149 +280,10 @@ export function normalizeQuiz(input) {
   const hasAnyId = rawQuestions.some((q) => isPlainObject(q) && Object.prototype.hasOwnProperty.call(q, 'id'));
 
   // normalize each question
-  const normalizedQuestions = [];
   const seenIds = new Set();
-  rawQuestions.forEach((q, idx) => {
-    const qPath = `questions[${idx}]`;
-    if (!isPlainObject(q)) {
-      pushError(errors, qPath, `Câu ${idx + 1}: phải là object.`);
-      return;
-    }
-
-    // id
-    let id = undefined;
-    if (Object.prototype.hasOwnProperty.call(q, 'id')) {
-      if (typeof q.id !== 'string') {
-        pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id phải là chuỗi.`);
-      } else {
-        const nid = cleanText(q.id);
-        if (nid.length < 1 || nid.length > 64 || !ID_RE.test(nid) || hasControlChar(nid)) {
-          pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id không hợp lệ.`);
-        } else {
-          id = nid;
-        }
-      }
-    } else if (hasAnyId) {
-      pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: thiếu id.`);
-    }
-
-    // question
-    let questionText = null;
-    if (typeof q.question !== 'string') {
-      pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question phải là chuỗi.`);
-    } else {
-      const nq = cleanText(q.question);
-      if (nq.length < 1 || nq.length > 2000) {
-        pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question phải từ 1 đến 2000 ký tự.`);
-      } else if (hasControlChar(nq)) {
-        pushError(errors, `${qPath}.question`, `Câu ${idx + 1}: question chứa ký tự điều khiển.`);
-      } else {
-        questionText = nq;
-      }
-    }
-
-    // options
-    let options = null;
-    if (!Array.isArray(q.options)) {
-      pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options phải là mảng.`);
-    } else {
-      if (q.options.length < QUIZ_MIN_OPTIONS || q.options.length > QUIZ_MAX_OPTIONS) {
-        pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options phải có ${QUIZ_MIN_OPTIONS}–${QUIZ_MAX_OPTIONS} lựa chọn.`);
-      }
-      const opts = [];
-      let optOk = true;
-      q.options.forEach((opt, oi) => {
-        if (typeof opt !== 'string') {
-          pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] phải là chuỗi.`);
-          optOk = false;
-          return;
-        }
-        const no = cleanText(opt);
-        if (no.length < 1 || no.length > 500) {
-          pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] phải từ 1 đến 500 ký tự.`);
-          optOk = false;
-          return;
-        }
-        if (hasControlChar(no)) {
-          pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options[${oi}] chứa ký tự điều khiển.`);
-          optOk = false;
-          return;
-        }
-        opts.push(no);
-      });
-      if (optOk && opts.length >= QUIZ_MIN_OPTIONS && opts.length <= QUIZ_MAX_OPTIONS) {
-        // duplicate check
-        const seen = new Set();
-        let dup = false;
-        for (const o of opts) {
-          const key = o.toLocaleLowerCase('vi-VN');
-          if (seen.has(key)) { dup = true; break; }
-          seen.add(key);
-        }
-        if (dup) {
-          pushError(errors, `${qPath}.options`, `Câu ${idx + 1}: options trùng nhau.`);
-        } else {
-          options = opts;
-        }
-      }
-    }
-
-    // correct: nội dung option (trim + case-insensitive), lưu chuỗi option gốc (canonical)
-    let correct = null;
-    if (typeof q.correct !== 'string') {
-      pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là chuỗi.`);
-    } else if (options) {
-      const matched = matchOption(options, q.correct);
-      if (matched === null) {
-        pushError(
-          errors,
-          `${qPath}.correct`,
-          `Câu ${idx + 1}: correct phải trùng một lựa chọn trong options.`
-        );
-      } else {
-        correct = matched;
-      }
-    }
-
-    // explanation (optional)
-    let explanation = '';
-    if (q.explanation !== undefined && q.explanation !== null) {
-      if (typeof q.explanation !== 'string') {
-        pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation phải là chuỗi.`);
-      } else {
-        const ne = cleanText(q.explanation);
-        if (ne.length > 2000) {
-          pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation vượt quá 2000 ký tự.`);
-        } else if (hasControlChar(ne)) {
-          pushError(errors, `${qPath}.explanation`, `Câu ${idx + 1}: explanation chứa ký tự điều khiển.`);
-        } else {
-          explanation = ne;
-        }
-      }
-    }
-
-    // id uniqueness check later; store id maybe undefined if invalid
-    // Only build if no errors for this question? We'll collect and decide at end.
-    // Track id for uniqueness
-    if (id !== undefined) {
-      if (seenIds.has(id)) {
-        pushError(errors, `${qPath}.id`, `Câu ${idx + 1}: id trùng.`);
-      } else {
-        seenIds.add(id);
-      }
-    }
-
-    // If hasAnyId and id undefined due to error, skip build
-    normalizedQuestions.push({
-      _idx: idx,
-      id,
-      question: questionText,
-      options,
-      correct,
-      explanation,
-      _hasId: Object.prototype.hasOwnProperty.call(q, 'id')
-    });
-  });
+  const normalizedQuestions = rawQuestions.map((q, idx) =>
+    normalizeQuestion(q, idx, errors, { hasAnyId, seenIds })
+  );
 
   // If any errors, return failure
   if (errors.length > 0) {
@@ -344,6 +360,131 @@ export function publicQuizQuestions(questions) {
     question: q.question,
     options: Array.isArray(q.options) ? [...q.options] : []
   }));
+}
+
+function isIntegerInRange(value, min, max) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+/**
+ * Chia total câu thành các phần, mỗi phần ≤ maxPerPart.
+ * Các phần đầu bằng ceil(total / partCount), phần cuối nhận phần còn lại
+ * (ví dụ 65/20 -> [17,17,17,14], 65/25 -> [22,22,21]).
+ * Trả [] nếu input không hợp lệ hoặc vượt quá 20 phần.
+ */
+export function splitQuestionCounts(total, maxPerPart) {
+  if (!isIntegerInRange(total, 1, QUIZ_SET_MAX_QUESTIONS)) return [];
+  if (!isIntegerInRange(maxPerPart, QUIZ_SET_MIN_PER_PART, QUIZ_SET_MAX_PER_PART)) return [];
+
+  const partCount = Math.ceil(total / maxPerPart);
+  if (partCount < 1 || partCount > QUIZ_SET_MAX_PARTS) return [];
+
+  const chunkSize = Math.ceil(total / partCount);
+  return Array.from(
+    { length: partCount },
+    (_, index) => (index === partCount - 1 ? total - chunkSize * (partCount - 1) : chunkSize)
+  );
+}
+
+/**
+ * Gộp câu hỏi từ nhiều file thành một bộ đề: validate lại toàn bộ, bỏ ID gốc,
+ * cấp ID q1..qN, chia phần đều và gán partIndex.
+ */
+export function buildQuizSet(options = {}) {
+  const {
+    questions,
+    maxQuestionsPerPart = QUIZ_SET_DEFAULT_MAX_PER_PART,
+    minutesPerPart = QUIZ_SET_DEFAULT_MINUTES_PER_PART
+  } = isPlainObject(options) ? options : {};
+  const errors = [];
+
+  const maxValid = isIntegerInRange(maxQuestionsPerPart, QUIZ_SET_MIN_PER_PART, QUIZ_SET_MAX_PER_PART);
+  if (!maxValid) {
+    pushError(
+      errors,
+      '$.maxQuestionsPerPart',
+      `maxQuestionsPerPart phải là số nguyên ${QUIZ_SET_MIN_PER_PART}–${QUIZ_SET_MAX_PER_PART}.`
+    );
+  }
+
+  const minutesValid = isIntegerInRange(
+    minutesPerPart,
+    QUIZ_SET_MIN_MINUTES_PER_PART,
+    QUIZ_SET_MAX_MINUTES_PER_PART
+  );
+  if (!minutesValid) {
+    pushError(
+      errors,
+      '$.minutesPerPart',
+      `minutesPerPart phải là số nguyên ${QUIZ_SET_MIN_MINUTES_PER_PART}–${QUIZ_SET_MAX_MINUTES_PER_PART}.`
+    );
+  }
+
+  const questionsIsArray = Array.isArray(questions);
+  if (!questionsIsArray) {
+    pushError(errors, '$.questions', 'questions phải là mảng.');
+  } else if (questions.length < 1 || questions.length > QUIZ_SET_MAX_QUESTIONS) {
+    pushError(errors, '$.questions', `questions phải có 1–${QUIZ_SET_MAX_QUESTIONS} câu.`);
+  }
+
+  const normalizedQuestions = questionsIsArray
+    ? questions.map((q, idx) => normalizeQuestion(q, idx, errors, { ignoreId: true }))
+    : [];
+
+  let partSizes = [];
+  const countValid = questionsIsArray
+    && questions.length >= 1
+    && questions.length <= QUIZ_SET_MAX_QUESTIONS;
+  if (maxValid && countValid) {
+    partSizes = splitQuestionCounts(questions.length, maxQuestionsPerPart);
+    if (partSizes.length === 0) {
+      pushError(
+        errors,
+        '$.questions',
+        `Số câu vượt quá ${QUIZ_SET_MAX_PARTS} phần; hãy tăng số câu tối đa mỗi phần.`
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    return { ok: false, set: null, errors };
+  }
+
+  const partIndexes = [];
+  partSizes.forEach((size, partIndex) => {
+    for (let index = 0; index < size; index += 1) partIndexes.push(partIndex);
+  });
+
+  const builtQuestions = normalizedQuestions.map((question, index) => ({
+    id: `q${index + 1}`,
+    partIndex: partIndexes[index],
+    question: question.question,
+    options: question.options,
+    correct: question.correct,
+    explanation: question.explanation
+  }));
+
+  const set = {
+    questions: builtQuestions,
+    partSizes,
+    partCount: partSizes.length,
+    questionCount: builtQuestions.length,
+    maxQuestionsPerPart,
+    minutesPerPart
+  };
+  return { ok: true, set, errors: [] };
+}
+
+/** Chỉ trả câu hỏi công khai (không đáp án/giải thích) của một phần. */
+export function publicQuizSetQuestions(questions, partIndex) {
+  if (!Array.isArray(questions) || !Number.isInteger(partIndex) || partIndex < 0) return [];
+  return questions
+    .filter((question) => question && question.partIndex === partIndex)
+    .map((question) => ({
+      id: question.id,
+      question: question.question,
+      options: Array.isArray(question.options) ? [...question.options] : []
+    }));
 }
 
 export function gradeQuizResponse(question, response) {

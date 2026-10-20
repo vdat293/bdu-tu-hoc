@@ -69,6 +69,7 @@ export const SAFE_NODE_TESTS = [
   'test-wordfmt-document-type-ui.js',
   'test-grammar.js',
   'test-course-quiz.js',
+  'test-quiz-set-data.js',
   'test-learning-quiz-controller.js',
   'test-broadcast.js',
   'test-profile-controller.js',
