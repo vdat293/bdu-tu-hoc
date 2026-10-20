@@ -44,8 +44,11 @@ function assertSplit(total, max, expected) {
 
 // Các ví dụ chốt trong spec §4.
 assertSplit(60, 20, [20, 20, 20]);
-assertSplit(65, 20, [17, 17, 17, 14]);
+assertSplit(65, 20, [17, 16, 16, 16]);
 assertSplit(65, 25, [22, 22, 21]);
+// 76 câu cần 16 phần khi max 5; hình dạng 5 phần đều (16/15/15/15/15) ứng với max 16.
+assertSplit(76, 5, [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4]);
+assertSplit(76, 16, [16, 15, 15, 15, 15]);
 assertSplit(20, 25, [20]);
 
 // Biên hợp lệ.
@@ -69,7 +72,7 @@ for (const badTotal of [0, -1, 501, 1.5, '60', null, undefined, NaN]) {
 }
 
 // Bất biến: tổng khớp, mọi phần 1..max, số phần ≤ 20, không tăng dần.
-for (const [total, max] of [[1, 5], [7, 5], [25, 20], [60, 20], [65, 20], [65, 25], [500, 25]]) {
+for (const [total, max] of [[1, 5], [7, 5], [25, 20], [60, 20], [65, 20], [65, 25], [76, 5], [76, 16], [500, 25]]) {
   const sizes = splitQuestionCounts(total, max);
   assert.ok(Array.isArray(sizes) && sizes.length > 0, `split(${total}, ${max}) phải trả mảng`);
   assert.ok(sizes.length <= 20, `split(${total}, ${max}) không quá 20 phần`);
@@ -118,13 +121,13 @@ assert.deepEqual(
   'câu đã build có đủ field và không lộ field nội bộ'
 );
 
-// 65 câu / max 20 -> [17,17,17,14] và partIndex đúng biên.
+// 65 câu / max 20 -> [17,16,16,16] và partIndex đúng biên.
 built = buildQuizSet({ questions: makeQuestions(65), maxQuestionsPerPart: 20, minutesPerPart: 30 });
 assert.equal(built.ok, true);
-assert.deepEqual(built.set.partSizes, [17, 17, 17, 14]);
+assert.deepEqual(built.set.partSizes, [17, 16, 16, 16]);
 assert.equal(built.set.partCount, 4);
 assert.equal(built.set.questionCount, 65);
-for (const [index, expectedPart] of [[0, 0], [16, 0], [17, 1], [33, 1], [34, 2], [50, 2], [51, 3], [64, 3]]) {
+for (const [index, expectedPart] of [[0, 0], [16, 0], [17, 1], [32, 1], [33, 2], [48, 2], [49, 3], [64, 3]]) {
   assert.equal(built.set.questions[index].partIndex, expectedPart, `câu ${index + 1} thuộc phần ${expectedPart}`);
 }
 

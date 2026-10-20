@@ -367,9 +367,9 @@ function isIntegerInRange(value, min, max) {
 }
 
 /**
- * Chia total câu thành các phần, mỗi phần ≤ maxPerPart.
- * Các phần đầu bằng ceil(total / partCount), phần cuối nhận phần còn lại
- * (ví dụ 65/20 -> [17,17,17,14], 65/25 -> [22,22,21]).
+ * Chia total câu thành các phần đều nhất có thể, mỗi phần ≤ maxPerPart.
+ * base = floor(total / partCount), remainder phần đầu nhận thêm 1 câu
+ * (ví dụ 65/20 -> [17,16,16,16], 65/25 -> [22,22,21]).
  * Trả [] nếu input không hợp lệ hoặc vượt quá 20 phần.
  */
 export function splitQuestionCounts(total, maxPerPart) {
@@ -379,10 +379,11 @@ export function splitQuestionCounts(total, maxPerPart) {
   const partCount = Math.ceil(total / maxPerPart);
   if (partCount < 1 || partCount > QUIZ_SET_MAX_PARTS) return [];
 
-  const chunkSize = Math.ceil(total / partCount);
+  const base = Math.floor(total / partCount);
+  const remainder = total % partCount;
   return Array.from(
     { length: partCount },
-    (_, index) => (index === partCount - 1 ? total - chunkSize * (partCount - 1) : chunkSize)
+    (_, index) => base + (index < remainder ? 1 : 0)
   );
 }
 
