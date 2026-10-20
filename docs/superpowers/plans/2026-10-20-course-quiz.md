@@ -1145,6 +1145,89 @@ Nếu phải rollback sau khi deploy: rollback code server/client trước, sau 
 
 ---
 
+## Phase 2 — Đổi `correct` sang nội dung option + trộn đề
+
+> **Quan trọng:** Phase 2 (Task 15–18) thay thế cách hiểu `correct` là chữ cái `A–F` trong các Task 1–14. Từ đây, `correct` là **nội dung option**; response lưu nội dung option. Lý do: cho phép xáo thứ tự câu hỏi và options mỗi lượt mà vẫn chấm đúng. Feature chưa deploy nên giữ schema `bdu-quiz/v1`, không cần tương thích dữ liệu cũ.
+
+## Task 15: Shared validator/grading dùng đáp án text
+
+**Files:**
+- Modify: `src/utils/quiz-data.js`
+- Modify: `tests/test-course-quiz.js`
+
+**Interfaces:**
+- `NormalizedQuiz.questions[].correct: string` — luôn là chuỗi option gốc (canonical).
+- `gradeQuizResponse(question, response: string) -> boolean` — so khớp nội dung, trim + case-insensitive.
+- `gradeQuizResponses(questions, responses)` — bỏ entry có response không phải option hợp lệ (không tính là đã trả lời).
+- `quizTemplateJson()` dùng `correct` text.
+
+- [ ] **Step 1: Update failing unit tests**
+  - Fixture hợp lệ: `options: ['Hàng đợi','Ngăn xếp']`, `correct: 'ngăn xếp'` → normalized `correct === 'Ngăn xếp'`.
+  - `correct: 'B'` không trùng option → lỗi `correct phải trùng một lựa chọn`.
+  - `correct` number → lỗi.
+  - Grading: `gradeQuizResponse({options:['a','b'],correct:'b'}, 'B') === true`; `'a' === false`; `'z' === false`.
+  - `gradeQuizResponses` bỏ response `'z'` (không thêm entry), giữ response `'b'` với `correct:true`.
+  - `quizTemplateJson()` parse được và `correct` nằm trong `options`.
+- [ ] **Step 2: Run `node tests/test-course-quiz.js`; confirm RED.**
+- [ ] **Step 3: Implement** `normalizeQuiz` (tìm option khớp trim/case-insensitive, lưu canonical), `gradeQuizResponse`, `gradeQuizResponses`, template. Không đổi schema/migration/DB.
+- [ ] **Step 4: Run `node tests/test-course-quiz.js`; GREEN.**
+- [ ] **Step 5: Commit `refactor(learning): use option text as quiz answer`.**
+
+## Task 16: Backend answer/review dùng text + fixtures
+
+**Files:**
+- Modify: `src/services/learning.service.js`
+- Modify: `tests/test-learning-course-quiz.js`
+
+**Interfaces:**
+- `answerCourseQuiz` trả `{ correct, correct_answer, explanation, remaining_seconds }`; `correct_answer` là nội dung option.
+- `review` trả `[{ id, correct, explanation }]` với `correct` là nội dung option.
+- Response gửi lên `/quiz/answer` và `/quiz/progress` là nội dung option (string).
+
+- [ ] **Step 1: Update integration fixtures/responses/assertions**
+  - `VALID_QUIZ` dùng `correct` text (ví dụ `'Ngăn xếp'`, `'4'`) và options tương ứng.
+  - Thay mọi response `'B'/'A'` bằng nội dung option; `correct_option` → `correct_answer`.
+  - Thêm case: response không phải option → 400; response khác hoa/thường của option → vẫn hợp lệ.
+  - Review sau completed trả đúng text.
+- [ ] **Step 2: Run integration suite; confirm RED.**
+- [ ] **Step 3: Implement** validation `response` thuộc `question.options` (trim/case-insensitive) và trả `correct_answer`; review giữ `correct` text. Không đổi schema/DB.
+- [ ] **Step 4: Run integration suite on disposable DB; GREEN.**
+- [ ] **Step 5: Commit `refactor(learning): grade quiz by option text`.**
+
+## Task 17: Frontend trộn đề/đáp án + text answer
+
+**Files:**
+- Modify: `client/src/features/learning/QuizRunner.jsx`
+- Modify: `client/src/features/learning/QuizComposerPanel.jsx`
+- Modify: `client/src/features/learning/QuizResultView.jsx`
+- Modify: `tests/frontend/course-quiz.test.jsx`
+
+**Interfaces:**
+- Runner xáo thứ tự câu hỏi và options **mỗi lần mount** (mỗi lượt start/restart); response lưu nội dung option.
+- `onCheckAnswer(questionId, optionText)`; feedback dùng `correct_answer` text.
+- Resume: response cũ là text; câu đã trả lời bị khóa/skip.
+- Composer preview tô xanh option có nội dung trùng `q.correct`.
+- Result review: hiện lựa chọn của bạn + `correct` text + giải thích; không map chữ cái.
+
+- [ ] **Step 1: Update failing frontend tests**
+  - Chọn option theo text → `onCheckAnswer('q1','Ngăn xếp')`; autosave response text.
+  - Đúng/sai feedback hiện `correct_answer` text.
+  - Resume response text; không uppercase.
+  - Mock `Math.random` để xáo xác định; assert thứ tự câu/option đổi giữa hai lần mount và vẫn đủ phần tử.
+  - Composer preview tô xanh đúng option text.
+  - Result review hiện text, không letter.
+- [ ] **Step 2: Run focused Vitest; RED.**
+- [ ] **Step 3: Implement** shuffle (Fisher–Yates) cho questions/options trong runner; response text; feedback `correct_answer`; bỏ uppercase; composer/result text. CSS không cần đổi trừ khi layout vỡ.
+- [ ] **Step 4: Run focused + full Vitest, lint, build; GREEN.**
+- [ ] **Step 5: Commit `feat(learning): shuffle quiz questions and options`.**
+
+## Task 18: Re-verify Phase 2
+
+- [ ] Run `node tests/test-course-quiz.js`, full Vitest, integration on disposable DB, lint, build.
+- [ ] Verify: `correct` text validation; answer/review text; shuffle per mount; resume by id/text; no regression of deadline/best/attempts.
+- [ ] Update Task 14 acceptance notes if needed; commit only test/config fixes.
+- [ ] If everything is green, proceed to final whole-branch review.
+
 ## Execution Notes
 
 - Integration tests in Tasks 3–7 are cumulative in one file; each task appends its case and runs the whole file.
