@@ -440,6 +440,7 @@ describe('quiz runner', () => {
     fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
     await flush();
     fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     await flush();
 
     expect(onSaveProgress).toHaveBeenLastCalledWith({
@@ -477,6 +478,135 @@ describe('quiz runner', () => {
       completed: true
     });
     expect(onComplete).toHaveBeenCalled();
+  });
+
+  it('traps interactions in the confirm dialog, restores focus, and never drops an answer', async () => {
+    const onCheckAnswer = vi.fn().mockResolvedValue({
+      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+    });
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
+    const onComplete = vi.fn();
+    runner({ onCheckAnswer, onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+
+    const trigger = screen.getByRole('button', { name: 'Xem kết quả' });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const dialog = screen.getByRole('alertdialog', { name: 'Nộp bài?' });
+    expect(dialog).toHaveFocus();
+    expect(dialog.getAttribute('aria-describedby')).toBe('quiz-runner-confirm-count');
+    expect(document.getElementById('quiz-runner-confirm-count').textContent)
+      .toMatch(/Còn 1 câu chưa làm, các câu đó sẽ tính sai\. Nộp bài\?/);
+    expect(screen.getByRole('button', { name: 'Câu tiếp' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Quay lại' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Xem kết quả' })).toBeDisabled();
+
+    // No next question or answer can slip in behind the modal confirmation.
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(screen.queryByText('2 + 2 = ?')).toBeNull();
+    expect(onCheckAnswer).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục làm' }));
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledTimes(2);
+    expect(onSaveProgress).toHaveBeenLastCalledWith({
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to an empty time-up finalize when manual submit gets QUIZ_TIME_UP', async () => {
+    const onCheckAnswer = vi.fn().mockResolvedValue({
+      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+    });
+    const onSaveProgress = vi.fn()
+      .mockResolvedValueOnce({ answered: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error('Hết giờ'), { code: 'QUIZ_TIME_UP' }))
+      .mockResolvedValueOnce({ answered: 1, expired: true });
+    const onComplete = vi.fn();
+    runner({ onCheckAnswer, onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    await flush();
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenNthCalledWith(1, {
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: false
+    });
+    expect(onSaveProgress).toHaveBeenNthCalledWith(2, {
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: true
+    });
+    expect(onSaveProgress).toHaveBeenNthCalledWith(3, {
+      responses: [],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalledWith({ answered: 1, expired: true });
+    expect(screen.getByText('Đã hết thời gian làm bài.')).toBeTruthy();
+  });
+
+  it('hands an autosave QUIZ_TIME_UP rejection to the empty finalize path', async () => {
+    const onCheckAnswer = vi.fn().mockResolvedValue({
+      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+    });
+    const onSaveProgress = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Hết giờ'), { code: 'QUIZ_TIME_UP' }))
+      .mockResolvedValueOnce({ answered: 0, expired: true });
+    const onComplete = vi.fn();
+    runner({ onCheckAnswer, onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenNthCalledWith(1, {
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: false
+    });
+    expect(onSaveProgress).toHaveBeenNthCalledWith(2, {
+      responses: [],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalledWith({ answered: 0, expired: true });
+    expect(screen.queryByText(/Chưa lưu được tiến độ/)).toBeNull();
+    expect(screen.getByText('Đã hết thời gian làm bài.')).toBeTruthy();
+  });
+
+  it('does not resend a completed save when onComplete throws', async () => {
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
+    const onComplete = vi.fn(() => { throw new Error('navigation failed'); });
+    runner({ onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledTimes(2);
+    expect(onSaveProgress).toHaveBeenLastCalledWith({
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: true
+    });
+    expect(screen.queryByText(/Chưa nộp được bài/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Thử lưu kết quả lại/ })).toBeNull();
   });
 
   it('calls onExit from the back action', () => {

@@ -61,6 +61,9 @@ export default function QuizRunner({
   const onCompleteRef = useRef(onComplete);
   const feedbackRef = useRef(null);
   const questionHeadingRef = useRef(null);
+  const confirmDialogRef = useRef(null);
+  const confirmTriggerRef = useRef(null);
+  const restoreConfirmFocusRef = useRef(false);
 
   onSaveProgressRef.current = onSaveProgress;
   onCompleteRef.current = onComplete;
@@ -70,8 +73,9 @@ export default function QuizRunner({
   const answeredIds = new Set(responses.map((entry) => entry.id));
   const answeredCount = questions.reduce((count, question) => count + (answeredIds.has(question.id) ? 1 : 0), 0);
   const unansweredCount = Math.max(0, total - answeredCount);
+  const showConfirm = confirmSubmit && unansweredCount > 0;
   const progressPercent = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
-  const locked = Boolean(feedback) || checking || timeUp || finishing;
+  const locked = Boolean(feedback) || checking || timeUp || finishing || showConfirm;
   const timerLabel = remaining === null ? 'Không giới hạn thời gian' : `Thời gian còn lại ${toClock(remaining)}`;
 
   const finishExpired = useCallback(async () => {
@@ -79,20 +83,31 @@ export default function QuizRunner({
     finishAttemptRef.current = true;
     setFinishing(true);
     setFinishError('');
+    let progress;
     try {
-      const progress = await onSaveProgressRef.current?.({ responses: [], completed: true });
-      finishedRef.current = true;
+      progress = await onSaveProgressRef.current?.({ responses: [], completed: true });
+    } catch {
+      finishAttemptRef.current = false;
+      setFinishing(false);
+      setFinishError('Chưa lưu được kết quả. Vui lòng thử lại.');
+      return;
+    }
+    finishedRef.current = true;
+    finishAttemptRef.current = false;
+    try {
       onCompleteRef.current?.(progress);
     } catch {
-      setFinishError('Chưa lưu được kết quả. Vui lòng thử lại.');
+      // The attempt is already finalized server-side; never offer an inert retry.
     } finally {
-      finishAttemptRef.current = false;
       setFinishing(false);
     }
   }, []);
 
   const handleTimeUp = useCallback(() => {
-    if (timeUpRef.current) return;
+    if (timeUpRef.current) {
+      if (!finishedRef.current && !finishAttemptRef.current) finishExpired();
+      return;
+    }
     timeUpRef.current = true;
     setTimeUp(true);
     setSelected(null);
@@ -128,12 +143,39 @@ export default function QuizRunner({
     if (!feedback && !timeUp) questionHeadingRef.current?.focus();
   }, [index, feedback, timeUp]);
 
+  useEffect(() => {
+    if (showConfirm) {
+      confirmDialogRef.current?.focus();
+      return;
+    }
+    if (restoreConfirmFocusRef.current) {
+      restoreConfirmFocusRef.current = false;
+      confirmTriggerRef.current?.focus?.();
+    }
+  }, [showConfirm]);
+
+  useEffect(() => {
+    if (confirmSubmit && unansweredCount === 0) setConfirmSubmit(false);
+  }, [confirmSubmit, unansweredCount]);
+
+  const handleExit = () => {
+    setConfirmSubmit(false);
+    onExit?.();
+  };
+
+  const cancelConfirm = () => {
+    restoreConfirmFocusRef.current = true;
+    setConfirmSubmit(false);
+  };
+
   const handleSelect = (letter) => {
+    setConfirmSubmit(false);
     if (locked) return;
     setSelected(letter);
   };
 
   const handleCheck = async () => {
+    setConfirmSubmit(false);
     if (!current || !selected || locked || timeUpRef.current) return;
     const questionId = current.id;
     const response = selected;
@@ -161,13 +203,21 @@ export default function QuizRunner({
         setRemaining(normalizeRemaining(result.remaining_seconds));
       }
       const payload = sessionResponsesRef.current.map((item) => ({ id: item.id, response: item.response }));
+      const handleSaveFailure = (error) => {
+        if (timeUpRef.current) return;
+        if (error?.code === 'QUIZ_TIME_UP') {
+          handleTimeUp();
+          return;
+        }
+        setSaveError('Chưa lưu được tiến độ, sẽ thử lại.');
+      };
       try {
         const savePromise = onSaveProgressRef.current?.({ responses: payload, completed: false });
         if (savePromise && typeof savePromise.catch === 'function') {
-          savePromise.catch(() => setSaveError('Chưa lưu được tiến độ, sẽ thử lại.'));
+          savePromise.catch(handleSaveFailure);
         }
-      } catch {
-        setSaveError('Chưa lưu được tiến độ, sẽ thử lại.');
+      } catch (error) {
+        handleSaveFailure(error);
       }
     } catch (error) {
       if (timeUpRef.current) return;
@@ -182,6 +232,7 @@ export default function QuizRunner({
   };
 
   const handleNext = () => {
+    setConfirmSubmit(false);
     const nextIndex = questions.findIndex((question, questionIndex) => (
       questionIndex > index && !answeredIds.has(question.id)
     ));
@@ -194,26 +245,40 @@ export default function QuizRunner({
   };
 
   const finalize = async () => {
-    if (finishedRef.current) return;
+    if (finishedRef.current || checking || timeUpRef.current) return;
     finishedRef.current = true;
     setConfirmSubmit(false);
     setFinishing(true);
     setFinishError('');
+    const payload = responses.map((entry) => ({ id: entry.id, response: entry.response }));
+    let progress;
     try {
-      const payload = responses.map((entry) => ({ id: entry.id, response: entry.response }));
-      const progress = await onSaveProgressRef.current?.({ responses: payload, completed: true });
+      progress = await onSaveProgressRef.current?.({ responses: payload, completed: true });
+    } catch (error) {
+      finishedRef.current = false;
+      if (error?.code === 'QUIZ_TIME_UP') {
+        // The local timer was stale: let the time-up path finalize only the
+        // responses already stored server-side, with an empty payload.
+        handleTimeUp();
+        return;
+      }
+      setFinishError('Chưa nộp được bài. Vui lòng thử lại.');
+      setFinishing(false);
+      return;
+    }
+    try {
       onCompleteRef.current?.(progress);
     } catch {
-      finishedRef.current = false;
-      setFinishError('Chưa nộp được bài. Vui lòng thử lại.');
+      // The attempt is already finalized server-side; never offer an inert retry.
     } finally {
       setFinishing(false);
     }
   };
 
   const requestFinish = () => {
-    if (finishing || checking || timeUpRef.current) return;
+    if (finishing || checking || showConfirm || timeUpRef.current) return;
     if (unansweredCount > 0) {
+      confirmTriggerRef.current = document.activeElement;
       setConfirmSubmit(true);
       return;
     }
@@ -260,7 +325,7 @@ export default function QuizRunner({
                 Thử lưu kết quả lại
               </button>
             )}
-            <button type="button" className="btn btn-secondary" onClick={onExit}>
+            <button type="button" className="btn btn-secondary" onClick={handleExit}>
               Quay lại
             </button>
           </div>
@@ -278,7 +343,7 @@ export default function QuizRunner({
             >
               {finishing ? 'Đang nộp...' : 'Hoàn tất bài làm'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={onExit}>
+            <button type="button" className="btn btn-secondary" onClick={handleExit}>
               Quay lại
             </button>
           </div>
@@ -352,16 +417,28 @@ export default function QuizRunner({
           {saveError && <p className="quiz-runner-error" role="alert">{saveError}</p>}
           {!timeUp && finishError && <p className="quiz-runner-error" role="alert">{finishError}</p>}
 
-          {confirmSubmit && (
-            <section className="quiz-runner-confirm" role="alertdialog" aria-label="Nộp bài?">
-              <p>
+          {showConfirm && (
+            <section
+              className="quiz-runner-confirm"
+              role="alertdialog"
+              aria-label="Nộp bài?"
+              aria-describedby="quiz-runner-confirm-count"
+              ref={confirmDialogRef}
+              tabIndex={-1}
+            >
+              <p id="quiz-runner-confirm-count">
                 Còn {unansweredCount} câu chưa làm, các câu đó sẽ tính sai. Nộp bài?
               </p>
               <div className="quiz-runner-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setConfirmSubmit(false)}>
+                <button type="button" className="btn btn-secondary" onClick={cancelConfirm}>
                   Tiếp tục làm
                 </button>
-                <button type="button" className="btn btn-primary" onClick={finalize} disabled={finishing}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={finalize}
+                  disabled={finishing || checking}
+                >
                   Nộp bài
                 </button>
               </div>
@@ -375,12 +452,17 @@ export default function QuizRunner({
                   type="button"
                   className="btn btn-primary"
                   onClick={requestFinish}
-                  disabled={finishing}
+                  disabled={finishing || showConfirm}
                 >
                   {finishing ? 'Đang nộp...' : 'Xem kết quả'}
                 </button>
               ) : (
-                <button type="button" className="btn btn-primary" onClick={handleNext}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleNext}
+                  disabled={showConfirm}
+                >
                   Câu tiếp
                 </button>
               )
@@ -389,24 +471,29 @@ export default function QuizRunner({
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCheck}
-                disabled={!selected || checking || timeUp}
+                disabled={!selected || checking || timeUp || showConfirm}
               >
                 {checking ? 'Đang kiểm tra...' : 'Kiểm tra đáp án'}
               </button>
             )}
 
-            {!confirmSubmit && answeredCount > 0 && unansweredCount > 0 && !timeUp && (
+            {answeredCount > 0 && unansweredCount > 0 && !timeUp && (
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={requestFinish}
-                disabled={finishing || checking}
+                disabled={finishing || checking || showConfirm}
               >
                 Xem kết quả
               </button>
             )}
 
-            <button type="button" className="btn btn-secondary" onClick={onExit}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleExit}
+              disabled={showConfirm}
+            >
               Quay lại
             </button>
           </footer>
