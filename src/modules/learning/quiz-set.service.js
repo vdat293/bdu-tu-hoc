@@ -6,6 +6,7 @@ import {
   QUIZ_SET_DEFAULT_MAX_PER_PART,
   QUIZ_SET_DEFAULT_MINUTES_PER_PART,
   buildQuizSet,
+  gradeQuizResponses,
   publicQuizSetQuestions
 } from '../../utils/quiz-data.js';
 
@@ -277,6 +278,126 @@ function progressKey(setId, partIndex, mode) {
   return `${String(setId)}:${Number(partIndex)}:${mode}`;
 }
 
+/** Snapshot câu hỏi của đúng một phần; đây là nguồn chấm điểm duy nhất. */
+function partQuestionsOf(setRow, partIndex) {
+  const questions = Array.isArray(setRow.questions) ? setRow.questions : [];
+  return questions.filter((question) => question && Number(question.partIndex) === Number(partIndex));
+}
+
+/**
+ * Validate responses từ client theo snapshot của phần: object `{id,response}`,
+ * tối đa bằng số câu của phần, id thuộc phần và response phải trùng một option
+ * (trim + không phân biệt hoa/thường). Trả entry đã canonical hóa + chấm server.
+ */
+function normalizeProgressResponses(value, questions) {
+  if (!Array.isArray(value)) {
+    throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+      { path: '$.responses', message: 'responses phải là mảng.' }
+    ]);
+  }
+  if (value.length > questions.length) {
+    throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+      { path: '$.responses', message: `responses tối đa ${questions.length} câu.` }
+    ]);
+  }
+
+  const questionById = new Map(questions.map((question) => [String(question.id), question]));
+  const seen = new Set();
+  const entries = [];
+  value.forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+        { path: `$.responses[${index}]`, message: 'Mỗi response phải là object {id,response}.' }
+      ]);
+    }
+    const id = String(raw.id ?? '').trim();
+    const question = questionById.get(id);
+    if (!question) {
+      throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+        { path: `$.responses[${index}].id`, message: 'Câu hỏi không thuộc phần này.' }
+      ]);
+    }
+    if (seen.has(id)) {
+      throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+        { path: `$.responses[${index}].id`, message: 'Câu hỏi bị lặp trong responses.' }
+      ]);
+    }
+    const graded = gradeQuizResponses([question], [{ id, response: raw.response }]);
+    if (graded.answered !== 1) {
+      throw invalidSet('Dữ liệu tiến độ không hợp lệ.', [
+        {
+          path: `$.responses[${index}].response`,
+          message: 'Đáp án phải là một lựa chọn của câu hỏi.'
+        }
+      ]);
+    }
+    seen.add(id);
+    entries.push(graded.entries[0]);
+  });
+  return entries;
+}
+
+/**
+ * Làm sạch responses đã lưu: bỏ entry hỏng/id lạ/option cũ và chấm lại từ
+ * snapshot, không tin cờ `correct` (nếu có) trong JSONB.
+ */
+function normalizeStoredResponses(value, questions) {
+  if (!Array.isArray(value)) return [];
+  const questionById = new Map(questions.map((question) => [String(question.id), question]));
+  const byId = new Map();
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const id = String(raw.id ?? '').trim();
+    const question = questionById.get(id);
+    if (!question) continue;
+    const graded = gradeQuizResponses([question], [{ id, response: raw.response }]);
+    if (graded.answered !== 1) continue;
+    // Entry trùng id: bản ghi sau thắng; Map giữ nguyên vị trí xuất hiện đầu.
+    byId.set(id, graded.entries[0]);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Response của saveProgress: test trước khi nộp tuyệt đối không có
+ * `correct`/`correct_count`; review có `correct_count`, không có best/attempts.
+ */
+function mapSaveProgress(row, mode, { remainingSeconds, expired, alreadyCompleted }) {
+  const completed = row.completed_at != null;
+  const progress = {
+    mode,
+    answered: Number(row.answered || 0),
+    total_count: Number(row.total_count || 0),
+    completed_at: row.completed_at || null,
+    responses: sanitizeResponses(row.responses, mode, row.completed_at),
+    remaining_seconds: remainingSeconds,
+    expired,
+    already_completed: alreadyCompleted
+  };
+  if (mode === 'test') {
+    progress.best_correct = row.best_correct == null ? null : Number(row.best_correct);
+    progress.best_total = row.best_total == null ? null : Number(row.best_total);
+    progress.attempts = Number(row.attempts || 0);
+    if (completed) progress.correct_count = Number(row.correct_count || 0);
+  } else {
+    progress.correct_count = Number(row.correct_count || 0);
+  }
+  return progress;
+}
+
+/**
+ * Review chi tiết sau khi test đã nộp: trả đáp án đúng (nội dung option) +
+ * giải thích từ snapshot. `correct` ở đây là text để result view hiển thị,
+ * khác với cờ boolean trong responses đã chấm.
+ */
+function buildCompletedTestReview(questions) {
+  return questions.map((question) => ({
+    id: question.id,
+    correct: String(question.correct ?? ''),
+    explanation: String(question.explanation ?? '')
+  }));
+}
+
 async function loadSet(course, setId, db = { query }) {
   const result = await db.query(`
     SELECT qs.*, s.full_name AS author_name
@@ -475,6 +596,12 @@ export const QuizSetService = {
 
     const presentations = await IdentityPresentationService.getPresentations([setRow.author_mssv]);
 
+    // Review chi tiết chỉ có sau khi test đã nộp; trong lúc làm và ở chế độ
+    // ôn tập (feedback từng câu qua answer) luôn là null.
+    const review = modeValue === 'test' && progressRow?.completed_at
+      ? buildCompletedTestReview(partQuestionsOf(setRow, partIndexValue))
+      : null;
+
     return {
       set: mapSetSummary(setRow, cleanMssv, presentations.get(setRow.author_mssv)),
       part: {
@@ -486,9 +613,7 @@ export const QuizSetService = {
       },
       questions,
       progress: mapProgress(progressRow, modeValue, { includeResponses: true }),
-      // Task 3 sẽ dựng review chi tiết khi test đã hoàn thành; Task 2 tuyệt đối
-      // không trả correct/explanation trong detail.
-      review: null
+      review
     };
   },
 
@@ -533,16 +658,16 @@ export const QuizSetService = {
       `, [cleanMssv, cleanSetId, partIndexValue, modeValue])).rows[0];
 
       let restarted = false;
-      // Chỉ test đã hoàn thành mới được làm lại. Test đang làm dở + restart
-      // phải resume để không thể gia hạn thời gian giữa lượt (§6). Review không
-      // có timer nên luôn resume và bỏ qua restart để giữ vị trí đang ôn.
+      // Chỉ lượt đã hoàn thành mới được làm lại. Lượt đang làm dở + restart
+      // phải resume để không thể gia hạn thời gian giữa lượt test (§6). Review
+      // đang làm dở cũng resume để giữ vị trí; review đã xong thì reset lượt
+      // (không timer, không best/attempts).
       if (
         inserted.rowCount === 0
         && restart
-        && modeValue === 'test'
         && progress.completed_at != null
       ) {
-        // Làm lại chỉ reset lượt hiện tại; best/attempts là lịch sử nên giữ nguyên.
+        // Làm lại chỉ reset lượt hiện tại; best/attempts của test là lịch sử nên giữ nguyên.
         progress = (await client.query(`
           UPDATE course_quiz_progress
           SET started_at = NOW(),
@@ -591,6 +716,322 @@ export const QuizSetService = {
         completed_at: progress.completed_at,
         restarted
       };
+    });
+  },
+
+  /**
+   * Chấm một câu ở chế độ ôn tập. Không ghi progress; feedback do client gửi
+   * `saveProgress` sau đó. Endpoint không tồn tại cho test mode.
+   */
+  async answerReview(mssv, courseCode, setId, partIndex, input = {}) {
+    requireDatabase();
+    const cleanMssv = normalizeMssv(mssv);
+    const cleanSetId = normalizeRecordId(setId);
+    if (!cleanSetId) {
+      throw invalidSet('Bộ đề không hợp lệ.', [
+        { path: '$.setId', message: 'setId phải là số nguyên dương.' }
+      ]);
+    }
+
+    const course = await findAccessibleCourse(cleanMssv, courseCode);
+    const setRow = await loadSet(course, cleanSetId);
+    const partIndexValue = normalizePartIndex(partIndex, Number(setRow.part_count));
+
+    if (input?.mode !== undefined && input?.mode !== null) {
+      const rawMode = String(input.mode).trim().toLowerCase();
+      if (rawMode !== 'review') {
+        throw httpError(
+          'Chỉ chế độ ôn tập mới được chấm và trả đáp án từng câu.',
+          400,
+          'QUIZ_REVIEW_ONLY'
+        );
+      }
+    }
+
+    const rows = (await query(`
+      SELECT *
+      FROM course_quiz_progress
+      WHERE mssv = $1 AND set_id = $2 AND part_index = $3;
+    `, [cleanMssv, cleanSetId, partIndexValue])).rows;
+    const reviewRow = rows.find((row) => row.mode === 'review') || null;
+    const testRow = rows.find((row) => row.mode === 'test') || null;
+
+    if (!reviewRow || !reviewRow.started_at) {
+      if (testRow && testRow.started_at) {
+        throw httpError(
+          'Chỉ chế độ ôn tập mới được chấm và trả đáp án từng câu.',
+          400,
+          'QUIZ_REVIEW_ONLY'
+        );
+      }
+      throw httpError(
+        'Bạn chưa bắt đầu làm phần ôn tập này.',
+        409,
+        'QUIZ_NOT_STARTED'
+      );
+    }
+    if (reviewRow.completed_at) {
+      throw httpError('Bạn đã hoàn thành phần ôn tập này.', 409, 'QUIZ_COMPLETED');
+    }
+
+    const questions = partQuestionsOf(setRow, partIndexValue);
+    const questionId = String(input?.questionId ?? '').trim();
+    const question = questions.find((item) => String(item.id) === questionId);
+    if (!question) {
+      throw invalidSet('Câu hỏi không thuộc phần này.', [
+        { path: '$.questionId', message: 'questionId không thuộc phần đang ôn tập.' }
+      ]);
+    }
+
+    const graded = gradeQuizResponses(
+      [question],
+      [{ id: question.id, response: input?.response }]
+    );
+    if (graded.answered !== 1) {
+      throw invalidSet('Đáp án không hợp lệ.', [
+        { path: '$.response', message: 'Đáp án phải là một trong các lựa chọn của câu hỏi.' }
+      ]);
+    }
+
+    return {
+      correct: graded.entries[0].correct,
+      correct_answer: String(question.correct ?? ''),
+      explanation: String(question.explanation ?? '')
+    };
+  },
+
+  /**
+   * Lưu tiến độ/làm bài. Review merge không ghi đè và hoàn thành khi đủ câu;
+   * test lưu đáp án mới nhất không kèm cờ đúng/sai và chỉ chấm khi nộp/hết giờ.
+   */
+  async saveProgress(mssv, courseCode, setId, partIndex, input = {}) {
+    requireDatabase();
+    const cleanMssv = normalizeMssv(mssv);
+    const cleanSetId = normalizeRecordId(setId);
+    if (!cleanSetId) {
+      throw invalidSet('Bộ đề không hợp lệ.', [
+        { path: '$.setId', message: 'setId phải là số nguyên dương.' }
+      ]);
+    }
+    const wantsCompleted = input?.completed === true;
+
+    return transaction(async (client) => {
+      const course = await findAccessibleCourse(cleanMssv, courseCode, client);
+      const modeValue = normalizeMode(input?.mode);
+      const setRow = await loadSet(course, cleanSetId, client);
+      const partIndexValue = normalizePartIndex(partIndex, Number(setRow.part_count));
+      const questions = partQuestionsOf(setRow, partIndexValue);
+      const totalCount = Number(readPartSizes(setRow)[partIndexValue] || 0);
+      const timeLimitSeconds = modeValue === 'test'
+        ? Number(setRow.minutes_per_part || 0) * 60
+        : null;
+
+      // Khóa dòng progress; remaining_seconds dùng đồng hồ PostgreSQL (§8).
+      const progress = (await client.query(`
+        SELECT
+          qp.*,
+          CASE
+            WHEN $5::int IS NULL THEN NULL
+            WHEN qp.completed_at IS NOT NULL THEN 0
+            WHEN qp.started_at IS NULL THEN $5::int
+            ELSE GREATEST(
+              0,
+              $5::int - FLOOR(EXTRACT(EPOCH FROM (NOW() - qp.started_at)))
+            )::int
+          END AS remaining_seconds
+        FROM course_quiz_progress qp
+        WHERE qp.mssv = $1 AND qp.set_id = $2 AND qp.part_index = $3 AND qp.mode = $4
+        FOR UPDATE;
+      `, [cleanMssv, cleanSetId, partIndexValue, modeValue, timeLimitSeconds])).rows[0];
+
+      if (!progress || !progress.started_at) {
+        throw httpError(
+          'Bạn chưa bắt đầu làm phần này.',
+          409,
+          'QUIZ_NOT_STARTED'
+        );
+      }
+
+      const remaining = progress.remaining_seconds == null
+        ? null
+        : Number(progress.remaining_seconds);
+
+      // Đã hoàn thành: trả nguyên trạng, không cộng attempts/ghi responses lần nữa.
+      if (progress.completed_at) {
+        return mapSaveProgress(progress, modeValue, {
+          remainingSeconds: remaining,
+          expired: false,
+          alreadyCompleted: true
+        });
+      }
+
+      const incoming = normalizeProgressResponses(input?.responses, questions);
+      const stored = normalizeStoredResponses(progress.responses, questions);
+
+      if (modeValue === 'review') {
+        // Merge no-overwrite: đáp án đã lưu thắng, chỉ thêm câu chưa trả lời.
+        const storedIds = new Set(stored.map((entry) => entry.id));
+        const merged = [...stored];
+        for (const entry of incoming) {
+          if (storedIds.has(entry.id)) continue;
+          storedIds.add(entry.id);
+          merged.push(entry);
+        }
+
+        const answered = merged.length;
+        const correctCount = merged.filter((entry) => entry.correct).length;
+
+        if (wantsCompleted && answered < totalCount) {
+          throw httpError(
+            `Hãy trả lời đủ ${totalCount} câu trước khi kết thúc phần ôn tập.`,
+            400,
+            'QUIZ_REVIEW_INCOMPLETE'
+          );
+        }
+
+        const updated = (await client.query(`
+          UPDATE course_quiz_progress
+          SET answered = $5,
+              correct_count = $6,
+              total_count = $7,
+              responses = $8::jsonb,
+              completed_at = CASE WHEN $9::boolean THEN NOW() ELSE completed_at END,
+              updated_at = NOW()
+          WHERE mssv = $1 AND set_id = $2 AND part_index = $3 AND mode = $4
+          RETURNING *;
+        `, [
+          cleanMssv,
+          cleanSetId,
+          partIndexValue,
+          modeValue,
+          answered,
+          correctCount,
+          totalCount,
+          JSON.stringify(merged),
+          wantsCompleted
+        ])).rows[0];
+
+        // Review không có timer nên remaining luôn null, kể cả khi vừa xong.
+        return mapSaveProgress(updated, 'review', {
+          remainingSeconds: null,
+          expired: false,
+          alreadyCompleted: false
+        });
+      }
+
+      const expired = timeLimitSeconds > 0 && remaining === 0;
+      // Quá hạn: chỉ nhận finalize từ đúng dữ liệu đã lưu (responses rỗng).
+      if (expired && (!wantsCompleted || incoming.length > 0)) {
+        throw httpError(
+          'Đã hết thời gian làm bài kiểm tra này.',
+          409,
+          'QUIZ_TIME_UP'
+        );
+      }
+
+      // Test: đáp án mới nhất thắng trước khi nộp; không lưu/không trả cờ đúng.
+      const mergedById = new Map(stored.map((entry) => [entry.id, entry]));
+      if (!expired) {
+        for (const entry of incoming) mergedById.set(entry.id, entry);
+      }
+      const merged = [...mergedById.values()];
+
+      if (!wantsCompleted) {
+        const storedResponses = merged.map((entry) => ({
+          id: entry.id,
+          response: entry.response
+        }));
+        const updated = (await client.query(`
+          UPDATE course_quiz_progress
+          SET answered = $5,
+              correct_count = 0,
+              total_count = $6,
+              responses = $7::jsonb,
+              updated_at = NOW()
+          WHERE mssv = $1 AND set_id = $2 AND part_index = $3 AND mode = $4
+          RETURNING *;
+        `, [
+          cleanMssv,
+          cleanSetId,
+          partIndexValue,
+          modeValue,
+          merged.length,
+          totalCount,
+          JSON.stringify(storedResponses)
+        ])).rows[0];
+
+        return mapSaveProgress(updated, 'test', {
+          remainingSeconds: remaining,
+          expired: false,
+          alreadyCompleted: false
+        });
+      }
+
+      // Nộp sớm khi chưa trả lời câu nào bị chặn; hết giờ được phép finalize 0 câu.
+      if (!expired && merged.length === 0) {
+        throw httpError(
+          'Hãy trả lời ít nhất một câu trước khi nộp bài.',
+          400,
+          'QUIZ_EMPTY_SUBMIT'
+        );
+      }
+
+      const correctCount = merged.filter((entry) => entry.correct).length;
+      const previousBestCorrect = progress.best_correct == null
+        ? null
+        : Number(progress.best_correct);
+      const previousBestTotal = progress.best_total == null
+        ? null
+        : Number(progress.best_total);
+      const hasBest = previousBestCorrect != null
+        && previousBestTotal != null
+        && previousBestTotal > 0;
+      // So tỉ lệ bằng nhân chéo để tránh sai số float; chỉ đổi khi tốt hơn.
+      const isBetterBest = !hasBest
+        || correctCount * previousBestTotal > previousBestCorrect * totalCount;
+      const bestCorrect = isBetterBest ? correctCount : previousBestCorrect;
+      const bestTotal = isBetterBest ? totalCount : previousBestTotal;
+      // completed_at đã được chặn ở trên nên đây là lần chuyển completed duy nhất.
+      const attempts = Number(progress.attempts || 0) + 1;
+      // Lưu kèm correct do server chấm từ snapshot để detail/review sau nộp dùng.
+      const gradedResponses = merged.map((entry) => ({
+        id: entry.id,
+        response: entry.response,
+        correct: entry.correct
+      }));
+
+      const completedRow = (await client.query(`
+        UPDATE course_quiz_progress
+        SET answered = $5,
+            correct_count = $6,
+            total_count = $7,
+            best_correct = $8,
+            best_total = $9,
+            attempts = $10,
+            responses = $11::jsonb,
+            completed_at = NOW(),
+            updated_at = NOW()
+        WHERE mssv = $1 AND set_id = $2 AND part_index = $3 AND mode = $4
+        RETURNING *;
+      `, [
+        cleanMssv,
+        cleanSetId,
+        partIndexValue,
+        modeValue,
+        merged.length,
+        correctCount,
+        totalCount,
+        bestCorrect,
+        bestTotal,
+        attempts,
+        JSON.stringify(gradedResponses)
+      ])).rows[0];
+
+      return mapSaveProgress(completedRow, 'test', {
+        remainingSeconds: timeLimitSeconds > 0 ? 0 : null,
+        expired,
+        alreadyCompleted: false
+      });
     });
   }
 };
