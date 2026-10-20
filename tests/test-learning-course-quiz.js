@@ -98,7 +98,9 @@ try {
     () => LearningService.createCoursePost(VIEWER, COURSE_CODE, {
       kind: 'quiz', title: 'Quiz', content: '', quiz: VALID_QUIZ
     }),
-    (err) => err.status === 403 && /#TTCDS/.test(err.message)
+    (err) => err.status === 403
+      && err.code === 'TTCDS_FORBIDDEN'
+      && /#TTCDS/.test(err.message)
   );
   assert.equal(await countQuizzes(courseId), 0, '403 không được tạo dòng course_quizzes');
 
