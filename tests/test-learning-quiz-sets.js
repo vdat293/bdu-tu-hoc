@@ -305,7 +305,48 @@ try {
   assert.equal(testRow.best_total, null);
   assert.equal(Number(testRow.attempts), 0);
 
-  // 8. Restart test reset lượt nhưng giữ best/attempts; không restart thì resume.
+  // 8. Restart giữa lượt test KHÔNG được reset timer/responses; chỉ lượt đã
+  //    hoàn thành mới được làm lại và giữ best/attempts.
+  const midTestResponses = [
+    { id: 'q21', response: 'Đáp án A 21' },
+    { id: 'q22', response: 'Đáp án B 22' }
+  ];
+  await query(`
+    UPDATE course_quiz_progress
+    SET started_at = NOW() - INTERVAL '10 seconds',
+        answered = 4,
+        correct_count = 2,
+        total_count = 20,
+        responses = $1::jsonb,
+        updated_at = NOW()
+    WHERE mssv = $2 AND set_id = $3 AND part_index = 1 AND mode = 'test';
+  `, [JSON.stringify(midTestResponses), VIEWER, created.id]);
+
+  const midTestBefore = await readProgress(created.id, VIEWER, 1, 'test');
+  const midTestRestart = await QuizSetService.startPart(VIEWER, COURSE_CODE, created.id, 1, {
+    mode: 'test',
+    restart: true
+  });
+  assert.equal(midTestRestart.restarted, false, 'Restart giữa lượt test phải bị từ chối');
+  assert.equal(
+    new Date(midTestRestart.started_at).getTime(),
+    new Date(midTestBefore.started_at).getTime(),
+    'Restart giữa lượt không được đặt lại started_at'
+  );
+  assert.equal(midTestRestart.completed_at, null);
+  assert.ok(
+    midTestRestart.remaining_seconds < 1795 && midTestRestart.remaining_seconds > 1770,
+    `Restart giữa lượt không được cấp lại full timer, nhận ${midTestRestart.remaining_seconds}`
+  );
+
+  const midTestAfter = await readProgress(created.id, VIEWER, 1, 'test');
+  assert.equal(new Date(midTestAfter.started_at).getTime(), new Date(midTestBefore.started_at).getTime());
+  assert.equal(Number(midTestAfter.answered), Number(midTestBefore.answered));
+  assert.equal(Number(midTestAfter.correct_count), Number(midTestBefore.correct_count));
+  assert.deepEqual(midTestAfter.responses, midTestResponses);
+  assert.equal(midTestAfter.completed_at, null);
+
+  // Completed test + restart: reset lượt, giữ best/attempts.
   await query(`
     UPDATE course_quiz_progress
     SET answered = 7,

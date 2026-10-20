@@ -533,7 +533,15 @@ export const QuizSetService = {
       `, [cleanMssv, cleanSetId, partIndexValue, modeValue])).rows[0];
 
       let restarted = false;
-      if (inserted.rowCount === 0 && restart && modeValue === 'test') {
+      // Chỉ test đã hoàn thành mới được làm lại. Test đang làm dở + restart
+      // phải resume để không thể gia hạn thời gian giữa lượt (§6). Review không
+      // có timer nên luôn resume và bỏ qua restart để giữ vị trí đang ôn.
+      if (
+        inserted.rowCount === 0
+        && restart
+        && modeValue === 'test'
+        && progress.completed_at != null
+      ) {
         // Làm lại chỉ reset lượt hiện tại; best/attempts là lịch sử nên giữ nguyên.
         progress = (await client.query(`
           UPDATE course_quiz_progress
