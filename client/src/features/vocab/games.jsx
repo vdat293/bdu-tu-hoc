@@ -222,28 +222,10 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
     go(1);
   }, [word, saving, onProgress, go]);
 
-  useEffect(() => {
-    const onKey = (e) => {
-      const typing = e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName);
-      if (typing) return;
-      const k = e.key.toLowerCase();
-      if (e.code === 'Space') { e.preventDefault(); setFlipped((f) => !f); }
-      else if (e.key === 'ArrowRight') go(1);
-      else if (e.key === 'ArrowLeft') go(-1);
-      else if (k === 'x' || (e.ctrlKey && k === '1')) mark(false);
-      else if (k === 'c' || (e.ctrlKey && k === '2')) mark(true);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [go, mark]);
-
-  if (!word) return <EmptyPool onExit={onExit} />;
-
-  const frontText = direction === 'en-vi' ? word.term : word.meaning;
-  const backText = direction === 'en-vi' ? word.meaning : word.term;
-
-  const submitGuess = async (e) => {
-    e.preventDefault();
+  const submitGuess = useCallback(async (e) => {
+    e?.preventDefault?.();
+    // Sau khi đã check đúng, Enter/Check lần nữa tự chuyển sang thẻ tiếp theo.
+    if (feedback === 'ok') { go(1); return; }
     const needle = normText(guess);
     if (!needle) return;
     const expected = normText(direction === 'en-vi' ? word.meaning : word.term);
@@ -256,7 +238,29 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
     } else {
       setFeedback('bad');
     }
-  };
+  }, [feedback, guess, direction, word, onProgress, go]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName);
+      if (typing) return;
+      const k = e.key.toLowerCase();
+      if (e.code === 'Space') { e.preventDefault(); setFlipped((f) => !f); }
+      else if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'Enter' && feedback === 'ok') go(1);
+      else if (e.key === 'Enter' && guess.trim() && feedback !== 'ok') submitGuess();
+      else if (k === 'x' || (e.ctrlKey && k === '1')) mark(false);
+      else if (k === 'c' || (e.ctrlKey && k === '2')) mark(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [go, mark, feedback, guess, submitGuess]);
+
+  if (!word) return <EmptyPool onExit={onExit} />;
+
+  const frontText = direction === 'en-vi' ? word.term : word.meaning;
+  const backText = direction === 'en-vi' ? word.meaning : word.term;
 
   return (
     <GameShell
@@ -275,7 +279,12 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
           role="button" tabIndex={0}
           onClick={() => setFlipped((f) => !f)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped((f) => !f); }
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.key === 'Enter' && feedback === 'ok') { go(1); return; }
+              setFlipped((f) => !f);
+            }
           }}
           aria-label={`Thẻ ${direction === 'en-vi' ? 'từ tiếng Anh' : 'nghĩa tiếng Việt'}: ${frontText}, nhấn để lật`}
         >
@@ -302,6 +311,7 @@ export function FlashcardGame({ words, onProgress, onReplay, onExit }) {
           <input
             value={guess}
             onChange={(e) => { setGuess(e.target.value); if (feedback) setFeedback(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitGuess(e); } }}
             placeholder={direction === 'en-vi' ? 'Gõ nghĩa (đánh dấu đã thuộc nếu đúng)...' : 'Gõ từ tiếng Anh...'}
             aria-label={direction === 'en-vi' ? 'Gõ nghĩa tiếng Việt' : 'Gõ từ tiếng Anh'}
           />
