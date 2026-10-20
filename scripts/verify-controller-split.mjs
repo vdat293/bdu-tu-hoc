@@ -81,7 +81,13 @@ const ADDED_AFTER_SPLIT = new Map([
   ['getAttendance', 'ttcds (dot tach)'],
   ['listPermissions', 'ttcds (dot tach)'],
   ['setPermission', 'ttcds (dot tach)'],
-  ['listAuditLogs', 'ttcds (dot tach)']
+  ['listAuditLogs', 'ttcds (dot tach)'],
+  // Quiz mon hoc (course-quiz): 4 handler trong learning.controller.js
+  // (get/start/answer/save progress). Khong co trong ban goc ApiController.
+  ['getCourseQuiz', 'course quiz'],
+  ['startCourseQuiz', 'course quiz'],
+  ['answerCourseQuiz', 'course quiz'],
+  ['saveCourseQuizProgress', 'course quiz']
 ]);
 
 // Method bi XOA co chu dich sau dot tach (doi chieu nguoc voi ADDED o tren):

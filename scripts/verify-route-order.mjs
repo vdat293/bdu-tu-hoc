@@ -138,7 +138,13 @@ const ROUTES_ADDED_AFTER_SPLIT = new Set([
   'GET /ttcds/students/:mssv/diem-danh',
   'GET /ttcds/permissions',
   'PUT /ttcds/permissions',
-  'GET /ttcds/audit'
+  'GET /ttcds/audit',
+  // Route quiz mon hoc (course-quiz): xem de, bat dau, cham mot cau, luu tien
+  // do. Dang ky trong learning.routes.js, khong co trong ban goc api.routes.js.
+  'GET /learning/courses/:courseCode/posts/:postId/quiz',
+  'POST /learning/courses/:courseCode/posts/:postId/quiz/start',
+  'POST /learning/courses/:courseCode/posts/:postId/quiz/answer',
+  'POST /learning/courses/:courseCode/posts/:postId/quiz/progress'
 ]);
 
 try {
