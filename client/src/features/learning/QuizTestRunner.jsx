@@ -65,8 +65,11 @@ function normalizeRemaining(value) {
  * - Never renders feedback, the correct answer, or an explanation: the server
  *   is the only grader and only reveals the key after completion.
  * - Autosaves the latest full answer set via `onSubmit({responses, completed:false})`
- *   (debounced after each selection, flushed on navigation/exit) without
- *   blocking the UI.
+ *   (debounced after each selection, flushed on navigation/exit/unmount).
+ *   Autosave never blocks answering; navigation inside the runner stays
+ *   fire-and-forget, while exit awaits the flushed save so the landing
+ *   refetches only after the POST commits. Failures keep the answers dirty
+ *   for the next save, navigation, exit, or unmount retry.
  * - The countdown runs from the server-provided `remainingSeconds`. On expiry
  *   the runner submits exactly `{responses: [], completed: true}`: answers
  *   chosen after the deadline must never reach the server.
@@ -77,7 +80,7 @@ function normalizeRemaining(value) {
  * - `remainingSeconds`: server-authoritative countdown start, or null.
  * - `onSubmit({responses, completed})`: persists progress, resolves saved progress.
  * - `onComplete(savedProgress)`: called once the attempt is finalized.
- * - `onExit()`: leaves the runner (progress already flushed).
+ * - `onExit()`: leaves the runner (the latest save has committed).
  */
 export default function QuizTestRunner({
   questions: incomingQuestions = [],
@@ -133,14 +136,12 @@ export default function QuizTestRunner({
   const locked = timeUp || finishing || showConfirm;
   const timerLabel = remaining === null ? 'Không giới hạn thời gian' : `Thời gian còn lại ${toClock(remaining)}`;
 
-  const clearAutosaveTimer = () => {
+  const clearAutosaveTimer = useCallback(() => {
     if (autosaveTimerRef.current !== null) {
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
-  };
-
-  useEffect(() => clearAutosaveTimer, []);
+  }, []);
 
   const toPayload = useCallback(() => {
     const snapshot = answersRef.current || {};
@@ -153,42 +154,59 @@ export default function QuizTestRunner({
     return payload;
   }, [questions]);
 
-  // Fire-and-forget: autosave must never block answering or navigation. The
-  // payload is always rebuilt from the ref so concurrent edits send the
-  // latest selections (latest-answer-wins server-side).
+  // Autosave never blocks answering or in-runner navigation, but the returned
+  // promise lets unmount/exit await the flush so the landing refetches only
+  // after the POST commits. The payload is always rebuilt from the ref so
+  // concurrent edits send the latest selections (latest-answer-wins
+  // server-side). Failures keep dirty=true so the next save, navigation,
+  // exit, or unmount retries with the full latest set.
   const doAutosave = useCallback(() => {
-    if (timeUpRef.current || finishedRef.current) return;
+    if (timeUpRef.current || finishedRef.current) return null;
     dirtyRef.current = false;
     const payload = toPayload();
     let promise = null;
     try {
       promise = onSubmitRef.current?.({ responses: payload, completed: false });
     } catch {
+      dirtyRef.current = true;
       if (!timeUpRef.current && !finishedRef.current) {
         setSaveError('Chưa lưu được tiến độ, sẽ thử lại.');
       }
-      return;
+      return null;
     }
     if (promise && typeof promise.catch === 'function') {
-      promise.catch(() => {
+      // Return the handled branch so awaiters never throw; the rejection is
+      // recorded via dirtyRef for the next save/exit.
+      return promise.catch(() => {
+        dirtyRef.current = true;
         if (!timeUpRef.current && !finishedRef.current) {
           setSaveError('Chưa lưu được tiến độ, sẽ thử lại.');
         }
       });
     }
+    return promise;
   }, [toPayload]);
 
   const scheduleAutosave = useCallback(() => {
     if (timeUpRef.current || finishedRef.current) return;
     clearAutosaveTimer();
     autosaveTimerRef.current = setTimeout(doAutosave, AUTOSAVE_DELAY_MS);
-  }, [doAutosave]);
+  }, [clearAutosaveTimer, doAutosave]);
 
   const flushAutosave = useCallback(() => {
+    if (!dirtyRef.current) return null;
+    clearAutosaveTimer();
+    return doAutosave();
+  }, [clearAutosaveTimer, doAutosave]);
+
+  // Unmount (breadcrumb, browser Back, route change) must not drop a selection
+  // made inside the debounce window: flush the latest payload. Terminal states
+  // (time-up/finished) are skipped inside doAutosave.
+  useEffect(() => () => {
     if (!dirtyRef.current) return;
     clearAutosaveTimer();
     doAutosave();
-  }, [doAutosave]);
+  }, [clearAutosaveTimer, doAutosave]);
 
   const finishExpired = useCallback(async () => {
     if (finishedRef.current || finishAttemptRef.current) return;
@@ -209,7 +227,9 @@ export default function QuizTestRunner({
     finishedRef.current = true;
     finishAttemptRef.current = false;
     try {
-      onCompleteRef.current?.(progress);
+      // Stay locked until the result has mounted so a concurrent exit cannot
+      // clear the result between the save and the refetch.
+      await onCompleteRef.current?.(progress);
     } catch {
       // The attempt is already finalized server-side; never offer an inert retry.
     } finally {
@@ -227,7 +247,7 @@ export default function QuizTestRunner({
     setTimeUp(true);
     setConfirmSubmit(false);
     finishExpired();
-  }, [finishExpired]);
+  }, [clearAutosaveTimer, finishExpired]);
 
   // Timer runs from the server-provided remaining seconds; expiry submits an
   // empty payload and locks the UI until the result is stored.
@@ -299,6 +319,9 @@ export default function QuizTestRunner({
       progress = await onSubmitRef.current?.({ responses: payload, completed: true });
     } catch (error) {
       finishedRef.current = false;
+      // The submit did not commit: keep the answers dirty so exit/unmount
+      // flushes them as an autosave instead of dropping them.
+      dirtyRef.current = true;
       if (error?.code === 'QUIZ_TIME_UP') {
         // The local timer was stale: let the time-up path finalize only the
         // responses already stored server-side, with an empty payload.
@@ -310,7 +333,9 @@ export default function QuizTestRunner({
       return;
     }
     try {
-      onCompleteRef.current?.(progress);
+      // Stay locked until the result has mounted so a concurrent exit cannot
+      // clear the result between the save and the refetch.
+      await onCompleteRef.current?.(progress);
     } catch {
       // The attempt is already finalized server-side; never offer an inert retry.
     } finally {
@@ -336,9 +361,17 @@ export default function QuizTestRunner({
     setConfirmSubmit(false);
   };
 
-  const handleExit = () => {
-    flushAutosave();
+  // Exit waits for the flushed save to commit before leaving, so the landing
+  // refetch (in onExit) never reads stale resume state. A failed save keeps
+  // dirty=true and still exits; the landing then shows the last committed
+  // state and the next attempt resumes from it.
+  const handleExit = async () => {
     setConfirmSubmit(false);
+    try {
+      await flushAutosave();
+    } catch {
+      // doAutosave already surfaces the error and restores dirty; exit anyway.
+    }
     onExit?.();
   };
 

@@ -379,7 +379,11 @@ export default function QuizSetPartPage() {
   const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
   const answered = Number(progress?.answered || 0);
   const questionCount = Number(part.question_count || questions.length || 0);
-  const resuming = answered > 0 && !completed;
+  // A test progress row only exists after start, so a non-null row means the
+  // attempt (and its timer) is already running even with zero answers; start
+  // then resumes without extending the deadline. Review keeps the answered>0
+  // rule since its rows carry no timer.
+  const resuming = isReview ? (answered > 0 && !completed) : (progress !== null && !completed);
   const timeMinutes = minutesOf(part, set);
   const bestCorrect = progress?.best_correct;
   const bestTotal = progress?.best_total;

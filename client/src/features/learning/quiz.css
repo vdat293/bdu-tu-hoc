@@ -1226,8 +1226,15 @@ body.theme-dark .quiz-test-error {
   .quiz-test-footer-spacer {
     height: 72px;
   }
+  /* Compact 2-column footer: four stacked full-width buttons would dominate a
+     360–560px viewport and crowd out the timer and palette. */
+  .quiz-test-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
   .quiz-test > .quiz-test-actions .btn {
-    flex: 1 1 100%;
+    flex: none;
+    width: 100%;
   }
 }
 @media (max-width: 390px) {
