@@ -12,6 +12,9 @@ import {
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
+import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
+import QuizComposerPanel from './QuizComposerPanel.jsx';
+import './quiz.css';
 import {
   AvatarContent,
   TitleBadges,
@@ -58,6 +61,7 @@ function detectResourceSource(rawUrl) {
 const KIND_META = {
   request: { label: 'Luận bàn', icon: '💬', badgeClass: 'kind-request', filterLabel: 'Luận bàn' },
   document: { label: 'Tài liệu', icon: '📚', badgeClass: 'kind-document', filterLabel: 'Tài liệu' },
+  quiz: { label: 'Trắc nghiệm', icon: '📝', badgeClass: 'kind-quiz', filterLabel: 'Trắc nghiệm' },
   video: { label: 'Video bài giảng', icon: '🎥', badgeClass: 'kind-video', filterLabel: 'Video' },
   link: { label: 'Tham khảo', icon: '🔗', badgeClass: 'kind-link', filterLabel: 'Liên kết' }
 };
@@ -187,7 +191,48 @@ function SingleAttachmentCard({ url, title, type, downloadUrl }) {
   );
 }
 
+function QuizSummaryCard({ post, onOpen }) {
+  const quiz = post?.quiz;
+  if (!quiz) return null;
+  const progress = quiz.progress || null;
+  const isCompleted = Boolean(progress?.completed_at);
+  const answered = Number(progress?.answered || 0);
+  const total = Number(quiz.question_count || 0);
+  const timeLimit = Number(quiz.time_limit_seconds || 0);
+  const isResuming = Boolean(progress && !isCompleted && answered > 0);
+  const timeLabel = timeLimit > 0 ? `${Math.round(timeLimit / 60)} phút` : 'Không giới hạn thời gian';
+  const ctaLabel = isCompleted ? 'Xem kết quả' : isResuming ? 'Làm tiếp' : 'Bắt đầu làm bài';
+
+  return (
+    <div className="quiz-summary-card">
+      <div className="quiz-summary-meta">
+        <span className="quiz-summary-chip">📝 {total} câu</span>
+        <span className="quiz-summary-chip">⏱ {timeLabel}</span>
+        {progress && !isCompleted && (
+          <span className="quiz-summary-chip">Đã làm {answered}/{total}</span>
+        )}
+        {isCompleted && progress?.best_correct != null && (
+          <span className="quiz-summary-chip">
+            Cao nhất {progress.best_correct}/{progress.best_total}
+          </span>
+        )}
+        {Number(progress?.attempts || 0) > 0 && (
+          <span className="quiz-summary-chip">{Number(progress.attempts)} lượt làm</span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary btn-sm quiz-summary-cta"
+        onClick={onOpen}
+      >
+        {ctaLabel}
+      </button>
+    </div>
+  );
+}
+
 function PostAttachments({ post }) {
+  if (post?.kind === 'quiz') return null;
   const attachments = Array.isArray(post.attachments) && post.attachments.length
     ? post.attachments
     : post.url
@@ -318,8 +363,14 @@ export default function CourseLearningPage() {
     title: '',
     content: '',
     url: '',
+    quizText: '',
+    quiz: null,
+    quizValid: false,
     isAnonymous: false
   });
+
+  const capabilities = useTtcdsCapabilities();
+  const canCreateQuiz = Boolean(capabilities.data?.can_access);
 
   // Query posts
   const postsQuery = useQuery({
@@ -360,16 +411,26 @@ export default function CourseLearningPage() {
   useRealtimeRoom(normalizedCourseCode ? `course:${normalizedCourseCode}` : null, Boolean(auth.token && courseCode));
 
   const create = useMutation({
-    mutationFn: () =>
-      createCoursePost(auth.token, courseCode, {
+    mutationFn: () => {
+      if (draft.kind === 'quiz') {
+        return createCoursePost(auth.token, courseCode, {
+          title: draft.title.trim() || draft.quiz?.title || 'Bài trắc nghiệm',
+          content: draft.content.trim() || draft.quiz?.description || '',
+          kind: 'quiz',
+          quiz: draft.quiz,
+          isAnonymous: false
+        });
+      }
+      return createCoursePost(auth.token, courseCode, {
         title: draft.title.trim() || 'Thảo luận môn học',
         content: draft.content.trim(),
         url: draft.url.trim(),
         kind: draft.kind,
         isAnonymous: draft.isAnonymous
-      }),
+      });
+    },
     onSuccess: () => {
-      setDraft({ kind: 'request', title: '', content: '', url: '', isAnonymous: false });
+      setDraft({ kind: 'request', title: '', content: '', url: '', quizText: '', quiz: null, quizValid: false, isAnonymous: false });
       setShowComposer(false);
       client.invalidateQueries({ queryKey: ['course-posts', auth.user?.mssv, courseCode] });
       notify('Đã đăng bài vào không gian môn học thành công!', 'success');
@@ -396,7 +457,7 @@ export default function CourseLearningPage() {
 
   // Filtered posts and counts
   const counts = useMemo(() => {
-    const map = { all: rawPosts.length, request: 0, document: 0, video: 0, link: 0 };
+    const map = { all: rawPosts.length, request: 0, document: 0, quiz: 0, video: 0, link: 0 };
     rawPosts.forEach((p) => {
       if (map[p.kind] !== undefined) map[p.kind]++;
     });
@@ -423,6 +484,34 @@ export default function CourseLearningPage() {
   const openComposer = (kind) => {
     setDraft((prev) => ({ ...prev, kind }));
     setShowComposer(true);
+  };
+
+  const selectKind = (kind) => {
+    setDraft((prev) => kind === 'quiz'
+      ? { ...prev, kind }
+      : { ...prev, kind, quiz: null, quizValid: false });
+  };
+
+  const handleComposerSubmit = (e) => {
+    e.preventDefault();
+    if (draft.kind === 'quiz') {
+      if (!draft.quizValid || !draft.quiz) {
+        notify('JSON trắc nghiệm chưa hợp lệ. Hãy kiểm tra và xem trước trước khi đăng.', 'warning');
+        return;
+      }
+      const quizTitle = draft.title.trim() || draft.quiz.title || '';
+      if (!quizTitle) {
+        notify('Vui lòng nhập tiêu đề bài trắc nghiệm.', 'warning');
+        return;
+      }
+      create.mutate();
+      return;
+    }
+    if (!draft.title.trim() && !draft.content.trim()) {
+      notify('Vui lòng nhập tiêu đề hoặc nội dung cần chia sẻ.', 'warning');
+      return;
+    }
+    create.mutate();
   };
 
   const toggleComments = (postId) => {
@@ -480,6 +569,10 @@ export default function CourseLearningPage() {
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">📚</span>
                 <span><strong>{counts.document}</strong> tài liệu</span>
+              </div>
+              <div className="learning-hero-stat-pill">
+                <span className="stat-icon">📝</span>
+                <span><strong>{counts.quiz}</strong> trắc nghiệm</span>
               </div>
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">💬</span>
@@ -540,6 +633,15 @@ export default function CourseLearningPage() {
               onClick={() => setFilterKind('document')}
             >
               📚 Tài liệu <span className="filter-count-badge">{counts.document}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterKind === 'quiz'}
+              className={`learning-filter-tab ${filterKind === 'quiz' ? 'active' : ''}`}
+              onClick={() => setFilterKind('quiz')}
+            >
+              📝 Trắc nghiệm <span className="filter-count-badge">{counts.quiz}</span>
             </button>
             <button
               type="button"
@@ -702,6 +804,12 @@ export default function CourseLearningPage() {
                   <div className="learning-post-card-body">
                     {post.title && <h3 className="learning-post-title">{post.title}</h3>}
                     {post.content && <div className="learning-post-content">{post.content}</div>}
+                    {post.kind === 'quiz' && (
+                      <QuizSummaryCard
+                        post={post}
+                        onOpen={() => navigate(`/learning/${encodeURIComponent(courseCode)}/quiz/${post.id}`)}
+                      />
+                    )}
                     <PostAttachments post={post} />
                   </div>
 
@@ -816,19 +924,14 @@ export default function CourseLearningPage() {
             <form
               id="learning-post-form"
               className="learning-composer-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!draft.title.trim() && !draft.content.trim()) {
-                  notify('Vui lòng nhập tiêu đề hoặc nội dung cần chia sẻ.', 'warning');
-                  return;
-                }
-                create.mutate();
-              }}
+              onSubmit={handleComposerSubmit}
             >
               <div className="learning-composer-header">
                 <div>
                   <h3 className="composer-headline">
-                    {draft.kind === 'request' ? '💬 Mở cuộc luận bàn / Hỏi đáp' : '📚 Chia sẻ tài liệu học tập'}
+                    {draft.kind === 'quiz'
+                      ? '📝 Tạo bài trắc nghiệm'
+                      : draft.kind === 'request' ? '💬 Mở cuộc luận bàn / Hỏi đáp' : '📚 Chia sẻ tài liệu học tập'}
                   </h3>
                   <p className="composer-subline">
                     Đang đăng vào: <strong>{displayCode} · {courseName}</strong>
@@ -849,31 +952,40 @@ export default function CourseLearningPage() {
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'request' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'request' })}
+                  onClick={() => selectKind('request')}
                 >
                   <span>💬</span> Luận bàn / Hỏi đáp
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'document' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'document' })}
+                  onClick={() => selectKind('document')}
                 >
                   <span>📚</span> Tài liệu / Slide / Đề
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'video' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'video' })}
+                  onClick={() => selectKind('video')}
                 >
                   <span>🎥</span> Video học tập
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'link' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'link' })}
+                  onClick={() => selectKind('link')}
                 >
                   <span>🔗</span> Liên kết ngoài
                 </button>
+                {canCreateQuiz && (
+                  <button
+                    type="button"
+                    className={`composer-kind-pill composer-kind-pill--quiz ${draft.kind === 'quiz' ? 'is-selected' : ''}`}
+                    onClick={() => selectKind('quiz')}
+                  >
+                    <span>📝</span> Tạo trắc nghiệm
+                  </button>
+                )}
               </div>
 
               <div className="composer-inputs-group">
@@ -888,7 +1000,9 @@ export default function CourseLearningPage() {
                     maxLength={180}
                     required
                     placeholder={
-                      draft.kind === 'request'
+                      draft.kind === 'quiz'
+                        ? 'VD: Ôn tập Chương 1 — Cấu trúc dữ liệu'
+                        : draft.kind === 'request'
                         ? 'VD: Thắc mắc về con trỏ và cấp phát động trong C/C++...'
                         : 'VD: Tổng hợp đề thi cuối kỳ và slide bài giảng 2025...'
                     }
@@ -922,7 +1036,9 @@ export default function CourseLearningPage() {
                     rows={4}
                     maxLength={5000}
                     placeholder={
-                      draft.kind === 'request'
+                      draft.kind === 'quiz'
+                        ? 'Mô tả ngắn gọn mục tiêu ôn tập...'
+                        : draft.kind === 'request'
                         ? 'Nêu rõ câu hỏi, bài tập hoặc chủ đề mà bạn muốn thảo luận cùng bạn học...'
                         : 'Mô tả ngắn gọn về tài liệu để mọi người dễ dàng tra cứu và ôn tập...'
                     }
@@ -931,6 +1047,23 @@ export default function CourseLearningPage() {
                   />
                 </div>
 
+                {draft.kind === 'quiz' && (
+                  <QuizComposerPanel
+                    text={draft.quizText}
+                    onChangeText={(text) => setDraft((prev) => ({ ...prev, quizText: text }))}
+                    onValidQuiz={(normalized) => setDraft((prev) => ({
+                      ...prev,
+                      quiz: normalized,
+                      quizValid: true,
+                      title: prev.title.trim() ? prev.title : (normalized.title || prev.title),
+                      content: prev.content.trim() ? prev.content : (normalized.description || prev.content)
+                    }))}
+                    onInvalid={() => setDraft((prev) => ({ ...prev, quiz: null, quizValid: false }))}
+                    disabled={create.isPending}
+                  />
+                )}
+
+                {draft.kind !== 'quiz' && (
                 <div className="composer-field">
                   <label className="composer-label" htmlFor="learning-post-url">
                     Liên kết đính kèm {draft.kind !== 'request' && <span className="req">*</span>}
@@ -959,6 +1092,7 @@ export default function CourseLearningPage() {
                     Hệ thống chỉ lưu liên kết bảo mật, không tải trực tiếp tệp lên máy chủ.
                   </span>
                 </div>
+                )}
               </div>
 
               <div className="composer-modal-footer">
@@ -973,9 +1107,9 @@ export default function CourseLearningPage() {
                   id="btn-learning-submit"
                   className="btn btn-primary btn-sm composer-btn-submit"
                   type="submit"
-                  disabled={create.isPending}
+                  disabled={create.isPending || (draft.kind === 'quiz' && !draft.quizValid)}
                 >
-                  {create.isPending ? 'Đang lưu bài...' : 'Đăng bài viết'}
+                  {create.isPending ? 'Đang lưu bài...' : draft.kind === 'quiz' ? 'Đăng bài trắc nghiệm' : 'Đăng bài viết'}
                 </button>
               </div>
             </form>

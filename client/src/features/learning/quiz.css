@@ -13,3 +13,53 @@
 .quiz-preview-options li { padding: 4px 8px; border-radius: 4px; }
 .quiz-option-correct { background: rgba(22, 163, 74, 0.15); color: #16a34a; font-weight: 600; }
 .quiz-preview-explanation { margin-top: 6px; font-style: italic; opacity: 0.8; }
+
+/* Task 10: quiz feed card + kind badge (dark-mode friendly via CSS vars). */
+.learning-kind-badge.kind-quiz {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+body.theme-dark .learning-kind-badge.kind-quiz {
+  color: #86efac;
+}
+.quiz-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  background: var(--bg-card-hover, transparent);
+}
+.quiz-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quiz-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-main, inherit);
+  background: var(--bg-card, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--border-color, var(--border, #ddd));
+}
+.quiz-summary-cta {
+  width: 100%;
+}
+/* Fifth composer pill: own accent; full row on narrow modals. */
+.composer-kind-pill--quiz.is-selected {
+  background: #15803d;
+  border-color: #15803d;
+}
+@media (max-width: 560px) {
+  .composer-kind-pill--quiz {
+    grid-column: 1 / -1;
+    border-color: #15803d;
+  }
+}
