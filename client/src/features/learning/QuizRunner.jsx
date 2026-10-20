@@ -1,0 +1,417 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import './quiz.css';
+
+function normalizeInitialResponses(initialProgress, questions) {
+  const entries = Array.isArray(initialProgress?.responses) ? initialProgress.responses : [];
+  const validIds = new Set(questions.map((question) => question.id));
+  const seen = new Set();
+  const responses = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry.id !== 'string' || typeof entry.response !== 'string') continue;
+    if (!validIds.has(entry.id) || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    responses.push({ id: entry.id, response: entry.response.toUpperCase() });
+  }
+  return responses;
+}
+
+function toClock(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = String(Math.floor(safe / 60)).padStart(2, '0');
+  const seconds = String(safe % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function normalizeRemaining(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : null;
+}
+
+export default function QuizRunner({
+  questions = [],
+  initialProgress = null,
+  remainingSeconds = null,
+  onCheckAnswer,
+  onSaveProgress,
+  onComplete,
+  onExit
+}) {
+  const initialResponses = normalizeInitialResponses(initialProgress, questions);
+  const [responses, setResponses] = useState(initialResponses);
+  const [index, setIndex] = useState(() => {
+    const answered = new Set(initialResponses.map((entry) => entry.id));
+    const firstUnanswered = questions.findIndex((question) => !answered.has(question.id));
+    return firstUnanswered === -1 ? questions.length : firstUnanswered;
+  });
+  const [selected, setSelected] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState('');
+  const [timeUp, setTimeUp] = useState(false);
+  const [remaining, setRemaining] = useState(() => normalizeRemaining(remainingSeconds));
+
+  const sessionResponsesRef = useRef([]);
+  const timeUpRef = useRef(false);
+  const finishedRef = useRef(false);
+  const finishAttemptRef = useRef(false);
+  const onSaveProgressRef = useRef(onSaveProgress);
+  const onCompleteRef = useRef(onComplete);
+  const feedbackRef = useRef(null);
+  const questionHeadingRef = useRef(null);
+
+  onSaveProgressRef.current = onSaveProgress;
+  onCompleteRef.current = onComplete;
+
+  const total = questions.length;
+  const current = index >= 0 && index < total ? questions[index] : null;
+  const answeredIds = new Set(responses.map((entry) => entry.id));
+  const answeredCount = questions.reduce((count, question) => count + (answeredIds.has(question.id) ? 1 : 0), 0);
+  const unansweredCount = Math.max(0, total - answeredCount);
+  const progressPercent = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
+  const locked = Boolean(feedback) || checking || timeUp || finishing;
+  const timerLabel = remaining === null ? 'Không giới hạn thời gian' : `Thời gian còn lại ${toClock(remaining)}`;
+
+  const finishExpired = useCallback(async () => {
+    if (finishedRef.current || finishAttemptRef.current) return;
+    finishAttemptRef.current = true;
+    setFinishing(true);
+    setFinishError('');
+    try {
+      const progress = await onSaveProgressRef.current?.({ responses: [], completed: true });
+      finishedRef.current = true;
+      onCompleteRef.current?.(progress);
+    } catch {
+      setFinishError('Chưa lưu được kết quả. Vui lòng thử lại.');
+    } finally {
+      finishAttemptRef.current = false;
+      setFinishing(false);
+    }
+  }, []);
+
+  const handleTimeUp = useCallback(() => {
+    if (timeUpRef.current) return;
+    timeUpRef.current = true;
+    setTimeUp(true);
+    setSelected(null);
+    setFeedback(null);
+    setConfirmSubmit(false);
+    finishExpired();
+  }, [finishExpired]);
+
+  // Timer runs from the server-provided remaining seconds; the page shell keeps
+  // it in sync on visibilitychange without remounting the runner.
+  const hasTimer = remaining !== null;
+  useEffect(() => {
+    if (!hasTimer || timeUp) return undefined;
+    const timerId = setInterval(() => {
+      setRemaining((previous) => (previous === null ? previous : Math.max(0, previous - 1)));
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [hasTimer, timeUp]);
+
+  useEffect(() => {
+    if (remaining === 0 && !timeUp) handleTimeUp();
+  }, [remaining, timeUp, handleTimeUp]);
+
+  useEffect(() => {
+    setRemaining(normalizeRemaining(remainingSeconds));
+  }, [remainingSeconds]);
+
+  useEffect(() => {
+    if (feedback) feedbackRef.current?.focus();
+  }, [feedback]);
+
+  useEffect(() => {
+    if (!feedback && !timeUp) questionHeadingRef.current?.focus();
+  }, [index, feedback, timeUp]);
+
+  const handleSelect = (letter) => {
+    if (locked) return;
+    setSelected(letter);
+  };
+
+  const handleCheck = async () => {
+    if (!current || !selected || locked || timeUpRef.current) return;
+    const questionId = current.id;
+    const response = selected;
+    setChecking(true);
+    setCheckError('');
+    setSaveError('');
+    try {
+      const result = await onCheckAnswer?.(questionId, response);
+      // The deadline may pass while the answer is in flight: never persist a
+      // response or reveal feedback after the server-side deadline.
+      if (timeUpRef.current) return;
+      setFeedback({
+        correct: Boolean(result?.correct),
+        correct_option: result?.correct_option || '',
+        explanation: result?.explanation || ''
+      });
+      const entry = { id: questionId, response };
+      setResponses((previous) => (
+        previous.some((item) => item.id === questionId) ? previous : [...previous, entry]
+      ));
+      if (!sessionResponsesRef.current.some((item) => item.id === questionId)) {
+        sessionResponsesRef.current.push(entry);
+      }
+      if (typeof result?.remaining_seconds === 'number') {
+        setRemaining(normalizeRemaining(result.remaining_seconds));
+      }
+      const payload = sessionResponsesRef.current.map((item) => ({ id: item.id, response: item.response }));
+      try {
+        const savePromise = onSaveProgressRef.current?.({ responses: payload, completed: false });
+        if (savePromise && typeof savePromise.catch === 'function') {
+          savePromise.catch(() => setSaveError('Chưa lưu được tiến độ, sẽ thử lại.'));
+        }
+      } catch {
+        setSaveError('Chưa lưu được tiến độ, sẽ thử lại.');
+      }
+    } catch (error) {
+      if (timeUpRef.current) return;
+      if (error?.code === 'QUIZ_TIME_UP') {
+        handleTimeUp();
+        return;
+      }
+      setCheckError('Không kiểm tra được đáp án. Vui lòng thử lại.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleNext = () => {
+    const nextIndex = questions.findIndex((question, questionIndex) => (
+      questionIndex > index && !answeredIds.has(question.id)
+    ));
+    const fallbackIndex = questions.findIndex((question) => !answeredIds.has(question.id));
+    const target = nextIndex === -1 ? fallbackIndex : nextIndex;
+    setSelected(null);
+    setFeedback(null);
+    setCheckError('');
+    setIndex(target === -1 ? total : target);
+  };
+
+  const finalize = async () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setConfirmSubmit(false);
+    setFinishing(true);
+    setFinishError('');
+    try {
+      const payload = responses.map((entry) => ({ id: entry.id, response: entry.response }));
+      const progress = await onSaveProgressRef.current?.({ responses: payload, completed: true });
+      onCompleteRef.current?.(progress);
+    } catch {
+      finishedRef.current = false;
+      setFinishError('Chưa nộp được bài. Vui lòng thử lại.');
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const requestFinish = () => {
+    if (finishing || checking || timeUpRef.current) return;
+    if (unansweredCount > 0) {
+      setConfirmSubmit(true);
+      return;
+    }
+    finalize();
+  };
+
+  const correctOptionText = current && feedback?.correct_option
+    ? current.options?.[feedback.correct_option.charCodeAt(0) - 65]
+    : '';
+
+  return (
+    <div className="quiz-runner">
+      <header className="quiz-runner-head">
+        <div className="quiz-runner-head-info">
+          <strong className="quiz-runner-count">
+            {current ? `Câu ${index + 1}/${total}` : `Đã trả lời ${answeredCount}/${total}`}
+          </strong>
+          <div
+            className="quiz-runner-progress"
+            role="progressbar"
+            aria-label="Tiến độ bài làm"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent}
+          >
+            <span className="quiz-runner-progress-bar" style={{ width: `${progressPercent}%` }} />
+          </div>
+        </div>
+        {remaining !== null && (
+          <span className="quiz-runner-timer" role="timer" aria-label={timerLabel}>
+            {toClock(remaining)}
+          </span>
+        )}
+      </header>
+
+      {timeUp ? (
+        <section className="quiz-runner-timeup" role="status" aria-live="polite">
+          <strong>Đã hết thời gian làm bài.</strong>
+          {finishing && <p className="quiz-runner-muted">Đang lưu kết quả...</p>}
+          {finishError && <p className="quiz-runner-error" role="alert">{finishError}</p>}
+          <div className="quiz-runner-actions">
+            {finishError && !finishing && (
+              <button type="button" className="btn btn-primary" onClick={finishExpired}>
+                Thử lưu kết quả lại
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={onExit}>
+              Quay lại
+            </button>
+          </div>
+        </section>
+      ) : !current ? (
+        <section className="quiz-runner-finish">
+          <p>Bạn đã trả lời tất cả câu hỏi.</p>
+          {finishError && <p className="quiz-runner-error" role="alert">{finishError}</p>}
+          <div className="quiz-runner-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={requestFinish}
+              disabled={finishing}
+            >
+              {finishing ? 'Đang nộp...' : 'Hoàn tất bài làm'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={onExit}>
+              Quay lại
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="quiz-runner-question" aria-labelledby="quiz-runner-question-heading">
+            <h2
+              className="quiz-runner-question-text"
+              id="quiz-runner-question-heading"
+              ref={questionHeadingRef}
+              tabIndex={-1}
+            >
+              {current.question}
+            </h2>
+            <div
+              className="quiz-runner-options"
+              role="radiogroup"
+              aria-labelledby="quiz-runner-question-heading"
+            >
+              {current.options.map((option, optionIndex) => {
+                const letter = String.fromCharCode(65 + optionIndex);
+                const isSelected = selected === letter;
+                const isCorrect = Boolean(feedback) && feedback.correct_option === letter;
+                const isWrong = Boolean(feedback) && isSelected && !feedback.correct;
+                const classes = ['quiz-runner-option'];
+                if (isSelected) classes.push('is-selected');
+                if (isCorrect) classes.push('is-correct');
+                if (isWrong) classes.push('is-wrong');
+                return (
+                  <button
+                    key={`${current.id}-${letter}`}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    aria-label={String(option)}
+                    className={classes.join(' ')}
+                    onClick={() => handleSelect(letter)}
+                    disabled={locked}
+                  >
+                    <span className="quiz-runner-option-letter" aria-hidden="true">{letter}</span>
+                    <span className="quiz-runner-option-text">{option}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {feedback && (
+            <div
+              className={`quiz-runner-feedback ${feedback.correct ? 'is-correct' : 'is-wrong'}`}
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+              ref={feedbackRef}
+            >
+              <strong>{feedback.correct ? 'Chính xác!' : 'Chưa chính xác.'}</strong>
+              {!feedback.correct && feedback.correct_option && (
+                <p className="quiz-runner-correct-answer">
+                  Đáp án đúng: {feedback.correct_option}
+                  {correctOptionText ? `. ${correctOptionText}` : ''}
+                </p>
+              )}
+              {feedback.explanation && (
+                <p className="quiz-runner-explanation">{feedback.explanation}</p>
+              )}
+            </div>
+          )}
+
+          {checkError && <p className="quiz-runner-error" role="alert">{checkError}</p>}
+          {saveError && <p className="quiz-runner-error" role="alert">{saveError}</p>}
+          {!timeUp && finishError && <p className="quiz-runner-error" role="alert">{finishError}</p>}
+
+          {confirmSubmit && (
+            <section className="quiz-runner-confirm" role="alertdialog" aria-label="Nộp bài?">
+              <p>
+                Còn {unansweredCount} câu chưa làm, các câu đó sẽ tính sai. Nộp bài?
+              </p>
+              <div className="quiz-runner-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirmSubmit(false)}>
+                  Tiếp tục làm
+                </button>
+                <button type="button" className="btn btn-primary" onClick={finalize} disabled={finishing}>
+                  Nộp bài
+                </button>
+              </div>
+            </section>
+          )}
+
+          <footer className="quiz-runner-actions">
+            {feedback ? (
+              unansweredCount === 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={requestFinish}
+                  disabled={finishing}
+                >
+                  {finishing ? 'Đang nộp...' : 'Xem kết quả'}
+                </button>
+              ) : (
+                <button type="button" className="btn btn-primary" onClick={handleNext}>
+                  Câu tiếp
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCheck}
+                disabled={!selected || checking || timeUp}
+              >
+                {checking ? 'Đang kiểm tra...' : 'Kiểm tra đáp án'}
+              </button>
+            )}
+
+            {!confirmSubmit && answeredCount > 0 && unansweredCount > 0 && !timeUp && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={requestFinish}
+                disabled={finishing || checking}
+              >
+                Xem kết quả
+              </button>
+            )}
+
+            <button type="button" className="btn btn-secondary" onClick={onExit}>
+              Quay lại
+            </button>
+          </footer>
+        </>
+      )}
+    </div>
+  );
+}

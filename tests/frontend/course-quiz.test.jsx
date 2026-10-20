@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QuizComposerPanel from '../../client/src/features/learning/QuizComposerPanel.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
+import QuizRunner from '../../client/src/features/learning/QuizRunner.jsx';
 
 const feedMocks = vi.hoisted(() => ({
   getCoursePosts: vi.fn(),
@@ -304,5 +305,252 @@ describe('course feed quiz integration', () => {
     fireEvent.change(screen.getByLabelText(/Tìm kiếm bài viết/), { target: { value: 'LIFO' } });
     await act(async () => { await Promise.resolve(); });
     expect(screen.queryByText('Ôn tập Chương 1')).toBeNull();
+  });
+});
+
+describe('quiz runner', () => {
+  async function flush() {
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  function runner(overrides = {}) {
+    const props = {
+      questions: [
+        { id: 'q1', question: '1 + 1 = ?', options: ['1', '2'] },
+        { id: 'q2', question: '2 + 2 = ?', options: ['3', '4'] }
+      ],
+      initialProgress: null,
+      remainingSeconds: 600,
+      onCheckAnswer: vi.fn().mockResolvedValue({
+        correct: true,
+        correct_option: 'B',
+        explanation: '2',
+        remaining_seconds: 590
+      }),
+      onSaveProgress: vi.fn().mockResolvedValue({ answered: 1 }),
+      onComplete: vi.fn(),
+      onExit: vi.fn(),
+      ...overrides
+    };
+    return { props, ...render(<QuizRunner {...props} />) };
+  }
+
+  it('checks an answer, locks it, and saves progress', async () => {
+    const onCheckAnswer = vi.fn().mockResolvedValue({
+      correct: true, correct_option: 'B', explanation: '2', remaining_seconds: 590
+    });
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
+    const onComplete = vi.fn();
+
+    render(<QuizRunner
+      questions={[
+        { id: 'q1', question: '1 + 1 = ?', options: ['1', '2'] },
+        { id: 'q2', question: '2 + 2 = ?', options: ['3', '4'] }
+      ]}
+      initialProgress={null}
+      remainingSeconds={600}
+      onCheckAnswer={onCheckAnswer}
+      onSaveProgress={onSaveProgress}
+      onComplete={onComplete}
+      onExit={() => {}}
+    />);
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+
+    expect(onCheckAnswer).toHaveBeenCalledWith('q1', 'B');
+    expect(screen.getByText('Chính xác!')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '1' })).toBeDisabled();
+    expect(onSaveProgress).toHaveBeenCalledWith({
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: false
+    });
+  });
+
+  it('marks the wrong choice, shows the correct answer and explanation', async () => {
+    const onCheckAnswer = vi.fn().mockResolvedValue({
+      correct: false, correct_option: 'B', explanation: '2 là đáp án đúng.', remaining_seconds: 580
+    });
+    runner({ onCheckAnswer });
+
+    fireEvent.click(screen.getByRole('radio', { name: '1' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+
+    expect(screen.getByText('Chưa chính xác.')).toBeTruthy();
+    expect(screen.getByText(/Đáp án đúng: B/)).toBeTruthy();
+    expect(screen.getByText('2 là đáp án đúng.')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '1' })).toHaveClass('is-wrong');
+    expect(screen.getByRole('radio', { name: '2' })).toHaveClass('is-correct');
+    const feedback = screen.getByRole('status');
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('resumes at the first unanswered question', () => {
+    runner({
+      initialProgress: { responses: [{ id: 'q1', response: 'B', correct: true }] }
+    });
+
+    expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
+    expect(screen.queryByText('1 + 1 = ?')).toBeNull();
+    expect(screen.getByText(/Câu 2\/2/)).toBeTruthy();
+  });
+
+  it('offers Hoàn tất bài làm when every question was already answered', async () => {
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 2, completed_at: '2026-10-20T10:00:00.000Z' });
+    const onComplete = vi.fn();
+    runner({
+      onSaveProgress,
+      onComplete,
+      initialProgress: {
+        responses: [
+          { id: 'q1', response: 'B', correct: true },
+          { id: 'q2', response: 'B', correct: true }
+        ]
+      }
+    });
+
+    expect(screen.queryByText('1 + 1 = ?')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Hoàn tất bài làm/ }));
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledWith({
+      responses: [
+        { id: 'q1', response: 'B' },
+        { id: 'q2', response: 'B' }
+      ],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalledWith({ answered: 2, completed_at: '2026-10-20T10:00:00.000Z' });
+  });
+
+  it('finishes from the last question with completed:true', async () => {
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 2, correct_count: 2 });
+    const onComplete = vi.fn();
+    runner({ onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('radio', { name: '4' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenLastCalledWith({
+      responses: [
+        { id: 'q1', response: 'B' },
+        { id: 'q2', response: 'B' }
+      ],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalledWith({ answered: 2, correct_count: 2 });
+  });
+
+  it('asks for confirmation before an early submit with unanswered questions', async () => {
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 1 });
+    const onComplete = vi.fn();
+    runner({ onSaveProgress, onComplete });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    expect(screen.getByText(/Còn 1 câu chưa làm, các câu đó sẽ tính sai\. Nộp bài\?/)).toBeTruthy();
+    expect(onSaveProgress).not.toHaveBeenCalledWith(expect.objectContaining({ completed: true }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục làm' }));
+    expect(screen.queryByText(/Còn 1 câu chưa làm/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nộp bài' }));
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledWith({
+      responses: [{ id: 'q1', response: 'B' }],
+      completed: true
+    });
+    expect(onComplete).toHaveBeenCalled();
+  });
+
+  it('calls onExit from the back action', () => {
+    const onExit = vi.fn();
+    runner({ onExit });
+
+    fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }));
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes with no new responses and calls onComplete when time runs out', async () => {
+    vi.useFakeTimers();
+    const onCheckAnswer = vi.fn();
+    const onSaveProgress = vi.fn().mockResolvedValue({ answered: 0, completed_at: '2026-10-20T10:00:00.000Z' });
+    const onComplete = vi.fn();
+    runner({ remainingSeconds: 1, onCheckAnswer, onSaveProgress, onComplete });
+
+    expect(screen.getByText('00:01')).toBeTruthy();
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledWith({ responses: [], completed: true });
+    expect(onComplete).toHaveBeenCalled();
+    expect(onCheckAnswer).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Kiểm tra đáp án/ })).toBeNull();
+  });
+
+  it('shows a retry action when finalizing after time up fails', async () => {
+    vi.useFakeTimers();
+    const onSaveProgress = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ answered: 0 });
+    const onComplete = vi.fn();
+    runner({ remainingSeconds: 1, onSaveProgress, onComplete });
+
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    await flush();
+
+    const retry = screen.getByRole('button', { name: /Thử lưu kết quả lại/ });
+    fireEvent.click(retry);
+    await flush();
+
+    expect(onSaveProgress).toHaveBeenCalledTimes(2);
+    expect(onComplete).toHaveBeenCalled();
+  });
+
+  it('keeps working after an autosave failure and shows a banner', async () => {
+    const onSaveProgress = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ answered: 1 });
+    runner({ onSaveProgress });
+
+    fireEvent.click(screen.getByRole('radio', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra đáp án/ }));
+    await flush();
+
+    expect(screen.getByText(/Chưa lưu được tiến độ, sẽ thử lại/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Câu tiếp' }));
+    expect(screen.getByText('2 + 2 = ?')).toBeTruthy();
+  });
+
+  it('renders question markup as text, never as HTML', () => {
+    const { container } = render(<QuizRunner
+      questions={[{ id: 'q1', question: 'Chọn <script>alert(1)</script>', options: ['An toàn', 'Nguy hiểm'] }]}
+      initialProgress={null}
+      remainingSeconds={null}
+      onCheckAnswer={vi.fn()}
+      onSaveProgress={vi.fn()}
+      onComplete={vi.fn()}
+      onExit={() => {}}
+    />);
+
+    expect(screen.getByText('Chọn <script>alert(1)</script>')).toBeTruthy();
+    expect(container.querySelector('script')).toBeNull();
+    expect(document.querySelector('script')).toBeNull();
   });
 });
