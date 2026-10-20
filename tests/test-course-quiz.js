@@ -260,6 +260,12 @@ assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'b' }, null), fals
 assert.equal(gradeQuizResponse({ options: ['a','b'], correct: 'c' }, 'c'), false);
 // chữ cái không còn là đáp án
 assert.equal(gradeQuizResponse({ options: ['Hàng đợi','Ngăn xếp'], correct: 'Ngăn xếp' }, 'B'), false);
+// response CRLF phải khớp option đã chuẩn hóa newline (\n)
+assert.equal(
+  gradeQuizResponse({ options: ['a\nb'], correct: 'a\nb' }, 'a\r\nb'),
+  true,
+  'response CRLF phải khớp option đã chuẩn hóa newline'
+);
 
 // gradeQuizResponses: response text, canonical hóa, bỏ entry không hợp lệ/trùng/lạ
 const gq = gradeQuizResponses(

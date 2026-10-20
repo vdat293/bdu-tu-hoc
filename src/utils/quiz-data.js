@@ -24,6 +24,22 @@ function cleanText(value) {
   return normalizeNewlines(value).trim();
 }
 
+/**
+ * Trả về chuỗi option canonical (newline đã chuẩn hóa + trim) khớp value,
+ * so sánh không phân biệt hoa/thường; null nếu không khớp.
+ */
+function matchOption(options, value) {
+  if (!Array.isArray(options) || typeof value !== 'string') return null;
+  const wanted = cleanText(value).toLocaleLowerCase('vi-VN');
+  if (wanted === '') return null;
+  for (const opt of options) {
+    if (typeof opt !== 'string') continue;
+    const canonical = cleanText(opt);
+    if (canonical.toLocaleLowerCase('vi-VN') === wanted) return canonical;
+  }
+  return null;
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -201,11 +217,8 @@ export function normalizeQuiz(input) {
     if (typeof q.correct !== 'string') {
       pushError(errors, `${qPath}.correct`, `Câu ${idx + 1}: correct phải là chuỗi.`);
     } else if (options) {
-      const wanted = cleanText(q.correct).toLocaleLowerCase('vi-VN');
-      const matched = wanted === ''
-        ? undefined
-        : options.find((opt) => opt.toLocaleLowerCase('vi-VN') === wanted);
-      if (matched === undefined) {
+      const matched = matchOption(options, q.correct);
+      if (matched === null) {
         pushError(
           errors,
           `${qPath}.correct`,
@@ -335,16 +348,10 @@ export function publicQuizQuestions(questions) {
 
 export function gradeQuizResponse(question, response) {
   if (!question || !Array.isArray(question.options)) return false;
-  if (typeof response !== 'string') return false;
-  const wanted = response.trim().toLocaleLowerCase('vi-VN');
-  if (wanted === '') return false;
-  const matched = question.options.find(
-    (opt) => typeof opt === 'string' && opt.trim().toLocaleLowerCase('vi-VN') === wanted
-  );
-  if (matched === undefined) return false;
-  if (typeof question.correct !== 'string') return false;
-  return matched.trim().toLocaleLowerCase('vi-VN')
-    === question.correct.trim().toLocaleLowerCase('vi-VN');
+  const matched = matchOption(question.options, response);
+  if (matched === null) return false;
+  const correctOption = matchOption(question.options, question.correct);
+  return correctOption !== null && matched === correctOption;
 }
 
 export function gradeQuizResponses(questions, responses) {
@@ -364,17 +371,9 @@ export function gradeQuizResponses(questions, responses) {
       if (!qMap.has(id)) continue;
       if (seen.has(id)) continue;
       const question = qMap.get(id);
-      if (typeof entry.response !== 'string') continue;
-      const wanted = entry.response.trim().toLocaleLowerCase('vi-VN');
-      if (wanted === '') continue;
-      const matched = Array.isArray(question.options)
-        ? question.options.find(
-          (opt) => typeof opt === 'string' && opt.trim().toLocaleLowerCase('vi-VN') === wanted
-        )
-        : undefined;
-      if (matched === undefined) continue;
+      const canonical = matchOption(question.options, entry.response);
+      if (canonical === null) continue;
       seen.add(id);
-      const canonical = matched.trim();
       entries.push({ id, response: canonical, correct: gradeQuizResponse(question, canonical) });
     }
   }
