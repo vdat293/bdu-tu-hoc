@@ -1,15 +1,19 @@
 import { isDatabaseConfigured, query, transaction } from '../db/database.js';
 import { detectSupportedResourceSource, parseDriveOrMediaUrl } from './community.service.js';
 import { IdentityPresentationService } from './identity-presentation.service.js';
+import { PermissionService } from './permission.service.js';
+import { QUIZ_MAX_BYTES, normalizeQuiz } from '../utils/quiz-data.js';
 
-const POST_KINDS = new Set(['request', 'document', 'video', 'link']);
+const POST_KINDS = new Set(['request', 'document', 'video', 'link', 'quiz']);
 const MAX_TITLE_LENGTH = 180;
 const MAX_CONTENT_LENGTH = 5000;
 const MAX_COMMENT_LENGTH = 2000;
 
-function httpError(message, status = 400) {
+function httpError(message, status = 400, code = null, errors = null) {
   const error = new Error(message);
   error.status = status;
+  if (code) error.code = code;
+  if (errors) error.errors = errors;
   return error;
 }
 
@@ -181,7 +185,7 @@ async function findAccessibleCoursePost(mssv, courseCode, postId, db = { query }
   if (!cleanPostId) throw httpError('Bài viết không hợp lệ.');
   const course = await findAccessibleCourse(mssv, courseCode, db);
   const result = await db.query(`
-    SELECT id, course_id, author_mssv, like_count, comment_count
+    SELECT id, course_id, author_mssv, kind, like_count, comment_count
     FROM course_posts
     WHERE id = $1 AND course_id = $2
     LIMIT 1;
@@ -203,6 +207,20 @@ function mapPost(row, viewerMssv) {
     like_count: Number(row.like_count || 0),
     comment_count: Number(row.comment_count || 0),
     is_liked: Boolean(row.is_liked_by_viewer),
+    quiz: row.kind === 'quiz' && row.quiz_question_count != null
+      ? {
+          question_count: Number(row.quiz_question_count),
+          time_limit_seconds: Number(row.quiz_time_limit_seconds || 0),
+          progress: row.quiz_answered == null ? null : {
+            answered: Number(row.quiz_answered || 0),
+            correct_count: Number(row.quiz_correct_count || 0),
+            best_correct: row.quiz_best_correct == null ? null : Number(row.quiz_best_correct),
+            best_total: row.quiz_best_total == null ? null : Number(row.quiz_best_total),
+            attempts: Number(row.quiz_attempts || 0),
+            completed_at: row.quiz_completed_at || null
+          }
+        }
+      : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     is_mine: row.author_mssv === viewerMssv,
@@ -246,6 +264,75 @@ async function enrichCourseIdentities(records) {
       }
     };
   });
+}
+
+function readQuizByteLength(value) {
+  try {
+    return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+async function createCourseQuizPost(mssv, course, input) {
+  if (!(await PermissionService.can(mssv, 'ttcds:access'))) {
+    throw httpError(
+      'Chỉ thành viên có danh hiệu #TTCDS mới được tạo bài trắc nghiệm.',
+      403,
+      'TTCDS_FORBIDDEN'
+    );
+  }
+
+  const byteLength = readQuizByteLength(input.quiz);
+  if (byteLength === null || byteLength > QUIZ_MAX_BYTES) {
+    throw httpError('Dữ liệu trắc nghiệm vượt quá 256 KB.', 400, 'QUIZ_INVALID', [
+      { path: '$', message: 'JSON vượt quá 256 KB.' }
+    ]);
+  }
+
+  const normalized = normalizeQuiz(input.quiz);
+  if (!normalized.ok) {
+    throw httpError('Dữ liệu trắc nghiệm không hợp lệ.', 400, 'QUIZ_INVALID', normalized.errors);
+  }
+
+  const quiz = normalized.quiz;
+  const title = cleanText(input.title, MAX_TITLE_LENGTH) || quiz.title || '';
+  if (!title) {
+    throw httpError('Tiêu đề không được để trống.', 400, 'QUIZ_INVALID', [
+      { path: '$.title', message: 'Cần tiêu đề bài đăng hoặc title trong JSON.' }
+    ]);
+  }
+  const content = cleanText(input.content, MAX_CONTENT_LENGTH) || quiz.description || '';
+
+  const created = await transaction(async (client) => {
+    const inserted = await client.query(`
+      INSERT INTO course_posts (
+        course_id, author_mssv, kind, title, content, attachments, is_anonymous
+      )
+      VALUES ($1, $2, 'quiz', $3, $4, '[]'::jsonb, FALSE)
+      RETURNING *;
+    `, [course.id, mssv, title, content]);
+
+    const postRow = inserted.rows[0];
+    await client.query(`
+      INSERT INTO course_quizzes (
+        post_id, schema_version, questions, question_count, time_limit_seconds
+      )
+      VALUES ($1, 1, $2::jsonb, $3, $4);
+    `, [postRow.id, JSON.stringify(quiz.questions), quiz.questions.length, quiz.timeLimitSeconds]);
+
+    return postRow;
+  });
+
+  const student = await query('SELECT full_name FROM students WHERE mssv = $1', [mssv]);
+  const post = mapPost({
+    ...created,
+    author_name: student.rows[0]?.full_name,
+    quiz_question_count: quiz.questions.length,
+    quiz_time_limit_seconds: quiz.timeLimitSeconds,
+    quiz_answered: null
+  }, mssv);
+  return (await enrichCourseIdentities([post]))[0];
 }
 
 export const LearningService = {
@@ -393,11 +480,25 @@ export const LearningService = {
     const cleanMssv = String(mssv || '').trim().toUpperCase();
     const course = await findAccessibleCourse(cleanMssv, courseCode);
     const result = await query(`
-      SELECT cp.*, s.full_name AS author_name, (viewer_like.post_id IS NOT NULL) AS is_liked_by_viewer
+      SELECT
+        cp.*,
+        s.full_name AS author_name,
+        (viewer_like.post_id IS NOT NULL) AS is_liked_by_viewer,
+        cq.question_count AS quiz_question_count,
+        cq.time_limit_seconds AS quiz_time_limit_seconds,
+        qp.answered AS quiz_answered,
+        qp.correct_count AS quiz_correct_count,
+        qp.best_correct AS quiz_best_correct,
+        qp.best_total AS quiz_best_total,
+        qp.attempts AS quiz_attempts,
+        qp.completed_at AS quiz_completed_at
       FROM course_posts cp
       JOIN students s ON s.mssv = cp.author_mssv
       LEFT JOIN course_post_likes viewer_like
         ON viewer_like.post_id = cp.id AND viewer_like.mssv = $2
+      LEFT JOIN course_quizzes cq ON cq.post_id = cp.id
+      LEFT JOIN course_quiz_progress qp
+        ON qp.post_id = cp.id AND qp.mssv = $2
       WHERE cp.course_id = $1
       ORDER BY cp.created_at DESC
       LIMIT 100;
@@ -419,12 +520,17 @@ export const LearningService = {
     const cleanMssv = String(mssv || '').trim().toUpperCase();
     const course = await findAccessibleCourse(cleanMssv, courseCode);
     const kind = String(input.kind || '').trim().toLowerCase();
+
+    if (!POST_KINDS.has(kind)) throw httpError('Loại bài đăng không hợp lệ.');
+    if (kind === 'quiz') {
+      return createCourseQuizPost(cleanMssv, course, input);
+    }
+
     const title = cleanText(input.title, MAX_TITLE_LENGTH);
     const content = cleanText(input.content, MAX_CONTENT_LENGTH);
     const url = cleanText(input.url, 2048);
     const isAnonymous = kind === 'request' && normalizeBoolean(input.isAnonymous ?? input.is_anonymous);
 
-    if (!POST_KINDS.has(kind)) throw httpError('Loại bài đăng không hợp lệ.');
     if (!title) throw httpError('Tiêu đề không được để trống.');
     if (kind === 'request' && !content) {
       throw httpError('Hãy nhập nội dung bạn muốn luận bàn.');
