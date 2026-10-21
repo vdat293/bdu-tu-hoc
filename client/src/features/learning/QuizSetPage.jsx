@@ -6,8 +6,9 @@ import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { AvatarContent, TitleBadges, getIdentityName } from '../../components/identity/Identity.jsx';
 import QuizPartActionDialog from './QuizPartActionDialog.jsx';
-import { partActions, partSummary, progressEntry, reviewProgressSummary } from './quiz-set-parts.js';
+import { partActions, progressEntry, reviewProgressSummary } from './quiz-set-parts.js';
 import './quiz.css';
+import '../vocab/vocab.css';
 
 /**
  * Trang chi tiết bộ đề: header (tiêu đề + mô tả + meta) và danh sách các
@@ -135,11 +136,17 @@ export default function QuizSetPage() {
   };
 
   return (
-    <div className="quiz-page quiz-page--set">
+    <div className="quiz-page">
       {breadcrumb}
-      <header className="quiz-part-head">
-        <div className="quiz-part-title-row">
-          <h1 className="quiz-page-title">{set.title}</h1>
+      <div className="vocab-panel glass-panel vocab-theme-hero">
+        <div className="vocab-theme-head">
+          <span className="vocab-theme-icon" aria-hidden="true">📝</span>
+          <h2 className="vocab-theme-title">{set.title}</h2>
+          <div className="vocab-theme-badges">
+            <span className="vocab-theme-badge is-sky">📝 {`${Number(set.question_count || 0)} câu`}</span>
+            <span className="vocab-theme-badge is-mint">🧩 {`${partCount} phần`}</span>
+            <span className="vocab-theme-badge is-violet">✓ {`${reviewPercent}% hoàn thành`}</span>
+          </div>
           {Boolean(set.is_mine) && (
             <button
               type="button"
@@ -180,71 +187,58 @@ export default function QuizSetPage() {
             </button>
           )}
         </div>
-        <section className="qz-hero" aria-label={`Tiến độ ${set.title}`}>
-          <div className="qz-hero-top">
-            <p className="qz-hero-label">Tiến độ ôn tập</p>
-            <p className="qz-hero-numbers">{`Đã làm ${reviewSummary.answered}/${reviewSummary.total}`}</p>
+        <div className="vocab-theme-progress">
+          <div className="vocab-theme-progress-label">
+            <span>Tiến độ: <strong>{`Đã làm ${reviewSummary.answered}/${reviewSummary.total} câu`}</strong></span>
+            <span className="vocab-theme-difficulty">⏱ {`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
           </div>
           <div
-            className="qz-hero-bar"
+            className="vocab-theme-progress-bar"
             role="progressbar"
-            aria-label={`Tiến độ ôn tập ${set.title}`}
             aria-valuemin={0}
             aria-valuemax={reviewSummary.total}
             aria-valuenow={reviewSummary.answered}
+            aria-label={`Tiến độ ôn tập ${set.title}`}
           >
-            <span className="qz-hero-fill" style={{ width: `${reviewPercent}%` }} />
+            <i style={{ width: `${reviewPercent}%` }} />
           </div>
-          <p className="qz-hero-modes">
-            <span>{`${Number(set.question_count || 0)} câu`}</span>
-            <span>{`${partCount} phần`}</span>
-            <span>{`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
-          </p>
-        </section>
-      </header>
+        </div>
+      </div>
 
-      <section className="quiz-set-parts quiz-set-parts-page" aria-label={`Các phần của ${set.title}`}>
+      <div className="vocab-panel glass-panel">
+        <div className="vocab-panel-head">
+          <h3>Các phần</h3>
+          <span className="vocab-list-count">{`${partCount} phần`}</span>
+        </div>
+        <div className="vocab-set-grid">
         {Array.from({ length: partCount }, (_, partIndex) => {
           const size = Number(partSizes[partIndex] || 0);
-          const entry = progressEntry(set.progress, partIndex);
-          const review = entry?.review || null;
-          const test = entry?.test || null;
-          const isDone = Boolean(review?.completed_at);
-          const isDoing = !isDone && (
-            Number(review?.answered || 0) > 0
-            || (Number(test?.answered || 0) > 0 && !test?.completed_at)
-          );
-          const status = isDone ? 'done' : isDoing ? 'doing' : 'todo';
-          const reviewPct = size > 0 ? Math.min(100, (Number(review?.answered || 0) / size) * 100) : 0;
-          const testBest = test?.best_correct != null && test?.best_total > 0
-            ? Math.min(100, (Number(test.best_correct) / Number(test.best_total)) * 100)
-            : 0;
-          const duoLabel = `Phần ${partIndex + 1}: ôn tập ${Number(review?.answered || 0)}/${size}`
-            + (test?.best_correct != null && test?.best_total != null
-              ? `, kiểm tra cao nhất ${test.best_correct}/${test.best_total}`
-              : ', chưa kiểm tra');
+          const answered = Number(progressEntry(set.progress, partIndex)?.review?.answered || 0);
+          const pct = size > 0 ? Math.min(100, Math.round((answered / size) * 100)) : 0;
           return (
             <button
               key={partIndex}
               type="button"
-              className="quiz-set-part-row"
-              data-status={status}
+              className="vocab-set-card glass-panel"
               aria-haspopup="dialog"
+              aria-label={`Phần ${partIndex + 1}: đã làm ${answered}/${size} câu`}
               onClick={() => setActivePart(partIndex)}
             >
-              <span className="quiz-set-part-info">
-                <strong>{`Phần ${partIndex + 1}`}</strong>
-                <span>{`${size} câu`}</span>
+              <span className="vocab-set-card-top">
+                <span className="vocab-set-index">{`#${partIndex + 1}`}</span>
+                <span className="vocab-set-pct" style={{ color: pct > 0 ? '#16a34a' : '#94a3b8' }}>{`${pct}%`}</span>
               </span>
-              <span className="quiz-set-part-summary">{partSummary(entry, size)}</span>
-              <span className="qz-duo" role="img" aria-label={duoLabel}>
-                <span className="qz-duo-review" style={{ width: `${reviewPct}%` }} />
-                <span className="qz-duo-test" style={{ width: `${testBest}%` }} />
+              <strong className="vocab-set-name">{`Phần ${partIndex + 1}`}</strong>
+              <span className="vocab-set-count">{`Đã làm ${answered}/${size} câu`}</span>
+              <span className="vocab-set-progress" aria-hidden="true">
+                <i style={{ width: `${pct}%` }} />
               </span>
+              <span className="vocab-set-play" aria-hidden="true">▶</span>
             </button>
           );
         })}
-      </section>
+        </div>
+      </div>
       {activePart !== null && (
         <QuizPartActionDialog
           title={`Phần ${activePart + 1} · ${Number(partSizes[activePart] || 0)} câu`}

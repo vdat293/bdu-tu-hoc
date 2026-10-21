@@ -477,7 +477,7 @@ describe('QuizSetPage', () => {
     );
   }
 
-  it('shows the set header and the list of parts as clickable rows', async () => {
+  it('shows the set header and the parts as vocab-style cards', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
@@ -485,42 +485,45 @@ describe('QuizSetPage', () => {
     expect(screen.getByText('Tổng hợp câu hỏi chương 1.')).toBeInTheDocument();
     expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
 
-    // Mỗi phần là một dòng bấm được, không còn chữ Ôn tập/Kiểm tra trên dòng.
-    const rows = screen.getAllByRole('button', { name: /Phần \d/ });
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveTextContent('Phần 1');
-    expect(rows[0]).toHaveTextContent('20 câu');
-    expect(rows[0]).toHaveTextContent('Đã làm 5/20');
+    // Mỗi phần là một card kiểu Luyện từ: #N, %, tên, x/y, thanh bar, nút ▶.
+    const cards = screen.getAllByRole('button', { name: /Phần \d/ });
+    expect(cards).toHaveLength(3);
+    expect(cards[0]).toHaveTextContent('#1');
+    expect(cards[0]).toHaveTextContent('Đã làm 5/20 câu');
+    expect(cards[0]).toHaveTextContent('▶');
     expect(screen.queryByRole('button', { name: 'Ôn tập' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Kiểm tra' })).not.toBeInTheDocument();
   });
 
-  it('shows the progress hero with numbers, bar and modes', async () => {
+  it('shows the vocab-style hero with badges, progress and difficulty', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
-    // Hero: part 0: 5 ôn tập + part 2: 20 hoàn thành = 25/60.
-    expect(await screen.findByText('Đã làm 25/60')).toBeInTheDocument();
+    // Hero: part 0: 5 ôn tập + part 2: 20 hoàn thành = 25/60 → 42%.
+    expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+    const skyBadge = document.querySelector('.vocab-theme-badge.is-sky');
+    expect(skyBadge).toHaveTextContent('60 câu');
+    expect(screen.getAllByText(/3 phần/)).toHaveLength(2);
+    expect(screen.getByText('✓ 42% hoàn thành')).toBeInTheDocument();
+    expect(screen.getByText('Đã làm 25/60 câu')).toBeInTheDocument();
+    expect(screen.getByText('⏱ 30 phút/phần')).toBeInTheDocument();
+
     const bar = screen.getByRole('progressbar', { name: 'Tiến độ ôn tập Ôn tập Chương 1' });
     expect(bar).toHaveAttribute('aria-valuenow', '25');
     expect(bar).toHaveAttribute('aria-valuemax', '60');
     expect(bar.firstChild).toHaveStyle({ width: '42%' });
-    expect(screen.getByText('Tiến độ ôn tập')).toBeInTheDocument();
   });
 
-  it('marks each part row with its status and a dual review/test bar', async () => {
+  it('shows per-part percent coloured like vocab cards', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
-    const rows = await screen.findAllByRole('button', { name: /Phần \d/ });
-    // part 0 đang làm dở, part 1 chưa làm, part 2 hoàn thành.
-    expect(rows[0]).toHaveAttribute('data-status', 'doing');
-    expect(rows[1]).toHaveAttribute('data-status', 'todo');
-    expect(rows[2]).toHaveAttribute('data-status', 'done');
-
-    expect(screen.getByRole('img', { name: 'Phần 1: ôn tập 5/20, kiểm tra cao nhất 8/20' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Phần 2: ôn tập 0/20, chưa kiểm tra' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Phần 3: ôn tập 20/20, chưa kiểm tra' })).toBeInTheDocument();
+    // part 0: 5/20 = 25% xanh; part 1: 0% xám; part 2: 100% xanh.
+    const cards = await screen.findAllByRole('button', { name: /Phần \d/ });
+    expect(cards[0]).toHaveTextContent('25%');
+    expect(cards[1]).toHaveTextContent('0%');
+    expect(cards[2]).toHaveTextContent('100%');
+    expect(cards[2]).toHaveTextContent('Đã làm 20/20 câu');
   });
 
   it('collapses author titles to 2 with +N and expands on click', async () => {
@@ -556,8 +559,9 @@ describe('QuizSetPage', () => {
     renderSetPage();
 
     const remove = await screen.findByRole('button', { name: 'Xóa bộ đề Ôn tập Chương 1' });
-    // Nút Xóa nằm cùng hàng tiêu đề, không chen giữa cụm tags tác giả.
-    expect(remove.closest('.quiz-part-title-row')).not.toBeNull();
+    // Nút Xóa nằm cùng hàng tiêu đề hero, không chen giữa cụm tags tác giả.
+    expect(remove.closest('.vocab-theme-head')).not.toBeNull();
+    expect(remove.closest('.quiz-part-author')).toBeNull();
     fireEvent.click(remove);
     await waitFor(() => expect(mocks.deleteQuizSet).toHaveBeenCalledWith('test-token', 'CSC101', 7));
   });
