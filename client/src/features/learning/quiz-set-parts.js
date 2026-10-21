@@ -16,9 +16,13 @@ export function reviewState(entry, partSize) {
   const answered = Number(review?.answered || 0);
   const total = Number(review?.total_count || partSize || 0);
   const completed = Boolean(review?.completed_at);
-  if (completed) return { label: `Đã làm ${total}/${partSize}`, hasCheckpoint: false };
-  if (answered > 0) return { label: `Đã làm ${answered}/${partSize}`, hasCheckpoint: true };
-  return { label: 'Chưa làm', hasCheckpoint: false };
+  if (completed) {
+    return { label: `Đã làm ${total}/${partSize}`, hasCheckpoint: false, hasProgress: true };
+  }
+  if (answered > 0) {
+    return { label: `Đã làm ${answered}/${partSize}`, hasCheckpoint: true, hasProgress: true };
+  }
+  return { label: 'Chưa làm', hasCheckpoint: false, hasProgress: false };
 }
 
 /**
@@ -32,11 +36,51 @@ export function testState(entry) {
   const completed = Boolean(test?.completed_at);
   const hasCheckpoint = !completed && answered > 0;
   if (test?.best_correct != null && test?.best_total != null) {
-    return { label: `Cao nhất ${test.best_correct}/${test.best_total} · ${attempts} lượt`, hasCheckpoint };
+    return {
+      label: `Cao nhất ${test.best_correct}/${test.best_total} · ${attempts} lượt`,
+      hasCheckpoint,
+      hasProgress: true
+    };
   }
-  if (attempts > 0) return { label: `${attempts} lượt làm`, hasCheckpoint };
-  if (hasCheckpoint) return { label: 'Đang làm dở', hasCheckpoint };
-  return { label: 'Tính giờ', hasCheckpoint };
+  if (attempts > 0) return { label: `${attempts} lượt làm`, hasCheckpoint, hasProgress: true };
+  if (hasCheckpoint) return { label: 'Đang làm dở', hasCheckpoint, hasProgress: true };
+  return { label: 'Tính giờ', hasCheckpoint, hasProgress: false };
+}
+
+/** Tóm tắt 1 dòng hiển thị trên thẻ "Phần N" (ưu tiên tiến độ ôn tập). */
+export function partSummary(entry, partSize) {
+  const review = reviewState(entry, partSize);
+  if (review.hasProgress) return review.label;
+  const test = testState(entry);
+  if (test.hasProgress) return test.label;
+  return 'Chưa làm';
+}
+
+/**
+ * Các hành động trong popup của một phần: luôn có "Ôn tập" và "Kiểm tra";
+ * thêm "Làm tiếp" khi phần đó đang làm dở ở đúng một chế độ.  Nếu cả hai
+ * chế độ đều đang dở thì tách thành hai lối riêng để không mơ hồ.
+ */
+export function partActions(entry, partSize) {
+  const review = reviewState(entry, partSize);
+  const test = testState(entry);
+  const actions = [
+    { key: 'review', title: 'Ôn tập', subtitle: review.label, mode: 'review' },
+    { key: 'test', title: 'Kiểm tra', subtitle: test.label, mode: 'test' }
+  ];
+  if (review.hasCheckpoint && test.hasCheckpoint) {
+    actions.push({ key: 'resume-review', title: 'Làm tiếp ôn tập', subtitle: review.label, mode: 'review' });
+    actions.push({ key: 'resume-test', title: 'Làm tiếp kiểm tra', subtitle: test.label, mode: 'test' });
+    return actions;
+  }
+  if (review.hasCheckpoint) {
+    actions.push({ key: 'resume', title: 'Làm tiếp', subtitle: `Ôn tập · ${review.label}`, mode: 'review' });
+    return actions;
+  }
+  if (test.hasCheckpoint) {
+    actions.push({ key: 'resume', title: 'Làm tiếp', subtitle: `Kiểm tra · ${test.label}`, mode: 'test' });
+  }
+  return actions;
 }
 
 /**

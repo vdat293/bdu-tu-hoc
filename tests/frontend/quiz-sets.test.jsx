@@ -454,7 +454,7 @@ describe('QuizSetPage', () => {
     );
   }
 
-  it('shows the set header and the list of parts with their CTAs', async () => {
+  it('shows the set header and the list of parts as clickable rows', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
@@ -462,25 +462,62 @@ describe('QuizSetPage', () => {
     expect(screen.getByText('Tổng hợp câu hỏi chương 1.')).toBeInTheDocument();
     expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
 
-    expect(screen.getByText('Phần 1')).toBeInTheDocument();
-    expect(screen.getByText('Phần 2')).toBeInTheDocument();
-    expect(screen.getByText('Phần 3')).toBeInTheDocument();
-
-    // Tên chế độ là link bấm được, không còn nút riêng.
-    expect(screen.getAllByRole('button', { name: 'Ôn tập' })).toHaveLength(3);
-    expect(screen.getAllByRole('button', { name: 'Kiểm tra' })).toHaveLength(3);
-    expect(screen.getByText('Đã làm 5/20')).toBeInTheDocument();
-    expect(screen.getByText('Cao nhất 8/20 · 2 lượt')).toBeInTheDocument();
-    // Phần 1 đang làm dở nên có thêm lối "Làm tiếp".
-    expect(screen.getAllByRole('button', { name: 'Làm tiếp' })).toHaveLength(1);
+    // Mỗi phần là một dòng bấm được, không còn chữ Ôn tập/Kiểm tra trên dòng.
+    const rows = screen.getAllByRole('button', { name: /Phần \d/ });
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent('Phần 1');
+    expect(rows[0]).toHaveTextContent('20 câu');
+    expect(rows[0]).toHaveTextContent('Đã làm 5/20');
+    expect(screen.queryByRole('button', { name: 'Ôn tập' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Kiểm tra' })).not.toBeInTheDocument();
   });
 
-  it('opens the review runner from a part row', async () => {
+  it('opens a popup with the actions of a part and navigates on pick', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Ôn tập' }))[0]);
+    const rows = await screen.findAllByRole('button', { name: /Phần \d/ });
+    fireEvent.click(rows[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Phần 1 · 20 câu');
+    expect(within(dialog).getByRole('button', { name: /^Ôn tập/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^Kiểm tra/ })).toBeInTheDocument();
+    // Phần 1 đang làm dở ôn tập nên có thêm lối "Làm tiếp".
+    expect(within(dialog).getByRole('button', { name: /^Làm tiếp/ })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Ôn tập/ }));
     expect(await screen.findByText('Trang làm bài')).toBeInTheDocument();
+  });
+
+  it('closes the popup with Escape and stays on the set page', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Phần \d/ }))[0]);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+  });
+
+  it('splits "Làm tiếp" into two entries when both modes are in progress', async () => {
+    mocks.getQuizSets.mockResolvedValue({
+      sets: [makeSet({
+        progress: [{
+          part_index: 0,
+          review: { answered: 4, total_count: 20, completed_at: null },
+          test: { answered: 6, total_count: 20, completed_at: null, best_correct: null, best_total: null, attempts: 0 }
+        }]
+      })]
+    });
+    renderSetPage();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Phần \d/ }))[0]);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Làm tiếp ôn tập');
+    expect(dialog).toHaveTextContent('Làm tiếp kiểm tra');
   });
 
   it('renders a not-found branch when the set does not exist', async () => {

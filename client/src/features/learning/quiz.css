@@ -705,15 +705,99 @@ body.theme-dark .quiz-result-correct-answer {
   max-height: 520px;
   padding: 2px;
 }
-.quiz-set-part-row {
+
+/* Popup chọn hành động cho một phần (Ôn tập / Kiểm tra / Làm tiếp). */
+.quiz-part-action-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.quiz-part-action-panel {
+  width: min(420px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card, #fff);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.quiz-part-action-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.quiz-part-action-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main, inherit);
+}
+.quiz-part-action-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.quiz-part-action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.quiz-part-action-item:hover {
+  border-color: var(--border-color-focus, #15803d);
+}
+.quiz-part-action-item strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.quiz-part-action-item span {
+  font-size: 0.8rem;
+  color: var(--text-muted, inherit);
+}
+.quiz-part-action-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.quiz-set-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color, var(--border, #ddd));
   border-radius: 10px;
   background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   min-width: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.quiz-set-part-row:hover {
+  border-color: var(--border-color-focus, #15803d);
 }
 .quiz-set-part-info {
   display: flex;
@@ -727,43 +811,12 @@ body.theme-dark .quiz-result-correct-answer {
   color: var(--text-muted, inherit);
   font-size: 0.82rem;
 }
-.quiz-set-part-modes {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.quiz-set-mode {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-/* Tên chế độ ("Ôn tập" / "Kiểm tra" / "Làm tiếp") là link bấm được thay cho
-   nút riêng: bấm vào là mở thẳng chế độ đó. */
-.quiz-set-mode-link {
+.quiz-set-part-summary {
   flex: 0 0 auto;
-  padding: 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-weight: 700;
-  color: var(--bdu-primary, #15803d);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.quiz-set-mode-link:hover {
-  opacity: 0.75;
-}
-.quiz-set-progress-text {
   font-size: 0.8rem;
   color: var(--text-muted, inherit);
+  text-align: right;
   overflow-wrap: anywhere;
-  flex: 1 1 auto;
-  min-width: 0;
 }
 .quiz-set-card-footer {
   display: flex;

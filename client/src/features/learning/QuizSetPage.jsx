@@ -1,11 +1,12 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { deleteQuizSet, getQuizSets } from '../../api/community.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { AvatarContent, TitleBadges, getIdentityName } from '../../components/identity/Identity.jsx';
-import { progressEntry, reviewState, testState } from './quiz-set-parts.js';
+import QuizPartActionDialog from './QuizPartActionDialog.jsx';
+import { partActions, partSummary, progressEntry } from './quiz-set-parts.js';
 import './quiz.css';
 
 /**
@@ -23,6 +24,8 @@ export default function QuizSetPage() {
   const { notify } = useToasts();
   const client = useQueryClient();
   const [confirmUI, askConfirm] = useConfirm();
+  // Phần đang mở popup chọn hành động (null = đóng).
+  const [activePart, setActivePart] = useState(null);
 
   const setsQuery = useQuery({
     queryKey: ['quiz-sets', courseCode, user?.mssv],
@@ -160,58 +163,31 @@ export default function QuizSetPage() {
         {Array.from({ length: partCount }, (_, partIndex) => {
           const size = Number(partSizes[partIndex] || 0);
           const entry = progressEntry(set.progress, partIndex);
-          const review = reviewState(entry, size);
-          const test = testState(entry);
           return (
-            <div key={partIndex} className="quiz-set-part-row">
-              <div className="quiz-set-part-info">
+            <button
+              key={partIndex}
+              type="button"
+              className="quiz-set-part-row"
+              aria-haspopup="dialog"
+              onClick={() => setActivePart(partIndex)}
+            >
+              <span className="quiz-set-part-info">
                 <strong>{`Phần ${partIndex + 1}`}</strong>
                 <span>{`${size} câu`}</span>
-              </div>
-              <div className="quiz-set-part-modes">
-                <div className="quiz-set-mode">
-                  <button
-                    type="button"
-                    className="quiz-set-mode-link"
-                    onClick={() => openPart(partIndex, 'review')}
-                  >
-                    Ôn tập
-                  </button>
-                  <span className="quiz-set-progress-text">{review.label}</span>
-                  {review.hasCheckpoint && (
-                    <button
-                      type="button"
-                      className="quiz-set-mode-link"
-                      onClick={() => openPart(partIndex, 'review')}
-                    >
-                      Làm tiếp
-                    </button>
-                  )}
-                </div>
-                <div className="quiz-set-mode">
-                  <button
-                    type="button"
-                    className="quiz-set-mode-link"
-                    onClick={() => openPart(partIndex, 'test')}
-                  >
-                    Kiểm tra
-                  </button>
-                  <span className="quiz-set-progress-text">{test.label}</span>
-                  {test.hasCheckpoint && (
-                    <button
-                      type="button"
-                      className="quiz-set-mode-link"
-                      onClick={() => openPart(partIndex, 'test')}
-                    >
-                      Làm tiếp
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+              </span>
+              <span className="quiz-set-part-summary">{partSummary(entry, size)}</span>
+            </button>
           );
         })}
       </section>
+      {activePart !== null && (
+        <QuizPartActionDialog
+          title={`Phần ${activePart + 1} · ${Number(partSizes[activePart] || 0)} câu`}
+          actions={partActions(progressEntry(set.progress, activePart), Number(partSizes[activePart] || 0))}
+          onClose={() => setActivePart(null)}
+          onPick={(action) => openPart(activePart, action.mode)}
+        />
+      )}
       {confirmUI}
     </div>
   );
