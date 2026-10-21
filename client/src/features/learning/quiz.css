@@ -898,6 +898,151 @@ body.theme-dark .quiz-set-part-row {
   }
 }
 
+/* QuizSet "Giấy & Mực": ngôn ngữ chung cho trang chi tiết + card feed + popup.
+   Cộng thêm, không sửa các rule legacy phía trên. Mọi màu qua biến app. */
+.quiz-page--set {
+  background:
+    radial-gradient(1200px 320px at 20% -80px, rgba(180, 120, 40, 0.10), transparent 60%),
+    var(--bg-app);
+  border-radius: 16px;
+  padding: 20px 16px 24px;
+}
+.qz-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 14px;
+  background: var(--bg-card, #fffdf8);
+  box-shadow: 0 10px 28px rgba(120, 72, 20, 0.10);
+}
+.qz-hero-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.qz-hero-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, inherit);
+}
+.qz-hero-numbers {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main, inherit);
+}
+.qz-hero-bar {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.22));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.qz-hero-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d97706 0%, #65a30d 60%, #15803d 100%);
+  transition: width 0.3s ease;
+}
+.qz-hero-modes {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, inherit);
+  font-variant-numeric: tabular-nums;
+}
+body.theme-dark .qz-hero {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+body.theme-dark .qz-hero-fill {
+  background: linear-gradient(90deg, #fbbf24 0%, #a3e635 60%, #4ade80 100%);
+}
+/* Trạng thái đọc được ngay trên card Phần: viền nhấn trái. */
+.quiz-set-part-row[data-status='doing'] {
+  border-left: 4px solid #d97706;
+}
+.quiz-set-part-row[data-status='done'] {
+  border-left: 4px solid #15803d;
+}
+.quiz-set-part-row[data-status='todo'] {
+  border-left: 4px solid var(--border-color, var(--border, #ddd));
+}
+body.theme-dark .quiz-set-part-row[data-status='doing'] {
+  border-left-color: #fbbf24;
+}
+body.theme-dark .quiz-set-part-row[data-status='done'] {
+  border-left-color: #4ade80;
+}
+/* Thanh kép mini: nửa Ôn tập (hổ phách) / nửa Kiểm tra (xanh). */
+.qz-duo {
+  display: flex;
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.22));
+  width: 100%;
+}
+.qz-duo-review {
+  background: #d97706;
+}
+.qz-duo-test {
+  background: #15803d;
+}
+body.theme-dark .qz-duo-review {
+  background: #fbbf24;
+}
+body.theme-dark .qz-duo-test {
+  background: #4ade80;
+}
+/* Card ngoài feed: cùng ngôn ngữ chip + thanh tiến độ. */
+.qz-card-progress {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.22));
+}
+.qz-card-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #d97706, #15803d);
+}
+body.theme-dark .qz-card-progress-fill {
+  background: linear-gradient(90deg, #fbbf24, #4ade80);
+}
+/* Popup chế độ: phân biệt Ôn tập / Kiểm tra / Làm tiếp bằng viền nhấn. */
+.quiz-part-action-item[data-mode='review'] {
+  border-left: 4px solid #d97706;
+}
+.quiz-part-action-item[data-mode='test'] {
+  border-left: 4px solid #15803d;
+}
+.quiz-part-action-item[data-mode^='resume'] {
+  border-color: var(--border-color-focus, #15803d);
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.10));
+}
+@media (max-width: 560px) {
+  .quiz-page--set {
+    padding: 12px 10px 20px;
+  }
+  .qz-hero-numbers {
+    font-size: 1.35rem;
+  }
+}
+
 /* Task 6: quiz set composer modal. The shared dialog shells carry no padding,
    so the padding lives here (tightened on phones). Width stays 100% of the
    padded backdrop: vw units would overflow the backdrop's 20px gutters, and
@@ -1057,29 +1202,6 @@ body.theme-dark .quiz-set-file-error { color: #fca5a5; }
 }
 .quiz-summary-chip-nums {
   font-variant-numeric: tabular-nums;
-}
-/* Tổng tiến độ ôn tập của cả bộ đề. */
-.quiz-set-progress-line {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 0;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.quiz-set-progressbar {
-  position: relative;
-  flex: 1 1 120px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.2));
-  overflow: hidden;
-}
-.quiz-set-progressbar-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--accent, #15803d);
 }
 .quiz-result-complete-title {
   margin: 0;

@@ -135,7 +135,7 @@ export default function QuizSetPage() {
   };
 
   return (
-    <div className="quiz-page">
+    <div className="quiz-page quiz-page--set">
       {breadcrumb}
       <header className="quiz-part-head">
         <div className="quiz-part-title-row">
@@ -180,35 +180,55 @@ export default function QuizSetPage() {
             </button>
           )}
         </div>
-        <div className="quiz-summary-meta">
-          <span className="quiz-summary-chip quiz-summary-chip-nums">{`${Number(set.question_count || 0)} câu`}</span>
-          <span className="quiz-summary-chip">{`${partCount} phần`}</span>
-          <span className="quiz-summary-chip quiz-summary-chip-nums">{`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
-        </div>
-        <p className="quiz-set-progress-line">
-          <span>{`Đã làm ${reviewSummary.answered}/${reviewSummary.total}`}</span>
-          <span
-            className="quiz-set-progressbar"
+        <section className="qz-hero" aria-label={`Tiến độ ${set.title}`}>
+          <div className="qz-hero-top">
+            <p className="qz-hero-label">Tiến độ ôn tập</p>
+            <p className="qz-hero-numbers">{`Đã làm ${reviewSummary.answered}/${reviewSummary.total}`}</p>
+          </div>
+          <div
+            className="qz-hero-bar"
             role="progressbar"
             aria-label={`Tiến độ ôn tập ${set.title}`}
             aria-valuemin={0}
             aria-valuemax={reviewSummary.total}
             aria-valuenow={reviewSummary.answered}
           >
-            <span className="quiz-set-progressbar-fill" style={{ width: `${reviewPercent}%` }} />
-          </span>
-        </p>
+            <span className="qz-hero-fill" style={{ width: `${reviewPercent}%` }} />
+          </div>
+          <p className="qz-hero-modes">
+            <span>{`${Number(set.question_count || 0)} câu`}</span>
+            <span>{`${partCount} phần`}</span>
+            <span>{`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
+          </p>
+        </section>
       </header>
 
       <section className="quiz-set-parts quiz-set-parts-page" aria-label={`Các phần của ${set.title}`}>
         {Array.from({ length: partCount }, (_, partIndex) => {
           const size = Number(partSizes[partIndex] || 0);
           const entry = progressEntry(set.progress, partIndex);
+          const review = entry?.review || null;
+          const test = entry?.test || null;
+          const isDone = Boolean(review?.completed_at);
+          const isDoing = !isDone && (
+            Number(review?.answered || 0) > 0
+            || (Number(test?.answered || 0) > 0 && !test?.completed_at)
+          );
+          const status = isDone ? 'done' : isDoing ? 'doing' : 'todo';
+          const reviewPct = size > 0 ? Math.min(100, (Number(review?.answered || 0) / size) * 100) : 0;
+          const testBest = test?.best_correct != null && test?.best_total > 0
+            ? Math.min(100, (Number(test.best_correct) / Number(test.best_total)) * 100)
+            : 0;
+          const duoLabel = `Phần ${partIndex + 1}: ôn tập ${Number(review?.answered || 0)}/${size}`
+            + (test?.best_correct != null && test?.best_total != null
+              ? `, kiểm tra cao nhất ${test.best_correct}/${test.best_total}`
+              : ', chưa kiểm tra');
           return (
             <button
               key={partIndex}
               type="button"
               className="quiz-set-part-row"
+              data-status={status}
               aria-haspopup="dialog"
               onClick={() => setActivePart(partIndex)}
             >
@@ -217,6 +237,10 @@ export default function QuizSetPage() {
                 <span>{`${size} câu`}</span>
               </span>
               <span className="quiz-set-part-summary">{partSummary(entry, size)}</span>
+              <span className="qz-duo" role="img" aria-label={duoLabel}>
+                <span className="qz-duo-review" style={{ width: `${reviewPct}%` }} />
+                <span className="qz-duo-test" style={{ width: `${testBest}%` }} />
+              </span>
             </button>
           );
         })}

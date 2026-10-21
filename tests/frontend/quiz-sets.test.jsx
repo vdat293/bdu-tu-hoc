@@ -182,6 +182,17 @@ describe('QuizSetCard', () => {
     expect(screen.queryByRole('button', { name: 'Làm tiếp' })).not.toBeInTheDocument();
   });
 
+  it('shows a mini progress bar with the same review numbers', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [] });
+    renderWithClient(<QuizSetCard courseCode="CSC101" set={makeSet()} onDelete={vi.fn()} />);
+
+    await screen.findByRole('heading', { name: 'Ôn tập Chương 1' });
+    const bar = screen.getByRole('progressbar', { name: 'Tiến độ ôn tập Ôn tập Chương 1' });
+    expect(bar).toHaveAttribute('aria-valuenow', '25');
+    expect(bar).toHaveAttribute('aria-valuemax', '60');
+    expect(bar.firstChild).toHaveStyle({ width: '42%' });
+  });
+
   it('sends the user to the set page when clicking "Xem"', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [] });
     renderWithClient(
@@ -484,15 +495,32 @@ describe('QuizSetPage', () => {
     expect(screen.queryByRole('button', { name: 'Kiểm tra' })).not.toBeInTheDocument();
   });
 
-  it('shows the overall review progress with an accessible progressbar', async () => {
+  it('shows the progress hero with numbers, bar and modes', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
-    // part 0: 5 ôn tập + part 2: 20 hoàn thành = 25/60.
+    // Hero: part 0: 5 ôn tập + part 2: 20 hoàn thành = 25/60.
     expect(await screen.findByText('Đã làm 25/60')).toBeInTheDocument();
     const bar = screen.getByRole('progressbar', { name: 'Tiến độ ôn tập Ôn tập Chương 1' });
     expect(bar).toHaveAttribute('aria-valuenow', '25');
     expect(bar).toHaveAttribute('aria-valuemax', '60');
+    expect(bar.firstChild).toHaveStyle({ width: '42%' });
+    expect(screen.getByText('Tiến độ ôn tập')).toBeInTheDocument();
+  });
+
+  it('marks each part row with its status and a dual review/test bar', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    const rows = await screen.findAllByRole('button', { name: /Phần \d/ });
+    // part 0 đang làm dở, part 1 chưa làm, part 2 hoàn thành.
+    expect(rows[0]).toHaveAttribute('data-status', 'doing');
+    expect(rows[1]).toHaveAttribute('data-status', 'todo');
+    expect(rows[2]).toHaveAttribute('data-status', 'done');
+
+    expect(screen.getByRole('img', { name: 'Phần 1: ôn tập 5/20, kiểm tra cao nhất 8/20' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Phần 2: ôn tập 0/20, chưa kiểm tra' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Phần 3: ôn tập 20/20, chưa kiểm tra' })).toBeInTheDocument();
   });
 
   it('collapses author titles to 2 with +N and expands on click', async () => {
@@ -545,6 +573,9 @@ describe('QuizSetPage', () => {
     expect(dialog).toHaveTextContent('Phần 1 · 20 câu');
     expect(within(dialog).getByRole('button', { name: /^Ôn tập/ })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /^Kiểm tra/ })).toBeInTheDocument();
+    // Mỗi chế độ có dấu data-mode để CSS "Giấy & Mực" tô viền nhấn riêng.
+    expect(within(dialog).getByRole('button', { name: /^Ôn tập/ })).toHaveAttribute('data-mode', 'review');
+    expect(within(dialog).getByRole('button', { name: /^Kiểm tra/ })).toHaveAttribute('data-mode', 'test');
     // Phần 1 đang làm dở ôn tập nên có thêm lối "Làm tiếp".
     expect(within(dialog).getByRole('button', { name: /^Làm tiếp/ })).toBeInTheDocument();
 

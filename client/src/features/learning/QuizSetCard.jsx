@@ -11,6 +11,9 @@ export default function QuizSetCard({ courseCode, set, onDelete, deleting = fals
   const authorName = set.author?.name || set.author?.mssv || 'Tác giả bộ đề';
   const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
   const reviewProgress = reviewProgressSummary(set);
+  const cardPercent = reviewProgress.total > 0
+    ? Math.min(100, Math.round((reviewProgress.answered / reviewProgress.total) * 100))
+    : 0;
 
   // "Xem" sang trang chi tiết bộ đề: danh sách phần nằm ở trang riêng nên
   // card không bao giờ phải chứa hết các phần (bộ đề nhiều phần không làm
@@ -27,7 +30,7 @@ export default function QuizSetCard({ courseCode, set, onDelete, deleting = fals
       </header>
 
       <div className="quiz-set-card-bar">
-        <p className="quiz-set-card-meta">
+        <p className="quiz-set-card-meta quiz-summary-chip-nums">
           {[
             `${Number(set.question_count || 0)} câu`,
             `${partCount} phần`,
@@ -35,6 +38,16 @@ export default function QuizSetCard({ courseCode, set, onDelete, deleting = fals
             reviewProgress.answered > 0 ? `Đã làm ${reviewProgress.answered}/${reviewProgress.total}` : null
           ].filter(Boolean).join(' · ')}
         </p>
+        <div
+          className="qz-card-progress"
+          role="progressbar"
+          aria-label={`Tiến độ ôn tập ${set.title}`}
+          aria-valuemin={0}
+          aria-valuemax={reviewProgress.total}
+          aria-valuenow={reviewProgress.answered}
+        >
+          <span className="qz-card-progress-fill" style={{ width: `${cardPercent}%` }} />
+        </div>
         <button type="button" className="quiz-set-toggle" onClick={openSet}>
           Xem {partCount} phần
           <span className="quiz-set-toggle-caret" aria-hidden="true">→</span>

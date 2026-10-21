@@ -52,6 +52,7 @@ export default function QuizPartActionDialog({ title, actions = [], onClose, onP
               ref={index === 0 ? firstActionRef : null}
               type="button"
               className="quiz-part-action-item"
+              data-mode={action.mode}
               onClick={() => onPick(action)}
             >
               <strong>{action.title}</strong>
