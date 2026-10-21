@@ -57,6 +57,7 @@ import QuizSetCard from '../../client/src/features/learning/QuizSetCard.jsx';
 import QuizSetSection from '../../client/src/features/learning/QuizSetSection.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 import QuizSetComposerModal from '../../client/src/features/learning/QuizSetComposerModal.jsx';
+import QuizSetPage from '../../client/src/features/learning/QuizSetPage.jsx';
 import QuizSetPartPage from '../../client/src/features/learning/QuizSetPartPage.jsx';
 
 function makeSet(overrides = {}) {
@@ -131,7 +132,7 @@ afterEach(() => {
 });
 
 describe('QuizSetSection', () => {
-  it('renders the header, card title, 3 part rows, review/test CTAs and author', async () => {
+  it('renders the header, card title, meta and the link to the set page', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderWithClient(<QuizSetSection courseCode="CSC101" canCreate onCreate={vi.fn()} />);
 
@@ -140,18 +141,9 @@ describe('QuizSetSection', () => {
     expect(await screen.findByText('Ôn tập Chương 1')).toBeInTheDocument();
     // The collapsed card still shows the meta plus the review progress.
     expect(screen.getByText('60 câu · 3 phần · 30 phút/phần · Đã làm 25/60')).toBeInTheDocument();
-
-    // Parts only show up after the "Xem" toggle.
-    fireEvent.click(screen.getByRole('button', { name: /Xem 3 phần/ }));
-    expect(screen.getByText('Phần 1')).toBeInTheDocument();
-    expect(screen.getByText('Phần 2')).toBeInTheDocument();
-    expect(screen.getByText('Phần 3')).toBeInTheDocument();
-
-    expect(screen.getByText('Đã làm 5/20')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ôn tập lại' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Kiểm tra' })).toHaveLength(3);
-    expect(screen.getByText('Cao nhất 8/20 · 2 lượt')).toBeInTheDocument();
+    // Parts live on the set page, reached through the "Xem" button.
+    expect(screen.getByRole('button', { name: /Xem 3 phần/ })).toBeInTheDocument();
+    expect(screen.queryByText('Phần 1')).not.toBeInTheDocument();
     expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
   });
 
@@ -175,47 +167,32 @@ describe('QuizSetSection', () => {
 });
 
 describe('QuizSetCard', () => {
-  it('keeps the parts collapsed behind a "Xem" toggle', async () => {
+  it('shows the title, the author description and a "Xem" link to the set page', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [] });
     renderWithClient(<QuizSetCard courseCode="CSC101" set={makeSet()} onDelete={vi.fn()} />);
 
     // Title first, then the description the author wrote.
     expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
     expect(screen.getByText('Tổng hợp câu hỏi chương 1.')).toBeInTheDocument();
+    expect(screen.getByText('60 câu · 3 phần · 30 phút/phần · Đã làm 25/60')).toBeInTheDocument();
 
-    // The parts are hidden until the user asks for them.
-    const toggle = screen.getByRole('button', { name: /Xem 3 phần/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The parts live on their own page, the card never renders them.
+    expect(screen.getByRole('button', { name: /Xem 3 phần/ })).toBeInTheDocument();
     expect(screen.queryByText('Phần 1')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Làm tiếp' })).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-    expect(screen.getByText('Phần 1')).toBeInTheDocument();
-    expect(screen.getByText('Phần 3')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ẩn phần/ })).toHaveAttribute('aria-expanded', 'true');
-
-    // Collapsing again hides them.
-    fireEvent.click(screen.getByRole('button', { name: /Ẩn phần/ }));
-    expect(screen.queryByText('Phần 1')).not.toBeInTheDocument();
   });
 
-  it('navigates to the review/test runner routes from part buttons', async () => {
+  it('sends the user to the set page when clicking "Xem"', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [] });
-    const view = renderWithClient(
+    renderWithClient(
       <Routes>
         <Route path="/" element={<QuizSetCard courseCode="CSC101" set={makeSet()} onDelete={vi.fn()} />} />
-        <Route
-          path="/learning/:courseCode/quiz-sets/:setId/parts/:partIndex/:mode"
-          element={<div>Trang làm bài</div>}
-        />
+        <Route path="/learning/:courseCode/quiz-sets/:setId" element={<div>Trang chi tiết bộ đề</div>} />
       </Routes>
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /Xem 3 phần/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
-    expect(await screen.findByText('Trang làm bài')).toBeInTheDocument();
-    expect(view.client).toBeDefined();
+    expect(await screen.findByText('Trang chi tiết bộ đề')).toBeInTheDocument();
   });
 
   it('shows the delete button only for the author and calls deleteQuizSet', async () => {
@@ -460,6 +437,58 @@ describe('QuizSetComposerModal', () => {
   });
 });
 
+describe('QuizSetPage', () => {
+  function renderSetPage() {
+    return renderWithClient(
+      <Routes>
+        <Route
+          path="/learning/:courseCode/quiz-sets/:setId"
+          element={<QuizSetPage />}
+        />
+        <Route
+          path="/learning/:courseCode/quiz-sets/:setId/parts/:partIndex/:mode"
+          element={<div>Trang làm bài</div>}
+        />
+      </Routes>,
+      ['/learning/CSC101/quiz-sets/7']
+    );
+  }
+
+  it('shows the set header and the list of parts with their CTAs', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+    expect(screen.getByText('Tổng hợp câu hỏi chương 1.')).toBeInTheDocument();
+    expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
+
+    expect(screen.getByText('Phần 1')).toBeInTheDocument();
+    expect(screen.getByText('Phần 2')).toBeInTheDocument();
+    expect(screen.getByText('Phần 3')).toBeInTheDocument();
+    expect(screen.getByText('Đã làm 5/20')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ôn tập lại' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Kiểm tra' })).toHaveLength(3);
+    expect(screen.getByText('Cao nhất 8/20 · 2 lượt')).toBeInTheDocument();
+  });
+
+  it('opens the review runner from a part row', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
+    expect(await screen.findByText('Trang làm bài')).toBeInTheDocument();
+  });
+
+  it('renders a not-found branch when the set does not exist', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [] });
+    renderSetPage();
+
+    expect(await screen.findByText('Không tìm thấy bộ đề này.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Về môn' })).toBeInTheDocument();
+  });
+});
+
 describe('QuizSetPartPage review mode', () => {
   it('loads the review landing with breadcrumb, author, part meta and resume CTA', async () => {
     mocks.getQuizPart.mockResolvedValue(makePartData({
@@ -520,8 +549,11 @@ describe('QuizSetPartPage review mode', () => {
       restart: false
     });
 
+    // Ôn tập chấm ngay khi chọn: KHÔNG còn nút "Kiểm tra đáp án".
+    expect(screen.queryByRole('button', { name: 'Kiểm tra đáp án' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Chọn một đáp án để xem kết quả/)).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('radio', { name: 'Đáp án A' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
 
     expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
     expect(screen.getByText('Giải thích câu 1.')).toBeInTheDocument();
@@ -550,7 +582,6 @@ describe('QuizSetPartPage review mode', () => {
     expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Đáp án D' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
     expect(await screen.findByText('Chưa chính xác.')).toBeInTheDocument();
     const lockedOptions = screen.getAllByRole('radio');
     expect(lockedOptions).toHaveLength(2);
@@ -605,7 +636,7 @@ describe('QuizSetPartPage review mode', () => {
     expect(screen.queryByText('Câu hỏi số 1?')).not.toBeInTheDocument();
   });
 
-  it('only selects on a single option click; the answer is accepted by "Kiểm tra đáp án"', async () => {
+  it('chấm ngay khi chọn: không còn nút "Kiểm tra đáp án"', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     mocks.getQuizPart.mockResolvedValue(makePartData());
     mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
@@ -626,19 +657,84 @@ describe('QuizSetPartPage review mode', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu ôn tập' }));
     const option = await screen.findByRole('radio', { name: 'Đáp án A' });
+
+    // Nút kiểm tra bị bỏ hoàn toàn ở chế độ ôn tập.
+    expect(screen.queryByRole('button', { name: 'Kiểm tra đáp án' })).not.toBeInTheDocument();
+
     fireEvent.click(option);
 
-    // A click only marks the option: nothing is graded and nothing is saved.
-    expect(mocks.answerQuizReview).not.toHaveBeenCalled();
-    expect(mocks.saveQuizPartProgress).not.toHaveBeenCalled();
-    expect(option).toHaveAttribute('aria-checked', 'true');
-    expect(screen.queryByText('Chính xác!')).not.toBeInTheDocument();
-    expect(screen.queryByText('Chưa chính xác.')).not.toBeInTheDocument();
-
-    // Only the explicit check button accepts the answer.
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
     await waitFor(() => expect(mocks.answerQuizReview).toHaveBeenCalledTimes(1));
+    expect(mocks.answerQuizReview).toHaveBeenCalledWith('test-token', 'CSC101', '7', 0, {
+      mode: 'review',
+      questionId: 'q1',
+      response: 'Đáp án A'
+    });
     expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
+    expect(option).toHaveAttribute('aria-checked', 'true');
+    // Đã chấm thì các option khoá lại.
+    screen.getAllByRole('radio').forEach((item) => expect(item).toBeDisabled());
+  });
+
+  it('chọn đáp án bằng phím 1-4 và chuyển câu bằng phím Enter', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makePartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
+    mocks.answerQuizReview.mockResolvedValue({
+      correct: true,
+      correct_answer: 'Đáp án A',
+      explanation: 'Giải thích câu 1.'
+    });
+    mocks.saveQuizPartProgress.mockResolvedValue({
+      mode: 'review',
+      answered: 1,
+      total_count: 2,
+      completed_at: null,
+      responses: [{ id: 'q1', response: 'Đáp án A', correct: true }]
+    });
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu ôn tập' }));
+    await screen.findByText('Câu hỏi số 1?');
+
+    // Phím 1 chọn đáp án A và chấm luôn.
+    fireEvent.keyDown(document, { key: '1' });
+    await waitFor(() => expect(mocks.answerQuizReview).toHaveBeenCalledTimes(1));
+    expect(mocks.answerQuizReview.mock.calls[0][4]).toEqual({
+      mode: 'review',
+      questionId: 'q1',
+      response: 'Đáp án A'
+    });
+    expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
+
+    // Enter sang câu tiếp.
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
+  });
+
+  it('không khoá option khi chấm lỗi để bấm lại được', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makePartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
+    mocks.answerQuizReview.mockRejectedValue(new Error('Mạng lỗi'));
+    mocks.saveQuizPartProgress.mockResolvedValue({
+      mode: 'review',
+      answered: 0,
+      total_count: 2,
+      completed_at: null,
+      responses: []
+    });
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu ôn tập' }));
+    const option = await screen.findByRole('radio', { name: 'Đáp án A' });
+    fireEvent.click(option);
+
+    expect(await screen.findByText('Không kiểm tra được đáp án. Vui lòng thử lại.')).toBeInTheDocument();
+    // Chưa có kết quả thì option vẫn bấm được để thử lại.
+    expect(option).not.toBeDisabled();
+    expect(screen.queryByText('Chính xác!')).not.toBeInTheDocument();
   });
 
   it('shuffles questions/options deterministically and resumes stored responses by id', async () => {

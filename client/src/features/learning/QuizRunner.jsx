@@ -67,6 +67,7 @@ export default function QuizRunner({
   initialProgress = null,
   remainingSeconds = null,
   allowEarlyFinish = true,
+  checkOnSelect = false,
   onCheckAnswer,
   onSaveProgress,
   onComplete,
@@ -222,17 +223,11 @@ export default function QuizRunner({
     setConfirmSubmit(false);
   };
 
-  const handleSelect = (optionText) => {
-    setConfirmSubmit(false);
-    if (locked) return;
-    setSelected(optionText);
-  };
-
-  const handleCheck = async () => {
-    setConfirmSubmit(false);
-    if (!current || !selected || locked || timeUpRef.current) return;
-    const questionId = current.id;
-    const response = selected;
+  // Chấm một đáp án đã chọn: gọi server, hiện đúng/sai + giải thích, rồi
+  // lưu tiến độ. Dùng chung cho cả chế độ bấm nút "Kiểm tra đáp án" và chế
+  // độ chấm ngay khi chọn.
+  const checkResponse = async (questionId, response) => {
+    if (!current || !response || locked || timeUpRef.current) return;
     setChecking(true);
     setCheckError('');
     setSaveError('');
@@ -283,6 +278,22 @@ export default function QuizRunner({
     } finally {
       setChecking(false);
     }
+  };
+
+  const handleSelect = (optionText) => {
+    setConfirmSubmit(false);
+    if (locked) return;
+    setSelected(optionText);
+    // Ôn tập: chọn là chấm luôn, không cần bấm "Kiểm tra đáp án".
+    if (checkOnSelect && current) {
+      checkResponse(current.id, optionText);
+    }
+  };
+
+  const handleCheck = async () => {
+    setConfirmSubmit(false);
+    if (!current || !selected || locked || timeUpRef.current) return;
+    await checkResponse(current.id, selected);
   };
 
   const handleNext = () => {
@@ -344,6 +355,42 @@ export default function QuizRunner({
     }
     finalize();
   };
+
+  // Ôn tập: phím 1-9 chọn đáp án tương ứng, Enter sang câu tiếp.
+  const handleNextRef = useRef(() => {});
+  handleNextRef.current = handleNext;
+  const handleSelectRef = useRef(() => {});
+  handleSelectRef.current = handleSelect;
+
+  useEffect(() => {
+    if (!checkOnSelect) return undefined;
+    const onKeyDown = (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (event.key === 'Enter') {
+        // Nút đang giữ focus tự xử lý Enter (nút "Câu tiếp" / "Quay lại"),
+        // không xử lý trùng ở đây.
+        const active = document.activeElement;
+        const activeTag = active && active.tagName ? active.tagName.toUpperCase() : '';
+        if (activeTag === 'BUTTON' || activeTag === 'A') return;
+        if (!feedback || checking || timeUp || finishing || showConfirm) return;
+        event.preventDefault();
+        handleNextRef.current();
+        return;
+      }
+      const digit = Number(event.key);
+      if (!Number.isInteger(digit) || digit < 1 || digit > 9) return;
+      const option = current?.options?.[digit - 1];
+      if (!option) return;
+      event.preventDefault();
+      handleSelectRef.current(option);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [checkOnSelect, current, feedback, checking, timeUp, finishing, showConfirm]);
 
   return (
     <div className="quiz-runner">
@@ -429,6 +476,7 @@ export default function QuizRunner({
                 if (isSelected) classes.push('is-selected');
                 if (isCorrect) classes.push('is-correct');
                 if (isWrong) classes.push('is-wrong');
+                if (isSelected && checking) classes.push('is-checking');
                 return (
                   <button
                     key={`${current.id}-${optionIndex}`}
@@ -522,6 +570,12 @@ export default function QuizRunner({
                   Câu tiếp
                 </button>
               )
+            ) : checkOnSelect ? (
+              <span className="quiz-runner-hint" role="status">
+                {checking
+                  ? 'Đang kiểm tra đáp án...'
+                  : 'Chọn một đáp án để xem kết quả (phím 1–4)'}
+              </span>
             ) : (
               <button
                 type="button"
