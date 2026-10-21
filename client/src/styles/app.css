@@ -870,6 +870,23 @@ body.theme-light .sidebar .nav-item.active:hover {
   }
 }
 
+/* Desktop hẹp (1201px - 1440px): bỏ wordmark để nhường chỗ cho tiêu đề
+   trang. Trước đây tiêu đề xuống 2 dòng trong thanh topbar cao cố định nên
+   bị cắt mất nửa trên khi cuộn trang. */
+@media (min-width: 1201px) and (max-width: 1440px) {
+  .topbar-wordmark {
+    display: none;
+  }
+}
+
+/* 1201px - 1280px: bỏ thêm pill trạng thái hệ thống để tiêu đề trang vừa
+   đủ một dòng, không bị cắt bằng dấu "…". */
+@media (min-width: 1201px) and (max-width: 1280px) {
+  .system-status-pill {
+    display: none;
+  }
+}
+
 .palette-backdrop .palette-results {
   min-height: 0;
   flex: 1 1 auto;

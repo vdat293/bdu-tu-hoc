@@ -5862,9 +5862,14 @@ body.theme-dark .nav-item.active {
 }
 
 /* Topbar and content shell */
+/* height cố định + align-items:center khiến tiêu đề xuống 2 dòng tràn ra
+   trên mép trên của thanh sticky và bị viewport cắt mất. Cho thanh cao theo
+   nội dung (min-height giữ nguyên chiều cao ở desktop) và khoá tiêu đề
+   trên 1 dòng để không bao giờ bị cắt. */
 .topbar {
-  height: 82px;
-  padding: 0 clamp(22px, 3vw, 46px);
+  height: auto;
+  min-height: 82px;
+  padding: 10px clamp(22px, 3vw, 46px);
   background: rgba(255, 255, 255, .96);
   border: 0;
   border-bottom: 1px solid var(--border-color);
@@ -5875,10 +5880,28 @@ body.theme-dark .topbar {
   background: rgba(33, 30, 28, .96);
 }
 
+.topbar-left {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.topbar-actions {
+  flex: 0 0 auto;
+}
+
+.page-title-group {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .topbar-title {
   font-size: 1.55rem;
   font-weight: 600;
   line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar-badge {
@@ -5886,7 +5909,17 @@ body.theme-dark .topbar {
   font-size: .63rem;
   text-transform: uppercase;
   letter-spacing: .1em;
+  /* Subtitle không được xuống dòng: 3-4 dòng làm thanh topbar phình to
+     và đẩy nội dung trang xuống dưới. */
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+/* Media query thu hẹp topbar cho desktop nằm ở app.css (file này bị app.css
+   đè về thứ tự cascade cho các selector trùng tên). */
 
 .topbar-btn,
 .btn-icon,
