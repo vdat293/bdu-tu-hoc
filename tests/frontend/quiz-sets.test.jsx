@@ -138,8 +138,11 @@ describe('QuizSetSection', () => {
     expect(await screen.findByText('Bộ đề trắc nghiệm')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Tạo bộ đề' })).toBeInTheDocument();
     expect(await screen.findByText('Ôn tập Chương 1')).toBeInTheDocument();
-    expect(screen.getByText('60 câu · 3 phần · 30 phút/phần')).toBeInTheDocument();
+    // The collapsed card still shows the meta plus the review progress.
+    expect(screen.getByText('60 câu · 3 phần · 30 phút/phần · Đã làm 25/60')).toBeInTheDocument();
 
+    // Parts only show up after the "Xem" toggle.
+    fireEvent.click(screen.getByRole('button', { name: /Xem 3 phần/ }));
     expect(screen.getByText('Phần 1')).toBeInTheDocument();
     expect(screen.getByText('Phần 2')).toBeInTheDocument();
     expect(screen.getByText('Phần 3')).toBeInTheDocument();
@@ -172,6 +175,31 @@ describe('QuizSetSection', () => {
 });
 
 describe('QuizSetCard', () => {
+  it('keeps the parts collapsed behind a "Xem" toggle', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [] });
+    renderWithClient(<QuizSetCard courseCode="CSC101" set={makeSet()} onDelete={vi.fn()} />);
+
+    // Title first, then the description the author wrote.
+    expect(await screen.findByRole('heading', { name: 'Ôn tập Chương 1' })).toBeInTheDocument();
+    expect(screen.getByText('Tổng hợp câu hỏi chương 1.')).toBeInTheDocument();
+
+    // The parts are hidden until the user asks for them.
+    const toggle = screen.getByRole('button', { name: /Xem 3 phần/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Phần 1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Làm tiếp' })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(screen.getByText('Phần 1')).toBeInTheDocument();
+    expect(screen.getByText('Phần 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ẩn phần/ })).toHaveAttribute('aria-expanded', 'true');
+
+    // Collapsing again hides them.
+    fireEvent.click(screen.getByRole('button', { name: /Ẩn phần/ }));
+    expect(screen.queryByText('Phần 1')).not.toBeInTheDocument();
+  });
+
   it('navigates to the review/test runner routes from part buttons', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [] });
     const view = renderWithClient(
@@ -184,6 +212,7 @@ describe('QuizSetCard', () => {
       </Routes>
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: /Xem 3 phần/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
     expect(await screen.findByText('Trang làm bài')).toBeInTheDocument();
     expect(view.client).toBeDefined();

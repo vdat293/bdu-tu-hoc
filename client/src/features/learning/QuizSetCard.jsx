@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AvatarContent, TitleBadges, getIdentityName } from '../../components/identity/Identity.jsx';
 import './quiz.css';
@@ -28,6 +29,9 @@ function testState(entry) {
 
 export default function QuizSetCard({ courseCode, set, onDelete, deleting = false }) {
   const navigate = useNavigate();
+  // The parts stay collapsed behind a "Xem" toggle so a set with many parts
+  // does not stretch the card; the expanded list scrolls inside its own box.
+  const [expanded, setExpanded] = useState(false);
   if (!set) return null;
 
   const partSizes = Array.isArray(set.part_sizes) ? set.part_sizes.map(Number) : [];
@@ -40,54 +44,86 @@ export default function QuizSetCard({ courseCode, set, onDelete, deleting = fals
     navigate(`/learning/${encodeURIComponent(courseCode)}/quiz-sets/${encodeURIComponent(set.id)}/parts/${partIndex}/${mode}`);
   };
 
+  const partsId = `quiz-set-parts-${set.id}`;
+
+  // The parts are collapsed by default, so the collapsed card still has to say
+  // how far the review mode got.
+  const reviewTotal = partSizes.reduce((sum, size) => sum + Number(size || 0), 0);
+  const reviewAnswered = indexes.reduce((sum, partIndex) => {
+    const review = progressEntry(set.progress, partIndex)?.review || null;
+    const size = Number(partSizes[partIndex] || 0);
+    if (review?.completed_at) return sum + size;
+    return sum + Number(review?.answered || 0);
+  }, 0);
+
   return (
     <article className="quiz-set-card glass-panel" aria-label={`Bộ đề ${set.title}`}>
       <header className="quiz-set-card-head">
         <h3 className="quiz-set-card-title">{set.title}</h3>
         {set.description ? <p className="quiz-set-card-description">{set.description}</p> : null}
-        <p className="quiz-set-card-meta">
-          {`${Number(set.question_count || 0)} câu · ${partCount} phần · ${Number(set.minutes_per_part || 0)} phút/phần`}
-        </p>
       </header>
 
-      <div className="quiz-set-parts">
-        {indexes.map((partIndex) => {
-          const size = Number(partSizes[partIndex] || 0);
-          const entry = progressEntry(set.progress, partIndex);
-          const review = reviewState(entry, size);
-          const test = testState(entry);
-          return (
-            <div key={partIndex} className="quiz-set-part-row">
-              <div className="quiz-set-part-info">
-                <strong>{`Phần ${partIndex + 1}`}</strong>
-                <span>{`${size} câu`}</span>
-              </div>
-              <div className="quiz-set-part-modes">
-                <div className="quiz-set-mode">
-                  <span className="quiz-set-progress-text">{review.label}</span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => openPart(partIndex, 'review')}
-                  >
-                    {review.cta}
-                  </button>
-                </div>
-                <div className="quiz-set-mode">
-                  <span className="quiz-set-progress-text">{test.label}</span>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => openPart(partIndex, 'test')}
-                  >
-                    {test.cta}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <div className="quiz-set-card-bar">
+        <p className="quiz-set-card-meta">
+          {[
+            `${Number(set.question_count || 0)} câu`,
+            `${partCount} phần`,
+            `${Number(set.minutes_per_part || 0)} phút/phần`,
+            reviewAnswered > 0 ? `Đã làm ${reviewAnswered}/${reviewTotal}` : null
+          ].filter(Boolean).join(' · ')}
+        </p>
+        <button
+          type="button"
+          className="quiz-set-toggle"
+          aria-expanded={expanded}
+          aria-controls={partsId}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Ẩn phần' : `Xem ${partCount} phần`}
+          <span className="quiz-set-toggle-caret" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+        </button>
       </div>
+
+      {expanded && (
+        <div className="quiz-set-parts" id={partsId}>
+          {indexes.map((partIndex) => {
+            const size = Number(partSizes[partIndex] || 0);
+            const entry = progressEntry(set.progress, partIndex);
+            const review = reviewState(entry, size);
+            const test = testState(entry);
+            return (
+              <div key={partIndex} className="quiz-set-part-row">
+                <div className="quiz-set-part-info">
+                  <strong>{`Phần ${partIndex + 1}`}</strong>
+                  <span>{`${size} câu`}</span>
+                </div>
+                <div className="quiz-set-part-modes">
+                  <div className="quiz-set-mode">
+                    <span className="quiz-set-progress-text">{review.label}</span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openPart(partIndex, 'review')}
+                    >
+                      {review.cta}
+                    </button>
+                  </div>
+                  <div className="quiz-set-mode">
+                    <span className="quiz-set-progress-text">{test.label}</span>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => openPart(partIndex, 'test')}
+                    >
+                      {test.cta}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <footer className="quiz-set-card-footer">
         <div className="quiz-set-author">

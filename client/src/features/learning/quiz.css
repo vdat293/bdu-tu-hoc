@@ -644,11 +644,48 @@ body.theme-dark .quiz-result-correct-answer {
   color: var(--text-muted, inherit);
   overflow-wrap: anywhere;
 }
+/* Meta + "Xem" toggle share one row under the title/description. */
+.quiz-set-card-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.quiz-set-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--bdu-primary, #15803d);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.quiz-set-toggle:hover {
+  opacity: 0.8;
+}
+.quiz-set-toggle-caret {
+  font-size: 0.75rem;
+  line-height: 1;
+}
 .quiz-set-parts {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  /* A set with many parts scrolls inside the card instead of stretching it
+     past the viewport. */
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .quiz-set-part-row {
   display: flex;
