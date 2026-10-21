@@ -9,7 +9,8 @@ import {
   toggleCoursePostLike,
   getCoursePostComments,
   addCoursePostComment,
-  getLearningResources
+  getLearningResources,
+  getQuizSets
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
@@ -417,6 +418,15 @@ export default function CourseLearningPage() {
 
   const rawPosts = postsFrom(postsQuery.data);
 
+  // Bộ đề trắc nghiệm cũng là tài liệu ôn tập của môn nên tính vào số
+  // "tài liệu" (cùng cách đếm ở thẻ môn học trong Kho Tài Liệu).
+  const quizSetsQuery = useQuery({
+    queryKey: ['quiz-sets', courseCode, auth.user?.mssv],
+    queryFn: ({ signal }) => getQuizSets(auth.token, courseCode, { signal }),
+    enabled: Boolean(auth.token && courseCode)
+  });
+  const quizSetCount = Array.isArray(quizSetsQuery.data?.sets) ? quizSetsQuery.data.sets.length : 0;
+
   // Filtered posts and counts
   const counts = useMemo(() => {
     const map = { all: rawPosts.length, request: 0, document: 0, video: 0, link: 0 };
@@ -515,7 +525,7 @@ export default function CourseLearningPage() {
             <div className="learning-hero-stats-row">
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">📚</span>
-                <span><strong>{counts.document}</strong> tài liệu</span>
+                <span><strong>{counts.document + quizSetCount}</strong> tài liệu</span>
               </div>
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">💬</span>

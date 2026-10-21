@@ -342,6 +342,13 @@ export const LearningService = {
         COUNT(DISTINCT cp.id) FILTER (WHERE cp.kind = 'request' AND cp.status = 'open')::int AS request_count,
         COUNT(DISTINCT cp.id) FILTER (WHERE cp.kind IN ('document', 'video', 'link'))::int AS resource_count,
         COUNT(DISTINCT cp.id)::int AS post_count,
+        -- Bộ đề trắc nghiệm là tài liệu ôn tập của môn, tính vào số "tài liệu"
+        -- trên thẻ môn học giống tài liệu chia sẻ.
+        (
+          SELECT COUNT(*)::int
+          FROM course_quiz_sets qs
+          WHERE qs.course_id = c.id
+        ) AS quiz_set_count,
         (
           SELECT COALESCE(
             JSONB_AGG(
@@ -383,7 +390,8 @@ export const LearningService = {
         semester_names: row.semester_names || [],
         semesters: row.semesters || [],
         request_count: Number(row.request_count || 0),
-        resource_count: Number(row.resource_count || 0),
+        resource_count: Number(row.resource_count || 0) + Number(row.quiz_set_count || 0),
+        quiz_set_count: Number(row.quiz_set_count || 0),
         post_count: Number(row.post_count || 0)
       })),
       synced_at: studentResult.rows[0]?.course_synced_at || null

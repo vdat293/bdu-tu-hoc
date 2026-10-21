@@ -276,6 +276,18 @@ describe('CourseLearningPage without old quiz-post UI', () => {
     expect(screen.queryByText(/Bắt đầu làm bài|Xem kết quả/)).not.toBeInTheDocument();
   });
 
+  it('counts the quiz sets as course documents in the hero', async () => {
+    mocks.canAccess = false;
+    mockPageAPIs();
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderPage();
+
+    // 1 bài viết tài liệu + 1 bộ đề trắc nghiệm -> "2 tài liệu".
+    const hero = document.querySelector('.learning-hero-stats-row');
+    expect(hero).toBeTruthy();
+    await waitFor(() => expect(hero.textContent).toContain('2 tài liệu'));
+  });
+
   it('opens the composer without any quiz pill or panel', async () => {
     mockPageAPIs();
     renderPage();

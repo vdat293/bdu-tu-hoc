@@ -104,6 +104,14 @@ assert.match(learningService, /toggleCoursePostLike/);
 assert.match(learningService, /addCoursePostComment/);
 assert.match(learningService, /deleteCoursePost/);
 assert.match(learningService, /kind === 'request' && normalizeBoolean/);
+// Bộ đề trắc nghiệm là tài liệu ôn tập của môn: số "tài liệu" trên thẻ môn
+// học phải cộng thêm số bộ đề của môn đó.
+assert.match(learningService, /AS quiz_set_count/);
+assert.match(
+  learningService,
+  /resource_count: Number\(row\.resource_count \|\| 0\) \+ Number\(row\.quiz_set_count \|\| 0\)/,
+  'Số tài liệu phải cộng thêm bộ đề trắc nghiệm của môn'
+);
 
 // Hồi quy tĩnh cho 4 kind cũ sau khi bỏ quiz-post: đúng tập kind, không còn
 // nhánh quiz/join schema cũ, và create vẫn từ chối kind ngoài tập. Test DB đầy
