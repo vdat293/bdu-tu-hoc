@@ -1078,6 +1078,18 @@ body.theme-dark .quiz-set-file-error { color: #fca5a5; }
 }
 .quiz-set-back {
   align-self: flex-start;
+  text-decoration: none;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  background: var(--bg-card, #fff);
+  /* Ghi đè `transition: all` của .btn: chỉ chuyển nền/viền, chữ đứng yên. */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.quiz-set-back:hover,
+.quiz-set-back:focus-visible {
+  text-decoration: none;
+  transform: none;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.10));
+  border-color: var(--border-color-focus, var(--border-color, #ddd));
 }
 /* QuizSetPage header polish: title row tách nút Xóa khỏi cụm tags. */
 .quiz-part-title-row {
