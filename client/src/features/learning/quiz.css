@@ -148,9 +148,18 @@ body.theme-dark .quiz-runner-progress-bar {
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.quiz-runner-option:hover:not(:disabled) {
-  border-color: var(--border-color-focus, #15803d);
+/* The theme's `--border-color-focus` is the showcase accent (dark red), which
+   inside a quiz reads as "wrong answer": the pointer stays on the option you
+   just clicked, so a single click painted a red border that looked like the
+   answer had already been judged.  Use the quiz's own green instead, and keep
+   the hover specificity low (`:where`) so is-selected/is-correct/is-wrong
+   always win over it. */
+.quiz-runner-option:where(:hover:not(:disabled)) {
+  border-color: rgba(21, 128, 61, 0.5);
   background: var(--bg-card-hover, rgba(127, 127, 127, 0.08));
+}
+body.theme-dark .quiz-runner-option:where(:hover:not(:disabled)) {
+  border-color: rgba(74, 222, 128, 0.5);
 }
 .quiz-runner-option:focus-visible {
   outline: 2px solid #15803d;
@@ -1112,9 +1121,14 @@ body.theme-dark .quiz-test-palette-btn.is-current {
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.quiz-test-option:hover:not(:disabled) {
-  border-color: var(--border-color-focus, #15803d);
+/* Same reasoning as the review option: the theme focus colour is the red
+   showcase accent, which would read as a verdict inside the quiz. */
+.quiz-test-option:where(:hover:not(:disabled)) {
+  border-color: rgba(21, 128, 61, 0.5);
   background: var(--bg-card-hover, rgba(127, 127, 127, 0.08));
+}
+body.theme-dark .quiz-test-option:where(:hover:not(:disabled)) {
+  border-color: rgba(74, 222, 128, 0.5);
 }
 .quiz-test-option:focus-visible {
   outline: 2px solid #15803d;
