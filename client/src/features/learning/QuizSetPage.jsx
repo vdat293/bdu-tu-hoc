@@ -122,6 +122,7 @@ export default function QuizSetPage() {
   const partSizes = Array.isArray(set.part_sizes) ? set.part_sizes.map(Number) : [];
   const partCount = Number(set.part_count || partSizes.length || 0);
   const authorName = getIdentityName(set.author, null) || set.author?.name || 'Tác giả bộ đề';
+  const authorMssv = set.author?.mssv || '';
   const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
   const MAX_VISIBLE_TITLES = 2;
   const visibleTitles = titlesExpanded ? authorTitles : authorTitles.slice(0, MAX_VISIBLE_TITLES);
@@ -138,6 +139,11 @@ export default function QuizSetPage() {
   return (
     <div className="quiz-page quiz-page--wide">
       {breadcrumb}
+      <div>
+        <button type="button" className="btn btn-secondary btn-sm quiz-set-back" onClick={goBack}>
+          ← Không gian môn
+        </button>
+      </div>
       <div className="vocab-panel glass-panel vocab-theme-hero">
         <div className="vocab-theme-head">
           <span className="vocab-theme-icon" aria-hidden="true">📝</span>
@@ -161,11 +167,16 @@ export default function QuizSetPage() {
           )}
         </div>
         {set.description ? <p className="quiz-page-description">{set.description}</p> : null}
-        <div className="quiz-part-author">
+        <div className="quiz-part-author" aria-label={`Bộ đề được tạo bởi ${authorName}`}>
           <span className="quiz-part-author-avatar">
             <AvatarContent user={set.author} alt={`Ảnh đại diện của ${authorName}`} />
           </span>
-          <span className="quiz-part-author-name">{authorName}</span>
+          <span className="quiz-part-author-who">
+            <span className="quiz-part-author-name">{authorName}</span>
+            <span className="quiz-part-author-role">
+              {`Người tạo${authorMssv ? ` · MSSV ${authorMssv}` : ''}`}
+            </span>
+          </span>
           {authorTitles.length > 0 && (
             <ul className="quiz-part-title-list" aria-label="Danh hiệu">
               {visibleTitles.map((title, index) => (

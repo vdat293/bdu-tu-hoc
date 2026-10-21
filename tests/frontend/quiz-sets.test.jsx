@@ -495,6 +495,23 @@ describe('QuizSetPage', () => {
     expect(screen.queryByRole('button', { name: 'Kiểm tra' })).not.toBeInTheDocument();
   });
 
+  it('shows a back button to the course space', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    await screen.findByRole('heading', { name: 'Ôn tập Chương 1' });
+    expect(screen.getByRole('button', { name: '← Không gian môn' })).toBeInTheDocument();
+  });
+
+  it('states explicitly who created the set', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    await screen.findByRole('heading', { name: 'Ôn tập Chương 1' });
+    expect(screen.getByText('Người tạo · MSSV 24050002')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bộ đề được tạo bởi Trần Thị B')).toBeInTheDocument();
+  });
+
   it('shows the vocab-style hero with badges, progress and difficulty', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();

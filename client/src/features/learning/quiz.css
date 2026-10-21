@@ -1066,6 +1066,19 @@ body.theme-dark .quiz-set-file-error { color: #fca5a5; }
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
+.quiz-part-author-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.quiz-part-author-role {
+  font-size: 0.8rem;
+  color: var(--text-muted, inherit);
+}
+.quiz-set-back {
+  align-self: flex-start;
+}
 /* QuizSetPage header polish: title row tách nút Xóa khỏi cụm tags. */
 .quiz-part-title-row {
   display: flex;
@@ -1182,7 +1195,7 @@ body.theme-dark .quiz-result-item.is-wrong .quiz-result-verdict {
   .quiz-part-author {
     width: 100%;
   }
-  .quiz-part-author-name {
+  .quiz-part-author-who {
     flex: 1 1 0;
   }
 }
