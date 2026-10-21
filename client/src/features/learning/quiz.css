@@ -351,6 +351,11 @@ body.theme-dark .quiz-runner-error {
   padding: 16px;
   color: var(--text-main, inherit);
 }
+/* Trang chi tiết bộ đề dùng chung nhịp với Luyện từ: cột rộng để lưới
+   card 3-4 cột thở được, trang làm bài (runner/kết quả) giữ 760px. */
+.quiz-page.quiz-page--wide {
+  max-width: 1080px;
+}
 .quiz-page-breadcrumb {
   display: flex;
   align-items: center;

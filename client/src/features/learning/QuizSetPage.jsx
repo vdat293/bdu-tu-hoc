@@ -83,7 +83,7 @@ export default function QuizSetPage() {
 
   if (setsQuery.isLoading && !setsQuery.data) {
     return (
-      <div className="quiz-page">
+      <div className="quiz-page quiz-page--wide">
         {breadcrumb}
         <p className="quiz-page-loading">Đang tải bộ đề trắc nghiệm...</p>
       </div>
@@ -93,7 +93,7 @@ export default function QuizSetPage() {
   if (setsQuery.isError && !setsQuery.data) {
     const notFound = [400, 404].includes(setsQuery.error?.status);
     return (
-      <div className="quiz-page">
+      <div className="quiz-page quiz-page--wide">
         {breadcrumb}
         <section className="quiz-page-error" role="alert">
           <p>{notFound ? 'Không tìm thấy bộ đề này.' : (setsQuery.error?.message || 'Không thể tải bộ đề.')}</p>
@@ -107,7 +107,7 @@ export default function QuizSetPage() {
 
   if (!set) {
     return (
-      <div className="quiz-page">
+      <div className="quiz-page quiz-page--wide">
         {breadcrumb}
         <section className="quiz-page-error" role="alert">
           <p>Không tìm thấy bộ đề này.</p>
@@ -136,7 +136,7 @@ export default function QuizSetPage() {
   };
 
   return (
-    <div className="quiz-page">
+    <div className="quiz-page quiz-page--wide">
       {breadcrumb}
       <div className="vocab-panel glass-panel vocab-theme-hero">
         <div className="vocab-theme-head">
