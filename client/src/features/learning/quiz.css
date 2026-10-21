@@ -664,10 +664,23 @@ body.theme-dark .quiz-result-correct-answer {
 /* Meta + "Xem" toggle share one row under the title/description. */
 .quiz-set-card-bar {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Hàng meta + CTA: CTA luôn bám mép phải, meta dài thì xuống dòng bên
+   trong chứ không đẩy CTA xuống dòng dưới (lệch nhịp giữa các card). */
+.quiz-set-card-meta-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.quiz-set-card-meta-row .quiz-set-card-meta {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .quiz-set-toggle {
@@ -914,6 +927,10 @@ button.vocab-set-card {
 /* Card ngoài feed: cùng ngôn ngữ chip + thanh tiến độ. */
 .qz-card-progress {
   position: relative;
+  /* Track là flex item: không có width 100% thì nó co về 0px vì phần trăm
+     bên trong nằm absolute nên không đóng góp vào chiều rộng của track. */
+  width: 100%;
+  flex: 0 0 auto;
   height: 6px;
   border-radius: 999px;
   overflow: hidden;

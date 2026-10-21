@@ -30,28 +30,38 @@ export default function QuizSetCard({ courseCode, set, onDelete, deleting = fals
       </header>
 
       <div className="quiz-set-card-bar">
-        <p className="quiz-set-card-meta quiz-summary-chip-nums">
-          {[
-            `${Number(set.question_count || 0)} câu`,
-            `${partCount} phần`,
-            `${Number(set.minutes_per_part || 0)} phút/phần`,
-            reviewProgress.answered > 0 ? `Đã làm ${reviewProgress.answered}/${reviewProgress.total}` : null
-          ].filter(Boolean).join(' · ')}
-        </p>
-        <div
-          className="qz-card-progress"
-          role="progressbar"
-          aria-label={`Tiến độ ôn tập ${set.title}`}
-          aria-valuemin={0}
-          aria-valuemax={reviewProgress.total}
-          aria-valuenow={reviewProgress.answered}
-        >
-          <span className="qz-card-progress-fill" style={{ width: `${cardPercent}%` }} />
+        {/* Meta + CTA luôn nằm chung một hàng: trước đây là 3 flex item
+            (meta, thanh tiến độ, nút) nên khi meta dài ("… · Đã làm 17/34")
+            nút bị đẩy xuống dòng và lệch trái, card này lệch card kia. */}
+        <div className="quiz-set-card-meta-row">
+          <p className="quiz-set-card-meta quiz-summary-chip-nums">
+            {[
+              `${Number(set.question_count || 0)} câu`,
+              `${partCount} phần`,
+              `${Number(set.minutes_per_part || 0)} phút/phần`,
+              reviewProgress.answered > 0 ? `Đã làm ${reviewProgress.answered}/${reviewProgress.total}` : null
+            ].filter(Boolean).join(' · ')}
+          </p>
+          <button type="button" className="quiz-set-toggle" onClick={openSet}>
+            Xem {partCount} phần
+            <span className="quiz-set-toggle-caret" aria-hidden="true">→</span>
+          </button>
         </div>
-        <button type="button" className="quiz-set-toggle" onClick={openSet}>
-          Xem {partCount} phần
-          <span className="quiz-set-toggle-caret" aria-hidden="true">→</span>
-        </button>
+
+        {/* Thanh tiến độ chỉ hiện khi đã làm bài: track là flex item nên phải
+            có width 100%, nếu không nó co về 0px và không thấy thanh nào. */}
+        {reviewProgress.answered > 0 && (
+          <div
+            className="qz-card-progress"
+            role="progressbar"
+            aria-label={`Tiến độ ôn tập ${set.title}`}
+            aria-valuemin={0}
+            aria-valuemax={reviewProgress.total}
+            aria-valuenow={reviewProgress.answered}
+          >
+            <span className="qz-card-progress-fill" style={{ width: `${cardPercent}%` }} />
+          </div>
+        )}
       </div>
 
       <footer className="quiz-set-card-footer">

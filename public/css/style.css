@@ -19123,6 +19123,7 @@ body.theme-dark .learning-badge-status.is-graded {
   justify-content: center;
   gap: 8px;
   min-width: 170px;
+  min-height: 48px;
   padding: 10px 18px;
   font-weight: 700;
   font-size: 0.84rem;
@@ -19135,9 +19136,30 @@ body.theme-dark .learning-badge-status.is-graded {
   box-shadow: 0 8px 20px -4px rgba(140, 21, 21, 0.35);
 }
 
+/* Nút phụ phải đọc ra là một nút: .btn-secondary mặc định là nền trắng 8%
+   trên nền hero màu kem nên trông như một dòng chữ trần. */
+.learning-hero-btn-secondary {
+  background: #fff;
+  color: var(--bdu-primary);
+  border: 1px solid rgba(140, 21, 21, 0.28);
+  box-shadow: none;
+}
+
 .learning-hero-btn-secondary:hover {
   transform: translateY(-2px);
-  background: var(--bg-card-hover);
+  background: rgba(140, 21, 21, 0.06);
+  border-color: rgba(140, 21, 21, 0.45);
+}
+
+body.theme-dark .learning-hero-btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f7f2e9;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+body.theme-dark .learning-hero-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 @media (max-width: 860px) {
