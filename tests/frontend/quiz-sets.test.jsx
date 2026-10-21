@@ -484,6 +484,56 @@ describe('QuizSetPage', () => {
     expect(screen.queryByRole('button', { name: 'Kiểm tra' })).not.toBeInTheDocument();
   });
 
+  it('shows the overall review progress with an accessible progressbar', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
+    renderSetPage();
+
+    // part 0: 5 ôn tập + part 2: 20 hoàn thành = 25/60.
+    expect(await screen.findByText('Đã làm 25/60')).toBeInTheDocument();
+    const bar = screen.getByRole('progressbar', { name: 'Tiến độ ôn tập Ôn tập Chương 1' });
+    expect(bar).toHaveAttribute('aria-valuenow', '25');
+    expect(bar).toHaveAttribute('aria-valuemax', '60');
+  });
+
+  it('collapses author titles to 2 with +N and expands on click', async () => {
+    mocks.getQuizSets.mockResolvedValue({
+      sets: [makeSet({
+        author: {
+          mssv: '24050002',
+          name: 'Trần Thị B',
+          titles: [
+            { id: 't1', label: 'Học thần' },
+            { id: 't2', label: 'Học bá' },
+            { id: 't3', label: 'Phá vỡ giới hạn' },
+            { id: 't4', label: 'TTCDS' }
+          ]
+        }
+      })]
+    });
+    renderSetPage();
+
+    await screen.findByRole('heading', { name: 'Ôn tập Chương 1' });
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    const more = screen.getByRole('button', { name: 'Xem thêm 2 danh hiệu' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(more);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Thu gọn danh hiệu' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('keeps the delete button in the title row and calls deleteQuizSet', async () => {
+    mocks.getQuizSets.mockResolvedValue({ sets: [makeSet({ is_mine: true })] });
+    mocks.deleteQuizSet.mockResolvedValue({ deleted: true });
+    renderSetPage();
+
+    const remove = await screen.findByRole('button', { name: 'Xóa bộ đề Ôn tập Chương 1' });
+    // Nút Xóa nằm cùng hàng tiêu đề, không chen giữa cụm tags tác giả.
+    expect(remove.closest('.quiz-part-title-row')).not.toBeNull();
+    fireEvent.click(remove);
+    await waitFor(() => expect(mocks.deleteQuizSet).toHaveBeenCalledWith('test-token', 'CSC101', 7));
+  });
+
   it('opens a popup with the actions of a part and navigates on pick', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();

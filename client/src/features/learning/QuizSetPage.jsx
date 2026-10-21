@@ -6,7 +6,7 @@ import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { AvatarContent, TitleBadges, getIdentityName } from '../../components/identity/Identity.jsx';
 import QuizPartActionDialog from './QuizPartActionDialog.jsx';
-import { partActions, partSummary, progressEntry } from './quiz-set-parts.js';
+import { partActions, partSummary, progressEntry, reviewProgressSummary } from './quiz-set-parts.js';
 import './quiz.css';
 
 /**
@@ -26,6 +26,8 @@ export default function QuizSetPage() {
   const [confirmUI, askConfirm] = useConfirm();
   // Phần đang mở popup chọn hành động (null = đóng).
   const [activePart, setActivePart] = useState(null);
+  // Thu gọn danh hiệu tác giả còn tối đa 2 badge + nút "+N".
+  const [titlesExpanded, setTitlesExpanded] = useState(false);
 
   const setsQuery = useQuery({
     queryKey: ['quiz-sets', courseCode, user?.mssv],
@@ -120,6 +122,13 @@ export default function QuizSetPage() {
   const partCount = Number(set.part_count || partSizes.length || 0);
   const authorName = getIdentityName(set.author, null) || set.author?.name || 'Tác giả bộ đề';
   const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
+  const MAX_VISIBLE_TITLES = 2;
+  const visibleTitles = titlesExpanded ? authorTitles : authorTitles.slice(0, MAX_VISIBLE_TITLES);
+  const hiddenTitleCount = Math.max(0, authorTitles.length - MAX_VISIBLE_TITLES);
+  const reviewSummary = reviewProgressSummary(set);
+  const reviewPercent = reviewSummary.total > 0
+    ? Math.min(100, Math.round((reviewSummary.answered / reviewSummary.total) * 100))
+    : 0;
 
   const openPart = (partIndex, mode) => {
     navigate(`/learning/${encodeURIComponent(courseCode || '')}/quiz-sets/${encodeURIComponent(set.id)}/parts/${partIndex}/${mode}`);
@@ -129,20 +138,12 @@ export default function QuizSetPage() {
     <div className="quiz-page">
       {breadcrumb}
       <header className="quiz-part-head">
-        <h1 className="quiz-page-title">{set.title}</h1>
-        {set.description ? <p className="quiz-page-description">{set.description}</p> : null}
-        <div className="quiz-part-author">
-          <span className="quiz-part-author-avatar">
-            <AvatarContent user={set.author} alt={`Ảnh đại diện của ${authorName}`} />
-          </span>
-          <span className="quiz-part-author-name">{authorName}</span>
-          {authorTitles.length > 0 && (
-            <TitleBadges titles={authorTitles} className="learning-inline-titles" />
-          )}
+        <div className="quiz-part-title-row">
+          <h1 className="quiz-page-title">{set.title}</h1>
           {Boolean(set.is_mine) && (
             <button
               type="button"
-              className="learning-post-delete-btn"
+              className="learning-post-delete-btn quiz-set-delete-btn"
               onClick={() => handleDelete(set)}
               disabled={removeMutation.isPending}
               title="Xóa bộ đề của bạn"
@@ -152,11 +153,51 @@ export default function QuizSetPage() {
             </button>
           )}
         </div>
-        <div className="quiz-summary-meta">
-          <span className="quiz-summary-chip">{`${Number(set.question_count || 0)} câu`}</span>
-          <span className="quiz-summary-chip">{`${partCount} phần`}</span>
-          <span className="quiz-summary-chip">{`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
+        {set.description ? <p className="quiz-page-description">{set.description}</p> : null}
+        <div className="quiz-part-author">
+          <span className="quiz-part-author-avatar">
+            <AvatarContent user={set.author} alt={`Ảnh đại diện của ${authorName}`} />
+          </span>
+          <span className="quiz-part-author-name">{authorName}</span>
+          {authorTitles.length > 0 && (
+            <ul className="quiz-part-title-list" aria-label="Danh hiệu">
+              {visibleTitles.map((title, index) => (
+                <li key={title?.id || `${title?.label || 'title'}-${index}`}>
+                  <TitleBadges titles={[title]} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {hiddenTitleCount > 0 && (
+            <button
+              type="button"
+              className="quiz-title-more"
+              aria-expanded={titlesExpanded}
+              aria-label={titlesExpanded ? 'Thu gọn danh hiệu' : `Xem thêm ${hiddenTitleCount} danh hiệu`}
+              onClick={() => setTitlesExpanded((value) => !value)}
+            >
+              {titlesExpanded ? 'Thu gọn' : `+${hiddenTitleCount}`}
+            </button>
+          )}
         </div>
+        <div className="quiz-summary-meta">
+          <span className="quiz-summary-chip quiz-summary-chip-nums">{`${Number(set.question_count || 0)} câu`}</span>
+          <span className="quiz-summary-chip">{`${partCount} phần`}</span>
+          <span className="quiz-summary-chip quiz-summary-chip-nums">{`${Number(set.minutes_per_part || 0)} phút/phần`}</span>
+        </div>
+        <p className="quiz-set-progress-line">
+          <span>{`Đã làm ${reviewSummary.answered}/${reviewSummary.total}`}</span>
+          <span
+            className="quiz-set-progressbar"
+            role="progressbar"
+            aria-label={`Tiến độ ôn tập ${set.title}`}
+            aria-valuemin={0}
+            aria-valuemax={reviewSummary.total}
+            aria-valuenow={reviewSummary.answered}
+          >
+            <span className="quiz-set-progressbar-fill" style={{ width: `${reviewPercent}%` }} />
+          </span>
+        </p>
       </header>
 
       <section className="quiz-set-parts quiz-set-parts-page" aria-label={`Các phần của ${set.title}`}>
