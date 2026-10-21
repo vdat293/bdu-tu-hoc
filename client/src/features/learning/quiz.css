@@ -729,16 +729,34 @@ body.theme-dark .quiz-result-correct-answer {
 }
 .quiz-set-part-modes {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .quiz-set-mode {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 200px;
+  gap: 10px;
   flex-wrap: wrap;
   min-width: 0;
+}
+/* Tên chế độ ("Ôn tập" / "Kiểm tra" / "Làm tiếp") là link bấm được thay cho
+   nút riêng: bấm vào là mở thẳng chế độ đó. */
+.quiz-set-mode-link {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--bdu-primary, #15803d);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quiz-set-mode-link:hover {
+  opacity: 0.75;
 }
 .quiz-set-progress-text {
   font-size: 0.8rem;
@@ -804,9 +822,6 @@ body.theme-dark .quiz-set-part-row {
   }
   .quiz-set-part-row {
     width: 100%;
-  }
-  .quiz-set-part-modes .btn {
-    flex: 1 1 100%;
   }
   .quiz-set-section-head .btn {
     flex: 1 1 100%;

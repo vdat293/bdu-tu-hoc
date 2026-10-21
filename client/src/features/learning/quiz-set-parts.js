@@ -7,23 +7,35 @@ export function progressEntry(progress, partIndex) {
   return progress.find((entry) => Number(entry?.part_index) === Number(partIndex)) || null;
 }
 
+/**
+ * Trạng thái của một phần ở chế độ ôn tập: nhãn tiến độ + cờ "đang làm dở"
+ * (checkpoint) để hiện thêm lối vào "Làm tiếp".
+ */
 export function reviewState(entry, partSize) {
   const review = entry?.review || null;
   const answered = Number(review?.answered || 0);
   const total = Number(review?.total_count || partSize || 0);
-  if (review?.completed_at) return { label: `Đã làm ${total}/${partSize}`, cta: 'Ôn tập lại' };
-  if (answered > 0) return { label: `Đã làm ${answered}/${partSize}`, cta: 'Làm tiếp' };
-  return { label: `Ôn tập · ${partSize} câu`, cta: 'Ôn tập' };
+  const completed = Boolean(review?.completed_at);
+  if (completed) return { label: `Đã làm ${total}/${partSize}`, hasCheckpoint: false };
+  if (answered > 0) return { label: `Đã làm ${answered}/${partSize}`, hasCheckpoint: true };
+  return { label: 'Chưa làm', hasCheckpoint: false };
 }
 
+/**
+ * Trạng thái của một phần ở chế độ kiểm tra: điểm cao nhất / số lượt đã làm
+ * + cờ checkpoint (đang làm dở thì có thể "Làm tiếp").
+ */
 export function testState(entry) {
   const test = entry?.test || null;
   const attempts = Number(test?.attempts || 0);
+  const answered = Number(test?.answered || 0);
+  const completed = Boolean(test?.completed_at);
+  const hasCheckpoint = !completed && answered > 0;
   if (test?.best_correct != null && test?.best_total != null) {
-    return { label: `Cao nhất ${test.best_correct}/${test.best_total} · ${attempts} lượt`, cta: 'Kiểm tra' };
+    return { label: `Cao nhất ${test.best_correct}/${test.best_total} · ${attempts} lượt`, hasCheckpoint };
   }
-  if (attempts > 0) return { label: `${attempts} lượt làm`, cta: 'Kiểm tra' };
-  return { label: 'Kiểm tra · tính giờ', cta: 'Kiểm tra' };
+  if (attempts > 0) return { label: `${attempts} lượt làm`, hasCheckpoint };
+  return { label: 'Tính giờ', hasCheckpoint };
 }
 
 /**

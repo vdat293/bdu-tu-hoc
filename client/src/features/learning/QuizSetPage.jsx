@@ -170,24 +170,42 @@ export default function QuizSetPage() {
               </div>
               <div className="quiz-set-part-modes">
                 <div className="quiz-set-mode">
-                  <span className="quiz-set-progress-text">{review.label}</span>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="quiz-set-mode-link"
                     onClick={() => openPart(partIndex, 'review')}
                   >
-                    {review.cta}
+                    Ôn tập
                   </button>
+                  <span className="quiz-set-progress-text">{review.label}</span>
+                  {review.hasCheckpoint && (
+                    <button
+                      type="button"
+                      className="quiz-set-mode-link"
+                      onClick={() => openPart(partIndex, 'review')}
+                    >
+                      Làm tiếp
+                    </button>
+                  )}
                 </div>
                 <div className="quiz-set-mode">
-                  <span className="quiz-set-progress-text">{test.label}</span>
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    className="quiz-set-mode-link"
                     onClick={() => openPart(partIndex, 'test')}
                   >
-                    {test.cta}
+                    Kiểm tra
                   </button>
+                  <span className="quiz-set-progress-text">{test.label}</span>
+                  {test.hasCheckpoint && (
+                    <button
+                      type="button"
+                      className="quiz-set-mode-link"
+                      onClick={() => openPart(partIndex, 'test')}
+                    >
+                      Làm tiếp
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

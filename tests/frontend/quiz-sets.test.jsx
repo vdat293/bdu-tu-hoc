@@ -465,18 +465,21 @@ describe('QuizSetPage', () => {
     expect(screen.getByText('Phần 1')).toBeInTheDocument();
     expect(screen.getByText('Phần 2')).toBeInTheDocument();
     expect(screen.getByText('Phần 3')).toBeInTheDocument();
-    expect(screen.getByText('Đã làm 5/20')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ôn tập lại' })).toBeInTheDocument();
+
+    // Tên chế độ là link bấm được, không còn nút riêng.
+    expect(screen.getAllByRole('button', { name: 'Ôn tập' })).toHaveLength(3);
     expect(screen.getAllByRole('button', { name: 'Kiểm tra' })).toHaveLength(3);
+    expect(screen.getByText('Đã làm 5/20')).toBeInTheDocument();
     expect(screen.getByText('Cao nhất 8/20 · 2 lượt')).toBeInTheDocument();
+    // Phần 1 đang làm dở nên có thêm lối "Làm tiếp".
+    expect(screen.getAllByRole('button', { name: 'Làm tiếp' })).toHaveLength(1);
   });
 
   it('opens the review runner from a part row', async () => {
     mocks.getQuizSets.mockResolvedValue({ sets: [makeSet()] });
     renderSetPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Làm tiếp' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Ôn tập' }))[0]);
     expect(await screen.findByText('Trang làm bài')).toBeInTheDocument();
   });
 
