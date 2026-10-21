@@ -699,10 +699,15 @@ body.theme-dark .quiz-result-correct-answer {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-/* Trang chi tiết bộ đề: danh sách phần ở trang riêng nên cao hơn, nhưng vẫn
-   cuộn trong khối để trang không bị kéo dài vô hạn. */
+/* Trang chi tiết bộ đề: các phần là lưới card hình chữ nhật, cuộn trong
+   khối nên bộ đề nhiều phần không kéo dài trang. */
 .quiz-set-parts-page {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
   max-height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 2px;
 }
 
@@ -781,13 +786,13 @@ body.theme-dark .quiz-result-correct-answer {
 }
 .quiz-set-part-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
   color: inherit;
   font: inherit;
@@ -801,21 +806,21 @@ body.theme-dark .quiz-result-correct-answer {
 }
 .quiz-set-part-info {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 0.9rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
+}
+.quiz-set-part-info strong {
+  font-size: 0.95rem;
 }
 .quiz-set-part-info span {
   color: var(--text-muted, inherit);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 .quiz-set-part-summary {
-  flex: 0 0 auto;
   font-size: 0.8rem;
   color: var(--text-muted, inherit);
-  text-align: right;
   overflow-wrap: anywhere;
 }
 .quiz-set-card-footer {
@@ -875,6 +880,10 @@ body.theme-dark .quiz-set-part-row {
   }
   .quiz-set-part-row {
     width: 100%;
+  }
+  /* Mobile: 2 card phần mỗi hàng thay vì 1 card dài. */
+  .quiz-set-parts-page {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
   .quiz-set-section-head .btn {
     flex: 1 1 100%;
