@@ -35,6 +35,7 @@ export function testState(entry) {
     return { label: `Cao nhất ${test.best_correct}/${test.best_total} · ${attempts} lượt`, hasCheckpoint };
   }
   if (attempts > 0) return { label: `${attempts} lượt làm`, hasCheckpoint };
+  if (hasCheckpoint) return { label: 'Đang làm dở', hasCheckpoint };
   return { label: 'Tính giờ', hasCheckpoint };
 }
 
