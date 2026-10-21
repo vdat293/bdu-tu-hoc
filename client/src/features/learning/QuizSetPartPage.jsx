@@ -8,11 +8,6 @@ import {
   startQuizPart
 } from '../../api/community.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
-import {
-  AvatarContent,
-  TitleBadges,
-  getIdentityName
-} from '../../components/identity/Identity.jsx';
 import QuizReviewRunner from './QuizReviewRunner.jsx';
 import QuizSetResultView from './QuizSetResultView.jsx';
 import QuizTestRunner from './QuizTestRunner.jsx';
@@ -418,8 +413,6 @@ export default function QuizSetPartPage() {
   }
 
   const partNumber = Number(part.index) + 1;
-  const authorName = getIdentityName(set.author, null);
-  const authorTitles = Array.isArray(set.author?.titles) ? set.author.titles : [];
   const answered = Number(progress?.answered || 0);
   const questionCount = Number(part.question_count || questions.length || 0);
   // A test progress row only exists after start, so a non-null row means the
@@ -448,18 +441,6 @@ export default function QuizSetPartPage() {
       <header className="quiz-part-head">
         <h1 className="quiz-page-title">{set.title}</h1>
         <p className="quiz-part-mode">{`Phần ${partNumber} · ${isReview ? 'Ôn tập' : 'Kiểm tra'}`}</p>
-        <div className="quiz-part-author">
-          <span className="quiz-part-author-avatar">
-            <AvatarContent
-              user={set.author}
-              alt={`Ảnh đại diện của ${authorName}`}
-            />
-          </span>
-          <span className="quiz-part-author-name">{authorName}</span>
-          {authorTitles.length > 0 && (
-            <TitleBadges titles={authorTitles} className="learning-inline-titles" />
-          )}
-        </div>
         {set.description ? <p className="quiz-page-description">{set.description}</p> : null}
         <div className="quiz-summary-meta">
           <span className="quiz-summary-chip">{`${questionCount} câu`}</span>

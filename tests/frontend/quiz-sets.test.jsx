@@ -644,7 +644,7 @@ describe('QuizSetPage', () => {
 });
 
 describe('QuizSetPartPage review mode', () => {
-  it('loads the review landing with breadcrumb, author, part meta and resume CTA', async () => {
+  it('loads the review landing with breadcrumb, part meta and resume CTA', async () => {
     mocks.getQuizPart.mockResolvedValue(makePartData({
       progress: {
         answered: 1,
@@ -662,7 +662,8 @@ describe('QuizSetPartPage review mode', () => {
     expect(screen.getByText('2 câu')).toBeInTheDocument();
     expect(screen.getByText('Không giới hạn thời gian')).toBeInTheDocument();
     expect(screen.getByText('Đã làm 1/2')).toBeInTheDocument();
-    expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
+    // Trang làm bài không hiện tên người tạo.
+    expect(screen.queryByText('Trần Thị B')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Làm tiếp' })).toBeInTheDocument();
     expect(mocks.getQuizPart).toHaveBeenCalledWith(
       'test-token',
