@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -8,10 +9,16 @@ import {
   toggleCoursePostLike,
   getCoursePostComments,
   addCoursePostComment,
-  getLearningResources
+  getLearningResources,
+  getQuizSets
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
+import { useViewportDialog } from '../../components/ViewportModal.jsx';
+import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
+import QuizSetSection from './QuizSetSection.jsx';
+import QuizSetComposerModal from './QuizSetComposerModal.jsx';
+import './quiz.css';
 import {
   AvatarContent,
   TitleBadges,
@@ -309,6 +316,19 @@ export default function CourseLearningPage() {
   const client = useQueryClient();
 
   const [showComposer, setShowComposer] = useState(false);
+  const [showQuizSetComposer, setShowQuizSetComposer] = useState(false);
+  // The composer dialog is portalled to document.body (see the render below):
+  // `.dashboard-body` sets `perspective`, which turns it into the containing
+  // block of every `position: fixed` descendant, so an inline modal would be
+  // clipped by the scrolling content area instead of the viewport.
+  const composerDialogRef = useRef(null);
+  const composerTitleRef = useRef(null);
+  useViewportDialog(
+    showComposer,
+    () => setShowComposer(false),
+    composerDialogRef,
+    composerTitleRef
+  );
   const [confirmUI, askConfirm] = useConfirm();
   const [filterKind, setFilterKind] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -320,6 +340,9 @@ export default function CourseLearningPage() {
     url: '',
     isAnonymous: false
   });
+
+  const capabilities = useTtcdsCapabilities();
+  const canCreateQuizSet = Boolean(capabilities.data?.can_access);
 
   // Query posts
   const postsQuery = useQuery({
@@ -360,14 +383,15 @@ export default function CourseLearningPage() {
   useRealtimeRoom(normalizedCourseCode ? `course:${normalizedCourseCode}` : null, Boolean(auth.token && courseCode));
 
   const create = useMutation({
-    mutationFn: () =>
-      createCoursePost(auth.token, courseCode, {
+    mutationFn: () => {
+      return createCoursePost(auth.token, courseCode, {
         title: draft.title.trim() || 'Thảo luận môn học',
         content: draft.content.trim(),
         url: draft.url.trim(),
         kind: draft.kind,
         isAnonymous: draft.isAnonymous
-      }),
+      });
+    },
     onSuccess: () => {
       setDraft({ kind: 'request', title: '', content: '', url: '', isAnonymous: false });
       setShowComposer(false);
@@ -393,6 +417,15 @@ export default function CourseLearningPage() {
   });
 
   const rawPosts = postsFrom(postsQuery.data);
+
+  // Bộ đề trắc nghiệm cũng là tài liệu ôn tập của môn nên tính vào số
+  // "tài liệu" (cùng cách đếm ở thẻ môn học trong Kho Tài Liệu).
+  const quizSetsQuery = useQuery({
+    queryKey: ['quiz-sets', courseCode, auth.user?.mssv],
+    queryFn: ({ signal }) => getQuizSets(auth.token, courseCode, { signal }),
+    enabled: Boolean(auth.token && courseCode)
+  });
+  const quizSetCount = Array.isArray(quizSetsQuery.data?.sets) ? quizSetsQuery.data.sets.length : 0;
 
   // Filtered posts and counts
   const counts = useMemo(() => {
@@ -423,6 +456,19 @@ export default function CourseLearningPage() {
   const openComposer = (kind) => {
     setDraft((prev) => ({ ...prev, kind }));
     setShowComposer(true);
+  };
+
+  const selectKind = (kind) => {
+    setDraft((prev) => ({ ...prev, kind }));
+  };
+
+  const handleComposerSubmit = (e) => {
+    e.preventDefault();
+    if (!draft.title.trim() && !draft.content.trim()) {
+      notify('Vui lòng nhập tiêu đề hoặc nội dung cần chia sẻ.', 'warning');
+      return;
+    }
+    create.mutate();
   };
 
   const toggleComments = (postId) => {
@@ -479,7 +525,7 @@ export default function CourseLearningPage() {
             <div className="learning-hero-stats-row">
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">📚</span>
-                <span><strong>{counts.document}</strong> tài liệu</span>
+                <span><strong>{counts.document + quizSetCount}</strong> tài liệu</span>
               </div>
               <div className="learning-hero-stat-pill">
                 <span className="stat-icon">💬</span>
@@ -519,6 +565,13 @@ export default function CourseLearningPage() {
             </button>
           </div>
         </div>
+
+        {/* Bộ đề trắc nghiệm riêng của môn học (thay quiz-post cũ) */}
+        <QuizSetSection
+          courseCode={courseCode}
+          canCreate={canCreateQuizSet}
+          onCreate={() => setShowQuizSetComposer(true)}
+        />
 
         {/* Filter Toolbar & Live Search Bar */}
         <div className="learning-filter-toolbar glass-panel">
@@ -799,8 +852,11 @@ export default function CourseLearningPage() {
         </div>
       </div>
 
-      {/* Modern Composer Modal */}
-      {showComposer && (
+      {/* Modern Composer Modal — portalled to document.body so the fixed
+          backdrop covers the whole viewport (sidebar + topbar included) and the
+          dialog is centred against the viewport instead of the scrolled
+          dashboard body. */}
+      {showComposer && createPortal(
         <div
           id="learning-composer-modal"
           className="modal-backdrop learning-modal-backdrop"
@@ -809,21 +865,16 @@ export default function CourseLearningPage() {
           }}
         >
           <div
+            ref={composerDialogRef}
             className="learning-composer-dialog glass-panel"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
           >
             <form
               id="learning-post-form"
               className="learning-composer-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!draft.title.trim() && !draft.content.trim()) {
-                  notify('Vui lòng nhập tiêu đề hoặc nội dung cần chia sẻ.', 'warning');
-                  return;
-                }
-                create.mutate();
-              }}
+              onSubmit={handleComposerSubmit}
             >
               <div className="learning-composer-header">
                 <div>
@@ -849,28 +900,28 @@ export default function CourseLearningPage() {
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'request' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'request' })}
+                  onClick={() => selectKind('request')}
                 >
                   <span>💬</span> Luận bàn / Hỏi đáp
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'document' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'document' })}
+                  onClick={() => selectKind('document')}
                 >
                   <span>📚</span> Tài liệu / Slide / Đề
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'video' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'video' })}
+                  onClick={() => selectKind('video')}
                 >
                   <span>🎥</span> Video học tập
                 </button>
                 <button
                   type="button"
                   className={`composer-kind-pill ${draft.kind === 'link' ? 'is-selected' : ''}`}
-                  onClick={() => setDraft({ ...draft, kind: 'link' })}
+                  onClick={() => selectKind('link')}
                 >
                   <span>🔗</span> Liên kết ngoài
                 </button>
@@ -883,6 +934,7 @@ export default function CourseLearningPage() {
                   </label>
                   <input
                     id="learning-post-title"
+                    ref={composerTitleRef}
                     className="form-input composer-input"
                     type="text"
                     maxLength={180}
@@ -980,7 +1032,11 @@ export default function CourseLearningPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+      {showQuizSetComposer && (
+        <QuizSetComposerModal courseCode={courseCode} onClose={() => setShowQuizSetComposer(false)} />
       )}
       {confirmUI}
     </section>

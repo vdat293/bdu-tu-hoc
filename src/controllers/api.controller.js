@@ -7,7 +7,7 @@
  * barrel này khi cần gom nhiều domain (ví dụ `api.routes.js` mount toàn bộ
  * route theo tên `ApiController.<method>`).
  *
- * Ở cuối file, 17 controller được hợp nhất bằng object spread để giữ đúng tên
+ * Ở cuối file, 18 controller được hợp nhất bằng object spread để giữ đúng tên
  * `ApiController.<method>` mà `api.routes.js` đang dùng. Spread tạo snapshot
  * tại thời điểm spread, nên `ApiController` KHÔNG phải view động của các
  * controller con: đổi tên một method trong controller con sau khi barrel đã
@@ -23,6 +23,7 @@ export { IdentityController } from '../modules/identity/identity.controller.js';
 export { MediaController } from '../modules/media/media.controller.js';
 export { MetaController } from '../modules/meta/meta.controller.js';
 export { LearningController } from '../modules/learning/learning.controller.js';
+export { QuizSetController } from '../modules/learning/quiz-set.controller.js';
 export { GamesController } from '../modules/games/games.controller.js';
 export { WordFmtController } from '../modules/wordfmt/wordfmt.controller.js';
 export { SurveyController } from '../modules/survey/survey.controller.js';
@@ -41,6 +42,7 @@ import { IdentityController } from '../modules/identity/identity.controller.js';
 import { MediaController } from '../modules/media/media.controller.js';
 import { MetaController } from '../modules/meta/meta.controller.js';
 import { LearningController } from '../modules/learning/learning.controller.js';
+import { QuizSetController } from '../modules/learning/quiz-set.controller.js';
 import { GamesController } from '../modules/games/games.controller.js';
 import { WordFmtController } from '../modules/wordfmt/wordfmt.controller.js';
 import { SurveyController } from '../modules/survey/survey.controller.js';
@@ -63,6 +65,7 @@ export const ApiController = {
   ...MediaController,
   ...MetaController,
   ...LearningController,
+  ...QuizSetController,
   ...GamesController,
   ...WordFmtController,
   ...SurveyController,

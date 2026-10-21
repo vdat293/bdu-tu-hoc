@@ -81,7 +81,16 @@ const ADDED_AFTER_SPLIT = new Map([
   ['getAttendance', 'ttcds (dot tach)'],
   ['listPermissions', 'ttcds (dot tach)'],
   ['setPermission', 'ttcds (dot tach)'],
-  ['listAuditLogs', 'ttcds (dot tach)']
+  ['listAuditLogs', 'ttcds (dot tach)'],
+  // Bo de trac nghiem mon hoc (course-quiz sets): 7 handler trong
+  // quiz-set.controller.js. Khong co trong ban goc ApiController.
+  ['listQuizSets', 'quiz sets'],
+  ['createQuizSet', 'quiz sets'],
+  ['deleteQuizSet', 'quiz sets'],
+  ['getQuizSetPart', 'quiz sets'],
+  ['startQuizSetPart', 'quiz sets'],
+  ['answerQuizSetReview', 'quiz sets'],
+  ['saveQuizSetProgress', 'quiz sets']
 ]);
 
 // Method bi XOA co chu dich sau dot tach (doi chieu nguoc voi ADDED o tren):

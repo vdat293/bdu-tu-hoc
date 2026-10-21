@@ -19934,7 +19934,10 @@ body.theme-dark .learning-drive-icon.github-icon {
 .learning-composer-dialog {
   width: 100%;
   max-width: 620px;
-  max-height: 90vh;
+  /* Reserve the backdrop's 20px gutter so the dialog never overflows the
+     viewport: `dvh` keeps the header reachable on mobile browsers. */
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   overflow-y: auto;
   border-radius: var(--radius-lg);
   background: var(--bg-card);
@@ -20079,6 +20082,14 @@ body.theme-dark .learning-drive-icon.github-icon {
   border-color: var(--bdu-primary);
   background: var(--bg-card);
   box-shadow: 0 0 0 3px rgba(140, 21, 21, 0.1);
+}
+
+/* The global showcase focus ring is a `box-shadow !important`, so it overrode
+   the soft halo above with a hard 1px line.  On a required field that reads
+   like a validation error.  Keep the component's own focus style. */
+.composer-input:focus-visible,
+.composer-textarea:focus-visible {
+  box-shadow: 0 0 0 3px rgba(140, 21, 21, 0.1) !important;
 }
 
 .composer-anonymous-toggle {

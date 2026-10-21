@@ -3,6 +3,14 @@ import { BduIdentityService } from '../../services/bdu-identity.service.js';
 import { LearningService } from '../../services/learning.service.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
 
+function sendLearningError(res, err, fallbackMessage) {
+  const status = err.status || 500;
+  const body = { result: false, message: err.message || fallbackMessage };
+  if (err.code) body.code = err.code;
+  if (err.errors) body.errors = err.errors;
+  return res.status(status).json(body);
+}
+
 export const LearningController = {
   // 9. Learning Hub: Catalog
   async getLearningResources(req, res) {
@@ -47,10 +55,11 @@ export const LearningController = {
   async createCourseLearningPost(req, res) {
     try {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const body = req.body || {};
       const post = await LearningService.createCoursePost(
         mssv,
         req.params.courseCode,
-        req.body || {}
+        body
       );
       CommunityRealtime.publishCoursePostCreated({
         postId: post.id,
@@ -59,10 +68,7 @@ export const LearningController = {
       });
       return res.status(201).json({ result: true, data: post });
     } catch (err) {
-      return res.status(err.status || 500).json({
-        result: false,
-        message: err.message || 'Không thể đăng nội dung cho môn học.'
-      });
+      return sendLearningError(res, err, 'Không thể đăng nội dung cho môn học.');
     }
   },
 

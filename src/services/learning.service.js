@@ -7,9 +7,11 @@ const MAX_TITLE_LENGTH = 180;
 const MAX_CONTENT_LENGTH = 5000;
 const MAX_COMMENT_LENGTH = 2000;
 
-function httpError(message, status = 400) {
+function httpError(message, status = 400, code = null, errors = null) {
   const error = new Error(message);
   error.status = status;
+  if (code) error.code = code;
+  if (errors) error.errors = errors;
   return error;
 }
 
@@ -154,7 +156,7 @@ function requireDatabase() {
   }
 }
 
-async function findAccessibleCourse(mssv, courseCode, db = { query }) {
+export async function findAccessibleCourse(mssv, courseCode, db = { query }) {
   const normalizedCode = normalizeCourseCode(courseCode);
   if (!normalizedCode) throw httpError('Mã môn học không hợp lệ.');
 
@@ -181,7 +183,7 @@ async function findAccessibleCoursePost(mssv, courseCode, postId, db = { query }
   if (!cleanPostId) throw httpError('Bài viết không hợp lệ.');
   const course = await findAccessibleCourse(mssv, courseCode, db);
   const result = await db.query(`
-    SELECT id, course_id, author_mssv, like_count, comment_count
+    SELECT id, course_id, author_mssv, kind, like_count, comment_count
     FROM course_posts
     WHERE id = $1 AND course_id = $2
     LIMIT 1;
@@ -340,6 +342,13 @@ export const LearningService = {
         COUNT(DISTINCT cp.id) FILTER (WHERE cp.kind = 'request' AND cp.status = 'open')::int AS request_count,
         COUNT(DISTINCT cp.id) FILTER (WHERE cp.kind IN ('document', 'video', 'link'))::int AS resource_count,
         COUNT(DISTINCT cp.id)::int AS post_count,
+        -- Bộ đề trắc nghiệm là tài liệu ôn tập của môn, tính vào số "tài liệu"
+        -- trên thẻ môn học giống tài liệu chia sẻ.
+        (
+          SELECT COUNT(*)::int
+          FROM course_quiz_sets qs
+          WHERE qs.course_id = c.id
+        ) AS quiz_set_count,
         (
           SELECT COALESCE(
             JSONB_AGG(
@@ -381,7 +390,8 @@ export const LearningService = {
         semester_names: row.semester_names || [],
         semesters: row.semesters || [],
         request_count: Number(row.request_count || 0),
-        resource_count: Number(row.resource_count || 0),
+        resource_count: Number(row.resource_count || 0) + Number(row.quiz_set_count || 0),
+        quiz_set_count: Number(row.quiz_set_count || 0),
         post_count: Number(row.post_count || 0)
       })),
       synced_at: studentResult.rows[0]?.course_synced_at || null
@@ -393,7 +403,10 @@ export const LearningService = {
     const cleanMssv = String(mssv || '').trim().toUpperCase();
     const course = await findAccessibleCourse(cleanMssv, courseCode);
     const result = await query(`
-      SELECT cp.*, s.full_name AS author_name, (viewer_like.post_id IS NOT NULL) AS is_liked_by_viewer
+      SELECT
+        cp.*,
+        s.full_name AS author_name,
+        (viewer_like.post_id IS NOT NULL) AS is_liked_by_viewer
       FROM course_posts cp
       JOIN students s ON s.mssv = cp.author_mssv
       LEFT JOIN course_post_likes viewer_like
@@ -419,12 +432,14 @@ export const LearningService = {
     const cleanMssv = String(mssv || '').trim().toUpperCase();
     const course = await findAccessibleCourse(cleanMssv, courseCode);
     const kind = String(input.kind || '').trim().toLowerCase();
+
+    if (!POST_KINDS.has(kind)) throw httpError('Loại bài đăng không hợp lệ.');
+
     const title = cleanText(input.title, MAX_TITLE_LENGTH);
     const content = cleanText(input.content, MAX_CONTENT_LENGTH);
     const url = cleanText(input.url, 2048);
     const isAnonymous = kind === 'request' && normalizeBoolean(input.isAnonymous ?? input.is_anonymous);
 
-    if (!POST_KINDS.has(kind)) throw httpError('Loại bài đăng không hợp lệ.');
     if (!title) throw httpError('Tiêu đề không được để trống.');
     if (kind === 'request' && !content) {
       throw httpError('Hãy nhập nội dung bạn muốn luận bàn.');

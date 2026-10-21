@@ -25,6 +25,8 @@
 | Quyền xem/làm | Mọi sinh viên có quyền truy cập môn học, giống bài đăng hiện tại |
 | Phạm vi môn | Chỉ môn đã có trong dữ liệu học tập của người tạo (`findAccessibleCourse`) |
 | Loại câu | Một đáp án đúng, 2–6 lựa chọn |
+| Đáp án đúng | `correct` là nội dung option (không phải chữ cái); response lưu nội dung option |
+| Trộn đề | Xáo thứ tự câu hỏi + options mỗi lượt làm; resume dựa trên id/nội dung |
 | Phản hồi | Ôn tập: chọn → kiểm tra → khóa lựa chọn → hiện đáp án + giải thích |
 | Tiến độ | Lưu tiến độ, resume, điểm cao nhất, số lượt; không leaderboard |
 | Thời gian | Tùy chọn tổng thời gian cả bài; 0/không có = không giới hạn; hết giờ tự nộp |
@@ -166,7 +168,7 @@ CREATE INDEX IF NOT EXISTS course_quiz_progress_post_idx
       "id": "q1",
       "question": "Cấu trúc dữ liệu nào hoạt động theo nguyên tắc LIFO?",
       "options": ["Hàng đợi", "Ngăn xếp", "Danh sách liên kết", "Cây nhị phân"],
-      "correct": "B",
+      "correct": "Ngăn xếp",
       "explanation": "Ngăn xếp (stack) hoạt động theo LIFO: vào sau, ra trước."
     }
   ]
@@ -185,7 +187,7 @@ CREATE INDEX IF NOT EXISTS course_quiz_progress_post_idx
 | `questions[].id` | Không | Chuỗi 1–64 ký tự khớp `^[A-Za-z0-9_-]+$` |
 | `questions[].question` | Có | Chuỗi 1–2000 ký tự sau trim |
 | `questions[].options` | Có | Mảng 2–6 chuỗi; mỗi chuỗi 1–500 ký tự sau trim |
-| `questions[].correct` | Có | Chuỗi 1 ký tự `A`–`F`, không phân biệt hoa/thường; phải `< options.length` |
+| `questions[].correct` | Có | Chuỗi **trùng với một phần tử trong `options`** (sau trim, không phân biệt hoa/thường); server lưu lại đúng chuỗi option gốc. Không dùng chữ cái A–F. |
 | `questions[].explanation` | Không | Chuỗi ≤ 2000 ký tự sau trim |
 
 **Quy tắc ID:**
@@ -210,7 +212,7 @@ CREATE INDEX IF NOT EXISTS course_quiz_progress_post_idx
 **Lỗi validate:**
 - Mỗi lỗi có dạng `{ path, message }`, ví dụ:
   - `{ "path": "$.schema", "message": "schema phải là \"bdu-quiz/v1\"." }`
-  - `{ "path": "questions[2].correct", "message": "Câu 3: correct phải là A–D." }`
+  - `{ "path": "questions[2].correct", "message": "Câu 3: correct phải trùng một lựa chọn trong options." }`
   - `{ "path": "questions[4].options", "message": "Câu 5: options phải có 2–6 lựa chọn." }`
 - API trả `errors` cùng `message`; UI hiển thị tối đa toàn bộ lỗi (cuộn được).
 
@@ -267,7 +269,7 @@ export function quizTemplateJson()
   description: string | null,
   timeLimitSeconds: number,
   questions: [
-    { id: string, question: string, options: string[], correct: 'A'|'B'|'C'|'D'|'E'|'F', explanation: string }
+    { id: string, question: string, options: string[], correct: string, explanation: string }
   ]
 }
 ```
@@ -275,10 +277,11 @@ export function quizTemplateJson()
 `NormalizedQuiz` vẫn giữ `schema` để có thể gửi lại server và validate lần hai; server chỉ lưu `schema_version = 1`, không lưu chuỗi schema vào DB.
 
 Chấm điểm:
-- `response` được uppercase và trim; chỉ chấp nhận `A`–`F` nằm trong `options.length`.
-- `gradeQuizResponse` trả `false` nếu response rỗng/không hợp lệ.
-- `gradeQuizResponses` bỏ qua entry không phải object, thiếu `id`, id lạ, id trùng (entry đầu tiên thắng), response không hợp lệ.
+- `response` là **nội dung option** (string), trim và so khớp với `correct` không phân biệt hoa/thường.
+- `gradeQuizResponse` trả `false` nếu response rỗng/không khớp `correct`.
+- `gradeQuizResponses` bỏ qua entry không phải object, thiếu `id`, id lạ, id trùng (entry đầu tiên thắng), response không phải một option hợp lệ.
 - Không tin bất kỳ cờ `correct` nào do client gửi.
+- `correct` trong `NormalizedQuiz` luôn là chuỗi option gốc (canonical), không phải chữ cái.
 
 ## 6. Backend API
 
@@ -316,7 +319,7 @@ Request:
         "id": "q1",
         "question": "Câu hỏi ví dụ?",
         "options": ["Đáp án A", "Đáp án B"],
-        "correct": "B",
+        "correct": "Đáp án B",
         "explanation": "Giải thích ngắn."
       }
     ]
@@ -434,10 +437,12 @@ Request: `{ "restart": false }` (tùy chọn).
 
 Xử lý trong transaction, khóa dòng progress `FOR UPDATE`:
 - Chưa có dòng: INSERT `started_at=NOW()`, `responses='[]'`, `attempts=0`.
-- Có dòng, `completed_at IS NULL`: giữ nguyên.
+- Có dòng, `completed_at IS NULL`:
+  - `restart !== true`: giữ nguyên; `restarted=false`.
+  - `restart === true`: reset lượt đang làm (`started_at=NOW()`, `answered=0`, `correct_count=0`, `total_count=0`, `responses='[]'`, `completed_at=NULL`); giữ `best_correct`, `best_total`, `attempts`; `restarted=true`.
 - Có dòng, đã completed:
   - `restart !== true`: trả nguyên trạng; `restarted=false`.
-  - `restart === true`: reset `started_at=NOW()`, `answered=0`, `correct_count=0`, `total_count=0`, `responses='[]'`, `completed_at=NULL`; giữ `best_correct`, `best_total`, `attempts`.
+  - `restart === true`: reset như trên; giữ `best_correct`, `best_total`, `attempts`; `restarted=true`.
 - Nếu dòng tồn tại nhưng `started_at IS NULL` (dữ liệu bất thường): đặt `NOW()`.
 
 Rate limit `course-quiz-start:${mssv}`: 120 lượt/10 phút.
@@ -474,7 +479,7 @@ Xử lý:
 4. Đã `completed_at` → `409` code `QUIZ_COMPLETED`.
 5. Có giới hạn và đã hết giờ → `409` code `QUIZ_TIME_UP`.
 6. `questionId` không tồn tại → `400`.
-7. `response` không phải chữ cái hợp lệ của câu → `400`.
+7. `response` không phải một option hợp lệ của câu (so khớp nội dung, không phân biệt hoa/thường) → `400`.
 8. Rate limit `course-quiz-answer:${mssv}`: 600 lượt/10 phút.
 9. Trả:
 
@@ -483,7 +488,7 @@ Xử lý:
   "result": true,
   "data": {
     "correct": true,
-    "correct_option": "B",
+    "correct_answer": "Ngăn xếp",
     "explanation": "Ngăn xếp ...",
     "remaining_seconds": 540
   }
@@ -522,6 +527,7 @@ Xử lý trong transaction, khóa progress `FOR UPDATE`:
    - Chấm lại toàn bộ merged entries bằng `gradeQuizResponse`; lưu `{ id, response, correct }` với `correct` do server tính.
 6. `answered = merged.length`; `correct_count = merged.filter(correct).length`.
 7. Nếu `completed === true`:
+   - Nếu đã hết giờ và `responses` có entry mới → `409 QUIZ_TIME_UP`; chỉ chấp nhận finalize với `responses: []` từ dữ liệu đã lưu.
    - Nếu `answered === 0` và chưa hết giờ → `400 Hãy trả lời ít nhất một câu trước khi nộp bài.`
    - `total_count = question_count`.
    - `completed_at = NOW()`.
@@ -615,8 +621,8 @@ Không đổi `deleteCoursePost`. FK `ON DELETE CASCADE` xóa `course_quizzes` v
 1. Card CTA → `/learning/:courseCode/quiz/:postId`.
 2. GET quiz → landing với số câu, thời gian, best, attempts.
 3. Bấm **Bắt đầu** → POST start → nhận `remaining_seconds`.
-4. Runner hiển thị câu đầu tiên (hoặc câu đầu tiên chưa trả lời nếu resume).
-5. Chọn đáp án → **Kiểm tra** → POST answer → khóa lựa chọn, hiện đúng/sai + giải thích.
+4. Runner xáo câu hỏi + options cho lượt này, hiển thị câu đầu tiên (hoặc câu chưa trả lời đầu tiên trong thứ tự đã xáo nếu resume).
+5. Chọn đáp án (nội dung option) → **Kiểm tra** → POST answer → khóa lựa chọn, hiện đúng/sai + giải thích.
 6. Client lưu câu vừa trả lời qua POST progress (`completed:false`), im lặng.
 7. **Câu tiếp** → câu kế; hết câu → **Xem kết quả** → POST progress (`completed:true`).
 8. Server chấm lại, cập nhật best/attempts, trả progress.
@@ -634,7 +640,7 @@ Không đổi `deleteCoursePost`. FK `ON DELETE CASCADE` xóa `course_quizzes` v
 
 - Timer client chạy theo `remaining_seconds`; khi về 0:
   - Khóa toàn bộ lựa chọn.
-  - Gọi POST progress `{ responses: [...các câu đã kiểm tra nhưng chưa lưu], completed: true }` (gửi `[]` nếu mọi câu đã lưu).
+  - Gọi POST progress `{ responses: [], completed: true }`: server chỉ finalize các response **đã lưu**, không nhận response mới sau hạn. Client autosave ngay sau mỗi câu đã kiểm tra để giảm rủi ro mất câu cuối.
   - Server cho phép nộp dù 0 câu hoặc thiếu câu; `total_count = question_count`.
   - Hiện kết quả + thông báo "Đã hết thời gian làm bài."
 - Nếu người dùng reload sau khi hết giờ: GET trả `remaining_seconds=0`, `expired=true`; UI hiện nút **Xem kết quả** thay vì cho làm tiếp.
@@ -684,7 +690,7 @@ UI:
 - Trạng thái:
   - Hợp lệ: badge xanh `✓ 10 câu · 10 phút`.
   - Lỗi: danh sách đỏ `path` + message, cuộn tối đa 200px.
-- Preview: accordion, hiện câu hỏi, options A–F, đáp án đúng được tô xanh, giải thích. Mặc định mở 3 câu đầu; có nút **Xem tất cả**.
+- Preview: accordion, hiện câu hỏi, options A–F, option có **nội dung trùng `correct`** được tô xanh, giải thích. Mặc định mở 3 câu đầu; có nút **Xem tất cả**.
 - `onValidQuiz` trả object normalized; component cha lưu vào `draft.quiz`.
 - Sửa text sau khi hợp lệ → gọi `onInvalid`, disable submit.
 
@@ -744,10 +750,11 @@ File mới:
 **Runner:**
 - Header: `Câu 3/10`, progress bar, timer `09:42` nếu có giới hạn.
 - Timer dựa trên `remaining_seconds` từ server; `setInterval` 1 giây; `visibilitychange` → refetch quiz để đồng bộ **chỉ remaining_seconds**, không reset câu đang làm hay state đã chọn. Nếu refetch thấy `completed_at` (tab khác đã nộp) thì chuyển sang màn kết quả.
-- Câu hỏi + options A–F dạng nút lớn.
+- **Trộn mỗi lượt làm:** xáo thứ tự câu hỏi và thứ tự options khi runner mount (mỗi lần bắt đầu/làm lại). Response lưu theo **nội dung option**, nên resume/refetch không phụ thuộc thứ tự.
+- Câu hỏi + options dạng nút lớn; nhãn A–F chỉ là thứ tự hiển thị sau khi xáo.
 - Chọn → **Kiểm tra đáp án**; sau khi có kết quả:
   - Khóa lựa chọn.
-  - Đáp án đúng tô xanh; lựa chọn sai tô đỏ.
+  - Option có nội dung trùng `correct_answer` tô xanh; lựa chọn sai tô đỏ.
   - Hiện giải thích.
   - Nút **Câu tiếp** hoặc **Xem kết quả** ở câu cuối.
   - Nếu chưa làm hết câu, **Xem kết quả** mở confirm “Còn N câu chưa làm, các câu đó sẽ tính sai. Nộp bài?”.
@@ -759,7 +766,7 @@ File mới:
 
 **Result:**
 - Điểm `correct/total`, phần trăm, best, attempts.
-- Danh sách review: câu hỏi, lựa chọn của bạn, đáp án đúng, giải thích.
+- Danh sách review: câu hỏi, nội dung lựa chọn của bạn, `correct_answer`, giải thích.
 - Câu chưa trả lời hiện “Chưa trả lời”.
 - Nút **Làm lại**, **Về không gian môn**.
 
@@ -796,7 +803,7 @@ File mới:
 - Parse JSON hợp lệ; BOM; CRLF.
 - Thiếu/sai `schema`; top-level array; JSON hỏng.
 - 0 câu, 101 câu; 1 option, 7 options; option trùng (hoa/thường/khoảng trắng).
-- `correct` thường → uppercase; `correct` ngoài phạm vi; `correct` là number.
+- `correct` trùng option (khác hoa/thường) → nhận; `correct` không trùng option; `correct` là number.
 - ID: không có → `q1..qN`; có đủ → giữ nguyên; trộn → lỗi; trùng → lỗi.
 - Giới hạn ký tự: question 2000/2001; option 500/501; explanation 2000/2001; title 180/181; description 5000/5001.
 - `timeLimitSeconds`: 0, 29, 30, 14400, 14401, chuỗi `"600"`.
@@ -821,7 +828,7 @@ Case:
 - GET quiz: không có `correct`/`explanation`; có `remaining_seconds`; `review=null`.
 - Chưa start mà answer/progress → 409 `QUIZ_NOT_STARTED`.
 - Start → `started_at` khác null; start lần 2 không reset thời gian.
-- Answer đúng/sai → đúng `correct_option`, `explanation`.
+- Answer đúng/sai → đúng `correct_answer` (nội dung option), `explanation`.
 - Save progress `completed:false` → `answered`, `correct_count`, `total_count` đúng; gửi lại response cũ với đáp án khác không overwrite.
 - Resume: GET trả responses; start lại giữ `remaining_seconds` gần đúng.
 - Complete sớm khi có ≥1 câu → `completed_at`, `attempts=1`, `total_count=question_count`; best cập nhật.
@@ -907,7 +914,7 @@ Không cần sửa `docs/architecture.md` vì không thêm domain/service mới;
 2. TTCDS tạo quiz từ file `.json` hoặc dán JSON hợp lệ; JSON sai bị chặn với lỗi chỉ rõ câu/trường; không tạo bản ghi dở dang khi lỗi.
 3. Feed hiển thị card quiz, filter **Trắc nghiệm**, count và stat hero; không có đáp án trong payload feed.
 4. Mọi sinh viên thuộc môn mở được quiz; GET không trả đáp án/giải thích.
-5. Làm bài: chọn → kiểm tra → khóa lựa chọn → hiện đúng/sai + giải thích; resume đúng câu; reload không reset timer.
+5. Làm bài: câu hỏi + options được xáo mỗi lượt; chọn theo nội dung option → kiểm tra → khóa lựa chọn → hiện đúng/sai + giải thích; resume đúng câu; reload không reset timer.
 6. Hết giờ tự nộp; server chặn trả lời muộn; kết quả ghi nhận câu chưa làm là sai.
 7. Điểm cao nhất và số lượt đúng; làm lại không làm mất best.
 8. Xóa bài quiz xóa cả quiz + tiến độ; xóa bài loại khác không đổi.
