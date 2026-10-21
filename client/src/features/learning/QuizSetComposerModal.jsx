@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { useViewportDialog } from '../../components/ViewportModal.jsx';
 import { createQuizSet } from '../../api/community.js';
 import {
   QUIZ_MAX_BYTES,
@@ -45,7 +47,16 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
   const [maxPerPart, setMaxPerPart] = useState(QUIZ_SET_DEFAULT_MAX_PER_PART);
   const [minutes, setMinutes] = useState(QUIZ_SET_DEFAULT_MINUTES_PER_PART);
   const [submitError, setSubmitError] = useState('');
+  // Validation must not shout at an empty form: the title error appears once
+  // the field has been edited (or a submit was attempted), and the
+  // "questions phải có 1-500 câu" error only once files were actually picked
+  // (or a submit was attempted).
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const inputRef = useRef(null);
+  const dialogRef = useRef(null);
+  const titleRef = useRef(null);
+  useViewportDialog(true, onClose || (() => {}), dialogRef, titleRef);
 
   const titleError = title.trim() === '' ? 'Tiêu đề là bắt buộc.' : title.trim().length > 180 ? 'Tiêu đề tối đa 180 ký tự.' : '';
   const descriptionError = description.length > 5000 ? 'Mô tả tối đa 5000 ký tự.' : '';
@@ -65,6 +76,10 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
 
   const previewSet = buildResult.ok ? buildResult.set : null;
   const buildErrors = buildResult.ok ? [] : buildResult.errors || [];
+  // An empty form is not an error state: only surface the build errors once
+  // there is something to build (files picked) or the user tried to submit.
+  const showBuildErrors = submitAttempted || files.length > 0;
+  const showTitleError = (titleTouched || submitAttempted) && Boolean(titleError);
 
   const canSubmit =
     !titleError &&
@@ -175,18 +190,25 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
   const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitError('');
+    setSubmitAttempted(true);
     if (!canSubmit) return;
     submitMutation.mutate();
   };
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop learning-modal-backdrop"
       onClick={(e) => {
         if (e.target.classList && e.target.classList.contains('modal-backdrop') && onClose) onClose();
       }}
     >
-      <div className="learning-composer-dialog glass-panel quiz-set-composer" role="dialog" aria-modal="true">
+      <div
+        ref={dialogRef}
+        className="learning-composer-dialog glass-panel quiz-set-composer"
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+      >
         <form onSubmit={handleSubmit}>
           <div className="learning-composer-header">
             <div>
@@ -205,13 +227,18 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
               </label>
               <input
                 id="quiz-set-title"
+                ref={titleRef}
                 className="form-input composer-input"
                 type="text"
                 maxLength={180}
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setTitleTouched(true);
+                }}
+                onBlur={() => setTitleTouched(true)}
               />
-              {titleError && <p className="quiz-runner-error">{titleError}</p>}
+              {showTitleError && <p className="quiz-runner-error">{titleError}</p>}
             </div>
 
             <div className="composer-field">
@@ -323,9 +350,12 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
               </div>
             )}
 
-            {(buildErrors.length > 0 || submitError) && (
+            {((showBuildErrors && buildErrors.length > 0) || submitError) && (
               <div className="quiz-errors">
-                {[...buildErrors, ...(submitError ? [{ message: submitError }] : [])].map((e, i) => (
+                {[
+                  ...(showBuildErrors ? buildErrors : []),
+                  ...(submitError ? [{ message: submitError }] : [])
+                ].map((e, i) => (
                   <p key={i} className="quiz-error-item">{e.message}</p>
                 ))}
               </div>
@@ -349,6 +379,7 @@ export default function QuizSetComposerModal({ courseCode, token: tokenProp, onC
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -232,7 +232,7 @@ describe('CourseLearningPage without old quiz-post UI', () => {
 
   function renderPage() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
+    return render(
       <MemoryRouter initialEntries={['/learning/CSC101']}>
         <QueryClientProvider client={client}>
           <Routes>
@@ -279,6 +279,20 @@ describe('CourseLearningPage without old quiz-post UI', () => {
     expect(screen.queryByText('Tạo trắc nghiệm')).not.toBeInTheDocument();
     expect(screen.queryByText('Tạo bài trắc nghiệm')).not.toBeInTheDocument();
     expect(screen.getByText(/Luận bàn \/ Hỏi đáp/)).toBeInTheDocument();
+  });
+
+  it('portals the post composer to document.body so the backdrop covers the viewport', async () => {
+    mockPageAPIs();
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Chia sẻ tài liệu/ }));
+    const dialog = await screen.findByRole('dialog');
+    // The dashboard body sets `perspective`, which makes it the containing block
+    // of every `position: fixed` descendant: an inline modal would be clipped
+    // by the scrolling content area instead of the viewport.
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(dialog.parentElement.classList.contains('modal-backdrop')).toBe(true);
   });
 });
 
@@ -382,6 +396,38 @@ describe('QuizSetComposerModal', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo bộ đề' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Tạo bộ đề' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('portals the dialog to document.body so the backdrop covers the viewport', () => {
+    const { container } = renderModal();
+    const dialog = screen.getByRole('dialog');
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(dialog.parentElement.classList.contains('modal-backdrop')).toBe(true);
+  });
+
+  it('does not show validation errors before the user interacts with the form', async () => {
+    renderModal();
+    // An untouched form is not an error state: no red boxes on open.
+    expect(screen.queryByText('Tiêu đề là bắt buộc.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/questions phải có/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo bộ đề' })).toBeDisabled();
+
+    // The title error only appears once the field has actually been edited.
+    const titleInput = screen.getByLabelText(/Tiêu đề/);
+    fireEvent.change(titleInput, { target: { value: 'Bộ đề' } });
+    fireEvent.change(titleInput, { target: { value: '' } });
+    await waitFor(() => expect(screen.getByText('Tiêu đề là bắt buộc.')).toBeInTheDocument());
+  });
+
+  it('reports the missing questions only after a submit attempt', async () => {
+    renderModal();
+    const input = document.querySelector('input[type="file"]');
+    fireEvent.change(input, { target: { files: [makeFile('a.json', 3)] } });
+    await waitFor(() => expect(screen.getByText(/phần · 3 câu/)).toBeInTheDocument());
+
+    // With a valid file there is no question-count error at all.
+    expect(screen.queryByText(/questions phải có/)).not.toBeInTheDocument();
   });
 });
 
@@ -528,6 +574,42 @@ describe('QuizSetPartPage review mode', () => {
     expect(await screen.findByText('Câu hỏi số 2?')).toBeInTheDocument();
     expect(screen.getByText('Câu 2/2')).toBeInTheDocument();
     expect(screen.queryByText('Câu hỏi số 1?')).not.toBeInTheDocument();
+  });
+
+  it('only selects on a single option click; the answer is accepted by "Kiểm tra đáp án"', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    mocks.getQuizPart.mockResolvedValue(makePartData());
+    mocks.startQuizPart.mockResolvedValue({ remaining_seconds: null, restarted: false, completed_at: null });
+    mocks.answerQuizReview.mockResolvedValue({
+      correct: true,
+      correct_answer: 'Đáp án A',
+      explanation: 'Giải thích câu 1.'
+    });
+    mocks.saveQuizPartProgress.mockResolvedValue({
+      mode: 'review',
+      answered: 1,
+      total_count: 2,
+      completed_at: null,
+      responses: [{ id: 'q1', response: 'Đáp án A', correct: true }]
+    });
+
+    renderPartPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu ôn tập' }));
+    const option = await screen.findByRole('radio', { name: 'Đáp án A' });
+    fireEvent.click(option);
+
+    // A click only marks the option: nothing is graded and nothing is saved.
+    expect(mocks.answerQuizReview).not.toHaveBeenCalled();
+    expect(mocks.saveQuizPartProgress).not.toHaveBeenCalled();
+    expect(option).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Chính xác!')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chưa chính xác.')).not.toBeInTheDocument();
+
+    // Only the explicit check button accepts the answer.
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra đáp án' }));
+    await waitFor(() => expect(mocks.answerQuizReview).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Chính xác!')).toBeInTheDocument();
   });
 
   it('shuffles questions/options deterministically and resumes stored responses by id', async () => {

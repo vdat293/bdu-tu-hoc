@@ -123,8 +123,11 @@ body.theme-dark .quiz-runner-progress-bar {
 }
 .quiz-runner-question-text:focus,
 .quiz-runner-question-text:focus-visible {
-  /* Programmatic heading focus must not paint a thick ring around the question. */
+  /* Programmatic heading focus must not paint a thick ring around the question.
+     The global showcase ring is a `box-shadow !important`, so it has to be
+     cancelled explicitly - `outline: none` alone is not enough. */
   outline: none;
+  box-shadow: none !important;
 }
 .quiz-runner-options {
   display: grid;
@@ -152,6 +155,24 @@ body.theme-dark .quiz-runner-progress-bar {
 .quiz-runner-option:focus-visible {
   outline: 2px solid #15803d;
   outline-offset: 2px;
+  /* The global showcase ring paints a thick dark-red `box-shadow` with
+     `!important`, which would mask the selected/correct/wrong state ring: a
+     single click then looked like the answer had already been judged.  The
+     focus ring lives on `outline` (the global rule only zeroes `outline`),
+     and the state ring is restored below with a matching `!important`. */
+  box-shadow: none !important;
+}
+.quiz-runner-option.is-selected:focus-visible {
+  box-shadow: inset 0 0 0 1px #15803d !important;
+}
+body.theme-dark .quiz-runner-option.is-selected:focus-visible {
+  box-shadow: inset 0 0 0 1px #4ade80 !important;
+}
+.quiz-runner-option.is-correct:focus-visible {
+  box-shadow: inset 0 0 0 1px #16a34a !important;
+}
+.quiz-runner-option.is-wrong:focus-visible {
+  box-shadow: inset 0 0 0 1px #dc2626 !important;
 }
 .quiz-runner-option:disabled {
   cursor: default;
@@ -210,6 +231,9 @@ body.theme-dark .quiz-runner-option.is-wrong {
 .quiz-runner-feedback:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
+  /* Cancel the global showcase ring: the feedback box already carries its own
+     green/red verdict colours and must not be masked by a dark-red halo. */
+  box-shadow: none !important;
 }
 .quiz-runner-feedback.is-correct {
   border-color: rgba(22, 163, 74, 0.4);

@@ -19934,7 +19934,10 @@ body.theme-dark .learning-drive-icon.github-icon {
 .learning-composer-dialog {
   width: 100%;
   max-width: 620px;
-  max-height: 90vh;
+  /* Reserve the backdrop's 20px gutter so the dialog never overflows the
+     viewport: `dvh` keeps the header reachable on mobile browsers. */
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   overflow-y: auto;
   border-radius: var(--radius-lg);
   background: var(--bg-card);

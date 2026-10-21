@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -12,6 +13,7 @@ import {
 } from '../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
+import { useViewportDialog } from '../../components/ViewportModal.jsx';
 import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
 import QuizSetSection from './QuizSetSection.jsx';
 import QuizSetComposerModal from './QuizSetComposerModal.jsx';
@@ -314,6 +316,18 @@ export default function CourseLearningPage() {
 
   const [showComposer, setShowComposer] = useState(false);
   const [showQuizSetComposer, setShowQuizSetComposer] = useState(false);
+  // The composer dialog is portalled to document.body (see the render below):
+  // `.dashboard-body` sets `perspective`, which turns it into the containing
+  // block of every `position: fixed` descendant, so an inline modal would be
+  // clipped by the scrolling content area instead of the viewport.
+  const composerDialogRef = useRef(null);
+  const composerTitleRef = useRef(null);
+  useViewportDialog(
+    showComposer,
+    () => setShowComposer(false),
+    composerDialogRef,
+    composerTitleRef
+  );
   const [confirmUI, askConfirm] = useConfirm();
   const [filterKind, setFilterKind] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -828,8 +842,11 @@ export default function CourseLearningPage() {
         </div>
       </div>
 
-      {/* Modern Composer Modal */}
-      {showComposer && (
+      {/* Modern Composer Modal — portalled to document.body so the fixed
+          backdrop covers the whole viewport (sidebar + topbar included) and the
+          dialog is centred against the viewport instead of the scrolled
+          dashboard body. */}
+      {showComposer && createPortal(
         <div
           id="learning-composer-modal"
           className="modal-backdrop learning-modal-backdrop"
@@ -838,9 +855,11 @@ export default function CourseLearningPage() {
           }}
         >
           <div
+            ref={composerDialogRef}
             className="learning-composer-dialog glass-panel"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
           >
             <form
               id="learning-post-form"
@@ -905,6 +924,7 @@ export default function CourseLearningPage() {
                   </label>
                   <input
                     id="learning-post-title"
+                    ref={composerTitleRef}
                     className="form-input composer-input"
                     type="text"
                     maxLength={180}
@@ -1002,7 +1022,8 @@ export default function CourseLearningPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {showQuizSetComposer && (
         <QuizSetComposerModal courseCode={courseCode} onClose={() => setShowQuizSetComposer(false)} />
