@@ -45,8 +45,10 @@ export default function KillerSudokuPage() {
   };
 
   const handleOpenNewTab = () => {
-    const tokenParam = auth.token ? `?token=${encodeURIComponent(auth.token)}` : '';
-    window.open(`/killer-sudoku/index.html${tokenParam}`, '_blank', 'noopener,noreferrer');
+    if (auth.token) {
+      try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch {}
+    }
+    window.open('/killer-sudoku/index.html', '_blank', 'noopener,noreferrer');
   };
 
   // Luật cứng section TTCDS: chỉ ai có tag Trung tâm CĐS (ttcds:access)
@@ -66,9 +68,10 @@ export default function KillerSudokuPage() {
     );
   }
 
-  const iframeSrc = auth.token
-    ? `/killer-sudoku/index.html?token=${encodeURIComponent(auth.token)}&v=2.5.0`
-    : '/killer-sudoku/index.html?v=2.5.0';
+  if (auth.token) {
+    try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch {}
+  }
+  const iframeSrc = '/killer-sudoku/index.html?v=2.5.0';
 
   return (
     <div

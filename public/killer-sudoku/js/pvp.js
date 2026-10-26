@@ -234,6 +234,8 @@
       const params = new URLSearchParams(window.location.search);
       const queryToken = params.get('token');
       if (queryToken) return queryToken;
+      const cookieMatch = document.cookie.match(/(?:^|;\\s*)bdu_token=([^;]+)/);
+      if (cookieMatch) return decodeURIComponent(cookieMatch[1].trim());
       return localStorage.getItem('bdu_token') ||
              sessionStorage.getItem('bdu_token') ||
              (window.parent && window.parent.localStorage ? window.parent.localStorage.getItem('bdu_token') : null) ||

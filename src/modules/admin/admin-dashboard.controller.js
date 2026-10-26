@@ -31,12 +31,9 @@ const LOGIN_MAX_FAILURES = 5;
 const loginFailures = new Map();
 
 function clientIp(req) {
-  return String(
-    req?.headers?.['cf-connecting-ip']
-    || req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
-    || req?.socket?.remoteAddress
-    || 'unknown'
-  );
+  // Chỉ tin proxy header khi Express đã cấu hình trust proxy (app.set('trust proxy', ...)).
+  // Dùng req.ip để tránh attacker spoof x-forwarded-for nhằm đổi bucket rate limit.
+  return String(req?.ip || req?.socket?.remoteAddress || 'unknown');
 }
 
 function getLoginThrottle(req) {

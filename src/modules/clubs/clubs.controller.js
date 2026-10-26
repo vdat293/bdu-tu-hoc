@@ -220,6 +220,7 @@ export const ClubsController = {
 
   async getClanQuiz(req, res) {
     try {
+      await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const quiz = await getClanQuiz(req.params.id);
       return res.json({ result: true, data: quiz });
     } catch (err) {
@@ -230,11 +231,7 @@ export const ClubsController = {
 
   async getClanRoles(req, res) {
     try {
-      if (req.headers.authorization) {
-        try {
-          await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
-        } catch {}
-      }
+      await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       const data = await ClanRoleService.getRoleLabels(req.params.id);
       return res.json({ result: true, data });
     } catch (err) {

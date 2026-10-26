@@ -272,7 +272,7 @@ async function buildStudentDetail(key) {
 
 export const TtcdsStudentService = {
   /** Tìm sinh viên theo tiền tố MSSV hoặc tên (ILIKE). Trả `{ ket_qua }` như Dashboard cũ. */
-  async searchStudents(q, { limit } = {}) {
+  async searchStudents(q, { limit, ownerMssv = null, bypassScope = false } = {}) {
     const term = String(q ?? '').trim();
     if (term.length < SEARCH_MIN_LENGTH) {
       throw statusError('Nhập ít nhất 2 ký tự để tìm kiếm.', 400);
@@ -283,13 +283,22 @@ export const TtcdsStudentService = {
       MAX_SEARCH_LIMIT
     );
     const escaped = escapeLike(term);
+    // Giới hạn theo nhóm được giao cho owner, trừ system owner kèm ?all=1.
+    const owner = ownerMssv ? String(ownerMssv).trim().toUpperCase() : null;
+    const scoped = owner && !bypassScope;
+    const params = [`${escaped}%`, `%${escaped}%`, size];
+    let whereExtra = '';
+    if (scoped) {
+      params.push(owner);
+      whereExtra = ` AND mssv::text IN (SELECT m.mssv::text FROM ttcds_group_members m JOIN ttcds_groups g ON g.id = m.group_id WHERE g.owner_mssv = $4)`;
+    }
     const result = await query(
       `SELECT mssv, ten_day_du, ma_lop, ma_khoa, ten_khoa, hien_dien
        FROM odp_sinh_vien
-       WHERE mssv::text LIKE $1 OR ten_day_du ILIKE $2
+       WHERE (mssv::text LIKE $1 OR ten_day_du ILIKE $2)${whereExtra}
        ORDER BY mssv
        LIMIT $3`,
-      [`${escaped}%`, `%${escaped}%`, size]
+      params
     );
     return {
       ket_qua: result.rows.map((row) => ({

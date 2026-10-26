@@ -222,7 +222,8 @@ export const TtcdsController = {
       if (q.length < 2) {
         return res.status(400).json({ result: false, message: 'Nhập ít nhất 2 ký tự để tìm kiếm.' });
       }
-      const data = await TtcdsStudentService.searchStudents(q, { limit: req.query?.limit });
+      const bypassScope = isAllFlag(req.query?.all) && await PermissionService.isSystemOwner(mssv);
+      const data = await TtcdsStudentService.searchStudents(q, { limit: req.query?.limit, ownerMssv: mssv, bypassScope });
       return res.json({ result: true, data });
     } catch (err) {
       return sendError(res, err, err?.status || 503, 'Không thể tìm kiếm sinh viên.');

@@ -161,11 +161,17 @@ export function createApp() {
   // Token lấy từ Authorization header (fetch) hoặc ?token= (iframe mở tab mới).
   // Asset tĩnh (css/js/png) vẫn public để iframe sau khi qua cổng tải được;
   // dữ liệu thật (progress API + WS PvP) đều đã chặn 403 ở tầng riêng.
+  function readCookieToken(req) {
+    const raw = String(req?.headers?.cookie || '');
+    const match = raw.match(/(?:^|;\\s*)bdu_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1].trim()) : '';
+  }
   async function requireTtcdsForSudokuEntry(req, res, next) {
     try {
       const headerToken = req.headers.authorization || '';
-      const queryToken = typeof req.query?.token === 'string' ? req.query.token : '';
-      const token = headerToken || queryToken;
+      // Không nhận token qua query string (lộ qua log/referrer). Nhận qua cookie same-origin.
+      const cookieToken = readCookieToken(req);
+      const token = headerToken || cookieToken;
       if (!token) {
         return res.status(403).json({ result: false, code: 'TTCDS_FORBIDDEN', message: 'Bạn không thuộc Trung tâm Chuyển đổi số.' });
       }
@@ -183,6 +189,7 @@ export function createApp() {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     res.sendFile(path.join(sudokuSiteDir, 'index.html'));
   });
   app.use('/killer-sudoku', express.static(sudokuSiteDir, {
@@ -194,12 +201,14 @@ export function createApp() {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Referrer-Policy', 'no-referrer');
     }
   }));
   app.get(['/killer-sudoku/*'], requireTtcdsForSudokuEntry, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     res.sendFile(path.join(sudokuSiteDir, 'index.html'));
   });
 
