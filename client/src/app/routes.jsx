@@ -32,6 +32,7 @@ const TtcdsPage = lazy(() => import('../features/ttcds/TtcdsPage.jsx'));
 const TtcdsHubPage = lazy(() => import('../features/ttcds/TtcdsHubPage.jsx'));
 const TtcdsGroupPage = lazy(() => import('../features/ttcds/TtcdsGroupPage.jsx'));
 const TtcdsStudentPage = lazy(() => import('../features/ttcds/TtcdsStudentPage.jsx'));
+const TtcdsLookupPage = lazy(() => import('../features/ttcds/TtcdsLookupPage.jsx'));
 const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const KillerSudokuPage = lazy(() => import('../features/games/KillerSudokuPage.jsx'));
@@ -76,6 +77,10 @@ export default function AppRoutes() {
       <Route path="ttcds/sinh-vien-cua-toi" element={<Navigate to="/mystudent" replace />} />
       <Route path="ttcds/groups/:id" element={<Lazy><TtcdsGroupPage /></Lazy>} />
       <Route path="ttcds/students/:mssv" element={<Lazy><TtcdsStudentPage /></Lazy>} />
+<Route path="ttcds/lookup" element={<Lazy><TtcdsLookupPage /></Lazy>} />
+<Route path="ttcds/search" element={<Lazy><TtcdsLookupPage /></Lazy>} />
+<Route path="ttcds/tra-cuu" element={<Lazy><TtcdsLookupPage /></Lazy>} />
+<Route path="ttcds/students" element={<Lazy><TtcdsLookupPage /></Lazy>} />
     </Route>
     {/* 404 đứng riêng một trang, không mượn khung sidebar/topbar của cổng. */}
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />

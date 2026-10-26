@@ -34,19 +34,22 @@ export async function removeTtcdsGroupMember(token, groupId, mssv) {
   return request(`/api/ttcds/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(mssv)}`, { method: 'DELETE', token, defaultMessage: 'Không thể xóa thành viên.' });
 }
 
-export async function searchTtcdsStudents(token, q, { signal, limit } = {}) {
+export async function searchTtcdsStudents(token, q, { signal, limit, all } = {}) {
   const params = new URLSearchParams({ q: String(q ?? '').trim() });
   if (limit !== undefined && limit !== null && limit !== '') params.set('limit', String(limit));
+  if (all) params.set('all', '1');
   const data = await request(`/api/ttcds/students/search?${params}`, { token, signal, defaultMessage: 'Không thể tìm kiếm sinh viên.' });
   return unwrap(data, data);
 }
 
-export async function getTtcdsStudent(token, mssv, { signal } = {}) {
-  const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}`, { token, signal, defaultMessage: 'Không thể tải thông tin sinh viên.' });
+export async function getTtcdsStudent(token, mssv, { signal, all } = {}) {
+  const params = all ? '?all=1' : '';
+  const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}${params}`, { token, signal, defaultMessage: 'Không thể tải thông tin sinh viên.' });
   return unwrap(data, data);
 }
 
-export async function getTtcdsAttendance(token, mssv, { signal } = {}) {
-  const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}/diem-danh`, { token, signal, defaultMessage: 'Không thể tải nhật ký điểm danh.' });
+export async function getTtcdsAttendance(token, mssv, { signal, all } = {}) {
+  const params = all ? '?all=1' : '';
+  const data = await request(`/api/ttcds/students/${encodeURIComponent(String(mssv ?? '').trim().toUpperCase())}/diem-danh${params}`, { token, signal, defaultMessage: 'Không thể tải nhật ký điểm danh.' });
   return unwrap(data, data);
 }

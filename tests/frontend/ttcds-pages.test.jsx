@@ -28,7 +28,8 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
 import TtcdsPage from '../../client/src/features/ttcds/TtcdsPage.jsx';
 import TtcdsGroupPage from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import TtcdsHubPage from '../../client/src/features/ttcds/TtcdsHubPage.jsx';
-import TtcdsStudentPage from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
+import TtcdsLookupPage from '../../client/src/features/ttcds/TtcdsLookupPage.jsx';
+import TtcdsStudentPage, { resolveStudentBackTarget } from '../../client/src/features/ttcds/TtcdsStudentPage.jsx';
 import { summarizeTtcdsStudent, searchMinLength } from '../../client/src/features/ttcds/TtcdsGroupPage.jsx';
 import { navigation, filterNavigation, findRouteMeta } from '../../client/src/app/navigation.js';
 
@@ -527,6 +528,76 @@ describe('TTCDS frontend', () => {
     expect(screen.getByRole('link', { name: '← Sinh viên của tôi' })).toHaveAttribute('href', '/mystudent');
     expect(screen.getByRole('link', { name: 'Về danh sách' })).toHaveAttribute('href', '/mystudent');
     expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
+  });
+
+  it('returns to the lookup page when the profile was opened from tra cứu', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    mocks.getTtcdsAttendance.mockResolvedValue({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
+    renderAt(
+      { pathname: '/ttcds/students/24050126', state: { from: '/ttcds/lookup', fromLabel: 'Tra cứu sinh viên', query: 'nguyen' } },
+      '/ttcds/students/:mssv',
+      <TtcdsStudentPage />
+    );
+
+    const back = await screen.findByRole('link', { name: '← Tra cứu sinh viên' });
+    expect(back).toHaveAttribute('href', '/ttcds/lookup');
+  });
+
+  it('returns to the group page when the profile was opened from a group', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    mocks.getTtcdsAttendance.mockResolvedValue({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
+    renderAt(
+      { pathname: '/ttcds/students/24050126', state: { from: '/ttcds/groups/g1', fromLabel: 'Nhóm K29A' } },
+      '/ttcds/students/:mssv',
+      <TtcdsStudentPage />
+    );
+
+    const back = await screen.findByRole('link', { name: '← Nhóm K29A' });
+    expect(back).toHaveAttribute('href', '/ttcds/groups/g1');
+  });
+
+  it('falls back to the student list for direct links and rejects unsafe back targets', () => {
+    expect(resolveStudentBackTarget(undefined)).toMatchObject({ to: '/mystudent', label: 'Sinh viên của tôi' });
+    expect(resolveStudentBackTarget({ from: '//evil.test', fromLabel: 'X' }).to).toBe('/mystudent');
+    expect(resolveStudentBackTarget({ from: '/ttcds/groups/g1', fromLabel: 'Nhóm K29A' }))
+      .toMatchObject({ to: '/ttcds/groups/g1', label: 'Nhóm K29A' });
+  });
+
+  it('keeps the lookup query and returns to tra cứu after viewing a profile', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
+    mocks.getTtcdsAttendance.mockResolvedValue({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
+    mocks.searchTtcdsStudents.mockResolvedValue({
+      ket_qua: [{ mssv: '24050126', ten_day_du: 'Nguyễn Văn A', ma_lop: 'K29A' }]
+    });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/ttcds/lookup']}>
+          <Routes>
+            <Route path="/ttcds/lookup" element={<TtcdsLookupPage />} />
+            <Route path="/ttcds/students/:mssv" element={<TtcdsStudentPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'nguyen' } });
+    await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalled(), { timeout: 2000 });
+
+    const option = await screen.findByRole('option');
+    fireEvent.click(within(option).getByRole('button'));
+
+    // Hồ sơ mở từ tra cứu → nút back phải trỏ về tra cứu, không phải "Sinh viên của tôi".
+    const back = await screen.findByRole('link', { name: '← Tra cứu sinh viên' });
+    expect(back).toHaveAttribute('href', '/ttcds/lookup');
+
+    fireEvent.click(back);
+    const input = await screen.findByRole('combobox');
+    expect(input).toHaveValue('nguyen');
   });
 
   it('keeps a back link and retry on a generic student load error', async () => {

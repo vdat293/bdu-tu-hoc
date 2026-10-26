@@ -494,7 +494,7 @@ export default function TtcdsGroupPage() {
                   <Fragment key={member.mssv}>
                     <tr>
                       <td>{member.mssv}</td>
-                      <td><Link to={`/ttcds/students/${member.mssv}`}>{name}</Link></td>
+                      <td><Link to={`/ttcds/students/${member.mssv}`} state={{ from: location.pathname, fromLabel: group?.name ? `Nhóm ${group.name}` : 'Nhóm sinh viên' }}>{name}</Link></td>
                       <td>{cell(summary?.className)}</td>
                       <td style={{ textAlign: 'right' }}>{cell(summary?.gpa)}</td>
                       <td style={{ textAlign: 'right' }}>{cell(summary?.attendance)}</td>
@@ -502,7 +502,7 @@ export default function TtcdsGroupPage() {
                       <td style={{ textAlign: 'right' }}>{cell(summary?.eventCount)}</td>
                       <td>
                         <div className="club-member__actions">
-                          <Link className="btn btn-secondary" aria-label={`Chi tiết sinh viên ${name}`} to={`/ttcds/students/${member.mssv}`}>Chi tiết</Link>
+                          <Link className="btn btn-secondary" aria-label={`Chi tiết sinh viên ${name}`} to={`/ttcds/students/${member.mssv}`} state={{ from: location.pathname, fromLabel: group?.name ? `Nhóm ${group.name}` : 'Nhóm sinh viên' }}>Chi tiết</Link>
                           {canCreate && (
                             <button type="button" className="btn btn-secondary" aria-label={`Xóa sinh viên ${name}`} disabled={remove.isPending} onClick={() => confirmRemoveMember(member)}>
                               Xóa

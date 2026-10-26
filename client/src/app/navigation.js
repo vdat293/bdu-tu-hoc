@@ -14,7 +14,8 @@ export const navigation = [
   { path: '/clans', label: 'CLB / Nhóm Học Tập', icon: '10', keywords: 'clan nhóm câu lạc bộ guild' },
   { path: '/confession', label: 'BDU Confession', icon: '11', keywords: 'bài viết diễn đàn confession cfs' },
   { path: '/killer-sudoku', label: 'Killer Sudoku', icon: '12', keywords: 'killer sudoku game giải trí đố số tính nhẩm', requiresCapability: 'ttcds:access', section: 'ttcds' },
-  { path: '/mystudent', label: 'Sinh viên của tôi', icon: '13', keywords: 'trung tâm chuyển đổi số sinh viên của tôi ttcds', requiresCapability: 'ttcds:access', section: 'ttcds' }
+  { path: '/mystudent', label: 'Sinh viên của tôi', icon: '13', keywords: 'trung tâm chuyển đổi số sinh viên của tôi ttcds', requiresCapability: 'ttcds:access', section: 'ttcds' },
+  { path: '/ttcds/lookup', label: 'Tra cứu sinh viên', icon: '14', keywords: 'tra cứu sinh viên ttcds trung tâm chuyển đổi số', requiresCapability: 'ttcds:access', section: 'ttcds' }
 ];
 
 export function filterNavigation(items, capabilities) {

@@ -44,6 +44,13 @@ export default function TtcdsHubPage() {
             <Link className="btn btn-secondary" to="/mystudent">Mở dịch vụ</Link>
           </div>
         </article>
+        <article className="club-card">
+          <h2><Link to="/ttcds/lookup">Tra cứu sinh viên</Link></h2>
+          <p>Tra cứu hồ sơ, bảng điểm, thời khóa biểu và điểm rèn luyện của sinh viên.</p>
+          <div className="club-modal__footer">
+            <Link className="btn btn-secondary" to="/ttcds/lookup">Mở dịch vụ</Link>
+          </div>
+        </article>
         <article className="club-card" aria-disabled="true">
           <h2>Dịch vụ mới</h2>
           <p>Sắp ra mắt — thêm dịch vụ của Trung tâm sẽ xuất hiện tại đây.</p>

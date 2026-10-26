@@ -292,10 +292,25 @@ export const TtcdsStudentService = {
       params.push(owner);
       whereExtra = ` AND mssv::text IN (SELECT m.mssv::text FROM ttcds_group_members m JOIN ttcds_groups g ON g.id = m.group_id WHERE g.owner_mssv = $4)`;
     }
+
+    // Thử bật extension unaccent (idempotent) để tìm kiếm không phân biệt dấu;
+    // nếu DB không cho phép, fallback về ILIKE thường.
+    let useUnaccent = false;
+    try {
+      await query('CREATE EXTENSION IF NOT EXISTS unaccent');
+      useUnaccent = true;
+    } catch {
+      useUnaccent = false;
+    }
+
+    const nameCondition = useUnaccent
+      ? 'unaccent(ten_day_du) ILIKE unaccent($2)'
+      : 'ten_day_du ILIKE $2';
+
     const result = await query(
       `SELECT mssv, ten_day_du, ma_lop, ma_khoa, ten_khoa, hien_dien
        FROM odp_sinh_vien
-       WHERE (mssv::text LIKE $1 OR ten_day_du ILIKE $2)${whereExtra}
+       WHERE (mssv::text LIKE $1 OR ${nameCondition})${whereExtra}
        ORDER BY mssv
        LIMIT $3`,
       params

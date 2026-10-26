@@ -382,3 +382,277 @@ table.tkb-luoi .tkb-trong { background: transparent; }
    (container gốc display:grid nên mỗi nút rớt 1 dòng). Mobile ≤760px vẫn xếp
    chồng full-width theo rule chung của motion.css. */
 #tab-ttcds-group .club-directory-hero__action { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+
+/* ==========================================================================
+   TTCDS — Tra cứu sinh viên (/ttcds/lookup)
+   Trước đây panel chỉ có 1 input trần + <ul> cao cố định 300px nên khi chưa
+   có kết quả vẫn hiện một khối trắng rỗng rất lớn. Nay: ô tìm kiếm nổi bật,
+   danh sách kết quả co giãn theo nội dung, có skeleton + empty state.
+   Toàn bộ scoped bằng `.ttcds-lookup` để không đụng popup mời sinh viên
+   (`.ttcds-invite .ttcds-student-search__*`) và các trang TTCDS khác.
+   ========================================================================== */
+.ttcds-lookup__hero { align-items: center; }
+
+.ttcds-lookup__panel { display: grid; padding: 22px; border-radius: 16px; }
+
+.ttcds-lookup__search { display: grid; gap: 10px; }
+
+.ttcds-lookup__label {
+  color: var(--club-muted);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+/* Ô tìm kiếm: cao, bo tròn, viền accent + quầng sáng khi focus. */
+.ttcds-lookup__field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 4px 8px 4px 16px;
+  border: 1px solid var(--club-line);
+  border-radius: 14px;
+  background: var(--club-surface);
+  transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
+}
+.ttcds-lookup__field:hover { border-color: color-mix(in srgb, var(--club-accent) 38%, var(--club-line)); }
+.ttcds-lookup__field:focus-within {
+  border-color: var(--club-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--club-accent) 13%, transparent);
+}
+.ttcds-lookup__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--club-muted);
+  transition: color 180ms ease-out;
+}
+.ttcds-lookup__field:focus-within .ttcds-lookup__icon { color: var(--club-accent); }
+.ttcds-lookup__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--club-ink);
+  font: inherit;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+.ttcds-lookup__input::placeholder { color: var(--club-muted); font-weight: 450; opacity: .9; }
+.ttcds-lookup__clear {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--club-surface-soft);
+  color: var(--club-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.ttcds-lookup__clear:hover { background: color-mix(in srgb, var(--club-accent) 16%, transparent); color: var(--club-ink); }
+
+.ttcds-lookup__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.ttcds-lookup__helper { color: var(--club-muted); font-size: .78rem; }
+.ttcds-lookup__samples { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--club-muted); font-size: .78rem; }
+.ttcds-lookup__sample {
+  padding: 4px 10px;
+  border: 1px dashed color-mix(in srgb, var(--club-accent) 42%, var(--club-line));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--club-accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 700;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.ttcds-lookup__sample:hover { border-style: solid; background: color-mix(in srgb, var(--club-accent) 10%, transparent); }
+
+.ttcds-lookup__notice {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--club-accent) 8%, transparent);
+  color: var(--club-muted);
+  font-size: .82rem;
+}
+
+/* Kết quả: ngăn cách bằng đường kẻ, danh sách cao theo nội dung (tối đa 56vh). */
+.ttcds-lookup__results {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--club-line);
+}
+.ttcds-lookup__results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ttcds-lookup__results-head h2 { margin: 0; color: var(--club-ink); font-size: .92rem; letter-spacing: 0; }
+.ttcds-lookup__count {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--club-accent) 12%, transparent);
+  color: var(--club-accent);
+  font-size: .74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.ttcds-lookup__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 2px;
+  max-height: min(56vh, 560px);
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+/* Mỗi sinh viên là một hàng thẻ: avatar vuông bo mềm, tên đậm, MSSV dạng chip. */
+.ttcds-lookup__option button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--club-line);
+  border-radius: 12px;
+  background: var(--club-surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 160ms ease-out, background-color 160ms ease-out;
+}
+.ttcds-lookup__option button:hover,
+.ttcds-lookup__option button:focus-visible {
+  border-color: color-mix(in srgb, var(--club-accent) 55%, var(--club-line));
+  background: color-mix(in srgb, var(--club-accent) 6%, var(--club-surface));
+}
+.ttcds-lookup__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--club-accent) 24%, var(--club-surface)), color-mix(in srgb, var(--club-accent) 9%, var(--club-surface)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-accent) 26%, transparent);
+  color: var(--club-accent);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.ttcds-lookup__text { display: grid; flex: 1 1 auto; gap: 3px; min-width: 0; }
+.ttcds-lookup__name {
+  overflow: hidden;
+  color: var(--club-ink);
+  font-size: .95rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ttcds-lookup__line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--club-muted); font-size: .79rem; }
+.ttcds-lookup__mssv {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--club-surface-soft);
+  color: var(--club-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.ttcds-lookup__go {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--club-muted);
+  transition: background-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+}
+.ttcds-lookup__option button:hover .ttcds-lookup__go {
+  background: color-mix(in srgb, var(--club-accent) 14%, transparent);
+  color: var(--club-accent);
+  transform: translateX(2px);
+}
+
+/* Empty / lỗi: khối gọn, không còn khoảng trắng 300px. */
+.ttcds-lookup__state {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 26px 16px;
+  border: 1px dashed var(--club-line);
+  border-radius: 12px;
+  color: var(--club-muted);
+  font-size: .84rem;
+  text-align: center;
+}
+.ttcds-lookup__state strong { color: var(--club-ink); font-size: .92rem; }
+.ttcds-lookup__state-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--club-surface-soft);
+  color: var(--club-muted);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+/* Skeleton khi đang tìm. */
+.ttcds-lookup__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--club-line);
+  border-radius: 12px;
+}
+.ttcds-lookup__skeleton {
+  display: block;
+  border-radius: 6px;
+  background: var(--club-surface-soft);
+  animation: ttcds-lookup-pulse 1.3s ease-in-out infinite;
+}
+.ttcds-lookup__skeleton--avatar { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 14px; }
+.ttcds-lookup__skeleton-lines { display: grid; flex: 1 1 auto; gap: 8px; min-width: 0; }
+.ttcds-lookup__skeleton--name { width: min(220px, 55%); height: 12px; }
+.ttcds-lookup__skeleton--meta { width: min(150px, 35%); height: 10px; }
+
+@keyframes ttcds-lookup-pulse {
+  0%, 100% { opacity: .45; }
+  50% { opacity: .95; }
+}
+
+@media (max-width: 560px) {
+  .ttcds-lookup__panel { padding: 16px; }
+  .ttcds-lookup__field { min-height: 52px; padding-left: 12px; border-radius: 12px; }
+  .ttcds-lookup__input { height: 44px; font-size: 16px; }
+  .ttcds-lookup__meta { flex-direction: column; align-items: flex-start; }
+  .ttcds-lookup__option button { gap: 12px; padding: 10px 12px; }
+  .ttcds-lookup__avatar { width: 40px; height: 40px; border-radius: 12px; }
+  .ttcds-lookup__skeleton--avatar { width: 40px; height: 40px; border-radius: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttcds-lookup__skeleton { animation: none; opacity: .7; }
+  .ttcds-lookup__option button:hover .ttcds-lookup__go { transform: none; }
+}

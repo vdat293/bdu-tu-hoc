@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { getTtcdsAttendance, getTtcdsStudent } from '../../api/ttcds.js';
 import { useAuth } from '../../app/providers.jsx';
 import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
@@ -13,6 +13,23 @@ const TABS = [
   { id: 'bang-diem', label: 'Bảng điểm chi tiết' },
   { id: 'su-kien', label: 'Sự kiện' }
 ];
+
+/**
+ * Đích của link "quay lại" ở trang hồ sơ sinh viên.
+ * - Mở từ Tra cứu / Nhóm sinh viên: dùng `state.from` + nhãn do nơi điều hướng gửi kèm,
+ *   nên back về đúng trang vừa rời đi thay vì luôn nhảy về "Sinh viên của tôi".
+ * - Mở trực tiếp, refresh hoặc deep link: rơi về danh sách "Sinh viên của tôi".
+ */
+export function resolveStudentBackTarget(state) {
+  const from = typeof state?.from === 'string' && state.from.startsWith('/') && !state.from.startsWith('//')
+    ? state.from
+    : '/mystudent';
+  const label = typeof state?.fromLabel === 'string' && state.fromLabel.trim()
+    ? state.fromLabel.trim()
+    : 'Sinh viên của tôi';
+  const query = typeof state?.query === 'string' && state.query ? state.query : '';
+  return { to: from, label, state: query ? { query } : undefined };
+}
 
 function fmt(value, digits = 2) {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
@@ -744,7 +761,9 @@ function EventsTab({ detail }) {
 
 export default function TtcdsStudentPage() {
   const { mssv } = useParams();
+  const location = useLocation();
   const auth = useAuth();
+  const back = resolveStudentBackTarget(location.state);
   const [tab, setTab] = useState('tong-quan');
   const tabRefs = useRef({});
 
@@ -772,7 +791,7 @@ export default function TtcdsStudentPage() {
 
   const detail = useQuery({
     queryKey: ['ttcds-student', String(mssv ?? '').toUpperCase()],
-    queryFn: ({ signal }) => getTtcdsStudent(auth.token, mssv, { signal }),
+    queryFn: ({ signal }) => getTtcdsStudent(auth.token, mssv, { signal, all: true }),
     enabled: Boolean(auth.token && canAccess && mssv),
     retry: false
   });
@@ -781,7 +800,7 @@ export default function TtcdsStudentPage() {
   // ẩn chart, các tile tổng hợp vẫn hiện bình thường.
   const attendanceJournal = useQuery({
     queryKey: ['ttcds-attendance', String(mssv ?? '').toUpperCase()],
-    queryFn: ({ signal }) => getTtcdsAttendance(auth.token, mssv, { signal }),
+    queryFn: ({ signal }) => getTtcdsAttendance(auth.token, mssv, { signal, all: true }),
     enabled: Boolean(auth.token && canAccess && mssv),
     retry: false
   });
@@ -801,12 +820,14 @@ export default function TtcdsStudentPage() {
     const notFound = detail.error?.status === 404;
     return (
       <section id="tab-ttcds-student" className="tab-pane club-experience">
-        <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
+        <p><Link to={back.to} state={back.state}>← {back.label}</Link></p>
         <div className="club-empty" role="alert">
           <h1>{notFound ? 'Không tìm thấy sinh viên' : 'Chưa thể tải thông tin sinh viên'}</h1>
           <p>{notFound ? 'Không có sinh viên với mã này trong hệ thống.' : (detail.error?.message || 'Vui lòng thử lại sau ít phút.')}</p>
           {notFound ? (
-            <Link className="btn btn-secondary" to="/mystudent">Về danh sách</Link>
+            <Link className="btn btn-secondary" to={back.to} state={back.state}>
+              {back.to === '/mystudent' ? 'Về danh sách' : `Về ${back.label.toLowerCase()}`}
+            </Link>
           ) : (
             <button type="button" className="btn btn-secondary" onClick={() => detail.refetch()}>Thử lại</button>
           )}
@@ -820,7 +841,7 @@ export default function TtcdsStudentPage() {
 
   return (
     <section id="tab-ttcds-student" className="tab-pane club-experience">
-      <p><Link to="/mystudent">← Sinh viên của tôi</Link></p>
+      <p><Link to={back.to} state={back.state}>← {back.label}</Link></p>
       <ProfileCard profile={profile} mssv={mssv} termSource={latestTermSource(data)} />
 
       <div className="club-tabs" role="tablist" aria-label="Chi tiết sinh viên" onKeyDown={onTablistKeyDown}>
