@@ -12,6 +12,7 @@ import {
   getLearningResources,
   getQuizSets
 } from '../../api/community.js';
+import { getCourseGuide } from '../../api/guides.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { useViewportDialog } from '../../components/ViewportModal.jsx';
@@ -19,6 +20,7 @@ import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
 import QuizSetSection from './QuizSetSection.jsx';
 import QuizSetComposerModal from './QuizSetComposerModal.jsx';
 import './quiz.css';
+import './guides/guide.css';
 import {
   AvatarContent,
   TitleBadges,
@@ -427,6 +429,15 @@ export default function CourseLearningPage() {
   });
   const quizSetCount = Array.isArray(quizSetsQuery.data?.sets) ? quizSetsQuery.data.sets.length : 0;
 
+  // Hướng dẫn thực hành riêng theo môn: chỉ hiện entry khi môn đã được cấu hình.
+  const guideQuery = useQuery({
+    queryKey: ['course-guide', courseCode, auth.user?.mssv],
+    queryFn: ({ signal }) => getCourseGuide(auth.token, courseCode, { signal }),
+    enabled: Boolean(auth.token && courseCode)
+  });
+  const guideEnabled = Boolean(guideQuery.data?.enabled);
+  const guideLessonCount = Array.isArray(guideQuery.data?.lessons) ? guideQuery.data.lessons.length : 0;
+
   // Filtered posts and counts
   const counts = useMemo(() => {
     const map = { all: rawPosts.length, request: 0, document: 0, video: 0, link: 0 };
@@ -572,6 +583,27 @@ export default function CourseLearningPage() {
           canCreate={canCreateQuizSet}
           onCreate={() => setShowQuizSetComposer(true)}
         />
+
+        {/* Hướng dẫn thực hành từng chặng: chỉ môn đã cấu hình mới thấy. */}
+        {guideEnabled && (
+          <section className="guide-entry-section glass-panel" aria-label="Hướng dẫn thực hành">
+            <div className="guide-entry-text">
+              <h2 className="guide-entry-title">Hướng dẫn thực hành</h2>
+              <p className="guide-entry-sub">
+                {guideLessonCount > 0
+                  ? `Làm theo từng chặng có lưu tiến độ (${guideLessonCount} bài).`
+                  : 'Làm theo từng chặng có lưu tiến độ theo tài khoản của bạn.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => navigate(`/learning/${encodeURIComponent(courseCode)}/guides`)}
+            >
+              Mở hướng dẫn
+            </button>
+          </section>
+        )}
 
         {/* Filter Toolbar & Live Search Bar */}
         <div className="learning-filter-toolbar glass-panel">
