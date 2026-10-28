@@ -16,3 +16,13 @@ export async function saveGuideProgress(token, courseCode, lessonId, { stepId, d
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/progress`, { method: 'POST', token, body, defaultMessage: 'Không thể lưu tiến độ hướng dẫn.' });
   return unwrap(data, data);
 }
+
+export async function getLabResult(token, courseCode, lessonId, { signal } = {}) {
+  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/lab-result`, { token, signal, defaultMessage: 'Không thể tải kết quả lab.' });
+  return unwrap(data, null);
+}
+
+export async function saveLabResult(token, courseCode, lessonId, { token: labToken } = {}) {
+  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/lab-result`, { method: 'POST', token, body: { token: labToken }, defaultMessage: 'Không thể lưu kết quả lab.' });
+  return unwrap(data, data);
+}

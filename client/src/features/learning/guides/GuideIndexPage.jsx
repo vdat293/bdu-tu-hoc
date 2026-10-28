@@ -65,6 +65,10 @@ export default function GuideIndexPage() {
             const firstStep = lesson.steps?.[0]?.id;
             const done = doneByLesson.get(lesson.id) || 0;
             const total = lesson.steps?.length || 0;
+            // Sequential gating guarantees completed steps form a prefix, so
+            // doneCount is exactly the first incomplete index; when everything
+            // is done (or the count overshoots) fall back to the first step.
+            const targetStep = (done < total ? lesson.steps?.[done]?.id : null) || firstStep;
             return (
               <li key={lesson.id} className="guide-index-item">
                 <div className="guide-index-item-text">
@@ -74,10 +78,10 @@ export default function GuideIndexPage() {
                     {[lesson.duration && `${lesson.duration}`, total ? `Đã xong ${done}/${total}` : null].filter(Boolean).join(' · ')}
                   </p>
                 </div>
-                {firstStep && (
+                {targetStep && (
                   <Link
                     className="btn btn-primary btn-sm"
-                    to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(firstStep)}`}
+                    to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(targetStep)}`}
                   >
                     {done > 0 ? 'Học tiếp' : 'Bắt đầu'}
                   </Link>
