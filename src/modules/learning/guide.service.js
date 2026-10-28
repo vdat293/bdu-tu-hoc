@@ -1,8 +1,25 @@
 import { isDatabaseConfigured, query, transaction } from '../../db/database.js';
 import { findAccessibleCourse, normalizeCourseCode } from '../../services/learning.service.js';
+import { parseLabResult } from './lab-result.js';
 
 const KNOWN_STEPS = {
   'bai-1': ['buoc-1', 'buoc-2', 'buoc-3', 'buoc-4', 'buoc-5', 'buoc-6', 'buoc-7']
+};
+
+// Yêu cầu "sạch" trước khi được đánh dấu hoàn thành (done=true):
+// - folderInput/resultInput: bước thu thập dữ liệu (không chặn done).
+// - requiresResult: cần dòng BDU-LAB-V1: đã lưu (cùng progress_version).
+// - requiresDirectory: cần thư mục làm bài đã nhập (cùng progress_version).
+export const STEP_REQUIREMENTS = {
+  'bai-1': {
+    'buoc-1': { folderInput: true },
+    'buoc-2': { resultInput: true },
+    'buoc-3': { requiresResult: true },
+    'buoc-4': { requiresResult: true, requiresDirectory: true },
+    'buoc-5': { requiresResult: true },
+    'buoc-6': { requiresResult: true },
+    'buoc-7': {}
+  }
 };
 const STEP_ID_PATTERN = /^buoc-[a-z0-9-]+$/;
 const LESSON_ID_PATTERN = /^[a-z0-9-]+$/;
@@ -160,6 +177,40 @@ export const GuideService = {
         throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
       }
 
+      if (input.done === true) {
+        const requirements = (STEP_REQUIREMENTS[cleanLessonId] || {})[cleanStepId] || {};
+        if (requirements.requiresResult) {
+          const labResult = await client.query(
+            `SELECT 1 FROM guide_lab_results
+              WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3 AND progress_version = $4;`,
+            [cleanMssv, cleanCourseCode, cleanLessonId, lesson.progress_version]
+          );
+          if (labResult.rows.length === 0) {
+            throw httpError(
+              'Bước này cần key lab (dòng BDU-LAB-V1:) đã lưu. Hãy dán dòng kết quả ở bước 2 rồi thử lại.',
+              400,
+              'GUIDE_STEP_NOT_CLEAN'
+            );
+          }
+        }
+        if (requirements.requiresDirectory) {
+          const workdirResult = await client.query(
+            `SELECT 1 FROM guide_step_progress
+              WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3
+                AND progress_version = $4 AND workdir <> ''
+              LIMIT 1;`,
+            [cleanMssv, cleanCourseCode, cleanLessonId, lesson.progress_version]
+          );
+          if (cleanWorkdir === '' && workdirResult.rows.length === 0) {
+            throw httpError(
+              'Bước này cần thư mục làm bài đã nhập. Hãy nhập thư mục ở bước 1 rồi thử lại.',
+              400,
+              'GUIDE_STEP_NOT_CLEAN'
+            );
+          }
+        }
+      }
+
       await client.query(
         `INSERT INTO guide_step_progress
            (mssv, course_code, lesson_id, step_id, is_done, workdir, progress_version, completed_at, updated_at)
@@ -174,5 +225,93 @@ export const GuideService = {
       );
       return { stepId: cleanStepId, done: input.done, workdir: cleanWorkdir };
     });
+  },
+
+  async getLabResult(mssv, courseCode, lessonId) {
+    requireDatabase();
+    const cleanMssv = normalizeMssv(mssv);
+    const course = await findAccessibleCourse(cleanMssv, courseCode);
+    const cleanCourseCode = normalizeCourseCode(course.normalized_code || courseCode);
+    const cleanLessonId = normalizeLessonId(lessonId);
+
+    const registry = await loadRegistry(cleanCourseCode);
+    const lesson = registry.find((row) => row.lesson_id === cleanLessonId);
+    if (!lesson) {
+      throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
+    }
+
+    const result = await query(
+      `SELECT status, region, fe_ip, be_ip, db_endpoint, fe_key_path, be_key_path, token
+         FROM guide_lab_results
+        WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3 AND progress_version = $4;`,
+      [cleanMssv, cleanCourseCode, cleanLessonId, lesson.progress_version]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      STATUS: row.status,
+      REGION: row.region,
+      FE_IP: row.fe_ip,
+      BE_IP: row.be_ip,
+      DB_ENDPOINT: row.db_endpoint,
+      FE_KEY_PATH: row.fe_key_path,
+      BE_KEY_PATH: row.be_key_path,
+      token: row.token
+    };
+  },
+
+  async saveLabResult(mssv, courseCode, lessonId, input = {}) {
+    requireDatabase();
+    const cleanMssv = normalizeMssv(mssv);
+    const course = await findAccessibleCourse(cleanMssv, courseCode);
+    const cleanCourseCode = normalizeCourseCode(course.normalized_code || courseCode);
+    const cleanLessonId = normalizeLessonId(lessonId);
+
+    const registry = await loadRegistry(cleanCourseCode);
+    const lesson = registry.find((row) => row.lesson_id === cleanLessonId);
+    if (!lesson) {
+      throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
+    }
+
+    const rawToken = input && typeof input === 'object' && !Array.isArray(input) ? input.token : undefined;
+    let parsed;
+    try {
+      parsed = parseLabResult(rawToken);
+    } catch (err) {
+      throw httpError(err.message, 400, 'GUIDE_LAB_RESULT_INVALID');
+    }
+
+    await query(
+      `INSERT INTO guide_lab_results
+         (mssv, course_code, lesson_id, status, region, fe_ip, be_ip,
+          db_endpoint, fe_key_path, be_key_path, token, progress_version, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+       ON CONFLICT (mssv, course_code, lesson_id)
+       DO UPDATE SET status = EXCLUDED.status,
+                     region = EXCLUDED.region,
+                     fe_ip = EXCLUDED.fe_ip,
+                     be_ip = EXCLUDED.be_ip,
+                     db_endpoint = EXCLUDED.db_endpoint,
+                     fe_key_path = EXCLUDED.fe_key_path,
+                     be_key_path = EXCLUDED.be_key_path,
+                     token = EXCLUDED.token,
+                     progress_version = EXCLUDED.progress_version,
+                     updated_at = NOW();`,
+      [
+        cleanMssv,
+        cleanCourseCode,
+        cleanLessonId,
+        parsed.STATUS,
+        parsed.REGION,
+        parsed.FE_IP,
+        parsed.BE_IP,
+        parsed.DB_ENDPOINT,
+        parsed.FE_KEY_PATH,
+        parsed.BE_KEY_PATH,
+        parsed.token,
+        lesson.progress_version
+      ]
+    );
+    return parsed;
   }
 };

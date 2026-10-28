@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { closeDatabase, isDatabaseConfigured, query } from '../src/db/database.js';
 import { GuideService } from '../src/modules/learning/guide.service.js';
+import { parseLabResult } from '../src/modules/learning/lab-result.js';
 import { GuideController } from '../src/modules/learning/guide.controller.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
 import { ApiController } from '../src/controllers/api.controller.js';
@@ -390,7 +391,269 @@ try {
   }
 
   console.log('✓ GuideController: 200/403/400 map đúng status service; 3 route guide đã đăng ký.');
+
+  // Đoạn 4: lab-result backend — parser + lưu key + enforce clean.
+  function fakeLabResponse() {
+    const state = { statusCode: 200, body: null, headers: {} };
+    const res = {
+      setHeader(name, value) {
+        state.headers[name] = value;
+      },
+      status(code) {
+        state.statusCode = code;
+        return res;
+      },
+      json(body) {
+        state.body = body;
+        return res;
+      }
+    };
+    return { res, state };
+  }
+
+  const LAB_FIELD_ORDER = ['STATUS', 'REGION', 'FE_IP', 'BE_IP', 'DB_ENDPOINT', 'FE_KEY_PATH', 'BE_KEY_PATH'];
+  const LAB_FIELDS = {
+    STATUS: 'READY',
+    REGION: 'ap-southeast-1',
+    FE_IP: '13.212.10.5',
+    BE_IP: '10.0.1.25',
+    DB_ENDPOINT: 'bdu-lab-1.abc123xyz.ap-southeast-1.rds.amazonaws.com',
+    FE_KEY_PATH: '/home/ubuntu/bdu-key-fe.pem',
+    BE_KEY_PATH: '/home/ubuntu/bdu-key-be.pem'
+  };
+  function buildLabToken(fields) {
+    const payload = LAB_FIELD_ORDER.map((key) => `${key}=${fields[key]}`).join('\n');
+    return `BDU-LAB-V1:${Buffer.from(payload, 'utf8').toString('base64')}`;
+  }
+  const VALID_LAB_TOKEN = buildLabToken(LAB_FIELDS);
+
+  // 4a. Parser vectors (y bản gốc core.js).
+  {
+    const parsed = parseLabResult(`prefix ${VALID_LAB_TOKEN} suffix`);
+    assert.deepEqual(
+      Object.fromEntries(LAB_FIELD_ORDER.map((key) => [key, parsed[key]])),
+      LAB_FIELDS
+    );
+    assert.equal(parsed.token, VALID_LAB_TOKEN);
+  }
+  assert.throws(() => parseLabResult('x'.repeat(100001)), /quá dài hoặc không hợp lệ/);
+  assert.throws(
+    () => parseLabResult('-----BEGIN PRIVATE KEY-----\nfake'),
+    /nội dung key hoặc khối restore cũ/
+  );
+  assert.throws(() => parseLabResult('BDU-RESTORE-BEGIN\nfake'), /nội dung key hoặc khối restore cũ/);
+  assert.throws(() => parseLabResult('nothing here'), /Chưa tìm thấy một dòng kết quả đầy đủ/);
+  assert.throws(
+    () => parseLabResult(`${VALID_LAB_TOKEN} ${VALID_LAB_TOKEN}`),
+    /Chưa tìm thấy một dòng kết quả đầy đủ/
+  );
+  assert.throws(() => parseLabResult('BDU-LAB-V1:abcde'), /thiếu hoặc hỏng/);
+  {
+    const withoutBe = LAB_FIELD_ORDER.filter((key) => key !== 'BE_IP')
+      .map((key) => `${key}=${LAB_FIELDS[key]}`)
+      .join('\n');
+    assert.throws(
+      () => parseLabResult(`BDU-LAB-V1:${Buffer.from(withoutBe, 'utf8').toString('base64')}`),
+      /chưa đủ thông tin/
+    );
+  }
+  {
+    const pending = LAB_FIELD_ORDER.map((key) => `${key}=${key === 'STATUS' ? 'PENDING' : LAB_FIELDS[key]}`).join('\n');
+    assert.throws(
+      () => parseLabResult(`BDU-LAB-V1:${Buffer.from(pending, 'utf8').toString('base64')}`),
+      /chưa đủ thông tin/
+    );
+  }
+  assert.throws(
+    () => parseLabResult(buildLabToken({ ...LAB_FIELDS, FE_IP: '999.1.1.1' })),
+    /Địa chỉ kết nối/
+  );
+  assert.throws(
+    () => parseLabResult(buildLabToken({ ...LAB_FIELDS, REGION: 'XX' })),
+    /Địa chỉ kết nối/
+  );
+  assert.throws(
+    () => parseLabResult(buildLabToken({ ...LAB_FIELDS, DB_ENDPOINT: 'example.com' })),
+    /Địa chỉ kết nối/
+  );
+  assert.throws(
+    () => parseLabResult(buildLabToken({ ...LAB_FIELDS, FE_KEY_PATH: '/tmp/key.pem' })),
+    /Đường dẫn key/
+  );
+  {
+    const dup = `${LAB_FIELD_ORDER.map((key) => `${key}=${LAB_FIELDS[key]}`).join('\n')}\nSTATUS=READY`;
+    assert.throws(
+      () => parseLabResult(`BDU-LAB-V1:${Buffer.from(dup, 'utf8').toString('base64')}`),
+      /trường lạ hoặc trùng lặp/
+    );
+  }
+
+  console.log('✓ Lab-result parser: vectors hợp lệ/không hợp lệ bám đúng message bản gốc.');
+
+  // 4b. API lab-result + enforce clean (dùng data VIEWER/TESTG01 còn từ Đoạn 2).
+  const originalLabResolve = BduIdentityService.resolveVerifiedMssv;
+  try {
+    BduIdentityService.resolveVerifiedMssv = async () => VIEWER;
+
+    // POST sai → 400 + message parser.
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.saveLabResult(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' },
+          body: { token: 'not-a-result' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 400);
+      assert.equal(state.body.result, false);
+      assert.match(state.body.message, /Chưa tìm thấy một dòng kết quả đầy đủ/);
+    }
+
+    // POST đúng → 200 + GET đọc lại đúng fields.
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.saveLabResult(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' },
+          body: { token: VALID_LAB_TOKEN }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.result, true);
+      assert.deepEqual(
+        Object.fromEntries(LAB_FIELD_ORDER.map((key) => [key, state.body.data[key]])),
+        LAB_FIELDS
+      );
+      assert.equal(state.body.data.token, VALID_LAB_TOKEN);
+    }
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.getLabResult(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.deepEqual(
+        Object.fromEntries(LAB_FIELD_ORDER.map((key) => [key, state.body.data[key]])),
+        LAB_FIELDS
+      );
+      assert.equal(state.body.data.token, VALID_LAB_TOKEN);
+    }
+
+    // Outsider → 403 cả hai chiều.
+    BduIdentityService.resolveVerifiedMssv = async () => OUTSIDER;
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.saveLabResult(
+        {
+          headers: { authorization: 'Bearer outsider-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' },
+          body: { token: VALID_LAB_TOKEN }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 403);
+      assert.equal(state.body.result, false);
+    }
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.getLabResult(
+        {
+          headers: { authorization: 'Bearer outsider-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 403);
+      assert.equal(state.body.result, false);
+    }
+    BduIdentityService.resolveVerifiedMssv = async () => VIEWER;
+
+    // Đổi registry version → GET null (bỏ qua version cũ, rows cũ còn).
+    await query(
+      `UPDATE course_guide_configs SET progress_version = $1, updated_at = NOW()
+        WHERE course_code = $2 AND lesson_id = 'bai-1'`,
+      ['cmd-be-first-v5', COURSE_CODE]
+    );
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.getLabResult(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.data, null);
+    }
+    assert.equal(
+      (
+        await query(
+          'SELECT COUNT(*)::int AS total FROM guide_lab_results WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3',
+          [VIEWER, COURSE_CODE, 'bai-1']
+        )
+      ).rows[0].total,
+      1,
+      'Row lab-result cũ không được xóa khi bump version'
+    );
+
+    // Enforce clean: thiếu result → 400 GUIDE_STEP_NOT_CLEAN (nêu thiếu key).
+    await assert.rejects(
+      () => GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', { stepId: 'buoc-3', done: true }),
+      (err) =>
+        err.status === 400 &&
+        err.code === 'GUIDE_STEP_NOT_CLEAN' &&
+        /key|BDU-LAB-V1|kết quả/i.test(err.message)
+    );
+
+    // Lưu result dưới version mới → buoc-3 done=true qua được.
+    await GuideService.saveLabResult(VIEWER, COURSE_CODE, 'bai-1', { token: VALID_LAB_TOKEN });
+    await GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', { stepId: 'buoc-3', done: true });
+
+    // buoc-4 cần cả result + thư mục: thiếu workdir → 400 nêu thiếu thư mục.
+    await assert.rejects(
+      () => GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', { stepId: 'buoc-4', done: true }),
+      (err) =>
+        err.status === 400 &&
+        err.code === 'GUIDE_STEP_NOT_CLEAN' &&
+        /thư mục/i.test(err.message)
+    );
+
+    // Khôi phục version v4 + lưu lại result/progress để không ảnh hưởng test khác.
+    await query(
+      `UPDATE course_guide_configs SET progress_version = $1, updated_at = NOW()
+        WHERE course_code = $2 AND lesson_id = 'bai-1'`,
+      ['cmd-be-first-v4', COURSE_CODE]
+    );
+    await GuideService.saveLabResult(VIEWER, COURSE_CODE, 'bai-1', { token: VALID_LAB_TOKEN });
+
+    // 4c. Barrel + route registration (static assertion).
+    assert.equal(typeof ApiController.getLabResult, 'function');
+    assert.equal(typeof ApiController.saveLabResult, 'function');
+    const learningRoutesLab = fs.readFileSync('src/routes/learning.routes.js', 'utf8');
+    assert.match(learningRoutesLab, /\/learning\/courses\/:courseCode\/guides\/:lessonId\/lab-result/);
+    assert.match(learningRoutesLab, /ApiController\.getLabResult/);
+    assert.match(learningRoutesLab, /ApiController\.saveLabResult/);
+  } finally {
+    BduIdentityService.resolveVerifiedMssv = originalLabResolve;
+    await query(
+      `UPDATE course_guide_configs SET progress_version = $1, updated_at = NOW()
+        WHERE course_code = $2 AND lesson_id = 'bai-1'`,
+      ['cmd-be-first-v4', COURSE_CODE]
+    ).catch(() => {});
+  }
+
+  console.log('✓ Lab-result API: POST sai 400, POST đúng + GET đọc lại, outsider 403, GET null sau bump version, enforce clean GUIDE_STEP_NOT_CLEAN.');
 } finally {
+  await query('DELETE FROM guide_lab_results WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM guide_step_progress WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM course_guide_configs WHERE course_code IN ($1, $2)', [COURSE_CODE, EMPTY_COURSE_CODE]).catch(() => {});
   await query('DELETE FROM students WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});

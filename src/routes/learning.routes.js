@@ -26,4 +26,6 @@ export function registerLearningRoutes(router, deps = {}) {
   router.get('/learning/courses/:courseCode/guide', ApiController.getCourseGuide);
   router.get('/learning/courses/:courseCode/guides/:lessonId/progress', ApiController.getGuideProgress);
   router.post('/learning/courses/:courseCode/guides/:lessonId/progress', ApiController.saveGuideProgress);
+  router.get('/learning/courses/:courseCode/guides/:lessonId/lab-result', ApiController.getLabResult);
+  router.post('/learning/courses/:courseCode/guides/:lessonId/lab-result', ApiController.saveLabResult);
 }

@@ -55,5 +55,36 @@ export const GuideController = {
     } catch (err) {
       return sendGuideError(res, err, 'Không thể lưu tiến độ hướng dẫn.');
     }
+  },
+
+  async getLabResult(req, res) {
+    try {
+      setPrivateCache(res);
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await GuideService.getLabResult(
+        mssv,
+        req.params.courseCode,
+        req.params.lessonId
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendGuideError(res, err, 'Không thể tải kết quả lab.');
+    }
+  },
+
+  async saveLabResult(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const body = req.body || {};
+      const data = await GuideService.saveLabResult(
+        mssv,
+        req.params.courseCode,
+        req.params.lessonId,
+        { token: body.token }
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendGuideError(res, err, 'Không thể lưu kết quả lab.');
+    }
   }
 };
