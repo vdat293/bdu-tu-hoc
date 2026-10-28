@@ -145,13 +145,14 @@ try {
   assert.deepEqual(saved, { stepId: 'buoc-1', done: true, workdir: 'C:\\lab1' });
   const stored = (
     await query(
-      `SELECT is_done, workdir, completed_at FROM guide_step_progress
+      `SELECT is_done, workdir, completed_at, progress_version FROM guide_step_progress
         WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3 AND step_id = $4`,
       [VIEWER, COURSE_CODE, 'bai-1', 'buoc-1']
     )
   ).rows[0];
   assert.equal(stored.is_done, true);
   assert.equal(stored.workdir, 'C:\\lab1');
+  assert.equal(stored.progress_version, 'cmd-be-first-v4', 'saveProgress phải stamp version hiện hành');
   assert.ok(stored.completed_at, 'done=true phải set completed_at');
 
   const progress = await GuideService.getProgress(VIEWER, COURSE_CODE, 'bai-1');
@@ -174,17 +175,20 @@ try {
   const progressAfterSave = await GuideService.getProgress(VIEWER, COURSE_CODE, 'bai-1');
   assert.deepEqual(progressAfterSave.steps['buoc-2'], { done: false, workdir: '' });
 
-  // 2f. Đổi progress_version → getGuide trả version mới, doneCount tính lại từ 0.
-  // Hợp đồng reset: khi bump version phải xóa tiến độ cũ của lesson đó; service
-  // chỉ đếm tiến độ hiện hành nên doneCount quay về 0.
+  // 2f. Đổi progress_version nhưng giữ nguyên rows (không xóa cứng) → tiến độ
+  // cũ bị bỏ qua: getGuide trả version mới + doneCount 0, getProgress trống.
   await query(
     `UPDATE course_guide_configs SET progress_version = $1, updated_at = NOW()
       WHERE course_code = $2 AND lesson_id = 'bai-1'`,
     ['cmd-be-first-v5', COURSE_CODE]
   );
-  await query(
-    'DELETE FROM guide_step_progress WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3',
-    [VIEWER, COURSE_CODE, 'bai-1']
+  assert.equal(
+    (await query(
+      'SELECT COUNT(*)::int AS total FROM guide_step_progress WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3',
+      [VIEWER, COURSE_CODE, 'bai-1']
+    )).rows[0].total,
+    2,
+    'Tiến độ cũ không được xóa cứng khi bump version'
   );
   const guideAfterVersion = await GuideService.getGuide(VIEWER, COURSE_CODE);
   assert.equal(guideAfterVersion.lessons[0].progressVersion, 'cmd-be-first-v5');
@@ -193,7 +197,51 @@ try {
   assert.deepEqual(progressAfterVersion.steps, {});
   assert.equal(progressAfterVersion.workdir, null);
 
-  console.log('✓ GuideService: gating findAccessibleCourse, validate step/workdir, upsert tiến độ và reset theo version đều hoạt động.');
+  // Ghi tiến độ dưới version mới → chỉ hàng mới được đếm/đọc.
+  await GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', {
+    stepId: 'buoc-1',
+    done: true,
+    workdir: 'C:\\lab2'
+  });
+  const guideNewVersion = await GuideService.getGuide(VIEWER, COURSE_CODE);
+  assert.equal(guideNewVersion.lessons[0].doneCount, 1);
+  const progressNewVersion = await GuideService.getProgress(VIEWER, COURSE_CODE, 'bai-1');
+  assert.deepEqual(Object.keys(progressNewVersion.steps), ['buoc-1']);
+  assert.deepEqual(progressNewVersion.steps['buoc-1'], { done: true, workdir: 'C:\\lab2' });
+
+  // Khôi phục version để seed/registry của test không ảnh hưởng test khác,
+  // rồi ghi lại tiến độ dưới version đã khôi phục.
+  await query(
+    `UPDATE course_guide_configs SET progress_version = $1, updated_at = NOW()
+      WHERE course_code = $2 AND lesson_id = 'bai-1'`,
+    ['cmd-be-first-v4', COURSE_CODE]
+  );
+  await GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', {
+    stepId: 'buoc-1',
+    done: true,
+    workdir: 'C:\\lab1'
+  });
+
+  // 2g. Hàng step_id lạ chèn trực tiếp (bypass validate) bị bỏ qua ở cả hai chiều đọc.
+  await query(
+    `INSERT INTO guide_step_progress
+       (mssv, course_code, lesson_id, step_id, is_done, workdir, progress_version, completed_at, updated_at)
+     VALUES ($1, $2, 'bai-1', 'buoc-99', TRUE, '', 'cmd-be-first-v4', NOW(), NOW())
+     ON CONFLICT (mssv, course_code, lesson_id, step_id) DO NOTHING;`,
+    [VIEWER, COURSE_CODE]
+  );
+  const guideStray = await GuideService.getGuide(VIEWER, COURSE_CODE);
+  assert.equal(guideStray.lessons[0].doneCount, 1, 'step lạ không được tính vào doneCount');
+  const progressStray = await GuideService.getProgress(VIEWER, COURSE_CODE, 'bai-1');
+  assert.equal('buoc-99' in progressStray.steps, false, 'step lạ không được trả trong getProgress');
+  assert.deepEqual(progressStray.steps['buoc-1'], { done: true, workdir: 'C:\\lab1' });
+  await query(
+    `DELETE FROM guide_step_progress
+      WHERE mssv = $1 AND course_code = $2 AND lesson_id = 'bai-1' AND step_id = 'buoc-99'`,
+    [VIEWER, COURSE_CODE]
+  );
+
+  console.log('✓ GuideService: gating findAccessibleCourse, validate step/workdir, upsert tiến độ stamp version và bỏ qua version cũ đều hoạt động.');
 } finally {
   await query('DELETE FROM guide_step_progress WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM course_guide_configs WHERE course_code IN ($1, $2)', [COURSE_CODE, EMPTY_COURSE_CODE]).catch(() => {});

@@ -81,13 +81,15 @@ export const GuideService = {
     if (lessons.length === 0) return { enabled: false, lessons: [] };
 
     const progressResult = await query(
-      `SELECT lesson_id, step_id, is_done
+      `SELECT lesson_id, step_id, is_done, progress_version
        FROM guide_step_progress
        WHERE mssv = $1 AND course_code = $2 AND is_done = TRUE;`,
       [cleanMssv, cleanCourseCode]
     );
+    const versionByLesson = new Map(lessons.map((row) => [row.lesson_id, row.progress_version]));
     const doneByLesson = new Map();
     for (const row of progressResult.rows) {
+      if (versionByLesson.get(row.lesson_id) !== row.progress_version) continue;
       const allowed = new Set(KNOWN_STEPS[row.lesson_id] || []);
       if (!allowed.has(row.step_id)) continue;
       doneByLesson.set(row.lesson_id, (doneByLesson.get(row.lesson_id) || 0) + 1);
@@ -113,20 +115,23 @@ export const GuideService = {
     const cleanLessonId = normalizeLessonId(lessonId);
 
     const registry = await loadRegistry(cleanCourseCode);
-    if (!registry.some((row) => row.lesson_id === cleanLessonId)) {
+    const lesson = registry.find((row) => row.lesson_id === cleanLessonId);
+    if (!lesson) {
       throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
     }
+    const allowedSteps = new Set(KNOWN_STEPS[cleanLessonId] || []);
 
     const result = await query(
       `SELECT step_id, is_done, workdir
        FROM guide_step_progress
-       WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3
+       WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3 AND progress_version = $4
        ORDER BY updated_at DESC;`,
-      [cleanMssv, cleanCourseCode, cleanLessonId]
+      [cleanMssv, cleanCourseCode, cleanLessonId, lesson.progress_version]
     );
     const steps = {};
     let workdir = null;
     for (const row of result.rows) {
+      if (!allowedSteps.has(row.step_id)) continue;
       steps[row.step_id] = { done: row.is_done === true, workdir: row.workdir ?? '' };
       if (workdir === null && row.workdir) workdir = row.workdir;
     }
@@ -150,20 +155,22 @@ export const GuideService = {
       const course = await findAccessibleCourse(cleanMssv, courseCode, client);
       const cleanCourseCode = normalizeCourseCode(course.normalized_code || courseCode);
       const registry = await loadRegistry(cleanCourseCode, client);
-      if (!registry.some((row) => row.lesson_id === cleanLessonId)) {
+      const lesson = registry.find((row) => row.lesson_id === cleanLessonId);
+      if (!lesson) {
         throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
       }
 
       await client.query(
         `INSERT INTO guide_step_progress
-           (mssv, course_code, lesson_id, step_id, is_done, workdir, completed_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $5 THEN NOW() ELSE NULL END, NOW())
+           (mssv, course_code, lesson_id, step_id, is_done, workdir, progress_version, completed_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $5 THEN NOW() ELSE NULL END, NOW())
          ON CONFLICT (mssv, course_code, lesson_id, step_id)
          DO UPDATE SET is_done = EXCLUDED.is_done,
                        workdir = EXCLUDED.workdir,
+                       progress_version = EXCLUDED.progress_version,
                        completed_at = CASE WHEN EXCLUDED.is_done THEN NOW() ELSE NULL END,
                        updated_at = NOW();`,
-        [cleanMssv, cleanCourseCode, cleanLessonId, cleanStepId, input.done, cleanWorkdir]
+        [cleanMssv, cleanCourseCode, cleanLessonId, cleanStepId, input.done, cleanWorkdir, lesson.progress_version]
       );
       return { stepId: cleanStepId, done: input.done, workdir: cleanWorkdir };
     });
