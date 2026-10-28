@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   saveGuideProgress: vi.fn(),
   getLabResult: vi.fn(),
   saveLabResult: vi.fn(),
+  resetGuideProgress: vi.fn(),
   getQuizSets: vi.fn(),
   getCoursePosts: vi.fn(),
   createCoursePost: vi.fn(),
@@ -26,7 +27,8 @@ vi.mock('../../client/src/api/guides.js', () => ({
   getGuideProgress: mocks.getGuideProgress,
   saveGuideProgress: mocks.saveGuideProgress,
   getLabResult: mocks.getLabResult,
-  saveLabResult: mocks.saveLabResult
+  saveLabResult: mocks.saveLabResult,
+  resetGuideProgress: mocks.resetGuideProgress
 }));
 
 vi.mock('../../client/src/api/community.js', () => ({
@@ -68,8 +70,10 @@ vi.mock('../../client/src/features/ttcds/useTtcdsCapabilities.jsx', () => ({
   useTtcdsCapabilities: () => ({ data: { can_access: mocks.canAccess } })
 }));
 
+const confirmMocks = vi.hoisted(() => ({ impl: (..._args) => Promise.resolve(true) }));
+
 vi.mock('../../client/src/components/feedback/ConfirmDialog.jsx', () => ({
-  useConfirm: () => [null, async () => true]
+  useConfirm: () => [null, (...args) => confirmMocks.impl(...args)]
 }));
 
 import GuideSidebar from '../../client/src/features/learning/guides/GuideSidebar.jsx';
@@ -109,6 +113,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.canAccess = false;
   guideMocks.localGuides = null;
+  confirmMocks.impl = (..._args) => Promise.resolve(true);
 });
 
 describe('GuideSidebar', () => {
@@ -901,5 +906,83 @@ describe('GuideIndexPage resume', () => {
     renderIndex();
     const link = await screen.findByRole('link', { name: /học tiếp/i });
     expect(link).toHaveAttribute('href', expect.stringContaining('buoc-1'));
+  });
+});
+
+describe('GuideIndexPage reset', () => {
+  function mockIndexGuide(doneCount) {
+    mocks.getCourseGuide.mockResolvedValue({
+      enabled: true,
+      lessons: [{
+        id: 'bai-1',
+        title: 'Bài 1 — Dựng web 3 tầng trên AWS',
+        progressVersion: 'cmd-be-first-v4',
+        stepIds: ['buoc-1', 'buoc-2', 'buoc-3', 'buoc-4', 'buoc-5', 'buoc-6', 'buoc-7'],
+        doneCount
+      }]
+    });
+  }
+
+  function StepProbe() {
+    const { lessonId, stepId } = useParams();
+    return <div>Chặng {lessonId}/{stepId}</div>;
+  }
+
+  function renderIndexRoutes(client) {
+    const queryClient = client || new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    render(
+      <MemoryRouter initialEntries={['/learning/INF1003/guides']}>
+        <QueryClientProvider client={queryClient}>
+          <Routes>
+            <Route path="/learning/:courseCode/guides" element={<GuideIndexPage />} />
+            <Route path="/learning/:courseCode/guides/:lessonId/:stepId" element={<StepProbe />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+    return invalidateSpy;
+  }
+
+  it('hủy xác nhận → không gọi API', async () => {
+    mockIndexGuide(2);
+    const ask = vi.fn().mockResolvedValue(false);
+    confirmMocks.impl = ask;
+    renderIndexRoutes();
+    fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+    expect(mocks.resetGuideProgress).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
+  });
+
+  it('xác nhận → DELETE đúng URL, invalidate và về bước đầu', async () => {
+    mockIndexGuide(2);
+    const ask = vi.fn().mockResolvedValue(true);
+    confirmMocks.impl = ask;
+    mocks.resetGuideProgress.mockResolvedValue({ reset: true, deletedSteps: 2, deletedResult: 1 });
+    const invalidateSpy = renderIndexRoutes();
+    fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
+    await waitFor(() => expect(mocks.resetGuideProgress).toHaveBeenCalledTimes(1));
+    expect(mocks.resetGuideProgress).toHaveBeenCalledWith('test-token', 'INF1003', 'bai-1');
+    expect(ask.mock.calls[0][0].message).toMatch(/xóa/i);
+    await waitFor(() => expect(
+      invalidateSpy.mock.calls.some((call) => JSON.stringify(call[0]?.queryKey?.slice(0, 2)) === JSON.stringify(['course-guide', 'INF1003']))
+    ).toBe(true));
+    expect(
+      invalidateSpy.mock.calls.some((call) => JSON.stringify(call[0]?.queryKey?.slice(0, 3)) === JSON.stringify(['guide-progress', 'INF1003', 'bai-1']))
+    ).toBe(true);
+    expect(await screen.findByText('Chặng bai-1/buoc-1')).toBeInTheDocument();
+    expect(mocks.notify).toHaveBeenCalledWith(expect.stringMatching(/bắt đầu lại|đã xóa/i), 'success');
+  });
+
+  it('lỗi → toast message server, ở yên trang danh sách', async () => {
+    mockIndexGuide(2);
+    confirmMocks.impl = vi.fn().mockResolvedValue(true);
+    const serverMessage = 'Không có quyền truy cập môn học.';
+    mocks.resetGuideProgress.mockRejectedValueOnce(Object.assign(new Error(serverMessage), { status: 403 }));
+    renderIndexRoutes();
+    fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(serverMessage, 'error'));
+    expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
   });
 });

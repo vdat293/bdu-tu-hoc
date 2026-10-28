@@ -26,3 +26,8 @@ export async function saveLabResult(token, courseCode, lessonId, { token: labTok
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/lab-result`, { method: 'POST', token, body: { token: labToken }, defaultMessage: 'Không thể lưu kết quả lab.' });
   return unwrap(data, data);
 }
+
+export async function resetGuideProgress(token, courseCode, lessonId) {
+  const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/reset`, { method: 'DELETE', token, defaultMessage: 'Không thể làm lại từ đầu.' });
+  return unwrap(data, data);
+}

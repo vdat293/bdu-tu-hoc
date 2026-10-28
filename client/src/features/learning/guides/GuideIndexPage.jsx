@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getCourseGuide } from '../../../api/guides.js';
+import { getCourseGuide, resetGuideProgress } from '../../../api/guides.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
+import { useConfirm } from '../../../components/feedback/ConfirmDialog.jsx';
 import GuideLayout, { getLocalGuides } from './GuideLayout.jsx';
 
 export default function GuideIndexPage() {
@@ -10,6 +11,8 @@ export default function GuideIndexPage() {
   const { token, user } = useAuth();
   const { notify } = useToasts();
   const navigate = useNavigate();
+  const client = useQueryClient();
+  const [confirmUI, askConfirm] = useConfirm();
 
   const guideQuery = useQuery({
     queryKey: ['course-guide', courseCode, user?.mssv],
@@ -31,6 +34,32 @@ export default function GuideIndexPage() {
 
   const serverLessons = Array.isArray(guide?.lessons) ? guide.lessons : [];
   const doneByLesson = new Map(serverLessons.map((item) => [item.id, Number(item.doneCount || 0)]));
+
+  const reset = useMutation({
+    mutationFn: ({ lessonId }) => resetGuideProgress(token, courseCode, lessonId),
+    onSuccess: (_data, { lessonId, firstStep }) => {
+      client.invalidateQueries({ queryKey: ['course-guide', courseCode] });
+      client.invalidateQueries({ queryKey: ['guide-progress', courseCode, lessonId] });
+      notify('Đã xóa tiến độ, bắt đầu lại từ đầu.', 'success');
+      if (firstStep) {
+        navigate(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(firstStep)}`);
+      }
+    },
+    onError: (error) => {
+      notify(error?.message || 'Không thể làm lại từ đầu.', 'error');
+    }
+  });
+
+  const handleReset = async (lesson) => {
+    const ok = await askConfirm({
+      title: 'Làm lại từ đầu?',
+      message: 'Các chặng đã hoàn thành, thư mục đã lưu và kết quả lab đã lưu của bài này sẽ bị xóa và không thể khôi phục.',
+      confirmText: 'Làm lại từ đầu',
+      danger: true
+    });
+    if (!ok) return;
+    reset.mutate({ lessonId: lesson.id, firstStep: lesson.steps?.[0]?.id });
+  };
 
   if (guideQuery.isLoading || !guide) {
     return (
@@ -79,18 +108,31 @@ export default function GuideIndexPage() {
                   </p>
                 </div>
                 {targetStep && (
-                  <Link
-                    className="btn btn-primary btn-sm"
-                    to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(targetStep)}`}
-                  >
-                    {done > 0 ? 'Học tiếp' : 'Bắt đầu'}
-                  </Link>
+                  <>
+                    <Link
+                      className="btn btn-primary btn-sm"
+                      to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(targetStep)}`}
+                    >
+                      {done > 0 ? 'Học tiếp' : 'Bắt đầu'}
+                    </Link>
+                    {done > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleReset(lesson)}
+                        disabled={reset.isPending && reset.variables?.lessonId === lesson.id}
+                      >
+                        Làm lại từ đầu
+                      </button>
+                    )}
+                  </>
                 )}
               </li>
             );
           })}
         </ul>
       </section>
+      {confirmUI}
     </GuideLayout>
   );
 }
