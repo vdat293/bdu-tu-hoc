@@ -43,7 +43,17 @@ export default function GuideLessonPage() {
   });
 
   useEffect(() => {
-    if (guideQuery.isLoading || guideQuery.isError) return;
+    if (guideQuery.isLoading) return;
+    if (guideQuery.isError) {
+      // 403 (outside the course) must not hang on loading: bounce to the
+      // course page like the not-enabled case. Other errors stay on an
+      // error panel with retry rendered below.
+      if (guideQuery.error?.status === 403) {
+        notify('Môn học chưa có hướng dẫn thực hành.', 'warning');
+        navigate(`/learning/${encodeURIComponent(courseCode || '')}`, { replace: true });
+      }
+      return;
+    }
     if (!guideQuery.data?.enabled || !lesson) {
       notify('Môn học chưa có hướng dẫn thực hành.', 'warning');
       navigate(`/learning/${encodeURIComponent(courseCode || '')}`, { replace: true });
@@ -53,7 +63,7 @@ export default function GuideLessonPage() {
       notify('Không tìm thấy chặng hướng dẫn.', 'warning');
       navigate(`/learning/${encodeURIComponent(courseCode || '')}/guides`, { replace: true });
     }
-  }, [guideQuery.isLoading, guideQuery.isError, guideQuery.data, lesson, step, notify, navigate, courseCode]);
+  }, [guideQuery.isLoading, guideQuery.isError, guideQuery.error, guideQuery.data, lesson, step, notify, navigate, courseCode]);
 
   const doneMutation = useMutation({
     mutationFn: (done) => saveGuideProgress(token, courseCode, lessonId, {
@@ -155,6 +165,23 @@ export default function GuideLessonPage() {
     navigate(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(id)}`);
   };
 
+  // Mirror GuideIndexPage: a failed guide query never sticks on loading.
+  // 403 already redirects via the effect above (return null while navigating);
+  // any other error gets a panel with retry.
+  if (guideQuery.isError) {
+    if (guideQuery.error?.status === 403) return null;
+    return (
+      <GuideLayout courseCode={courseCode}>
+        <section className="guide-page-error" role="alert">
+          <p>{guideQuery.error?.message || 'Không thể tải hướng dẫn thực hành.'}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => guideQuery.refetch()}>
+            Tải lại
+          </button>
+        </section>
+      </GuideLayout>
+    );
+  }
+
   if (guideQuery.isLoading || !guideQuery.data) {
     return (
       <GuideLayout courseCode={courseCode}>
@@ -168,6 +195,11 @@ export default function GuideLessonPage() {
   const doneMap = progressQuery.data?.steps || {};
   const workdir = serverWorkdir;
   const isDone = doneMap[stepId]?.done === true;
+  // While progress is still loading, progressQuery.data is empty and the
+  // done mutation would POST workdir ?? undefined (server normalizes to ''
+  // and wipes the saved workdir). Keep both write controls disabled until
+  // the first progress load resolves.
+  const progressLoading = progressQuery.isLoading;
   const prevStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
   const nextStep = stepIndex < steps.length - 1 ? steps[stepIndex + 1] : null;
 
@@ -201,7 +233,7 @@ export default function GuideLessonPage() {
             <input
               type="checkbox"
               checked={isDone}
-              disabled={doneMutation.isPending}
+              disabled={doneMutation.isPending || progressLoading}
               onChange={(event) => doneMutation.mutate(event.target.checked)}
             />
             <span>Tôi đã làm xong chặng này</span>
@@ -230,7 +262,7 @@ export default function GuideLessonPage() {
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  disabled={workdirMutation.isPending}
+                  disabled={workdirMutation.isPending || progressLoading}
                   onClick={handleWorkdirSave}
                 >
                   Lưu thư mục

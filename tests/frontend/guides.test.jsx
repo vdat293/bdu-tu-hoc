@@ -358,6 +358,41 @@ describe('GuideLessonPage progress wiring', () => {
     await waitFor(() => expect(screen.getByLabelText(/đường dẫn thư mục làm việc/i)).toHaveValue('D:\\lab2'));
     expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
   });
+
+  it('redirects to the course page on guide 403 instead of hanging on loading', async () => {
+    const forbidden = new Error('Không có quyền truy cập môn học.');
+    forbidden.status = 403;
+    mocks.getCourseGuide.mockRejectedValueOnce(forbidden);
+    mocks.getGuideProgress.mockResolvedValue({ steps: {}, workdir: null });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1']);
+    expect(await screen.findByText('Trang môn học')).toBeInTheDocument();
+    expect(screen.queryByText(/đang tải/i)).not.toBeInTheDocument();
+    expect(mocks.notify).toHaveBeenCalledWith('Môn học chưa có hướng dẫn thực hành.', 'warning');
+  });
+
+  it('shows an error panel with retry on guide load failure instead of hanging on loading', async () => {
+    mocks.getCourseGuide.mockRejectedValueOnce(new Error('Mất kết nối mạng giả lập'));
+    mocks.getGuideProgress.mockResolvedValue({ steps: {}, workdir: null });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1']);
+    expect(await screen.findByRole('button', { name: /tải lại/i })).toBeInTheDocument();
+    expect(screen.queryByText(/đang tải/i)).not.toBeInTheDocument();
+    mocks.getCourseGuide.mockResolvedValue({
+      enabled: true,
+      lessons: [{ id: 'bai-1', title: 'Bài 1 — Dựng web 3 tầng trên AWS', progressVersion: 'cmd-be-first-v4', stepIds: ['buoc-1'], doneCount: 0 }]
+    });
+    fireEvent.click(screen.getByRole('button', { name: /tải lại/i }));
+    await waitFor(() => expect(mocks.getCourseGuide).toHaveBeenCalledTimes(2));
+  });
+
+  it('disables the done checkbox and workdir save while progress is still loading', async () => {
+    mockLessonAPIs();
+    mocks.getGuideProgress.mockImplementation(() => new Promise(() => {}));
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1']);
+    const checkbox = await screen.findByRole('checkbox', { name: /tôi đã làm xong chặng này/i });
+    expect(checkbox).toBeDisabled();
+    expect(screen.getByRole('button', { name: /lưu thư mục/i })).toBeDisabled();
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
+  });
 });
 
 describe('GuideLessonPage block data contract', () => {
