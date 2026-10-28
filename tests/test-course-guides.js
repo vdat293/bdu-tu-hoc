@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { closeDatabase, isDatabaseConfigured, query } from '../src/db/database.js';
 import { GuideService } from '../src/modules/learning/guide.service.js';
+import { GuideController } from '../src/modules/learning/guide.controller.js';
+import { BduIdentityService } from '../src/services/bdu-identity.service.js';
+import { ApiController } from '../src/controllers/api.controller.js';
 
 if (!isDatabaseConfigured()) {
   console.log('Skipping test-course-guides: DATABASE_URL not configured.');
@@ -242,6 +246,150 @@ try {
   );
 
   console.log('✓ GuideService: gating findAccessibleCourse, validate step/workdir, upsert tiến độ stamp version và bỏ qua version cũ đều hoạt động.');
+
+  // Đoạn 3: GuideController ủy quyền đúng service + map status lỗi;
+  // route guide đã đăng ký trong learning.routes.js (stub, không chạm DB).
+  function fakeGuideResponse() {
+    const state = { statusCode: 200, body: null, headers: {} };
+    const res = {
+      setHeader(name, value) {
+        state.headers[name] = value;
+      },
+      status(code) {
+        state.statusCode = code;
+        return res;
+      },
+      json(body) {
+        state.body = body;
+        return res;
+      }
+    };
+    return { res, state };
+  }
+
+  const originalResolveVerifiedMssv = BduIdentityService.resolveVerifiedMssv;
+  const originalGuideGetGuide = GuideService.getGuide;
+  const originalGuideGetProgress = GuideService.getProgress;
+  const originalGuideSaveProgress = GuideService.saveProgress;
+  try {
+    // 3a. getCourseGuide 200: resolve mssv rồi gọi service đúng tham số.
+    BduIdentityService.resolveVerifiedMssv = async () => VIEWER;
+    GuideService.getGuide = async (mssv, courseCode) => {
+      assert.equal(mssv, VIEWER);
+      assert.equal(courseCode, COURSE_CODE);
+      return { enabled: true, lessons: [] };
+    };
+    {
+      const { res, state } = fakeGuideResponse();
+      await GuideController.getCourseGuide(
+        { headers: { authorization: 'Bearer viewer-token' }, params: { courseCode: COURSE_CODE } },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.result, true);
+      assert.equal(state.body.data.enabled, true);
+    }
+
+    // 3b. getCourseGuide outsider → 403 (kế thừa gating Task 2).
+    const outsiderError = new Error('Sinh viên không thuộc môn học này.');
+    outsiderError.status = 403;
+    GuideService.getGuide = async () => {
+      throw outsiderError;
+    };
+    {
+      const { res, state } = fakeGuideResponse();
+      await GuideController.getCourseGuide(
+        { headers: { authorization: 'Bearer outsider-token' }, params: { courseCode: COURSE_CODE } },
+        res
+      );
+      assert.equal(state.statusCode, 403);
+      assert.equal(state.body.result, false);
+    }
+
+    // 3c. getGuideProgress 200.
+    GuideService.getProgress = async (mssv, courseCode, lessonId) => {
+      assert.equal(mssv, VIEWER);
+      assert.equal(courseCode, COURSE_CODE);
+      assert.equal(lessonId, 'bai-1');
+      return { steps: {}, workdir: null };
+    };
+    {
+      const { res, state } = fakeGuideResponse();
+      await GuideController.getGuideProgress(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.result, true);
+      assert.deepEqual(state.body.data, { steps: {}, workdir: null });
+    }
+
+    // 3d. saveGuideProgress stepId lạ → 400 GUIDE_STEP_INVALID.
+    const stepError = new Error('Bước hướng dẫn không hợp lệ.');
+    stepError.status = 400;
+    stepError.code = 'GUIDE_STEP_INVALID';
+    GuideService.saveProgress = async () => {
+      throw stepError;
+    };
+    {
+      const { res, state } = fakeGuideResponse();
+      await GuideController.saveGuideProgress(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' },
+          body: { stepId: 'buoc-99', done: true }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 400);
+      assert.equal(state.body.result, false);
+      assert.equal(state.body.code, 'GUIDE_STEP_INVALID');
+    }
+
+    // 3e. saveGuideProgress 200: body stepId/done/workdir truyền nguyên sang service.
+    GuideService.saveProgress = async (mssv, courseCode, lessonId, input) => {
+      assert.equal(mssv, VIEWER);
+      assert.equal(courseCode, COURSE_CODE);
+      assert.equal(lessonId, 'bai-1');
+      assert.deepEqual(input, { stepId: 'buoc-1', done: true, workdir: 'C:\\lab1' });
+      return { stepId: 'buoc-1', done: true, workdir: 'C:\\lab1' };
+    };
+    {
+      const { res, state } = fakeGuideResponse();
+      await GuideController.saveGuideProgress(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' },
+          body: { stepId: 'buoc-1', done: true, workdir: 'C:\\lab1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.result, true);
+      assert.deepEqual(state.body.data, { stepId: 'buoc-1', done: true, workdir: 'C:\\lab1' });
+    }
+
+    // 3f. Barrel + route registration (static assertion).
+    assert.equal(typeof ApiController.getCourseGuide, 'function');
+    assert.equal(typeof ApiController.getGuideProgress, 'function');
+    assert.equal(typeof ApiController.saveGuideProgress, 'function');
+    const learningRoutes = fs.readFileSync('src/routes/learning.routes.js', 'utf8');
+    assert.match(learningRoutes, /\/learning\/courses\/:courseCode\/guide/);
+    assert.match(learningRoutes, /\/learning\/courses\/:courseCode\/guides\/:lessonId\/progress/);
+    assert.match(learningRoutes, /ApiController\.getCourseGuide/);
+    assert.match(learningRoutes, /ApiController\.getGuideProgress/);
+    assert.match(learningRoutes, /ApiController\.saveGuideProgress/);
+  } finally {
+    BduIdentityService.resolveVerifiedMssv = originalResolveVerifiedMssv;
+    GuideService.getGuide = originalGuideGetGuide;
+    GuideService.getProgress = originalGuideGetProgress;
+    GuideService.saveProgress = originalGuideSaveProgress;
+  }
+
+  console.log('✓ GuideController: 200/403/400 map đúng status service; 3 route guide đã đăng ký.');
 } finally {
   await query('DELETE FROM guide_step_progress WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM course_guide_configs WHERE course_code IN ($1, $2)', [COURSE_CODE, EMPTY_COURSE_CODE]).catch(() => {});

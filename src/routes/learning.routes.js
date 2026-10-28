@@ -22,4 +22,8 @@ export function registerLearningRoutes(router, deps = {}) {
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/start', ApiController.startQuizSetPart);
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/answer', ApiController.answerQuizSetReview);
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/progress', ApiController.saveQuizSetProgress);
+
+  router.get('/learning/courses/:courseCode/guide', ApiController.getCourseGuide);
+  router.get('/learning/courses/:courseCode/guides/:lessonId/progress', ApiController.getGuideProgress);
+  router.post('/learning/courses/:courseCode/guides/:lessonId/progress', ApiController.saveGuideProgress);
 }
