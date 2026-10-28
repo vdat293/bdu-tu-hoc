@@ -24,6 +24,7 @@ export { MediaController } from '../modules/media/media.controller.js';
 export { MetaController } from '../modules/meta/meta.controller.js';
 export { LearningController } from '../modules/learning/learning.controller.js';
 export { QuizSetController } from '../modules/learning/quiz-set.controller.js';
+export { GuideController } from '../modules/learning/guide.controller.js';
 export { GamesController } from '../modules/games/games.controller.js';
 export { WordFmtController } from '../modules/wordfmt/wordfmt.controller.js';
 export { SurveyController } from '../modules/survey/survey.controller.js';
@@ -43,6 +44,7 @@ import { MediaController } from '../modules/media/media.controller.js';
 import { MetaController } from '../modules/meta/meta.controller.js';
 import { LearningController } from '../modules/learning/learning.controller.js';
 import { QuizSetController } from '../modules/learning/quiz-set.controller.js';
+import { GuideController } from '../modules/learning/guide.controller.js';
 import { GamesController } from '../modules/games/games.controller.js';
 import { WordFmtController } from '../modules/wordfmt/wordfmt.controller.js';
 import { SurveyController } from '../modules/survey/survey.controller.js';
@@ -66,6 +68,7 @@ export const ApiController = {
   ...MetaController,
   ...LearningController,
   ...QuizSetController,
+  ...GuideController,
   ...GamesController,
   ...WordFmtController,
   ...SurveyController,
