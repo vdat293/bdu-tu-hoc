@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getCourseGuide, getGuideProgress, saveGuideProgress } from '../../../api/guides.js';
@@ -96,9 +96,23 @@ export default function GuideLessonPage() {
   const [workdirTouched, setWorkdirTouched] = useState(false);
   const [workdirError, setWorkdirError] = useState('');
 
+  // The router reuses this component across lesson/step params, so a touched
+  // draft from one step must never leak into another lesson (or a new
+  // progressVersion with a fresh serverWorkdir). The scope key forces a reset
+  // on identity change; otherwise the touched guard stays so background
+  // refetches don't clobber in-progress typing.
+  const workdirScopeKey = `${courseCode ?? ''}/${lessonId ?? ''}/${stepId ?? ''}/${progressVersion ?? ''}/${user?.mssv ?? ''}`;
+  const workdirScopeRef = useRef(workdirScopeKey);
+
   useEffect(() => {
+    if (workdirScopeRef.current !== workdirScopeKey) {
+      workdirScopeRef.current = workdirScopeKey;
+      setWorkdirTouched(false);
+      setWorkdirDraft(serverWorkdir);
+      return;
+    }
     if (!workdirTouched) setWorkdirDraft(serverWorkdir);
-  }, [serverWorkdir, workdirTouched]);
+  }, [workdirScopeKey, serverWorkdir, workdirTouched]);
 
   const workdirMutation = useMutation({
     mutationFn: (clean) => {

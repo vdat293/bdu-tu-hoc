@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -48,6 +48,18 @@ vi.mock('../../client/src/app/providers.jsx', () => ({
   useToasts: () => ({ notify: mocks.notify })
 }));
 
+// Controllable local-lesson source: null falls back to the real INF1003 data,
+// a set array replaces it (lets one test stage a second lesson / new version).
+const guideMocks = vi.hoisted(() => ({ localGuides: null }));
+
+vi.mock('../../client/src/features/learning/guides/GuideLayout.jsx', async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    getLocalGuides: (...args) => guideMocks.localGuides ?? mod.getLocalGuides(...args)
+  };
+});
+
 vi.mock('../../client/src/features/ttcds/useTtcdsCapabilities.jsx', () => ({
   useTtcdsCapabilities: () => ({ data: { can_access: mocks.canAccess } })
 }));
@@ -86,6 +98,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   mocks.canAccess = false;
+  guideMocks.localGuides = null;
 });
 
 describe('GuideSidebar', () => {
@@ -293,6 +306,57 @@ describe('GuideLessonPage progress wiring', () => {
     renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1'], client);
     await waitFor(() => expect(mocks.getGuideProgress).toHaveBeenCalled());
     expect(await screen.findByRole('checkbox', { name: /tôi đã làm xong/i })).not.toBeChecked();
+  });
+
+  it('resets a touched workdir draft when switching lesson/version (new serverWorkdir wins)', async () => {
+    guideMocks.localGuides = [
+      {
+        id: 'bai-1',
+        title: 'Bài 1',
+        progressVersion: 'v1',
+        steps: [
+          { id: 'buoc-1', title: 'Bước 1', where: 'local', folderInput: true, blocks: [] },
+          { id: 'buoc-2', title: 'Bước 2', where: 'cloudshell', blocks: [] }
+        ]
+      },
+      {
+        id: 'bai-2',
+        title: 'Bài 2',
+        progressVersion: 'v2',
+        steps: [
+          { id: 'buoc-1', title: 'Bước 1', where: 'local', folderInput: true, blocks: [] },
+          { id: 'buoc-2', title: 'Bước 2', where: 'cloudshell', blocks: [] }
+        ]
+      }
+    ];
+    mockLessonAPIs();
+    mocks.getGuideProgress.mockImplementation((_token, _course, lessonId) =>
+      Promise.resolve(lessonId === 'bai-2' ? { steps: {}, workdir: 'D:\\lab2' } : { steps: {}, workdir: 'C:\\lab1' })
+    );
+    function NavProbe({ to, label }) {
+      const nav = useNavigate();
+      return <button type="button" onClick={() => nav(to)}>{label}</button>;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={['/learning/INF1003/guides/bai-1/buoc-1']}>
+        <QueryClientProvider client={client}>
+          <Routes>
+            <Route path="/learning/:courseCode/guides/:lessonId/:stepId" element={<GuideLessonPage />} />
+            <Route path="/learning/:courseCode/guides" element={<div>Trang danh sách chặng</div>} />
+            <Route path="/learning/:courseCode" element={<div>Trang môn học</div>} />
+          </Routes>
+          <NavProbe to="/learning/INF1003/guides/bai-2/buoc-1" label="đi tới bài 2" />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+    const input = await screen.findByLabelText(/đường dẫn thư mục làm việc/i);
+    await waitFor(() => expect(input).toHaveValue('C:\\lab1'));
+    fireEvent.change(input, { target: { value: 'C:\\tainted' } });
+    expect(input).toHaveValue('C:\\tainted');
+    fireEvent.click(screen.getByRole('button', { name: /đi tới bài 2/i }));
+    await waitFor(() => expect(screen.getByLabelText(/đường dẫn thư mục làm việc/i)).toHaveValue('D:\\lab2'));
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
   });
 });
 
