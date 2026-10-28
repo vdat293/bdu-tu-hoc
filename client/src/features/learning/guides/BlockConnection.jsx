@@ -1,28 +1,22 @@
 import CopyButton from './BlockCopy.jsx';
 
-// Task-6 contract: connection data lives inline in the block
-// (`block.connection`, falling back to the block itself so flat payloads like
-// `{ type: 'connection', feIp }` also render). The optional `connection` prop
-// is only an override slot for a future lab-result parser; bai-1.js ships bare
-// `{ type: 'connection' }` blocks, which keep rendering the hint below.
-export default function BlockConnection({ block, connection }) {
-  const source = connection ?? block?.connection ?? block ?? {};
+// Mirrors the original connectionInfo (assets/app.js): the four addresses the
+// site filled into every command, plus the saved working directory.
+export default function BlockConnection({ block, connection, workdir }) {
+  const source = connection ?? block?.connection ?? {};
+  const feIp = source?.feIp ?? source?.FE_IP;
+  const beIp = source?.beIp ?? source?.BE_IP;
+  const dbEndpoint = source?.dbEndpoint ?? source?.DB_ENDPOINT;
   const rows = [
-    source?.feIp ? { label: 'Frontend (FE)', value: String(source.feIp) } : null,
-    source?.beIp ? { label: 'Backend (BE)', value: String(source.beIp) } : null,
-    source?.dbEndpoint ? { label: 'Database (RDS)', value: String(source.dbEndpoint) } : null
+    feIp ? { label: 'IP máy FE (public)', value: String(feIp) } : null,
+    beIp ? { label: 'IP máy BE (private)', value: String(beIp) } : null,
+    dbEndpoint ? { label: 'DB endpoint', value: String(dbEndpoint) } : null,
+    { label: 'Thư mục làm việc', value: workdir || 'Chưa lưu ở bước 1' }
   ].filter(Boolean);
-  if (!rows.length) {
-    return (
-      <div className="guide-block-note is-info">
-        <p className="guide-block-note-title">Thông tin kết nối</p>
-        <p className="guide-block-note-text">Chạy xong bước 2 và dán dòng kết quả, website sẽ hiện địa chỉ máy FE/BE tại đây.</p>
-      </div>
-    );
-  }
   return (
-    <div className="guide-block-connection">
-      <p className="guide-block-connection-title">Thông tin kết nối hạ tầng của bạn</p>
+    <section className="guide-block-connection">
+      <h3 className="guide-block-connection-heading">Thông tin kết nối của bạn</h3>
+      <p className="guide-block-connection-desc">Website đã điền những địa chỉ này trực tiếp vào từng lệnh bên dưới. Bạn chỉ cần copy lệnh và chạy đúng máy được ghi trên khung.</p>
       <dl className="guide-block-connection-list">
         {rows.map((row) => (
           <div key={row.label} className="guide-block-connection-row">
@@ -34,6 +28,6 @@ export default function BlockConnection({ block, connection }) {
           </div>
         ))}
       </dl>
-    </div>
+    </section>
   );
 }

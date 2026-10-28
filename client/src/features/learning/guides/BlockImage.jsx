@@ -27,6 +27,11 @@ export default function BlockImage({ block }) {
         onError={() => setFailed(true)}
       />
       {block?.caption && <figcaption className="guide-block-image-caption">{block.caption}</figcaption>}
+      {block?.fullSizeLink && (
+        <a className="guide-block-image-link" href={block.src} target="_blank" rel="noopener noreferrer">
+          Mở ảnh lớn để xem vị trí bấm
+        </a>
+      )}
     </figure>
   );
 }

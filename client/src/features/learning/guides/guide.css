@@ -481,6 +481,175 @@ body.theme-dark .guide-step-stage {
   white-space: pre-wrap;
 }
 
+.guide-warn-action {
+  margin-top: 10px;
+  display: inline-block;
+}
+
+/* Step explain / expect / errors (mirrors the original step sections) */
+.guide-step-explain,
+.guide-step-expect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+}
+
+.guide-step-explain h3,
+.guide-step-expect h3 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-step-explain p,
+.guide-step-expect p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.guide-step-expect ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide-step-expect li {
+  overflow-wrap: anywhere;
+}
+
+.guide-step-errors {
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  overflow: hidden;
+}
+
+.guide-step-errors > summary {
+  padding: 12px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.guide-error-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 14px 14px;
+  min-width: 0;
+}
+
+.guide-error-item p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Folder + lab-result forms (mirror the original lab-result-form) */
+.guide-workdir-title,
+.guide-lab-title {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-lab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+}
+
+.guide-lab-label {
+  font-weight: 700;
+}
+
+.guide-lab-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.guide-lab-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.guide-lab-steps li {
+  overflow-wrap: anywhere;
+}
+
+.guide-lab-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  background: var(--bg-input, transparent);
+  color: inherit;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.guide-lab-error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.guide-lab-saved {
+  margin: 0;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Step actions + completion panel (mirror the original step-actions) */
+.guide-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guide-step-completion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+}
+
+.guide-step-completion h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-step-completion p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .guide-block-code {
   display: flex;
   flex-direction: column;
@@ -678,6 +847,19 @@ body.theme-dark .guide-step-stage {
   font-weight: 700;
 }
 
+.guide-block-connection-heading {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-block-connection-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+  overflow-wrap: anywhere;
+}
+
 .guide-block-connection-list {
   margin: 0;
   display: flex;
@@ -723,17 +905,48 @@ body.theme-dark .guide-step-stage {
 .guide-block-keys {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .guide-block-key-card {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--border-color, var(--border, #ddd));
   border-radius: 10px;
+}
+
+.guide-block-key-title {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-block-key-text {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-block-key-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  background: var(--bg-input, transparent);
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.guide-block-key-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+  overflow-wrap: anywhere;
 }
 
 .guide-block-key-label {
@@ -754,6 +967,26 @@ body.theme-dark .guide-step-stage {
   border-color: var(--border-color, var(--border, #ddd));
   background: var(--bg-card-hover, rgba(127, 127, 127, 0.12));
   color: var(--text-main, inherit);
+}
+
+.guide-block-image-link {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-block-script-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guide-block-script-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  overflow-wrap: anywhere;
 }
 
 .guide-block-troubleshoot {
