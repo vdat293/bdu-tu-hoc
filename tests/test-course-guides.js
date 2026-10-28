@@ -652,6 +652,124 @@ try {
   }
 
   console.log('✓ Lab-result API: POST sai 400, POST đúng + GET đọc lại, outsider 403, GET null sau bump version, enforce clean GUIDE_STEP_NOT_CLEAN.');
+
+  // Đoạn 5: resetLesson — xóa tiến độ + lab-result của lesson (mọi version).
+  await query('DELETE FROM guide_step_progress WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3', [VIEWER, COURSE_CODE, 'bai-1']);
+  await query('DELETE FROM guide_lab_results WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3', [VIEWER, COURSE_CODE, 'bai-1']);
+  await GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', {
+    stepId: 'buoc-1',
+    done: true,
+    workdir: 'C:\\lab1'
+  });
+  await GuideService.saveProgress(VIEWER, COURSE_CODE, 'bai-1', { stepId: 'buoc-7', done: true });
+  await GuideService.saveLabResult(VIEWER, COURSE_CODE, 'bai-1', { token: VALID_LAB_TOKEN });
+  // Hàng version cũ chèn trực tiếp (bypass validate) — reset phải xóa mọi version.
+  await query(
+    `INSERT INTO guide_step_progress
+       (mssv, course_code, lesson_id, step_id, is_done, workdir, progress_version, completed_at, updated_at)
+     VALUES ($1, $2, 'bai-1', 'buoc-2', TRUE, '', 'cmd-be-first-v3', NOW(), NOW())
+     ON CONFLICT (mssv, course_code, lesson_id, step_id)
+     DO UPDATE SET is_done = TRUE, workdir = '', progress_version = 'cmd-be-first-v3',
+                   completed_at = NOW(), updated_at = NOW();`,
+    [VIEWER, COURSE_CODE]
+  );
+
+  // 5a. reset → { reset:true, deletedSteps:3, deletedResult:1 }; cả hai bảng trống.
+  const reset = await GuideService.resetLesson(VIEWER, COURSE_CODE, 'bai-1');
+  assert.deepEqual(reset, { reset: true, deletedSteps: 3, deletedResult: 1 });
+  assert.equal(
+    (
+      await query(
+        'SELECT COUNT(*)::int AS total FROM guide_step_progress WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3',
+        [VIEWER, COURSE_CODE, 'bai-1']
+      )
+    ).rows[0].total,
+    0,
+    'reset phải xóa hết tiến độ của lesson (mọi version)'
+  );
+  assert.equal(
+    (
+      await query(
+        'SELECT COUNT(*)::int AS total FROM guide_lab_results WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3',
+        [VIEWER, COURSE_CODE, 'bai-1']
+      )
+    ).rows[0].total,
+    0,
+    'reset phải xóa lab-result của lesson'
+  );
+  const guideAfterReset = await GuideService.getGuide(VIEWER, COURSE_CODE);
+  assert.equal(guideAfterReset.lessons[0].doneCount, 0);
+  const progressAfterReset = await GuideService.getProgress(VIEWER, COURSE_CODE, 'bai-1');
+  assert.deepEqual(progressAfterReset.steps, {});
+  assert.equal(await GuideService.getLabResult(VIEWER, COURSE_CODE, 'bai-1'), null);
+
+  // 5b. reset lại khi đã trống → counts 0, vẫn ok.
+  const resetAgain = await GuideService.resetLesson(VIEWER, COURSE_CODE, 'bai-1');
+  assert.deepEqual(resetAgain, { reset: true, deletedSteps: 0, deletedResult: 0 });
+
+  // 5c. outsider → 403; lesson chưa seed → 404 GUIDE_LESSON_NOT_FOUND.
+  await assert.rejects(
+    () => GuideService.resetLesson(OUTSIDER, COURSE_CODE, 'bai-1'),
+    (err) => err.status === 403
+  );
+  await assert.rejects(
+    () => GuideService.resetLesson(VIEWER, COURSE_CODE, 'bai-99'),
+    (err) => err.status === 404 && err.code === 'GUIDE_LESSON_NOT_FOUND'
+  );
+
+  // 5d. Controller deleteGuideProgress: 200 passthrough + map 403; barrel + route.
+  const originalResetLesson = GuideService.resetLesson;
+  const originalResetResolve = BduIdentityService.resolveVerifiedMssv;
+  try {
+    BduIdentityService.resolveVerifiedMssv = async () => VIEWER;
+    GuideService.resetLesson = async (mssv, courseCode, lessonId) => {
+      assert.equal(mssv, VIEWER);
+      assert.equal(courseCode, COURSE_CODE);
+      assert.equal(lessonId, 'bai-1');
+      return { reset: true, deletedSteps: 2, deletedResult: 1 };
+    };
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.deleteGuideProgress(
+        {
+          headers: { authorization: 'Bearer viewer-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 200);
+      assert.equal(state.body.result, true);
+      assert.deepEqual(state.body.data, { reset: true, deletedSteps: 2, deletedResult: 1 });
+    }
+
+    const resetForbidden = new Error('Sinh viên không thuộc môn học này.');
+    resetForbidden.status = 403;
+    GuideService.resetLesson = async () => {
+      throw resetForbidden;
+    };
+    {
+      const { res, state } = fakeLabResponse();
+      await GuideController.deleteGuideProgress(
+        {
+          headers: { authorization: 'Bearer outsider-token' },
+          params: { courseCode: COURSE_CODE, lessonId: 'bai-1' }
+        },
+        res
+      );
+      assert.equal(state.statusCode, 403);
+      assert.equal(state.body.result, false);
+    }
+
+    assert.equal(typeof ApiController.deleteGuideProgress, 'function');
+    const learningRoutesReset = fs.readFileSync('src/routes/learning.routes.js', 'utf8');
+    assert.match(learningRoutesReset, /guides\/:lessonId\/reset/);
+    assert.match(learningRoutesReset, /ApiController\.deleteGuideProgress/);
+  } finally {
+    BduIdentityService.resolveVerifiedMssv = originalResetResolve;
+    GuideService.resetLesson = originalResetLesson;
+  }
+
+  console.log('✓ Reset lesson: xóa tiến độ + lab-result mọi version, idempotent, outsider 403, controller 200/403 + route reset đã đăng ký.');
 } finally {
   await query('DELETE FROM guide_lab_results WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});
   await query('DELETE FROM guide_step_progress WHERE mssv IN ($1, $2)', [VIEWER, OUTSIDER]).catch(() => {});

@@ -86,5 +86,19 @@ export const GuideController = {
     } catch (err) {
       return sendGuideError(res, err, 'Không thể lưu kết quả lab.');
     }
+  },
+
+  async deleteGuideProgress(req, res) {
+    try {
+      const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
+      const data = await GuideService.resetLesson(
+        mssv,
+        req.params.courseCode,
+        req.params.lessonId
+      );
+      return res.json({ result: true, data });
+    } catch (err) {
+      return sendGuideError(res, err, 'Không thể xóa tiến độ hướng dẫn.');
+    }
   }
 };

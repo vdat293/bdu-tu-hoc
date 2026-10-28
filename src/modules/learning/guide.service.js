@@ -313,5 +313,37 @@ export const GuideService = {
       ]
     );
     return parsed;
+  },
+
+  async resetLesson(mssv, courseCode, lessonId) {
+    requireDatabase();
+    const cleanMssv = normalizeMssv(mssv);
+    const cleanLessonId = normalizeLessonId(lessonId);
+
+    return transaction(async (client) => {
+      const course = await findAccessibleCourse(cleanMssv, courseCode, client);
+      const cleanCourseCode = normalizeCourseCode(course.normalized_code || courseCode);
+      const registry = await loadRegistry(cleanCourseCode, client);
+      const lesson = registry.find((row) => row.lesson_id === cleanLessonId);
+      if (!lesson) {
+        throw httpError('Bài hướng dẫn không tồn tại trong môn học này.', 404, 'GUIDE_LESSON_NOT_FOUND');
+      }
+
+      const stepsResult = await client.query(
+        `DELETE FROM guide_step_progress
+          WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3;`,
+        [cleanMssv, cleanCourseCode, cleanLessonId]
+      );
+      const labResult = await client.query(
+        `DELETE FROM guide_lab_results
+          WHERE mssv = $1 AND course_code = $2 AND lesson_id = $3;`,
+        [cleanMssv, cleanCourseCode, cleanLessonId]
+      );
+      return {
+        reset: true,
+        deletedSteps: stepsResult.rowCount ?? 0,
+        deletedResult: labResult.rowCount ?? 0
+      };
+    });
   }
 };
