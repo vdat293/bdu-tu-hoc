@@ -985,4 +985,23 @@ describe('GuideIndexPage reset', () => {
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(serverMessage, 'error'));
     expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
   });
+
+  it('vô hiệu hóa nút trong lúc chờ DELETE rồi mở lại sau khi xong', async () => {
+    mockIndexGuide(2);
+    confirmMocks.impl = vi.fn().mockResolvedValue(true);
+    let rejectReset;
+    mocks.resetGuideProgress.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => { rejectReset = reject; })
+    );
+    renderIndexRoutes();
+    const btn = await screen.findByRole('button', { name: /làm lại từ đầu/i });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    await waitFor(() => expect(mocks.resetGuideProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(btn).toBeDisabled());
+    rejectReset(new Error('Lỗi mạng giả lập'));
+    await waitFor(() => expect(btn).toBeEnabled());
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Lỗi mạng giả lập', 'error'));
+    expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
+  });
 });
