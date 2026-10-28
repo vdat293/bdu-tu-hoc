@@ -370,6 +370,68 @@ body.theme-dark .guide-step-stage {
   accent-color: #15803d;
 }
 
+/* Ô lưu thư mục làm việc (Task 6: lưu 1 lần, dùng cho mọi block localDirectory) */
+.guide-workdir {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+}
+
+.guide-workdir-label {
+  font-weight: 700;
+}
+
+.guide-workdir-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.guide-workdir-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.guide-workdir-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  background: var(--bg-input, transparent);
+  color: inherit;
+  font-family: inherit;
+}
+
+.guide-workdir-error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.guide-workdir-saved {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+  overflow-wrap: anywhere;
+}
+
+.guide-workdir-missing {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 4px solid #d97706;
+  border-radius: 8px;
+  background: rgba(217, 119, 6, 0.08);
+  font-size: 0.9rem;
+}
+
 .guide-step-footer {
   display: flex;
   align-items: center;

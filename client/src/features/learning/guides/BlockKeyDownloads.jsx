@@ -1,7 +1,12 @@
 import CopyButton from './BlockCopy.jsx';
 
-export default function BlockKeyDownloads({ keys }) {
-  const list = Array.isArray(keys) ? keys.filter((k) => k?.path) : [];
+// Task-6 contract: key-download data lives inline in the block (`block.keys`,
+// also accepting `block.items`). The optional `keys` prop is only an override
+// slot for a future lab-result parser; bare `{ type: 'key-downloads' }`
+// blocks (as shipped in bai-1.js) keep rendering the hint below.
+export default function BlockKeyDownloads({ block, keys }) {
+  const raw = Array.isArray(keys) ? keys : (block?.keys ?? block?.items ?? []);
+  const list = Array.isArray(raw) ? raw.filter((k) => k?.path) : [];
   if (!list.length) {
     return (
       <div className="guide-block-note is-info">

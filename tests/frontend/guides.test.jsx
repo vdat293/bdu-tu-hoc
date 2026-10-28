@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getCourseGuide: vi.fn(),
+  getGuideProgress: vi.fn(),
+  saveGuideProgress: vi.fn(),
   getQuizSets: vi.fn(),
   getCoursePosts: vi.fn(),
   createCoursePost: vi.fn(),
@@ -19,8 +21,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../client/src/api/guides.js', () => ({
   getCourseGuide: mocks.getCourseGuide,
-  getGuideProgress: vi.fn(),
-  saveGuideProgress: vi.fn()
+  getGuideProgress: mocks.getGuideProgress,
+  saveGuideProgress: mocks.saveGuideProgress
 }));
 
 vi.mock('../../client/src/api/community.js', () => ({
@@ -55,6 +57,7 @@ vi.mock('../../client/src/components/feedback/ConfirmDialog.jsx', () => ({
 }));
 
 import GuideSidebar from '../../client/src/features/learning/guides/GuideSidebar.jsx';
+import GuideLessonPage from '../../client/src/features/learning/guides/GuideLessonPage.jsx';
 import BlockRenderer from '../../client/src/features/learning/guides/BlockRenderer.jsx';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 
@@ -161,5 +164,172 @@ describe('CourseLearningPage guide entry', () => {
     mockPageAPIs({ enabled: true, lessons: [{ id: 'bai-1', title: 'Bài 1', progressVersion: 'v', stepIds: ['buoc-1'], doneCount: 0 }] });
     renderPage();
     expect(await screen.findByText('Hướng dẫn thực hành')).toBeInTheDocument();
+  });
+});
+
+describe('GuideLessonPage progress wiring', () => {
+  function mockLessonAPIs(progress) {
+    mocks.getCourseGuide.mockResolvedValue({
+      enabled: true,
+      lessons: [{ id: 'bai-1', title: 'Bài 1 — Dựng web 3 tầng trên AWS', progressVersion: 'cmd-be-first-v4', stepIds: ['buoc-1'], doneCount: 0 }]
+    });
+    mocks.getGuideProgress.mockResolvedValue(progress || { steps: {}, workdir: null });
+  }
+
+  function renderLessonRoutes(initialEntries, client) {
+    const queryClient = client || new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <MemoryRouter initialEntries={initialEntries}>
+        <QueryClientProvider client={queryClient}>
+          <Routes>
+            <Route path="/learning/:courseCode/guides/:lessonId/:stepId" element={<GuideLessonPage />} />
+            <Route path="/learning/:courseCode/guides" element={<div>Trang danh sách chặng</div>} />
+            <Route path="/learning/:courseCode" element={<div>Trang môn học</div>} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+  }
+
+  async function openStep1(progress) {
+    mockLessonAPIs(progress);
+    mocks.saveGuideProgress.mockResolvedValue({ stepId: 'buoc-1', done: true, workdir: '' });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1']);
+    const checkbox = await screen.findByRole('checkbox', { name: /tôi đã làm xong chặng này/i });
+    return checkbox;
+  }
+
+  it('ticks done at buoc-1 → saveGuideProgress called with stepId/done and advances to buoc-2', async () => {
+    const checkbox = await openStep1();
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(mocks.saveGuideProgress).toHaveBeenCalledWith(
+      'test-token',
+      'INF1003',
+      'bai-1',
+      expect.objectContaining({ stepId: 'buoc-1', done: true })
+    ));
+    expect(await screen.findByText('Bước 2/7')).toBeInTheDocument();
+  });
+
+  it('does NOT auto-advance when unchecking a done step', async () => {
+    const checkbox = await openStep1({ steps: { 'buoc-1': { done: true, workdir: '' } }, workdir: null });
+    await waitFor(() => expect(checkbox).toBeChecked());
+    mocks.saveGuideProgress.mockResolvedValue({ stepId: 'buoc-1', done: false, workdir: '' });
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(mocks.saveGuideProgress).toHaveBeenCalledWith(
+      'test-token',
+      'INF1003',
+      'bai-1',
+      expect.objectContaining({ stepId: 'buoc-1', done: false })
+    ));
+    expect(await screen.findByText('Bước 1/7')).toBeInTheDocument();
+    expect(screen.queryByText('Bước 2/7')).not.toBeInTheDocument();
+  });
+
+  it('rejects invalid workdir "abc" with an inline error and no API call', async () => {
+    await openStep1();
+    const input = await screen.findByLabelText(/đường dẫn thư mục làm việc/i);
+    fireEvent.change(input, { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: /lưu thư mục/i }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
+  });
+
+  it('persists a valid workdir once via saveGuideProgress', async () => {
+    await openStep1();
+    const input = await screen.findByLabelText(/đường dẫn thư mục làm việc/i);
+    fireEvent.change(input, { target: { value: 'C:\\lab1' } });
+    fireEvent.click(screen.getByRole('button', { name: /lưu thư mục/i }));
+    await waitFor(() => expect(mocks.saveGuideProgress).toHaveBeenCalledWith(
+      'test-token',
+      'INF1003',
+      'bai-1',
+      expect.objectContaining({ stepId: 'buoc-1', workdir: 'C:\\lab1' })
+    ));
+  });
+
+  it('remount keeps the server-checked state', async () => {
+    mockLessonAPIs({ steps: { 'buoc-1': { done: true, workdir: 'C:\\lab1' } }, workdir: 'C:\\lab1' });
+    const first = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { unmount } = renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1'], first);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /tôi đã làm xong/i })).toBeChecked());
+    unmount();
+    const second = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1'], second);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /tôi đã làm xong/i })).toBeChecked());
+    expect(mocks.getGuideProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it('redirects a bad lessonId to the course page with a toast', async () => {
+    mockLessonAPIs();
+    renderLessonRoutes(['/learning/INF1003/guides/bai-khong-co/buoc-1']);
+    expect(await screen.findByText('Trang môn học')).toBeInTheDocument();
+    expect(mocks.notify).toHaveBeenCalledWith('Môn học chưa có hướng dẫn thực hành.', 'warning');
+  });
+
+  it('redirects a bad stepId to the guide index with a toast', async () => {
+    mockLessonAPIs();
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-khong-co']);
+    expect(await screen.findByText('Trang danh sách chặng')).toBeInTheDocument();
+    expect(mocks.notify).toHaveBeenCalledWith('Không tìm thấy chặng hướng dẫn.', 'warning');
+  });
+
+  it('rolls back the optimistic check and toasts when POST fails', async () => {
+    const checkbox = await openStep1();
+    mocks.saveGuideProgress.mockRejectedValueOnce(new Error('Mất kết nối mạng giả lập'));
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    expect(mocks.notify).toHaveBeenCalledWith('Mất kết nối mạng giả lập', 'error');
+  });
+
+  it('ignores progress cached under a previous progressVersion', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['guide-progress', 'INF1003', 'bai-1', '24050001'], {
+      steps: { 'buoc-1': { done: true, workdir: '' } },
+      workdir: null
+    });
+    mockLessonAPIs({ steps: {}, workdir: null });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1'], client);
+    await waitFor(() => expect(mocks.getGuideProgress).toHaveBeenCalled());
+    expect(await screen.findByRole('checkbox', { name: /tôi đã làm xong/i })).not.toBeChecked();
+  });
+});
+
+describe('GuideLessonPage block data contract', () => {
+  it('prepends cd /d with the saved workdir for localDirectory code blocks', () => {
+    renderWithClient(
+      <BlockRenderer
+        block={{ type: 'code', lang: 'cmd', label: 'Máy local', text: 'ssh -i bdu-key-fe.pem ubuntu@1.2.3.4', localDirectory: true }}
+        workdir="C:\lab1"
+      />
+    );
+    expect(screen.getByText(/cd \/d/)).toBeInTheDocument();
+    expect(screen.getByText(/C:\\lab1/)).toBeInTheDocument();
+  });
+
+  it('leaves localDirectory code blocks untouched when no workdir is saved', () => {
+    renderWithClient(
+      <BlockRenderer
+        block={{ type: 'code', lang: 'cmd', label: 'Máy local', text: 'ssh -i bdu-key-fe.pem ubuntu@1.2.3.4', localDirectory: true }}
+        workdir=""
+      />
+    );
+    expect(screen.queryByText(/cd \/d/)).not.toBeInTheDocument();
+  });
+
+  it('renders connection data carried inline in the block', () => {
+    renderWithClient(<BlockRenderer block={{ type: 'connection', feIp: '54.1.2.3' }} workdir="" />);
+    expect(screen.getByText('54.1.2.3')).toBeInTheDocument();
+  });
+
+  it('renders key-download paths carried inline in the block', () => {
+    renderWithClient(
+      <BlockRenderer
+        block={{ type: 'key-downloads', keys: [{ path: '/home/cloudshell/bdu-key-fe.pem', label: 'Key FE' }] }}
+        workdir=""
+      />
+    );
+    expect(screen.getByText('/home/cloudshell/bdu-key-fe.pem')).toBeInTheDocument();
   });
 });

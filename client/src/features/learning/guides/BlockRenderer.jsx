@@ -19,6 +19,12 @@ function Troubleshoot({ block, workdir, vars, connection, keys }) {
   );
 }
 
+// Task-6 contract for `connection` / `key-downloads` blocks: data is read
+// inline from the block (`block.connection`, `block.keys`/`block.items`);
+// the `connection`/`keys` props below are only override slots for a future
+// lab-result parser and default to undefined. bai-1.js ships these blocks bare
+// (`{ type: 'connection' }`), so they render the info hint until inline data
+// or a parser exists — no dead-undefined props are passed by GuideLessonPage.
 export default function BlockRenderer({ block, workdir, vars, connection, keys }) {
   if (!block?.type) return null;
   switch (block.type) {

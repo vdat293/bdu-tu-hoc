@@ -1,10 +1,16 @@
 import CopyButton from './BlockCopy.jsx';
 
-export default function BlockConnection({ connection }) {
+// Task-6 contract: connection data lives inline in the block
+// (`block.connection`, falling back to the block itself so flat payloads like
+// `{ type: 'connection', feIp }` also render). The optional `connection` prop
+// is only an override slot for a future lab-result parser; bai-1.js ships bare
+// `{ type: 'connection' }` blocks, which keep rendering the hint below.
+export default function BlockConnection({ block, connection }) {
+  const source = connection ?? block?.connection ?? block ?? {};
   const rows = [
-    connection?.feIp ? { label: 'Frontend (FE)', value: String(connection.feIp) } : null,
-    connection?.beIp ? { label: 'Backend (BE)', value: String(connection.beIp) } : null,
-    connection?.dbEndpoint ? { label: 'Database (RDS)', value: String(connection.dbEndpoint) } : null
+    source?.feIp ? { label: 'Frontend (FE)', value: String(source.feIp) } : null,
+    source?.beIp ? { label: 'Backend (BE)', value: String(source.beIp) } : null,
+    source?.dbEndpoint ? { label: 'Database (RDS)', value: String(source.dbEndpoint) } : null
   ].filter(Boolean);
   if (!rows.length) {
     return (
