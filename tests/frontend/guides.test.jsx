@@ -829,7 +829,7 @@ describe('GuideLessonPage block data contract', () => {
     renderWithClient(<BlockRenderer block={block} workdir="" lab={null} />);
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép lệnh' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(
-      `mkdir -p "$HOME/lab1" && cd "$HOME/lab1" && curl -fL --retry 3 -o b5.zip '${window.location.origin}/guides/inf1003/b5.zip' && unzip -n b5.zip && open .`
+      `mkdir -p "$HOME/lab1" && cd "$HOME/lab1" && curl -fL --retry 3 -o b5.zip '${window.location.origin}/guides/inf1003/b5.zip' && unzip -n b5.zip && rm b5.zip && open .`
     ));
     expect(screen.queryByText(/{{SITE_ORIGIN}}/)).not.toBeInTheDocument();
     expect(screen.queryByText(/chưa có kết quả tạo hạ tầng/i)).not.toBeInTheDocument();

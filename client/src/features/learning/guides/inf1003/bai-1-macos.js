@@ -42,17 +42,17 @@ const MAC_FOLDER_STEP = {
     },
     {
       type: 'note', id: 'macos-quick-setup', title: 'Tạo nhanh bằng Terminal (tùy chọn)',
-      text: 'Ấn Command + dấu cách, gõ Terminal rồi nhấn Enter để mở Terminal. Copy lệnh bên dưới, dán vào Terminal bằng Command + V rồi nhấn Enter để thực hiện nhanh chóng.'
+      text: 'Ấn Command + dấu cách, gõ Terminal rồi nhấn Enter để mở Terminal. Copy lệnh bên dưới, dán vào Terminal bằng Command + V rồi nhấn Enter để thực hiện nhanh chóng. Giải nén thành công, lệnh sẽ tự xóa b5.zip rồi mở thư mục trong Finder.'
     },
     {
       type: 'code', lang: 'zsh', label: 'Máy local · Terminal · Tạo thư mục, tải b5, giải nén và mở Finder',
-      text: 'mkdir -p "$HOME/lab1" && cd "$HOME/lab1" && curl -fL --retry 3 -o b5.zip \'{{SITE_ORIGIN}}/guides/inf1003/b5.zip\' && unzip -n b5.zip && open .'
+      text: 'mkdir -p "$HOME/lab1" && cd "$HOME/lab1" && curl -fL --retry 3 -o b5.zip \'{{SITE_ORIGIN}}/guides/inf1003/b5.zip\' && unzip -n b5.zip && rm b5.zip && open .'
     },
     {
       type: 'image', title: 'Kết quả giải nén trên macOS',
       src: '/guides/inf1003/macos/hinh-thu-muc-b5.jpg',
       alt: 'Finder trên macOS mở thư mục bai1, bên trong có thư mục mã nguồn b5.',
-      caption: 'Thư mục làm việc chứa thư mục mã nguồn b5. Ảnh dùng tên bai1; thư mục của bạn có thể tên lab1 hoặc tên khác. File b5.zip có thể vẫn còn bên cạnh b5.',
+      caption: 'Thư mục làm việc chứa thư mục mã nguồn b5. Ảnh dùng tên bai1; thư mục của bạn có thể tên lab1 hoặc tên khác. Lệnh tạo nhanh tự xóa b5.zip sau khi giải nén; nếu làm thủ công, file zip có thể vẫn còn bên cạnh b5.',
       fullSizeLink: true
     },
     {
