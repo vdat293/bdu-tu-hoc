@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import CloudShellHelpDialog from './CloudShellHelpDialog.jsx';
+import { adaptLesson, labKeySource } from './inf1003/local-setup.js';
 import { getCourseGuide, getGuideProgress, getLabResult, saveGuideProgress, saveLabResult } from '../../../api/guides.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
 import BlockImage from './BlockImage.jsx';
@@ -28,6 +30,29 @@ const LAB_RESULT_GUIDE_STEPS = [
   'Nhấn chuột trái vào ô bên dưới, nhấn Ctrl+V để dán rồi bấm Phân tích & sang bước 3.'
 ];
 
+const LOCAL_LAB_RESULT_IMAGES = {
+  macos: {
+    type: 'image',
+    src: '/guides/inf1003/hinh-copy-ket-qua-local-annotated.png',
+    alt: 'Terminal macOS sau khi tạo hạ tầng: khung đỏ bao trọn chuỗi BDU-LAB-V1: tự xuống nhiều dòng, mũi tên và ghi chú Copy dòng này chỉ phần cần copy.',
+    caption: 'Trong Terminal trên macOS, copy toàn bộ chuỗi trong khung đỏ, bắt đầu từ BDU-LAB-V1: đến ký tự cuối cùng. Hãy dùng kết quả từ cửa sổ lệnh của chính bạn.',
+    fullSizeLink: true
+  },
+  windows: {
+    type: 'image',
+    src: '/guides/inf1003/hinh-copy-ket-qua-windows-annotated.png',
+    alt: 'PowerShell Windows sau khi tạo hạ tầng: khung đỏ bao trọn chuỗi BDU-LAB-V1: tự xuống nhiều dòng, mũi tên và ghi chú Copy dòng này chỉ phần cần copy.',
+    caption: 'Trong PowerShell trên Windows, copy toàn bộ chuỗi trong khung đỏ, bắt đầu từ BDU-LAB-V1: đến ký tự cuối cùng. Hãy dùng kết quả từ cửa sổ lệnh của chính bạn.',
+    fullSizeLink: true
+  }
+};
+
+const LOCAL_LAB_RESULT_GUIDE_STEPS = [
+  'Bôi đen và copy toàn bộ chuỗi trong khung đỏ: bắt đầu bằng BDU-LAB-V1: đến ký tự cuối cùng. Nếu chuỗi tự xuống dòng như ảnh, chọn cả các dòng tiếp theo.',
+  'Chỉ copy chuỗi kết quả; bỏ qua câu Đã hoàn tất, hai dòng dấu = và dấu nhắc lệnh ở cuối.',
+  'Nhấn vào ô bên dưới, nhấn Ctrl+V để dán rồi bấm Phân tích & sang bước 3.'
+];
+
 // A step is "clean" when every input it declares is satisfied: folderInput and
 // requiresDirectory need the saved workdir, resultInput and requiresResult need
 // the saved lab result (same progress_version, enforced by the lab query key).
@@ -53,9 +78,13 @@ export default function GuideLessonPage() {
   const client = useQueryClient();
   const [searchParams] = useSearchParams();
   const platform = searchParams.get('os') === 'macos' ? 'macos' : 'windows';
-  const platformSearch = searchParams.has('os') ? `?os=${platform}` : '';
-
-  const lesson = getLocalGuides(courseCode, platform).find((item) => item.id === lessonId) || null;
+  const originalLesson = getLocalGuides(courseCode, platform).find((item) => item.id === lessonId) || null;
+  const setupKey = `bdu:guide-setup:${user?.mssv ?? ''}:${courseCode}:${lessonId}:${originalLesson?.progressVersion ?? ''}`;
+  let savedSetup = 'cloudshell';
+  try { savedSetup = window.localStorage.getItem(setupKey) || 'cloudshell'; } catch { /* URL keeps the choice when storage is blocked. */ }
+  const setupMode = (searchParams.get('setup') ?? savedSetup) === 'local' ? 'local' : 'cloudshell';
+  const platformSearch = setupMode === 'local' ? `?os=${platform}&setup=local` : searchParams.has('os') ? `?os=${platform}&setup=cloudshell` : '';
+  const lesson = useMemo(() => originalLesson ? adaptLesson(originalLesson, setupMode, platform) : null, [originalLesson, setupMode, platform]);
   const steps = lesson?.steps || [];
   const stepIndex = steps.findIndex((step) => step.id === stepId);
   const step = stepIndex >= 0 ? steps[stepIndex] : null;
@@ -111,7 +140,8 @@ export default function GuideLessonPage() {
 
   // The lab result shares the progressVersion in its key so a content update
   // never unlocks steps with a result saved under a previous version.
-  const lab = labQuery.data || null;
+  const storedLab = labQuery.data || null;
+  const lab = storedLab && (storedLab.KEY_SOURCE === 'LOCAL') === (setupMode === 'local') ? storedLab : null;
 
   const [tokenDraft, setTokenDraft] = useState('');
   const [labError, setLabError] = useState('');
@@ -209,7 +239,9 @@ export default function GuideLessonPage() {
 
   return (
     <GuideLessonPageBody
-      key={`${courseCode}/${lessonId}/${stepId}/${platform}`}
+      key={`${courseCode}/${lessonId}/${stepId}/${platform}/${setupMode}`}
+      setupMode={setupMode}
+      setupKey={setupKey}
       platform={platform}
       platformSearch={platformSearch}
       courseCode={courseCode}
@@ -254,7 +286,7 @@ export default function GuideLessonPage() {
 }
 
 function GuideLessonPageBody({
-  platform, platformSearch,
+  platform, platformSearch, setupMode, setupKey,
   courseCode, lesson, steps, step, stepId, stepIndex, isLast, prevStep, nextStep,
   doneMap, isDone, workdir, serverWorkdir, lab, labKey, progressKey,
   resultStep, folderStep, resultStepUrl, folderStepUrl, goToStep,
@@ -263,6 +295,8 @@ function GuideLessonPageBody({
   tokenDraft, setTokenDraft, labError, setLabError, labInputRef,
   client, navigate
 }) {
+  const [showCloudShellHelp, setShowCloudShellHelp] = useState(false);
+  const localSetup = setupMode === 'local';
   const labVars = {
     WORKDIR: workdir,
     FE_IP: lab?.FE_IP,
@@ -292,6 +326,23 @@ function GuideLessonPageBody({
     client.invalidateQueries({ queryKey: ['course-guide', courseCode] });
     client.invalidateQueries({ queryKey: ['guide-progress', courseCode, lesson.id] });
   };
+
+  const setupMutation = useMutation({
+    mutationFn: async ({ mode }) => {
+      for (const item of steps) {
+        if (!item.folderInput) await saveGuideProgress(token, courseCode, lesson.id, { stepId: item.id, done: false });
+      }
+      return { mode };
+    },
+    onSuccess: ({ mode }) => {
+      try { window.localStorage.setItem(setupKey, mode); } catch { /* The URL retains the selected mode. */ }
+      updateProgressCache((base) => ({ ...base, steps: Object.fromEntries(Object.entries(base.steps || {}).map(([id, entry]) => [id, id === folderStep?.id ? entry : { ...entry, done: false }])) }));
+      refreshProgress();
+      setShowCloudShellHelp(false);
+      navigate(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(resultStep?.id || 'buoc-2')}?os=${platform}&setup=${mode}`);
+    },
+    onError: (error) => notify(error?.message || 'Không thể chuyển cách tạo hạ tầng. Hãy thử lại.', 'error')
+  });
 
   // Normal steps: one primary button like the original markButton. Content is
   // only shown when every requirement is met, so the server clean-check is a
@@ -383,6 +434,9 @@ function GuideLessonPageBody({
   // original kept buoc-1 on reset). The current step is always marked done.
   const labMutation = useMutation({
     mutationFn: async (cleanToken) => {
+      if ((labKeySource(cleanToken) === 'LOCAL') !== localSetup) {
+        throw new Error(localSetup ? 'Hãy dùng kết quả do AWS CLI trên máy tạo ra.' : 'Đây là kết quả từ máy cá nhân. Hãy chuyển sang AWS CLI hoặc nhập kết quả CloudShell.');
+      }
       const data = await saveLabResult(token, courseCode, lesson.id, { token: cleanToken });
       const tokenChanged = !lab || lab.token !== data?.token;
       if (tokenChanged) {
@@ -450,6 +504,8 @@ function GuideLessonPageBody({
         <BlockRenderer
           key={[block?.type, block?.text, block?.title, block?.label, block?.src, index].filter((part) => part !== undefined && part !== null && part !== '').join('|') || String(index)}
           block={block}
+          platform={platform}
+          onCloudShellHelp={() => setShowCloudShellHelp(true)}
           workdir={workdir}
           vars={labVars}
           connection={labConnection}
@@ -500,10 +556,12 @@ function GuideLessonPageBody({
   const cardHead = (
     <>
       <p className="guide-step-stage">CHẶNG {stepIndex + 1}/{steps.length}</p>
-      <p className="guide-platform-label">{platform === 'macos' ? 'macOS · Terminal' : 'Windows · CMD'}</p>
+      <p className="guide-platform-label">{platform === 'macos' ? 'macOS · Terminal' : localSetup && ['buoc-2', 'buoc-7'].includes(stepId) ? 'Windows · PowerShell' : 'Windows · CMD'}</p>
+      {showCloudShellHelp && <CloudShellHelpDialog pending={setupMutation.isPending} onClose={() => { if (!setupMutation.isPending) setShowCloudShellHelp(false); }} onConfirm={() => setupMutation.mutate({ mode: 'local' })} />}
       <h1 className="guide-step-title">{step.title}</h1>
       {step.goal && <p className="guide-step-goal">{step.goal}</p>}
       <p><span className="guide-where-badge">{whereLabel(step)}</span></p>
+      {localSetup && <button type="button" className="guide-cloudshell-help" disabled={setupMutation.isPending} onClick={() => setupMutation.mutate({ mode: 'cloudshell' })}>Quay lại cách dùng CloudShell</button>}
     </>
   );
 
@@ -615,17 +673,17 @@ function GuideLessonPageBody({
             {expectNode}
             {errorsNode}
             <form className="guide-lab-form" onSubmit={handleLabSubmit}>
-              <h3 className="guide-lab-title">Kết quả CloudShell</h3>
-              <BlockImage block={LAB_RESULT_IMAGE} />
+              <h3 className="guide-lab-title">{localSetup ? 'Kết quả AWS CLI trên máy' : 'Kết quả CloudShell'}</h3>
+              <BlockImage block={localSetup ? LOCAL_LAB_RESULT_IMAGES[platform] : LAB_RESULT_IMAGE} />
               <ol className="guide-lab-steps">
-                {LAB_RESULT_GUIDE_STEPS.map((item, index) => (
+                {(localSetup ? LOCAL_LAB_RESULT_GUIDE_STEPS : LAB_RESULT_GUIDE_STEPS).map((item, index) => (
                   <li key={index}>{platform === 'macos' ? item.replace('Ctrl+V', 'Cmd+V') : item}</li>
                 ))}
               </ol>
               <label className="guide-lab-label" htmlFor={`guide-lab-token-${stepId}`}>
                 Dán toàn bộ chuỗi bắt đầu bằng BDU-LAB-V1: vào đây
               </label>
-              <p className="guide-lab-hint">Bạn chỉ cần copy và dán. Website sẽ đọc kết quả và tự điền đường dẫn key, IP và địa chỉ database cho các bước sau. Dữ liệu được xử lý và lưu trên trình duyệt này.</p>
+              <p className="guide-lab-hint">Website đọc kết quả và tự điền đường dẫn key, IP và địa chỉ database cho các bước sau. Kết quả được lưu vào tài khoản của bạn; không tải lên nội dung hai file PEM.</p>
               <textarea
                 id={`guide-lab-token-${stepId}`}
                 ref={labInputRef}

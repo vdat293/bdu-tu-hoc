@@ -8,6 +8,9 @@ npm-debug.log
 .env.*
 !.env.example
 .acc
+.vps
+.vps.*
+.tmp_*
 dist
 # Dữ liệu runtime chỉ được mount vào container, không đưa vào image.
 # fb-profile do container tạo với quyền root nên còn làm hỏng bước build context.

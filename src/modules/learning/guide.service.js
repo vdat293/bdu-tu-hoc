@@ -260,6 +260,7 @@ export const GuideService = {
       DB_ENDPOINT: row.db_endpoint,
       FE_KEY_PATH: row.fe_key_path,
       BE_KEY_PATH: row.be_key_path,
+      ...(parseLabResult(row.token).KEY_SOURCE === 'LOCAL' ? { KEY_SOURCE: 'LOCAL' } : {}),
       token: row.token
     };
   },

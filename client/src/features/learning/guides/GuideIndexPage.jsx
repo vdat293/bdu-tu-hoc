@@ -40,11 +40,20 @@ export default function GuideIndexPage() {
   const reset = useMutation({
     mutationFn: ({ lessonId }) => resetGuideProgress(token, courseCode, lessonId),
     onSuccess: (_data, { lessonId, firstStep }) => {
+      try {
+        const storage = window.localStorage;
+        const prefix = `bdu:guide-setup:${user?.mssv ?? ''}:${courseCode}:${lessonId}:`;
+        for (let index = storage.length - 1; index >= 0; index--) {
+          const key = storage.key(index);
+          if (key?.startsWith(prefix)) storage.removeItem(key);
+        }
+      } catch { /* The reset URL explicitly selects CloudShell if storage is blocked. */ }
       client.invalidateQueries({ queryKey: ['course-guide', courseCode] });
       client.invalidateQueries({ queryKey: ['guide-progress', courseCode, lessonId] });
-      notify('Đã xóa tiến độ, bắt đầu lại từ đầu.', 'success');
+      client.removeQueries({ queryKey: ['guide-lab-result', courseCode, lessonId] });
+      notify('Đã xóa tiến độ, bắt đầu lại từ đầu với CloudShell.', 'success');
       if (firstStep) {
-        setPlatformTarget(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(firstStep)}`);
+        setPlatformTarget({ path: `/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(firstStep)}`, setup: 'cloudshell' });
       }
     },
     onError: (error) => {
@@ -55,7 +64,7 @@ export default function GuideIndexPage() {
   const handleReset = async (lesson) => {
     const ok = await askConfirm({
       title: 'Làm lại từ đầu?',
-      message: 'Các chặng đã hoàn thành, thư mục đã lưu và kết quả lab đã lưu của bài này sẽ bị xóa và không thể khôi phục.',
+      message: 'Các chặng đã hoàn thành, thư mục đã lưu và kết quả lab đã lưu của bài này sẽ bị xóa và không thể khôi phục. Bài học sẽ trở về hướng dẫn dùng CloudShell.',
       confirmText: 'Làm lại từ đầu',
       danger: true
     });
@@ -117,7 +126,7 @@ export default function GuideIndexPage() {
                       onClick={(event) => {
                         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                         event.preventDefault();
-                        setPlatformTarget(event.currentTarget.getAttribute('href'));
+                        setPlatformTarget({ path: event.currentTarget.getAttribute('href') });
                       }}
                     >
                       {done > 0 ? 'Học tiếp' : 'Bắt đầu'}
@@ -143,7 +152,11 @@ export default function GuideIndexPage() {
       {platformTarget && (
         <GuidePlatformDialog
           onClose={() => setPlatformTarget(null)}
-          onSelect={(platform) => navigate(`${platformTarget}?os=${platform}`)}
+          onSelect={(platform) => {
+            const params = new URLSearchParams({ os: platform });
+            if (platformTarget.setup) params.set('setup', platformTarget.setup);
+            navigate(`${platformTarget.path}?${params}`);
+          }}
         />
       )}
     </GuideLayout>

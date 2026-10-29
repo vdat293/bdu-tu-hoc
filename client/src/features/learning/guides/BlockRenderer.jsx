@@ -6,6 +6,7 @@ import BlockImage from './BlockImage.jsx';
 import BlockKeyDownloads from './BlockKeyDownloads.jsx';
 import BlockNote from './BlockNote.jsx';
 import BlockScript from './BlockScript.jsx';
+import BlockLocalBootstrap from './BlockLocalBootstrap.jsx';
 
 // Original gate copy (assets/app.js missingLabResult / missingWorkingDirectory).
 export const MISSING_LAB_TEXT = 'Chưa có kết quả tạo hạ tầng. Quay lại cuối bước 2, dán dòng BDU-LAB-V1: để website điền đúng thông tin cho bạn.';
@@ -58,11 +59,17 @@ function needsLabResult(block) {
 // Per-block gate mirroring renderBlock (assets/app.js): personalized blocks
 // need the saved lab result (and the workdir for localDirectory ones);
 // key-downloads/connection always need it.
-export default function BlockRenderer({ block, workdir, vars, connection, keys, lab, labHref, workdirHref }) {
+export default function BlockRenderer({ block, workdir, vars, connection, keys, lab, labHref, workdirHref, platform, onCloudShellHelp }) {
   if (!block?.type) return null;
   switch (block.type) {
     case 'note':
-      return <BlockNote block={block} feIp={lab?.FE_IP ?? vars?.FE_IP} />;
+      return <>
+        <BlockNote block={block} feIp={lab?.FE_IP ?? vars?.FE_IP} />
+        {block.cloudshellFallback && onCloudShellHelp && <button type="button" className="guide-cloudshell-help" onClick={onCloudShellHelp}>Bạn không mở được CloudShell?</button>}
+      </>;
+    case 'local-bootstrap':
+      if (!workdir) return <GuideGateWarn text={MISSING_WORKDIR_TEXT} href={workdirHref} action="Lưu đường dẫn ở bước 1" />;
+      return <BlockLocalBootstrap block={block} workdir={workdir} platform={platform} />;
     case 'code': {
       if (needsLabResult(block) && !lab) {
         return <GuideGateWarn text={MISSING_LAB_TEXT} href={labHref} action="→ Dán kết quả ở bước 2" />;

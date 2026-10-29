@@ -240,7 +240,7 @@ export function createApp() {
     redirect: false,
     setHeaders(res, filePath) {
       const ext = path.extname(filePath).toLowerCase();
-      if (ext === '.html' || ext === '.js' || ext === '.css') {
+      if (ext === '.html' || ext === '.js' || ext === '.css' || ext === '.sh' || ext === '.ps1') {
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       } else {
         res.setHeader('Cache-Control', 'public, max-age=3600');

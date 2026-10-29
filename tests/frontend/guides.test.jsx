@@ -409,6 +409,70 @@ describe('GuideLessonPage original-flow wiring', () => {
     await screen.findByText(/CHẶNG \d\/7/);
   }
 
+  it.each(['windows', 'macos'])('switches %s from the CloudShell help dialog, keeps the folder and remembers the selection', async (platform) => {
+    const directory = platform === 'macos' ? '/Users/ban/lab1' : 'C:\\lab1';
+    mockLessonAPIs({ steps: { 'buoc-1': { done: true } }, workdir: directory });
+    renderLessonRoutes([`/learning/INF1003/guides/bai-1/buoc-2?os=${platform}`]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Bạn không mở được CloudShell?' }));
+    expect(screen.getByRole('dialog', { name: 'Bạn không mở được CloudShell?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy bỏ' }));
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Bạn không mở được CloudShell?' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+    expect(await screen.findByText('Kết quả AWS CLI trên máy')).toBeInTheDocument();
+    expect(screen.queryByText('Đang dùng AWS CLI trên máy của bạn')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Hệ điều hành' })).not.toBeInTheDocument();
+    expect(screen.getByText(directory)).toBeInTheDocument();
+    expect(screen.getByText(platform === 'macos' ? 'Máy local · Terminal macOS' : 'Máy local · Windows PowerShell')).toBeInTheDocument();
+    expect(mocks.saveGuideProgress).toHaveBeenCalledTimes(6);
+    expect(mocks.saveGuideProgress.mock.calls.some(call => call[3].stepId === 'buoc-1')).toBe(false);
+    expect(screen.queryByText('Kết quả CloudShell')).not.toBeInTheDocument();
+    cleanup();
+    renderLessonRoutes([`/learning/INF1003/guides/bai-1/buoc-7?os=${platform}`]);
+    expect(await screen.findByRole('button', { name: 'Quay lại cách dùng CloudShell' })).toBeInTheDocument();
+    expect(screen.getByText('Thư mục lưu hai key:', { exact: false })).toHaveTextContent(directory);
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại cách dùng CloudShell' }));
+    expect(await screen.findByRole('button', { name: 'Bạn không mở được CloudShell?' })).toBeInTheDocument();
+  });
+
+  it.each(['windows', 'macos'])('shows the annotated result and accepts pasted local output on %s', async (platform) => {
+    mockLessonAPIs({ steps: {}, workdir: platform === 'macos' ? '/Users/ban/lab1' : 'C:\\lab1' });
+    renderLessonRoutes([`/learning/INF1003/guides/bai-1/buoc-2?os=${platform}&setup=local`]);
+    const image = await screen.findByRole('img', { name: platform === 'macos' ? /Terminal macOS sau khi tạo hạ tầng/ : /PowerShell Windows sau khi tạo hạ tầng/ });
+    expect(image).toHaveAttribute('src', platform === 'macos'
+      ? '/guides/inf1003/hinh-copy-ket-qua-local-annotated.png'
+      : '/guides/inf1003/hinh-copy-ket-qua-windows-annotated.png');
+    const passwordImage = screen.queryByRole('img', { name: /Biểu tượng chìa khóa cạnh Password:/ });
+    if (platform === 'macos') {
+      expect(passwordImage).toHaveAttribute('src', '/guides/inf1003/macos/hinh-nhap-mat-khau-cai-aws-cli-annotated.png');
+      expect(screen.getByText('Nhập mật khẩu mở máy của bạn', { exact: true })).toBeInTheDocument();
+    } else {
+      expect(passwordImage).not.toBeInTheDocument();
+      expect(screen.queryByText('Nhập mật khẩu mở máy của bạn', { exact: true })).not.toBeInTheDocument();
+    }
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByText(/lab-result\.json/)).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(platform === 'macos' ? 'nhấn Cmd\\+V để dán' : 'nhấn Ctrl\\+V để dán'))).toBeInTheDocument();
+    const textarea = screen.getByRole('textbox', { name: /Dán toàn bộ chuỗi/ });
+    fireEvent.change(textarea, { target: { value: LAB_FIELDS.token } });
+    fireEvent.click(screen.getByRole('button', { name: 'Phân tích & sang bước 3' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hãy dùng kết quả do AWS CLI trên máy tạo ra.');
+    expect(mocks.saveLabResult).not.toHaveBeenCalled();
+    const localToken = 'BDU-LAB-V1:' + btoa('STATUS=READY\nKEY_SOURCE=LOCAL\n');
+    fireEvent.change(textarea, { target: { value: localToken } });
+    mocks.saveLabResult.mockResolvedValue({ ...LAB_FIELDS, KEY_SOURCE: 'LOCAL', token: localToken });
+    fireEvent.click(screen.getByRole('button', { name: 'Phân tích & sang bước 3' }));
+    await waitFor(() => expect(mocks.saveLabResult).toHaveBeenCalledWith('test-token', 'INF1003', 'bai-1', { token: localToken }));
+  });
+
+  it('hides an existing CloudShell result when viewing local instructions', async () => {
+    mockLessonAPIs({ steps: {}, workdir: 'C:\\lab1' }, LAB_FIELDS);
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-3?os=windows&setup=local']);
+    expect(await screen.findByText(/Chưa có kết quả tạo hạ tầng/)).toBeInTheDocument();
+    expect(screen.queryByText('Key đã có sẵn trên máy')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Dán kết quả ở bước 2/ })).toHaveAttribute('href', expect.stringContaining('setup=local'));
+  });
+
   it('has no kicker header: card starts straight at CHẶNG', async () => {
     await openStep('buoc-5', { steps: {}, workdir: 'C:\\lab1' }, LAB_FIELDS);
     expect(await screen.findByText('CHẶNG 5/7')).toBeInTheDocument();
@@ -1025,6 +1089,7 @@ describe('GuideIndexPage resume', () => {
 });
 
 describe('GuideIndexPage reset', () => {
+  const setupKey = `bdu:guide-setup:24050001:INF1003:bai-1:${BAI_1_MACOS_LESSON.progressVersion}`;
   function mockIndexGuide(doneCount) {
     mocks.getCourseGuide.mockResolvedValue({
       enabled: true,
@@ -1061,6 +1126,7 @@ describe('GuideIndexPage reset', () => {
   }
 
   it('hủy xác nhận → không gọi API', async () => {
+    window.localStorage.setItem(setupKey, 'local');
     mockIndexGuide(2);
     const ask = vi.fn().mockResolvedValue(false);
     confirmMocks.impl = ask;
@@ -1068,15 +1134,24 @@ describe('GuideIndexPage reset', () => {
     fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
     expect(mocks.resetGuideProgress).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(setupKey)).toBe('local');
     expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
   });
 
-  it('xác nhận → DELETE đúng URL, invalidate và về bước đầu', async () => {
+  it.each(['windows', 'macos'])('xác nhận → DELETE đúng URL, xóa lựa chọn AWS CLI và về CloudShell trên %s', async (platform) => {
+    window.localStorage.setItem(setupKey, 'local');
+    const oldSetupKey = 'bdu:guide-setup:24050001:INF1003:bai-1:previous-version';
+    const otherUserKey = 'bdu:guide-setup:another-student:INF1003:bai-1:previous-version';
+    window.localStorage.setItem(oldSetupKey, 'local');
+    window.localStorage.setItem(otherUserKey, 'local');
     mockIndexGuide(2);
     const ask = vi.fn().mockResolvedValue(true);
     confirmMocks.impl = ask;
     mocks.resetGuideProgress.mockResolvedValue({ reset: true, deletedSteps: 2, deletedResult: 1 });
-    const invalidateSpy = renderIndexRoutes();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const labKey = ['guide-lab-result', 'INF1003', 'bai-1', BAI_1_MACOS_LESSON.progressVersion, '24050001'];
+    client.setQueryData(labKey, { KEY_SOURCE: 'LOCAL', token: 'old-result' });
+    const invalidateSpy = renderIndexRoutes(client);
     fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
     await waitFor(() => expect(mocks.resetGuideProgress).toHaveBeenCalledTimes(1));
     expect(mocks.resetGuideProgress).toHaveBeenCalledWith('test-token', 'INF1003', 'bai-1');
@@ -1088,12 +1163,17 @@ describe('GuideIndexPage reset', () => {
       invalidateSpy.mock.calls.some((call) => JSON.stringify(call[0]?.queryKey?.slice(0, 3)) === JSON.stringify(['guide-progress', 'INF1003', 'bai-1']))
     ).toBe(true);
     expect(await screen.findByRole('dialog', { name: /hệ điều hành nào/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'macOS · Terminal' }));
-    expect(await screen.findByText('Chặng bai-1/buoc-1?os=macos')).toBeInTheDocument();
+    expect(window.localStorage.getItem(setupKey)).toBeNull();
+    expect(window.localStorage.getItem(oldSetupKey)).toBeNull();
+    expect(window.localStorage.getItem(otherUserKey)).toBe('local');
+    expect(client.getQueryData(labKey)).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: platform === 'macos' ? 'macOS · Terminal' : 'Windows · CMD' }));
+    expect(await screen.findByText(`Chặng bai-1/buoc-1?os=${platform}&setup=cloudshell`)).toBeInTheDocument();
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringMatching(/bắt đầu lại|đã xóa/i), 'success');
   });
 
   it('lỗi → toast message server, ở yên trang danh sách', async () => {
+    window.localStorage.setItem(setupKey, 'local');
     mockIndexGuide(2);
     confirmMocks.impl = vi.fn().mockResolvedValue(true);
     const serverMessage = 'Không có quyền truy cập môn học.';
@@ -1101,6 +1181,7 @@ describe('GuideIndexPage reset', () => {
     renderIndexRoutes();
     fireEvent.click(await screen.findByRole('button', { name: /làm lại từ đầu/i }));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(serverMessage, 'error'));
+    expect(window.localStorage.getItem(setupKey)).toBe('local');
     expect(screen.getByRole('link', { name: /học tiếp/i })).toBeInTheDocument();
   });
 

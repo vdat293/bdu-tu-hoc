@@ -46,7 +46,7 @@ export default function KillerSudokuPage() {
 
   const handleOpenNewTab = () => {
     if (auth.token) {
-      try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch {}
+      try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch { /* Browser privacy settings may block cookies. */ }
     }
     window.open('/killer-sudoku/index.html', '_blank', 'noopener,noreferrer');
   };
@@ -69,7 +69,7 @@ export default function KillerSudokuPage() {
   }
 
   if (auth.token) {
-    try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch {}
+    try { document.cookie = `bdu_token=${encodeURIComponent(auth.token)}; path=/killer-sudoku; SameSite=Lax`; } catch { /* Browser privacy settings may block cookies. */ }
   }
   const iframeSrc = '/killer-sudoku/index.html?v=2.5.0';
 

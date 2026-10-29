@@ -12,6 +12,7 @@
 
 const LAB_TOKEN_PATTERN = /(?:^|\s)BDU-LAB-V1:([A-Za-z0-9+/]+={0,2})(?=\s|$)/g;
 const LAB_FIELD_NAMES = ['STATUS', 'REGION', 'FE_IP', 'BE_IP', 'DB_ENDPOINT', 'FE_KEY_PATH', 'BE_KEY_PATH'];
+const OPTIONAL_FIELD_NAMES = ['KEY_SOURCE'];
 const MAX_TEXT_LENGTH = 100000;
 const MAX_TOKEN_LENGTH = 8192;
 
@@ -59,13 +60,16 @@ export function parseLabResult(text) {
   decoded.trimEnd().split('\n').forEach((line) => {
     const at = line.indexOf('=');
     const key = line.slice(0, at);
-    if (at < 1 || LAB_FIELD_NAMES.indexOf(key) === -1 || Object.prototype.hasOwnProperty.call(fields, key)) {
+    if (at < 1 || ![...LAB_FIELD_NAMES, ...OPTIONAL_FIELD_NAMES].includes(key) || Object.prototype.hasOwnProperty.call(fields, key)) {
       fail('Khối kết quả có trường lạ hoặc trùng lặp. Hãy dùng kết quả từ script mới của bài học.');
     }
     fields[key] = line.slice(at + 1);
   });
   if (LAB_FIELD_NAMES.some((key) => !fields[key]) || fields.STATUS !== 'READY') {
     fail('Kết quả chưa đủ thông tin hoặc hạ tầng chưa tạo xong. Chờ script báo hoàn tất rồi copy lại.');
+  }
+  if (fields.KEY_SOURCE !== undefined && fields.KEY_SOURCE !== 'LOCAL') {
+    fail('Nguồn key không hợp lệ. Hãy dùng kết quả từ script mới của bài học.');
   }
   if (
     !/^[a-z]{2}(?:-[a-z]+)+-\d$/.test(fields.REGION) ||
@@ -79,7 +83,7 @@ export function parseLabResult(text) {
     const path = fields[`${host}_KEY_PATH`];
     if (
       path.length > 512 ||
-      !/^\/[a-zA-Z0-9_./ -]+$/.test(path) ||
+      !(fields.KEY_SOURCE === 'LOCAL' ? /^\/[\p{L}\p{M}\p{N}_./ ()'@+-]+$/u : /^\/[a-zA-Z0-9_./ -]+$/).test(path) ||
       path.split('/').some((part) => part === '..' || part === '.') ||
       !path.endsWith(`/bdu-key-${host.toLowerCase()}.pem`)
     ) {

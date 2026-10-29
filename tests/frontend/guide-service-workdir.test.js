@@ -39,3 +39,21 @@ describe('guide workdir storage', () => {
     }
   );
 });
+
+describe('local guide result storage', () => {
+  const values = { STATUS: 'READY', REGION: 'ap-southeast-1', FE_IP: '203.0.113.10', BE_IP: '10.0.2.5', DB_ENDPOINT: 'bdu-db.example.ap-southeast-1.rds.amazonaws.com', FE_KEY_PATH: "/c/Năm 3/O'Brien/lab1/bdu-key-fe.pem", BE_KEY_PATH: "/c/Năm 3/O'Brien/lab1/bdu-key-be.pem", KEY_SOURCE: 'LOCAL' };
+  const token = 'BDU-LAB-V1:' + Buffer.from(Object.entries(values).map(([key, value]) => `${key}=${value}\n`).join('')).toString('base64');
+
+  it('stores local Unicode paths and source metadata inside the existing result token', async () => {
+    const saved = await GuideService.saveLabResult('student', 'INF1003', 'bai-1', { token });
+    expect(saved).toEqual({ ...values, token });
+    const parameters = db.query.mock.calls[1][1];
+    expect(parameters).toContain(values.FE_KEY_PATH);
+    expect(parameters).toContain(token);
+  });
+
+  it('restores the local key source after loading a saved result', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ status: values.STATUS, region: values.REGION, fe_ip: values.FE_IP, be_ip: values.BE_IP, db_endpoint: values.DB_ENDPOINT, fe_key_path: values.FE_KEY_PATH, be_key_path: values.BE_KEY_PATH, token }] });
+    expect(await GuideService.getLabResult('student', 'INF1003', 'bai-1')).toEqual({ ...values, token });
+  });
+});

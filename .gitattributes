@@ -1,1 +1,2 @@
 *.sql text eol=lf
+public/guides/inf1003/scripts/* text eol=lf

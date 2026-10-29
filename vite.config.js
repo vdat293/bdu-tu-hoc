@@ -59,6 +59,7 @@ export default defineConfig(({ command }) => ({
       '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/media': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/assets': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/guides': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/css': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/games': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/admin-tool': { target: 'http://127.0.0.1:3000', changeOrigin: false },

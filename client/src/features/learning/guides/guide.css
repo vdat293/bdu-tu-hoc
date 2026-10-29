@@ -39,6 +39,44 @@
   flex: 1 1 160px;
 }
 
+.guide-cloudshell-help {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, #6366f1);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.modal-dialog.guide-cloudshell-dialog {
+  width: min(900px, calc(100vw - 32px));
+  max-width: 900px;
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  padding: clamp(18px, 4vw, 28px);
+  background: var(--bg-app, #fff);
+  color: var(--text-main, #202537);
+}
+
+.guide-cloudshell-dialog img {
+  display: block;
+  width: 100%;
+  height: min(40dvh, 360px);
+  object-fit: cover;
+  object-position: bottom;
+  border-radius: 10px;
+}
+
+.guide-cloudshell-error-caption {
+  color: var(--text-muted, #6e6260);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
 .guide-breadcrumb {
   display: flex;
   align-items: center;

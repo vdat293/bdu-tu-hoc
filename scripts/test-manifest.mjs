@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 export const SAFE_NODE_TESTS = [
+  'guide-local-bootstrap.test.mjs',
   'test-environment.test.mjs',
   'test-load-env-isolation.test.mjs',
   'test-runner-command.test.mjs',
@@ -116,6 +117,7 @@ export const QUARANTINED_TESTS = new Map([
   ['test-clan-feed-and-documents.js', 'Ghi/xóa clan, post, document DB; chỉ chạy trên disposable test DB.'],
   ['test-achievement-integration.js', 'Ghi/xóa achievement definition/unlock DB; chỉ chạy trên disposable test DB.'],
   ['test-learning-interactions.js', 'Ghi/xóa course, post, comment DB; chỉ chạy trên disposable test DB.'],
+  ['test-course-guides.js', 'Ghi/xóa cấu hình, tiến độ và kết quả hướng dẫn DB; chỉ chạy trên disposable test DB.'],
   ['test-learning-quiz-sets.js', 'Ghi/xóa course, quiz set, progress DB; chỉ chạy trên disposable test DB.'],
   ['test-clan-polls.js', 'Ghi/xóa clan poll/student DB; chỉ chạy trên disposable test DB.'],
   ['test-student-clan.js', 'Ghi/xóa clan/student DB; chỉ chạy trên disposable test DB.'],

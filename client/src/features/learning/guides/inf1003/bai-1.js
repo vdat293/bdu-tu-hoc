@@ -88,6 +88,7 @@ export const BAI_1_LESSON = {
           type: "note",
           tone: "info",
           title: "1. Mở AWS CloudShell",
+          cloudshellFallback: true,
           text: "Trong AWS Console, kiểm tra góc trên bên phải đang chọn Asia Pacific (Singapore), tức ap-southeast-1. Nhấn chuột trái vào biểu tượng cửa sổ lệnh trên thanh trên cùng, ở vị trí khoanh đỏ trong ảnh. Chờ CloudShell mở ở phía dưới trang và xuất hiện dấu nhắc ~ $. Script bên dưới chỉ chạy trong AWS CloudShell, là terminal Linux của AWS; CMD dùng cho các phần máy Windows được ghi riêng trong bài."
         },
         {
