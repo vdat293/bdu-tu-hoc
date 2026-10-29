@@ -16,7 +16,7 @@ export default function BlockConnection({ block, connection, workdir }) {
   return (
     <section className="guide-block-connection">
       <h3 className="guide-block-connection-heading">Thông tin kết nối của bạn</h3>
-      <p className="guide-block-connection-desc">Website đã điền những địa chỉ này trực tiếp vào từng lệnh bên dưới. Bạn chỉ cần copy lệnh và chạy đúng máy được ghi trên khung.</p>
+      <p className="guide-block-connection-desc">Đây là thông tin IP của máy FE và BE và endpoint của DB</p>
       <dl className="guide-block-connection-list">
         {rows.map((row) => (
           <div key={row.label} className="guide-block-connection-row">
