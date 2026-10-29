@@ -1,3 +1,6 @@
+import { useEffect, useRef } from 'react';
+import styles from './GuideSidebar.module.css';
+
 const WHERE_LABELS = {
   local: 'Máy local',
   cloudshell: 'AWS CloudShell',
@@ -18,43 +21,68 @@ export function countDone(steps, doneMap) {
 }
 
 export default function GuideSidebar({ lesson, steps, doneMap, activeStep, onSelect }) {
+  const rootRef = useRef(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    let frame = null;
+    const updateHeight = () => {
+      frame = null;
+      const top = Math.max(12, root.getBoundingClientRect().top);
+      const available = Math.max(0, Math.floor(window.innerHeight - top - 12));
+      root.style.setProperty('--guide-toc-available-height', `${available}px`);
+    };
+    const scheduleUpdate = () => {
+      if (frame === null) frame = window.requestAnimationFrame(updateHeight);
+    };
+    // Measure the actual space below the component, including the app header
+    // and nested scrolling containers, without depending on legacy CSS sizes.
+    const observer = window.ResizeObserver ? new window.ResizeObserver(scheduleUpdate) : null;
+    if (root.parentElement) observer?.observe(root.parentElement);
+    window.addEventListener('resize', scheduleUpdate);
+    document.addEventListener('scroll', scheduleUpdate, { capture: true, passive: true });
+    updateHeight();
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleUpdate);
+      document.removeEventListener('scroll', scheduleUpdate, true);
+    };
+  }, []);
   const list = Array.isArray(steps) ? steps : [];
   const done = countDone(list, doneMap);
   const total = list.length;
   const percent = total ? Math.round((done / total) * 100) : 0;
   return (
-    <aside className="guide-sidebar" aria-label="Mục lục hướng dẫn">
-      <div className="guide-sidebar-progress">
-        <p className="guide-sidebar-progress-text">Đã xong {done}/{total}</p>
-        <div className="guide-sidebar-progress-track" role="progressbar" aria-label={`Tiến độ ${lesson?.title || 'hướng dẫn'}`} aria-valuenow={done} aria-valuemin={0} aria-valuemax={total}>
-          <span className="guide-sidebar-progress-fill" style={{ width: `${percent}%` }} />
+    <aside ref={rootRef} className={styles.root} aria-label="Mục lục hướng dẫn">
+      <div className={styles.progress}>
+        <p className={styles.progressText}>Đã xong {done}/{total}</p>
+        <div className={styles.progressTrack} role="progressbar" aria-label={`Tiến độ ${lesson?.title || 'hướng dẫn'}`} aria-valuenow={done} aria-valuemin={0} aria-valuemax={total}>
+          <span className={styles.progressFill} style={{ width: `${percent}%` }} />
         </div>
       </div>
       {lesson?.title && (
-        <div className="guide-sidebar-lesson">
-          <p className="guide-sidebar-section-title">Không gian thực hành</p>
-          <p className="guide-sidebar-lesson-title">{lesson.title}</p>
-        </div>
+        <p className={styles.lesson}>{lesson.title}</p>
       )}
-      <nav className="guide-sidebar-nav" aria-label="Các chặng">
-        <p className="guide-sidebar-section-title">Mục lục hướng dẫn</p>
-        <ol className="guide-sidebar-steps">
+      <nav className={styles.nav} aria-label="Các chặng">
+        <p className={styles.sectionTitle}>Mục lục hướng dẫn</p>
+        <ol className={styles.steps}>
           {list.map((step, index) => {
             const entry = doneMap?.[step.id];
             const isDone = typeof entry === 'object' ? entry?.done === true : entry === true;
             const isActive = step.id === activeStep;
             return (
-              <li key={step.id} className={`guide-sidebar-step${isActive ? ' is-active' : ''}${isDone ? ' is-done' : ''}`}>
+              <li key={step.id} className={`${styles.step}${isDone ? ` ${styles.done}` : ''}`}>
                 <button
                   type="button"
-                  className="guide-sidebar-step-btn"
+                  className={styles.stepButton}
                   onClick={() => onSelect?.(step.id)}
                   aria-current={isActive ? 'step' : undefined}
                 >
-                  <span className="guide-sidebar-step-num" aria-hidden="true">{isDone ? '✓' : index + 1}</span>
-                  <span className="guide-sidebar-step-text">
-                    <span className="guide-sidebar-step-title">{step.title}</span>
-                    <span className="guide-where-badge">{whereLabel(step)}</span>
+                  <span className={styles.number} aria-hidden="true">{isDone ? '✓' : index + 1}</span>
+                  <span className={styles.stepText}>
+                    <span className={styles.title}>{step.title}</span>
+                    <span className={styles.location}>{whereLabel(step)}</span>
                   </span>
                 </button>
               </li>

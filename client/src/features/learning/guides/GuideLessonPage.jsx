@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getCourseGuide, getGuideProgress, getLabResult, saveGuideProgress, saveLabResult } from '../../../api/guides.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
 import BlockImage from './BlockImage.jsx';
@@ -9,8 +9,9 @@ import GuideLayout, { getLocalGuides } from './GuideLayout.jsx';
 import { whereLabel } from './GuideSidebar.jsx';
 
 // Client-side mirror of the server workdir rule (src/modules/learning/guide.service.js):
-// Windows drive path, max 260 chars. Invalid input is rejected inline, no POST.
-const WORKDIR_PATTERN = /^[A-Za-z]:\\/;
+// Absolute Windows/macOS paths, max 260 chars. Invalid input is rejected inline.
+const WINDOWS_WORKDIR_PATTERN = /^[A-Za-z]:\\/;
+const MACOS_WORKDIR_PATTERN = /^\/(?!\/)/;
 const MAX_WORKDIR_LENGTH = 260;
 
 const LAB_RESULT_IMAGE = {
@@ -50,8 +51,11 @@ export default function GuideLessonPage() {
   const { notify } = useToasts();
   const navigate = useNavigate();
   const client = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const platform = searchParams.get('os') === 'macos' ? 'macos' : 'windows';
+  const platformSearch = searchParams.has('os') ? `?os=${platform}` : '';
 
-  const lesson = getLocalGuides(courseCode).find((item) => item.id === lessonId) || null;
+  const lesson = getLocalGuides(courseCode, platform).find((item) => item.id === lessonId) || null;
   const steps = lesson?.steps || [];
   const stepIndex = steps.findIndex((step) => step.id === stepId);
   const step = stepIndex >= 0 ? steps[stepIndex] : null;
@@ -128,7 +132,10 @@ export default function GuideLessonPage() {
 
   // Workdir is saved once per lesson step via the same progress endpoint and
   // reused by every `localDirectory` code block through {{WORKDIR}} / cd-insert.
-  const serverWorkdir = progressQuery.data?.workdir || '';
+  const savedWorkdir = progressQuery.data?.workdir || '';
+  const workdirPattern = platform === 'macos' ? MACOS_WORKDIR_PATTERN : WINDOWS_WORKDIR_PATTERN;
+  // Keep the AWS result when changing OS, but ask for the new machine's folder.
+  const serverWorkdir = workdirPattern.test(savedWorkdir) ? savedWorkdir : '';
   const [workdirDraft, setWorkdirDraft] = useState('');
   const [workdirTouched, setWorkdirTouched] = useState(false);
   const [workdirError, setWorkdirError] = useState('');
@@ -139,7 +146,7 @@ export default function GuideLessonPage() {
   // progressVersion with a fresh serverWorkdir). The scope key forces a reset
   // on identity change; otherwise the touched guard stays so background
   // refetches don't clobber in-progress typing.
-  const workdirScopeKey = `${courseCode ?? ''}/${lessonId ?? ''}/${stepId ?? ''}/${progressVersion ?? ''}/${user?.mssv ?? ''}`;
+  const workdirScopeKey = `${courseCode ?? ''}/${lessonId ?? ''}/${stepId ?? ''}/${progressVersion ?? ''}/${user?.mssv ?? ''}/${platform}`;
   const workdirScopeRef = useRef(workdirScopeKey);
 
   useEffect(() => {
@@ -191,7 +198,7 @@ export default function GuideLessonPage() {
   const resultStep = steps.find((item) => item?.resultInput) || steps[1] || null;
   const folderStep = steps.find((item) => item?.folderInput) || steps[0] || null;
 
-  const stepUrl = (id) => `/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(id)}`;
+  const stepUrl = (id) => `/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(id)}${platformSearch}`;
   const resultStepUrl = resultStep ? stepUrl(resultStep.id) : null;
   const folderStepUrl = folderStep ? stepUrl(folderStep.id) : null;
 
@@ -202,6 +209,9 @@ export default function GuideLessonPage() {
 
   return (
     <GuideLessonPageBody
+      key={`${courseCode}/${lessonId}/${stepId}/${platform}`}
+      platform={platform}
+      platformSearch={platformSearch}
       courseCode={courseCode}
       lesson={lesson}
       steps={steps}
@@ -244,6 +254,7 @@ export default function GuideLessonPage() {
 }
 
 function GuideLessonPageBody({
+  platform, platformSearch,
   courseCode, lesson, steps, step, stepId, stepIndex, isLast, prevStep, nextStep,
   doneMap, isDone, workdir, serverWorkdir, lab, labKey, progressKey,
   resultStep, folderStep, resultStepUrl, folderStepUrl, goToStep,
@@ -268,7 +279,7 @@ function GuideLessonPageBody({
     ? { feIp: lab.FE_IP, beIp: lab.BE_IP, dbEndpoint: lab.DB_ENDPOINT }
     : undefined;
 
-  const stepUrl = (id) => `/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(id)}`;
+  const stepUrl = (id) => `/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(id)}${platformSearch}`;
 
   const updateProgressCache = (updater) => {
     client.setQueryData(progressKey, (old) => {
@@ -289,7 +300,7 @@ function GuideLessonPageBody({
     mutationFn: () => saveGuideProgress(token, courseCode, lesson.id, {
       stepId,
       done: true,
-      workdir: doneMap[stepId]?.workdir ?? serverWorkdir ?? undefined
+      workdir: serverWorkdir || undefined
     }),
     onSuccess: () => {
       updateProgressCache((base) => ({
@@ -351,8 +362,15 @@ function GuideLessonPageBody({
   const handleFolderSubmit = (event) => {
     event.preventDefault();
     const clean = workdirDraft.trim();
-    if (!WORKDIR_PATTERN.test(clean) || clean.length > MAX_WORKDIR_LENGTH) {
-      setWorkdirError('Đường dẫn phải dạng ổ Windows, ví dụ C:\\lab1.');
+    const pattern = platform === 'macos' ? MACOS_WORKDIR_PATTERN : WINDOWS_WORKDIR_PATTERN;
+    const hasControlCharacter = Array.from(clean).some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    });
+    if (!pattern.test(clean) || hasControlCharacter || clean.length > MAX_WORKDIR_LENGTH) {
+      setWorkdirError(platform === 'macos'
+        ? 'Đường dẫn phải đầy đủ, ví dụ /Users/ban/lab1, và tối đa 260 ký tự.'
+        : 'Đường dẫn phải dạng ổ Windows, ví dụ C:\\lab1.');
       workdirInputRef.current?.focus();
       return;
     }
@@ -482,6 +500,7 @@ function GuideLessonPageBody({
   const cardHead = (
     <>
       <p className="guide-step-stage">CHẶNG {stepIndex + 1}/{steps.length}</p>
+      <p className="guide-platform-label">{platform === 'macos' ? 'macOS · Terminal' : 'Windows · CMD'}</p>
       <h1 className="guide-step-title">{step.title}</h1>
       {step.goal && <p className="guide-step-goal">{step.goal}</p>}
       <p><span className="guide-where-badge">{whereLabel(step)}</span></p>
@@ -543,7 +562,9 @@ function GuideLessonPageBody({
               <label className="guide-workdir-label" htmlFor={`guide-workdir-${stepId}`}>
                 Đường dẫn thư mục làm việc
               </label>
-              <p className="guide-workdir-hint">Dán đường dẫn lab1 vừa copy từ File Explorer. Website sẽ nhớ đường dẫn này và thêm sẵn lệnh vào đúng thư mục cho các khối lệnh Máy local ở bước 4.</p>
+              <p className="guide-workdir-hint">{platform === 'macos'
+                ? 'Dán đường dẫn thư mục vừa copy từ Finder. Website sẽ nhớ đường dẫn này và thêm sẵn lệnh vào đúng thư mục cho các khối lệnh Máy local ở bước 4.'
+                : 'Dán đường dẫn lab1 vừa copy từ File Explorer. Website sẽ nhớ đường dẫn này và thêm sẵn lệnh vào đúng thư mục cho các khối lệnh Máy local ở bước 4.'}</p>
               <div className="guide-workdir-row">
                 <input
                   id={`guide-workdir-${stepId}`}
@@ -551,7 +572,7 @@ function GuideLessonPageBody({
                   className="guide-workdir-input"
                   type="text"
                   value={workdirDraft}
-                  placeholder="C:\thu-muc\lab1"
+                  placeholder={platform === 'macos' ? '/Users/ban/lab1' : 'C:\\thu-muc\\lab1'}
                   spellCheck={false}
                   autoComplete="off"
                   aria-describedby={`guide-workdir-feedback-${stepId}`}
@@ -598,7 +619,7 @@ function GuideLessonPageBody({
               <BlockImage block={LAB_RESULT_IMAGE} />
               <ol className="guide-lab-steps">
                 {LAB_RESULT_GUIDE_STEPS.map((item, index) => (
-                  <li key={index}>{item}</li>
+                  <li key={index}>{platform === 'macos' ? item.replace('Ctrl+V', 'Cmd+V') : item}</li>
                 ))}
               </ol>
               <label className="guide-lab-label" htmlFor={`guide-lab-token-${stepId}`}>

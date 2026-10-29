@@ -1,0 +1,256 @@
+/* Self-contained table of contents: no legacy sidebar, badge or button rules. */
+.rail {
+  --guide-toc-available-height: calc(100dvh - 120px);
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  min-width: 0;
+  max-height: var(--guide-toc-available-height);
+}
+
+.root {
+  --toc-surface: #fffdfa;
+  --toc-text: #292524;
+  --toc-muted: #78716c;
+  --toc-border: #e7e5e4;
+  --toc-active: #15803d;
+  --toc-highlight: #f0fdf4;
+  --toc-hover: #f5f5f4;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-height: var(--guide-toc-available-height, calc(100dvh - 120px));
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--toc-border);
+  border-radius: 12px;
+  background: var(--toc-surface);
+  color: var(--toc-text);
+  font: 400 13px/1.35 'Manrope', system-ui, -apple-system, sans-serif;
+  text-align: left;
+  letter-spacing: normal;
+  overflow: hidden;
+}
+
+:global(body.theme-dark) .root {
+  --toc-surface: #211e1c;
+  --toc-text: #fafaf9;
+  --toc-muted: #a8a29e;
+  --toc-border: #44403c;
+  --toc-active: #4ade80;
+  --toc-highlight: #193426;
+  --toc-hover: #292524;
+}
+
+.root *,
+.root *::before,
+.root *::after {
+  box-sizing: border-box;
+}
+
+.progress,
+.lesson {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.progressText {
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressTrack {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--toc-border);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--toc-active);
+}
+
+.lesson {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.sectionTitle {
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--toc-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepButton {
+  appearance: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--toc-text);
+  font: inherit;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+.stepButton:hover {
+  background: var(--toc-hover);
+}
+
+.stepButton:focus-visible {
+  outline: 2px solid var(--toc-active);
+  outline-offset: -2px;
+}
+
+.stepButton[aria-current='step'] {
+  border-color: var(--toc-active);
+  background: var(--toc-highlight);
+}
+
+.number {
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--toc-border);
+  color: var(--toc-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.done .number {
+  background: var(--toc-active);
+  color: var(--toc-surface);
+}
+
+.stepText {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  display: block;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.location {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--toc-muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.toggle {
+  display: none;
+  align-self: flex-start;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #a8a29e;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1.35 'Manrope', system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid #15803d;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .toggle {
+    display: inline-flex;
+  }
+
+  .rail {
+    --guide-toc-available-height: calc(100dvh - 24px);
+    position: fixed;
+    inset: 12px auto auto 12px;
+    z-index: 60;
+    width: min(320px, calc(100vw - 24px));
+    visibility: hidden;
+    transform: translateX(calc(-100% - 12px));
+  }
+
+  .rail.open {
+    visibility: visible;
+    transform: none;
+  }
+
+  .rail .root {
+    box-shadow: 0 12px 40px rgb(0 0 0 / .2);
+  }
+}

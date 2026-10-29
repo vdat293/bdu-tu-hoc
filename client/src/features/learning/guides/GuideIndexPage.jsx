@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getCourseGuide, resetGuideProgress } from '../../../api/guides.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
 import { useConfirm } from '../../../components/feedback/ConfirmDialog.jsx';
 import GuideLayout, { getLocalGuides } from './GuideLayout.jsx';
+import GuidePlatformDialog from './GuidePlatformDialog.jsx';
 
 export default function GuideIndexPage() {
   const { courseCode } = useParams();
@@ -13,6 +14,7 @@ export default function GuideIndexPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [confirmUI, askConfirm] = useConfirm();
+  const [platformTarget, setPlatformTarget] = useState(null);
 
   const guideQuery = useQuery({
     queryKey: ['course-guide', courseCode, user?.mssv],
@@ -42,7 +44,7 @@ export default function GuideIndexPage() {
       client.invalidateQueries({ queryKey: ['guide-progress', courseCode, lessonId] });
       notify('Đã xóa tiến độ, bắt đầu lại từ đầu.', 'success');
       if (firstStep) {
-        navigate(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(firstStep)}`);
+        setPlatformTarget(`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lessonId)}/${encodeURIComponent(firstStep)}`);
       }
     },
     onError: (error) => {
@@ -102,7 +104,7 @@ export default function GuideIndexPage() {
               <li key={lesson.id} className="guide-index-item">
                 <div className="guide-index-item-text">
                   <h2 className="guide-index-item-title">{lesson.title}</h2>
-                  {lesson.summary && <p className="guide-index-item-summary">{lesson.summary}</p>}
+                  {lesson.summary && <p className="guide-index-item-summary">{lesson.summary.replace('một cửa sổ CMD', 'một cửa sổ CMD trên Windows hoặc Terminal trên macOS')}</p>}
                   <p className="guide-index-item-meta">
                     {[lesson.duration && `${lesson.duration}`, total ? `Đã xong ${done}/${total}` : null].filter(Boolean).join(' · ')}
                   </p>
@@ -112,6 +114,11 @@ export default function GuideIndexPage() {
                     <Link
                       className="btn btn-primary btn-sm"
                       to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(targetStep)}`}
+                      onClick={(event) => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                        event.preventDefault();
+                        setPlatformTarget(event.currentTarget.getAttribute('href'));
+                      }}
                     >
                       {done > 0 ? 'Học tiếp' : 'Bắt đầu'}
                     </Link>
@@ -133,6 +140,12 @@ export default function GuideIndexPage() {
         </ul>
       </section>
       {confirmUI}
+      {platformTarget && (
+        <GuidePlatformDialog
+          onClose={() => setPlatformTarget(null)}
+          onSelect={(platform) => navigate(`${platformTarget}?os=${platform}`)}
+        />
+      )}
     </GuideLayout>
   );
 }

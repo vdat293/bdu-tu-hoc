@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -85,6 +85,7 @@ import BlockKeyDownloads from '../../client/src/features/learning/guides/BlockKe
 import BlockNote from '../../client/src/features/learning/guides/BlockNote.jsx';
 import BlockScript, { toBashOneLiner } from '../../client/src/features/learning/guides/BlockScript.jsx';
 import { GUIDE_SCRIPTS } from '../../client/src/features/learning/guides/inf1003/scripts.generated.js';
+import { BAI_1_MACOS_LESSON } from '../../client/src/features/learning/guides/inf1003/bai-1-macos.js';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 
 function makeSteps() {
@@ -539,6 +540,50 @@ describe('GuideLessonPage original-flow wiring', () => {
     expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
   });
 
+  it('macOS saves a Unix directory and keeps the OS through next, back and sidebar navigation', async () => {
+    mockLessonAPIs({ steps: {}, workdir: null }, LAB_FIELDS);
+    mockProgressStore({ steps: {}, workdir: null });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1?os=macos']);
+    const input = await screen.findByRole('textbox', { name: /đường dẫn thư mục làm việc/i });
+    expect(input).toHaveAttribute('placeholder', '/Users/ban/lab1');
+    fireEvent.change(input, { target: { value: '/Users/sinh vien/lab1' } });
+    fireEvent.click(screen.getByRole('button', { name: /lưu đường dẫn.*sang bước 2/i }));
+    await waitFor(() => expect(mocks.saveGuideProgress).toHaveBeenCalledWith(
+      'test-token', 'INF1003', 'bai-1',
+      { stepId: 'buoc-1', done: true, workdir: '/Users/sinh vien/lab1' }
+    ));
+    await screen.findByText('CHẶNG 2/7');
+    expect(screen.getByText('macOS · Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /bước trước/i })).toHaveAttribute('href', expect.stringContaining('?os=macos'));
+    fireEvent.click(screen.getByRole('button', { name: /Terminal → FE → BE: chép mã nguồn và kết nối/i }));
+    await screen.findByText('CHẶNG 4/7');
+    expect(screen.getAllByText(/cd -- '\/Users\/sinh vien\/lab1'/)[0]).toHaveTextContent('chmod 400 bdu-key-fe.pem bdu-key-be.pem');
+    expect(screen.queryByText(/icacls/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /tôi đã hoàn thành.*sang bước 5/i }));
+    await screen.findByText('CHẶNG 5/7');
+    expect(screen.getByText('macOS · Terminal')).toBeInTheDocument();
+  });
+
+  it('macOS rejects a Windows or relative directory without saving', async () => {
+    mockLessonAPIs();
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-1?os=macos']);
+    const input = await screen.findByRole('textbox', { name: /đường dẫn thư mục làm việc/i });
+    for (const value of ['C:\\lab1', '~/lab1', 'lab1']) {
+      fireEvent.change(input, { target: { value } });
+      fireEvent.click(screen.getByRole('button', { name: /lưu đường dẫn.*sang bước 2/i }));
+      expect(screen.getByRole('alert')).toHaveTextContent('/Users/ban/lab1');
+    }
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
+  });
+
+  it('changing from Windows to macOS requests the Mac directory before showing local commands', async () => {
+    mockLessonAPIs({ steps: {}, workdir: 'C:\\lab1' }, LAB_FIELDS);
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-4?os=macos']);
+    expect(await screen.findByText(/cần đường dẫn thư mục làm việc/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /lưu đường dẫn ở bước 1/i })).toHaveAttribute('href', expect.stringContaining('?os=macos'));
+    expect(screen.queryByText(/chmod 400 bdu-key-fe.pem/)).not.toBeInTheDocument();
+  });
+
   it('folder form prefills the saved workdir and posts done:true once', async () => {
     await openStep('buoc-1', { steps: {}, workdir: 'C:\\lab1' });
     expect(await screen.findByLabelText(/đường dẫn thư mục làm việc/i)).toHaveValue('C:\\lab1');
@@ -777,6 +822,41 @@ describe('GuideLessonPage original-flow wiring', () => {
 });
 
 describe('GuideLessonPage block data contract', () => {
+  it('copies the macOS quick setup with a direct download URL before any folder or AWS result is saved', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const block = BAI_1_MACOS_LESSON.steps[0].blocks.find((item) => item.type === 'code');
+    renderWithClient(<BlockRenderer block={block} workdir="" lab={null} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép lệnh' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(
+      `mkdir -p "$HOME/lab1" && cd "$HOME/lab1" && curl -fL --retry 3 -o b5.zip '${window.location.origin}/guides/inf1003/b5.zip' && unzip -n b5.zip && open .`
+    ));
+    expect(screen.queryByText(/{{SITE_ORIGIN}}/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/chưa có kết quả tạo hạ tầng/i)).not.toBeInTheDocument();
+  });
+
+  it('copies a safely quoted macOS directory with spaces, apostrophes and shell characters', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderWithClient(
+      <BlockRenderer
+        block={{ type: 'code', lang: 'zsh', label: 'Terminal', text: 'chmod 400 bdu-key-fe.pem', localDirectory: true }}
+        workdir="/Users/O'Brien/$lab 1"
+        lab={{ FE_IP: '1.2.3.4' }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép lệnh' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("cd -- '/Users/O'\\''Brien/$lab 1' &&\nchmod 400 bdu-key-fe.pem"));
+  });
+
+  it('macOS local commands use Unix permissions and open, while AWS scripts stay shared', () => {
+    const blocks = BAI_1_MACOS_LESSON.steps.flatMap((step) => step.blocks.flatMap((block) => [block, ...(block.blocks || [])]));
+    const commands = blocks.filter((block) => block.type === 'code').map((block) => block.text).join('\n');
+    expect(commands).not.toMatch(/icacls|curl\.exe|%USERDOMAIN%|&& \^|echo\.|start ""/);
+    expect(commands).toContain('chmod 400 bdu-key-fe.pem bdu-key-be.pem');
+    expect(commands).toContain('open "http://{{FE_IP}}:3000/"');
+    expect(blocks.filter((block) => block.type === 'script').map((block) => block.scriptKey)).toEqual(['start', 'clean']);
+  });
   it('prepends cd /d with the saved workdir for localDirectory code blocks', () => {
     renderWithClient(
       <BlockRenderer
@@ -861,6 +941,11 @@ describe('stepClean', () => {
 });
 
 describe('GuideIndexPage resume', () => {
+  function DestinationProbe() {
+    const { pathname, search } = useLocation();
+    return <p>{pathname}{search}</p>;
+  }
+
   function mockIndexGuide(doneCount) {
     mocks.getCourseGuide.mockResolvedValue({
       enabled: true,
@@ -881,6 +966,7 @@ describe('GuideIndexPage resume', () => {
         <QueryClientProvider client={client}>
           <Routes>
             <Route path="/learning/:courseCode/guides" element={<GuideIndexPage />} />
+            <Route path="/learning/:courseCode/guides/:lessonId/:stepId" element={<DestinationProbe />} />
           </Routes>
         </QueryClientProvider>
       </MemoryRouter>
@@ -899,6 +985,35 @@ describe('GuideIndexPage resume', () => {
     renderIndex();
     const link = await screen.findByRole('link', { name: /bắt đầu/i });
     expect(link).toHaveAttribute('href', expect.stringContaining('buoc-1'));
+  });
+
+  it.each(['windows', 'macos'])('Bắt đầu asks for the OS, then opens the chosen %s lesson', async (platform) => {
+    mockIndexGuide(0);
+    renderIndex();
+    fireEvent.click(await screen.findByRole('link', { name: /bắt đầu/i }));
+    expect(screen.getByRole('dialog', { name: /hệ điều hành nào/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: platform === 'macos' ? 'macOS · Terminal' : 'Windows · CMD' }));
+    expect(await screen.findByText(`/learning/INF1003/guides/bai-1/buoc-1?os=${platform}`)).toBeInTheDocument();
+  });
+
+  it('Học tiếp asks for the OS and keeps the first unfinished step', async () => {
+    mockIndexGuide(2);
+    renderIndex();
+    fireEvent.click(await screen.findByRole('link', { name: /học tiếp/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'macOS · Terminal' }));
+    expect(await screen.findByText('/learning/INF1003/guides/bai-1/buoc-3?os=macos')).toBeInTheDocument();
+  });
+
+  it('Escape cancels the OS choice and restores focus without navigation or progress changes', async () => {
+    mockIndexGuide(0);
+    renderIndex();
+    const start = await screen.findByRole('link', { name: /bắt đầu/i });
+    start.focus();
+    fireEvent.click(start);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(start).toHaveFocus();
+    expect(mocks.saveGuideProgress).not.toHaveBeenCalled();
   });
 
   it('làm xong hết → fallback buoc-1', async () => {
@@ -925,7 +1040,8 @@ describe('GuideIndexPage reset', () => {
 
   function StepProbe() {
     const { lessonId, stepId } = useParams();
-    return <div>Chặng {lessonId}/{stepId}</div>;
+    const { search } = useLocation();
+    return <div>Chặng {lessonId}/{stepId}{search}</div>;
   }
 
   function renderIndexRoutes(client) {
@@ -971,7 +1087,9 @@ describe('GuideIndexPage reset', () => {
     expect(
       invalidateSpy.mock.calls.some((call) => JSON.stringify(call[0]?.queryKey?.slice(0, 3)) === JSON.stringify(['guide-progress', 'INF1003', 'bai-1']))
     ).toBe(true);
-    expect(await screen.findByText('Chặng bai-1/buoc-1')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /hệ điều hành nào/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'macOS · Terminal' }));
+    expect(await screen.findByText('Chặng bai-1/buoc-1?os=macos')).toBeInTheDocument();
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringMatching(/bắt đầu lại|đã xóa/i), 'success');
   });
 

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { INF1003_GUIDES } from './inf1003/manifest.js';
+import { INF1003_GUIDES, INF1003_MACOS_GUIDES } from './inf1003/manifest.js';
 import GuideSidebar from './GuideSidebar.jsx';
+import sidebarStyles from './GuideSidebar.module.css';
 import './guide.css';
 
-export function getLocalGuides(courseCode) {
+export function getLocalGuides(courseCode, platform = 'windows') {
   const code = String(courseCode || '').trim().toUpperCase().replace(/\s+/g, '');
-  if (code === 'INF1003') return INF1003_GUIDES;
+  if (code === 'INF1003') return platform === 'macos' ? INF1003_MACOS_GUIDES : INF1003_GUIDES;
   return [];
 }
 
@@ -28,16 +29,16 @@ export default function GuideLayout({ courseCode, sidebar, children }) {
       {sidebar && (
         <button
           type="button"
-          className="guide-drawer-toggle btn btn-secondary btn-sm"
+          className={sidebarStyles.toggle}
           onClick={() => setDrawerOpen((open) => !open)}
           aria-expanded={drawerOpen}
         >
           {drawerOpen ? 'Đóng mục lục' : 'Mục lục'}
         </button>
       )}
-      <div className={`guide-body${drawerOpen ? ' drawer-open' : ''}`}>
+      <div className="guide-body">
         {sidebar && (
-          <div className="guide-sidebar-wrap">
+          <div className={`${sidebarStyles.rail}${drawerOpen ? ` ${sidebarStyles.open}` : ''}`}>
             <GuideSidebar
               lesson={sidebar.lesson}
               steps={sidebar.steps}

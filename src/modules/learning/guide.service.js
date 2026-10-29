@@ -23,7 +23,7 @@ export const STEP_REQUIREMENTS = {
 };
 const STEP_ID_PATTERN = /^buoc-[a-z0-9-]+$/;
 const LESSON_ID_PATTERN = /^[a-z0-9-]+$/;
-const WORKDIR_PATTERN = /^[A-Za-z]:\\/;
+const WORKDIR_PATTERN = /^(?:[A-Za-z]:\\|\/(?!\/))/;
 const MAX_WORKDIR_LENGTH = 260;
 
 function httpError(message, status = 400, code = null, errors = null) {
@@ -65,9 +65,13 @@ function normalizeWorkdir(value) {
   if (value === undefined || value === null) return '';
   const clean = String(value).trim();
   if (!clean) return '';
-  if (clean.length > MAX_WORKDIR_LENGTH || !WORKDIR_PATTERN.test(clean)) {
+  const hasControlCharacter = Array.from(clean).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
+  if (clean.length > MAX_WORKDIR_LENGTH || hasControlCharacter || !WORKDIR_PATTERN.test(clean)) {
     throw httpError(
-      'Thư mục làm bài phải dạng ổ Windows (ví dụ C:\\lab1) và tối đa 260 ký tự.',
+      'Thư mục làm bài phải là đường dẫn đầy đủ (ví dụ C:\\lab1 hoặc /Users/ban/lab1) và tối đa 260 ký tự.',
       400,
       'GUIDE_WORKDIR_INVALID'
     );

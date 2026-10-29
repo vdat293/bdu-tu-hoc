@@ -18,9 +18,32 @@ export default function BlockNote({ block, feIp }) {
     ? raw.replace(/http:\/\/FE_IP:3000\//g, `http://${feIp}:3000/`)
     : raw;
   return (
-    <div className={`guide-block-note ${tone}`.trim()}>
+    <div id={block?.id} tabIndex={block?.id ? -1 : undefined} className={`guide-block-note ${tone}`.trim()}>
       {block?.title && <p className="guide-block-note-title">{block.title}</p>}
-      {text && <p className="guide-block-note-text">{text}</p>}
+      {text && (
+        <p className="guide-block-note-text">
+          {text}
+          {block?.jumpLink && (
+            <>{' '}
+              <a
+                className="guide-block-note-link"
+                href={`#${block.jumpLink.targetId}`}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  const target = document.getElementById(block.jumpLink.targetId);
+                  if (!target) return;
+                  event.preventDefault();
+                  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+                  target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+                  target.focus({ preventScroll: true });
+                }}
+              >
+                {block.jumpLink.text}
+              </a>
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
