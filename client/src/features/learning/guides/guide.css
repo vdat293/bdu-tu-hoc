@@ -368,6 +368,77 @@ body.theme-dark .guide-step-stage {
   font-size: 0.9rem;
 }
 
+/* Chọn vùng AWS (bước 2) */
+.guide-block-region {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 10px;
+  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+}
+
+.guide-block-region-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.guide-block-region-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.guide-block-region-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.guide-block-region-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.guide-block-region-select {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  background: var(--bg-input, transparent);
+  color: inherit;
+  font-family: inherit;
+}
+
+.guide-block-region-current {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.guide-block-region-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 4px solid #d97706;
+  border-radius: 8px;
+  background: rgba(217, 119, 6, 0.08);
+  font-size: 0.85rem;
+}
+
+.guide-block-region-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .guide-step-footer {
   display: flex;
   align-items: center;

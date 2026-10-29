@@ -13,7 +13,7 @@ export const BAI_1_LESSON = {
   prerequisites: [
     "Tài khoản AWS lab có quyền tạo VPC, EC2 và RDS",
     "Windows Command Prompt (CMD), có lệnh ssh và scp",
-    "AWS CloudShell tại region ap-southeast-1"
+    "AWS CloudShell; chọn vùng AWS ở bước 2 (mặc định Singapore)"
   ],
   steps: [
     {
@@ -85,11 +85,17 @@ export const BAI_1_LESSON = {
       resultInput: true,
       blocks: [
         {
+          type: "region",
+          id: "chon-vung-aws",
+          title: "1. Chọn vùng AWS (region)",
+          hint: "Chọn vùng gần bạn nhất để giảm độ trễ; không bắt buộc dùng Singapore. VPC, hai EC2 và RDS của bài sẽ được tạo đúng vùng bạn chọn, và lệnh bên dưới tự dùng vùng đó. Hãy chọn trước khi chạy: đổi vùng sau khi đã tạo hạ tầng sẽ tạo thêm một bộ tài nguyên mới."
+        },
+        {
           type: "note",
           tone: "info",
-          title: "1. Mở AWS CloudShell",
+          title: "2. Mở AWS CloudShell",
           cloudshellFallback: true,
-          text: "Trong AWS Console, kiểm tra góc trên bên phải đang chọn Asia Pacific (Singapore), tức ap-southeast-1. Nhấn chuột trái vào biểu tượng cửa sổ lệnh trên thanh trên cùng, ở vị trí khoanh đỏ trong ảnh. Chờ CloudShell mở ở phía dưới trang và xuất hiện dấu nhắc ~ $. Script bên dưới chỉ chạy trong AWS CloudShell, là terminal Linux của AWS; CMD dùng cho các phần máy Windows được ghi riêng trong bài."
+          text: "Trong AWS Console, nhấn chuột trái vào biểu tượng cửa sổ lệnh trên thanh trên cùng, ở vị trí khoanh đỏ trong ảnh. Chờ CloudShell mở ở phía dưới trang và xuất hiện dấu nhắc ~ $. CloudShell có thể đang mở ở vùng khác; script vẫn tạo tài nguyên ở vùng bạn đã chọn ở mục 1. Script bên dưới chỉ chạy trong AWS CloudShell, là terminal Linux của AWS; CMD dùng cho các phần máy Windows được ghi riêng trong bài."
         },
         {
           type: "image",
@@ -100,8 +106,8 @@ export const BAI_1_LESSON = {
         {
           type: "note",
           tone: "info",
-          title: "2. Copy lệnh",
-          text: "Copy lệnh bên dưới, sau đó dán vào AWS CloudShell."
+          title: "3. Copy lệnh",
+          text: "Copy lệnh bên dưới, sau đó dán vào AWS CloudShell. Lệnh đã ghi sẵn vùng bạn chọn ở mục 1."
         },
         {
           type: "script",
@@ -111,7 +117,7 @@ export const BAI_1_LESSON = {
         {
           type: "note",
           tone: "info",
-          title: "3. Dán lệnh vào CloudShell và chạy",
+          title: "4. Dán lệnh vào CloudShell và chạy",
           text: "Quay lại AWS Console. Nhấn chuột trái vào vùng terminal màu tối, ngay sau dấu nhắc ~ $ tại vị trí mũi tên đỏ trong ảnh dưới. Nhấn Ctrl+V để dán lệnh vừa copy; nếu trình duyệt không dán bằng phím này, thử Ctrl+Shift+V. Khi lệnh đã hiện ra, nhấn Enter một lần để chạy nếu lệnh chưa tự chạy. Các dòng thông báo sẽ bắt đầu xuất hiện bên dưới."
         },
         {
@@ -123,12 +129,12 @@ export const BAI_1_LESSON = {
         {
           type: "note",
           tone: "info",
-          title: "4. Chờ hoàn tất và copy dòng kết quả",
+          title: "5. Chờ hoàn tất và copy dòng kết quả",
           text: "Giữ CloudShell mở và chờ script chạy xong; EC2 và RDS có thể mất 10–15 phút hoặc lâu hơn. Khi thấy Đã hoàn tất, vui lòng copy phần bên dưới, chọn nguyên dòng bắt đầu bằng BDU-LAB-V1: rồi copy. Dán dòng đó vào ô Kết quả CloudShell ở cuối bước này và bấm Phân tích & sang bước 3. Chưa cần tải key ở bước này. Nếu cần lấy lại dòng kết quả, chạy cat ~/bdu-aws/lab-result.txt trong CloudShell."
         }
       ],
       explain: [
-        "Script tạo VPC, hai EC2, RDS và mở sẵn các security group của bài. Không cần mở thêm port."
+        "Script tạo VPC, hai EC2, RDS và mở sẵn các security group của bài trong vùng bạn chọn. Không cần mở thêm port."
       ],
       expect: [
         "Script báo Đã hoàn tất và in một dòng BDU-LAB-V1: giữa hai dòng phân cách. Website đọc dòng này để điền đúng đường dẫn tải key và cấu hình cho bạn."
@@ -141,8 +147,8 @@ export const BAI_1_LESSON = {
         },
         {
           symptom: "AccessDenied hoặc sai region.",
-          cause: "Tài khoản thiếu quyền hoặc CloudShell mở sai khu vực.",
-          fix: "Dùng tài khoản lab, kiểm tra region ap-southeast-1 rồi chạy lại."
+          cause: "Tài khoản thiếu quyền, hoặc vùng đã chọn không có đủ dịch vụ cho bài.",
+          fix: "Dùng tài khoản lab và kiểm tra vùng đã chọn ở mục 1. Nếu vùng đó thiếu t3.micro, db.t3.micro hoặc Ubuntu 24.04, chọn lại Asia Pacific (Singapore) rồi chạy lại."
         }
       ]
     },
@@ -536,7 +542,7 @@ export const BAI_1_LESSON = {
           type: "note",
           tone: "warn",
           title: "Không bỏ qua bước cuối",
-          text: "NAT Gateway, RDS và EC2 vẫn phát sinh chi phí khi còn tồn tại. Bấm Copy ở khung bên dưới để lấy lệnh 1 dòng, dán vào CloudShell rồi nhấn Enter. Khi câu hỏi xác nhận xuất hiện, gõ riêng yes rồi nhấn Enter nếu đúng tài khoản và region của bài lab."
+          text: "NAT Gateway, RDS và EC2 vẫn phát sinh chi phí khi còn tồn tại. Bấm Copy ở khung bên dưới để lấy lệnh 1 dòng, dán vào CloudShell rồi nhấn Enter. Script tự dọn đúng vùng đã tạo hạ tầng ở bước 2. Khi câu hỏi xác nhận xuất hiện, gõ riêng yes rồi nhấn Enter nếu đúng tài khoản và vùng của bài lab."
         },
         {
           type: "script",
@@ -545,7 +551,7 @@ export const BAI_1_LESSON = {
       ],
       explain: [],
       expect: [
-        "Cuối script in Khong con tai nguyen bdu-* trong region ap-southeast-1."
+        "Cuối script in Khong con tai nguyen bdu-* trong region đã chọn ở bước 2."
       ],
       errors: [
         {

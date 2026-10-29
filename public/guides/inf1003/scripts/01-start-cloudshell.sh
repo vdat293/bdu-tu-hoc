@@ -14,13 +14,23 @@ mkdir -p "$BASE"
 if [ "${BDU_KEY_SOURCE:-}" != "LOCAL" ]; then : > "$BASE/lab-result.txt"; fi
 IDS="$BASE/aws-ids.env"
 IPS="$BASE/aws-ips.env"
-AZ_A="${AWS_DEFAULT_REGION}a"
-AZ_B="${AWS_DEFAULT_REGION}b"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "Thieu lenh $1. Hay dung AWS CloudShell hoac cai dat them."; exit 1; }; }
 need aws
 need base64
 need tr
+
+# Chon 2 Availability Zone that su co trong region (ten AZ khong phai luc nao
+# cung la a/b: vi du Tokyo chi co a, c, d). RDS can subnet o 2 AZ khac nhau.
+AZ_A=$(aws ec2 describe-availability-zones --filters Name=state,Values=available \
+  --query 'AvailabilityZones[0].ZoneName' --output text 2>/dev/null) || AZ_A=""
+AZ_B=$(aws ec2 describe-availability-zones --filters Name=state,Values=available \
+  --query 'AvailabilityZones[1].ZoneName' --output text 2>/dev/null) || AZ_B=""
+if [ -z "$AZ_A" ] || [ "$AZ_A" = "None" ] || [ -z "$AZ_B" ] || [ "$AZ_B" = "None" ]; then
+  echo "LOI: khong xac dinh duoc 2 Availability Zone trong region $AWS_DEFAULT_REGION."
+  echo "Kiem tra quyen ec2:DescribeAvailabilityZones, credentials va region da chon roi chay lai."
+  exit 1
+fi
 
 # Chay 1 lenh AWS; chi bo qua khi stderr khop $1 (loi trung lap da biet).
 # Moi loi khac deu dung script, khong bi nuot boi "|| true".
@@ -75,6 +85,7 @@ ensure_route() { # $1=route-table $2=cidr $3=--gateway-id|--nat-gateway-id $4=ta
 }
 
 echo "Region: $AWS_DEFAULT_REGION"
+echo "Availability zones: $AZ_A, $AZ_B"
 echo "Thu muc lam viec: $BASE"
 echo "Bat dau tao ha tang bdu-* (co the mat 10-15 phut, chu yeu la cho RDS)."
 

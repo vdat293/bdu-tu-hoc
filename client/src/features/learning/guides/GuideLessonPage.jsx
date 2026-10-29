@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CloudShellHelpDialog from './CloudShellHelpDialog.jsx';
 import { adaptLesson, labKeySource } from './inf1003/local-setup.js';
+import { DEFAULT_REGION, normalizeRegion, regionLabel } from './inf1003/regions.js';
 import { getCourseGuide, getGuideProgress, getLabResult, saveGuideProgress, saveLabResult } from '../../../api/guides.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
 import BlockImage from './BlockImage.jsx';
@@ -83,6 +84,25 @@ export default function GuideLessonPage() {
   let savedSetup = 'cloudshell';
   try { savedSetup = window.localStorage.getItem(setupKey) || 'cloudshell'; } catch { /* URL keeps the choice when storage is blocked. */ }
   const setupMode = (searchParams.get('setup') ?? savedSetup) === 'local' ? 'local' : 'cloudshell';
+  // AWS region for the lab. Kept on the client (same scope as setupKey) because
+  // it only changes the generated commands; the lab result later records the
+  // region that was really used.
+  const regionKey = `bdu:guide-region:${user?.mssv ?? ''}:${courseCode}:${lessonId}:${originalLesson?.progressVersion ?? ''}`;
+  let savedRegion = DEFAULT_REGION;
+  try { savedRegion = normalizeRegion(window.localStorage.getItem(regionKey)); } catch { /* Default region still works. */ }
+  const [region, setRegion] = useState(savedRegion);
+  const regionScopeRef = useRef(regionKey);
+  useEffect(() => {
+    if (regionScopeRef.current !== regionKey) {
+      regionScopeRef.current = regionKey;
+      setRegion(savedRegion);
+    }
+  }, [regionKey, savedRegion]);
+  const chooseRegion = (value) => {
+    const next = normalizeRegion(value);
+    setRegion(next);
+    try { window.localStorage.setItem(regionKey, next); } catch { /* The script keeps the in-memory choice. */ }
+  };
   const platformSearch = setupMode === 'local' ? `?os=${platform}&setup=local` : searchParams.has('os') ? `?os=${platform}&setup=cloudshell` : '';
   const lesson = useMemo(() => originalLesson ? adaptLesson(originalLesson, setupMode, platform) : null, [originalLesson, setupMode, platform]);
   const steps = lesson?.steps || [];
@@ -142,6 +162,15 @@ export default function GuideLessonPage() {
   // never unlocks steps with a result saved under a previous version.
   const storedLab = labQuery.data || null;
   const lab = storedLab && (storedLab.KEY_SOURCE === 'LOCAL') === (setupMode === 'local') ? storedLab : null;
+
+  // A returning student who never touched the picker should see the region
+  // their saved infrastructure actually uses (e.g. Tokyo), not the default.
+  useEffect(() => {
+    if (!lab?.REGION || lab.REGION === region) return;
+    let stored = '';
+    try { stored = window.localStorage.getItem(regionKey) || ''; } catch { /* No storage: adopt the saved result. */ }
+    if (!stored) setRegion(normalizeRegion(lab.REGION));
+  }, [lab?.REGION, region, regionKey]);
 
   const [tokenDraft, setTokenDraft] = useState('');
   const [labError, setLabError] = useState('');
@@ -260,6 +289,8 @@ export default function GuideLessonPage() {
       lab={lab}
       labKey={labKey}
       progressKey={progressKey}
+      region={region}
+      onRegionChange={chooseRegion}
       resultStep={resultStep}
       folderStep={folderStep}
       resultStepUrl={resultStepUrl}
@@ -293,7 +324,7 @@ function GuideLessonPageBody({
   token, notify,
   workdirDraft, setWorkdirDraft, setWorkdirTouched, workdirError, setWorkdirError, workdirInputRef,
   tokenDraft, setTokenDraft, labError, setLabError, labInputRef,
-  client, navigate
+  client, navigate, region, onRegionChange
 }) {
   const [showCloudShellHelp, setShowCloudShellHelp] = useState(false);
   const localSetup = setupMode === 'local';
@@ -513,6 +544,9 @@ function GuideLessonPageBody({
           lab={lab}
           labHref={resultStepUrl}
           workdirHref={folderStepUrl}
+          region={region}
+          onRegionChange={onRegionChange}
+          savedRegion={lab?.REGION}
         />
       ))}
     </div>
@@ -711,7 +745,7 @@ function GuideLessonPageBody({
               </button>
               {lab && (
                 <p className="guide-lab-saved">
-                  Đã có kết quả hợp lệ cho region {lab.REGION}.{' '}
+                  Đã có kết quả hợp lệ cho vùng {regionLabel(lab.REGION)} ({lab.REGION}).{' '}
                   {nextStep && (
                     <Link className="btn btn-secondary btn-sm" to={stepUrl(nextStep.id)}>
                       Dùng kết quả đã lưu · Sang bước 3

@@ -1,5 +1,7 @@
 // Ported from aws-web-tut/assets/local-setup.js. Adapt the existing OS lesson
 // so the richer macOS file/SSH instructions remain shared with CloudShell.
+import { DEFAULT_REGION, isValidRegion } from './regions.js';
+
 function parseLocalDirectory(value) {
   const display = String(value ?? '').trim();
   const bash = /^[A-Za-z]:\\/.test(display)
@@ -22,6 +24,8 @@ function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\\''") +
 function psQuote(value) { return "'" + String(value).replace(/'/g, "''") + "'"; }
 export function bootstrapCommand(options) {
   const url = new URL(options.baseUrl);
+  const region = String(options.region ?? DEFAULT_REGION);
+  if (!isValidRegion(region)) throw new Error("Vùng AWS không hợp lệ. Hãy chọn lại vùng ở bước 2.");
   const octets = url.hostname.split('.').map(Number);
   const tailscale = /^100\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname)
     && octets[1] >= 64 && octets[1] <= 127 && octets.every(value => value >= 0 && value <= 255);
@@ -45,7 +49,7 @@ export function bootstrapCommand(options) {
       "set -e; tmp=$(mktemp); trap 'rm -f -- \"$tmp\"' EXIT; " +
       "curl --fail --location " + shellQuote(new URL("scripts/start-aws-local.sh", url).href) + " -o \"$tmp\"; " +
       "test \"$(shasum -a 256 \"$tmp\" | awk '{print $1}')\" = " + shellQuote(options.bootstrapHash) + "; " +
-      "/bin/bash \"$tmp\" " + shellQuote(directory.bash) + " " + shellQuote(url.href) + " " + shellQuote(options.scriptHash) + " " + action
+      "/bin/bash \"$tmp\" " + shellQuote(directory.bash) + " " + shellQuote(url.href) + " " + shellQuote(options.scriptHash) + " " + action + " " + shellQuote(region)
     );
   }
   if (/^\/(Users|Volumes)\//.test(directory.bash)) throw new Error("Hãy chọn macOS hoặc lưu đường dẫn thư mục Windows ở bước 1.");
@@ -55,7 +59,7 @@ export function bootstrapCommand(options) {
     "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; " +
     "Invoke-WebRequest -UseBasicParsing -Uri " + psQuote(new URL("scripts/start-aws-local.ps1", url).href) + " -OutFile $p; " +
     "if ((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -ne " + psQuote(options.bootstrapHash) + ") { throw 'Reload the tutorial and copy the command again.' }; " +
-    "& $p -LabDirectory " + psQuote(windowsPath) + " -BaseUrl " + psQuote(url.href) + " -ScriptSha256 " + psQuote(options.scriptHash) + " -Action " + action +
+    "& $p -LabDirectory " + psQuote(windowsPath) + " -BaseUrl " + psQuote(url.href) + " -ScriptSha256 " + psQuote(options.scriptHash) + " -Action " + action + " -AwsRegion " + psQuote(region) +
     " } finally { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force } }";
   let binary = "";
   for (let i = 0; i < script.length; i++) {
@@ -73,23 +77,24 @@ export function adaptLesson(original, mode, platform) {
   const mac = lesson.platform === "macos";
   const terminal = mac ? "Terminal" : "PowerShell";
   lesson.summary = "Tạo hạ tầng bằng AWS CLI trên máy cá nhân, lưu hai key ngay vào thư mục bài lab, rồi tự triển khai backend và frontend theo các bước bên dưới.";
-  lesson.prerequisites = ["Tài khoản AWS có quyền tạo VPC, EC2, RDS và đăng nhập CLI", mac ? "macOS, Terminal và quyền cài AWS CLI" : "Windows 64-bit; bộ chạy tự cài AWS CLI và Git Bash nếu thiếu", "Thư mục bài lab có mã nguồn b5"];
+  lesson.prerequisites = ["Tài khoản AWS có quyền tạo VPC, EC2, RDS và đăng nhập CLI", "Vùng AWS gần bạn, chọn ở bước 2 (mặc định Singapore)", mac ? "macOS, Terminal và quyền cài AWS CLI" : "Windows 64-bit; bộ chạy tự cài AWS CLI và Git Bash nếu thiếu", "Thư mục bài lab có mã nguồn b5"];
   Object.assign(lesson.steps[1], {
     where: "local", whereLabel: "Máy local · " + terminal,
     goal: "Chạy bộ khởi động trong " + terminal + ". Đăng nhập AWS xong, script tự tạo hạ tầng và lưu hai key vào thư mục đã chọn.",
     blocks: [
-      { type: "note", title: "1. Mở " + terminal, text: mac ? "Mở Terminal trên macOS. Giữ cửa sổ mở cho đến khi tạo hạ tầng xong; macOS có thể yêu cầu mật khẩu quản trị để cài AWS CLI." : "Nhấn Start, gõ PowerShell và mở Windows PowerShell. Bộ chạy tự tải AWS CLI và Git Bash nếu thiếu; không cần tự mở Git Bash." },
+      { type: "region", title: "1. Chọn vùng AWS (region)", hint: "Chọn vùng gần bạn nhất để giảm độ trễ; mặc định là Asia Pacific (Singapore). Bộ chạy trên máy sẽ đăng nhập và tạo VPC, EC2, RDS trong vùng này. Chỉ đổi vùng trước khi chạy: đổi sau khi đã tạo hạ tầng sẽ tạo thêm một bộ tài nguyên mới." },
+      { type: "note", title: "2. Mở " + terminal, text: mac ? "Mở Terminal trên macOS. Giữ cửa sổ mở cho đến khi tạo hạ tầng xong; macOS có thể yêu cầu mật khẩu quản trị để cài AWS CLI." : "Nhấn Start, gõ PowerShell và mở Windows PowerShell. Bộ chạy tự tải AWS CLI và Git Bash nếu thiếu; không cần tự mở Git Bash." },
       { type: "local-bootstrap", action: "start" },
       ...(mac ? [
         { type: "note", title: "Nhập mật khẩu mở máy của bạn", text: "Khi Terminal hiện Password: và biểu tượng chìa khóa như ảnh, nhập mật khẩu đăng nhập Mac rồi nhấn Enter. Khi gõ, màn hình không hiện ký tự hay dấu sao; bạn cứ nhập đủ mật khẩu rồi nhấn Enter để tiếp tục cài AWS CLI." },
         { type: "image", src: "/guides/inf1003/macos/hinh-nhap-mat-khau-cai-aws-cli-annotated.png", alt: "Biểu tượng chìa khóa cạnh Password: trong Terminal macOS, mũi tên đỏ chỉ vào đó với ghi chú Nhập mật khẩu mở máy của bạn.", caption: "Nhập mật khẩu mở máy Mac tại dòng Password: rồi nhấn Enter. Đây là bước cài AWS CLI trên macOS.", fullSizeLink: true }
       ] : []),
-      { type: "note", title: "2. Đăng nhập rồi chờ hoàn tất", text: "Trình duyệt sẽ mở để bạn đăng nhập AWS. Chọn đúng tài khoản lab, quay lại cửa sổ lệnh và chờ script tự chạy. Region dùng cho bài là ap-southeast-1. Không đóng cửa sổ trong khi chờ EC2 và RDS." },
+      { type: "note", title: "3. Đăng nhập rồi chờ hoàn tất", text: "Trình duyệt sẽ mở để bạn đăng nhập AWS. Chọn đúng tài khoản lab, quay lại cửa sổ lệnh và chờ script tự chạy. Script dùng vùng đã chọn ở mục 1 (mặc định Singapore). Không đóng cửa sổ trong khi chờ EC2 và RDS." },
       ...(!mac ? [
         { type: "note", tone: "warn", title: "Configure AWS MCP server connection? [Y/n]: No", text: "Nếu PowerShell hiện câu hỏi này, gõ n rồi nhấn Enter để chọn No. Không chỉ nhấn Enter vì câu này mặc định là Yes. Bài lab không cần cấu hình AWS MCP server." },
         { type: "note", tone: "warn", title: "Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]: No", text: "Câu này cũng gõ n rồi nhấn Enter để chọn No. Bỏ qua cài AWS skills và cấu hình MCP cho AI coding agent, rồi tiếp tục chờ script chạy bài lab." }
       ] : []),
-      { type: "note", title: "3. Copy dòng kết quả và dán bên dưới", text: "Khi script báo hoàn tất, copy toàn bộ chuỗi bắt đầu bằng BDU-LAB-V1: trong cửa sổ lệnh rồi dán vào ô cuối bước này. Nếu chuỗi tự xuống dòng, chọn hết các dòng của chuỗi như khung đỏ trong ảnh minh họa. Thư mục bài lab chỉ cần hai file bdu-key-fe.pem và bdu-key-be.pem nằm cạnh b5." }
+      { type: "note", title: "4. Copy dòng kết quả và dán bên dưới", text: "Khi script báo hoàn tất, copy toàn bộ chuỗi bắt đầu bằng BDU-LAB-V1: trong cửa sổ lệnh rồi dán vào ô cuối bước này. Nếu chuỗi tự xuống dòng, chọn hết các dòng của chuỗi như khung đỏ trong ảnh minh họa. Thư mục bài lab chỉ cần hai file bdu-key-fe.pem và bdu-key-be.pem nằm cạnh b5." }
     ],
     explain: [], expect: ["Hai file bdu-key-fe.pem và bdu-key-be.pem nằm cạnh b5. Script báo hoàn tất và in chuỗi BDU-LAB-V1: để copy vào ô bên dưới."],
     errors: [
@@ -110,9 +115,9 @@ export function adaptLesson(original, mode, platform) {
     where: "local", whereLabel: "Máy local · " + terminal,
     goal: "Dùng AWS CLI trên máy để dọn tài nguyên của bài khi học xong.",
     blocks: [
-      { type: "note", title: "Dọn tài nguyên bằng " + terminal, text: "Mở lại " + terminal + ", chạy lệnh bên dưới và đăng nhập đúng tài khoản lab. Khi script hiển thị tài khoản cùng region ap-southeast-1, chỉ gõ yes nếu đúng hạ tầng bạn muốn dọn. Chờ kết quả kiểm tra tài nguyên còn sót." },
+      { type: "note", title: "Dọn tài nguyên bằng " + terminal, text: "Mở lại " + terminal + ", chạy lệnh bên dưới và đăng nhập đúng tài khoản lab. Khi script hiển thị tài khoản cùng vùng đã tạo hạ tầng ở bước 2, chỉ gõ yes nếu đúng hạ tầng bạn muốn dọn. Chờ kết quả kiểm tra tài nguyên còn sót." },
       { type: "local-bootstrap", action: "clean" }
-    ], explain: [], expect: ["Script xác nhận không còn tài nguyên của bài trong region ap-southeast-1."],
+    ], explain: [], expect: ["Script xác nhận không còn tài nguyên của bài trong vùng đã chọn ở bước 2."],
     errors: [{ symptom: "Script báo còn tài nguyên hoặc thiếu quyền xóa.", cause: "Tài nguyên còn phụ thuộc nhau hoặc phiên đăng nhập không có đủ quyền.", fix: "Đọc lỗi trong cửa sổ lệnh, xử lý quyền rồi chạy lại lệnh dọn. Không xem là hoàn tất khi vẫn còn tài nguyên." }]
   });
   return lesson;

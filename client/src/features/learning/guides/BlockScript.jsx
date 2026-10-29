@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import CopyButton from './BlockCopy.jsx';
 import { GUIDE_SCRIPTS } from './inf1003/scripts.generated.js';
+import { DEFAULT_REGION, applyScriptRegion } from './inf1003/regions.js';
 
 // Port of BDUCore.toBashOneLiner (assets/core.js): a single line that survives
 // clipboard paste into CloudShell. The script is base64-encoded so Windows
@@ -29,9 +30,12 @@ export function toBashOneLiner(text) {
 
 // Mirrors the original scriptBlock/codePanel (assets/app.js): the preview
 // shows the first lines, but Copy always takes the one-liner above.
-export default function BlockScript({ block, scripts = GUIDE_SCRIPTS }) {
+// `region` rewrites the script's AWS_DEFAULT_REGION/AWS_REGION exports so the
+// lab is not locked to Singapore; the selection lives in GuideLessonPage.
+export default function BlockScript({ block, scripts = GUIDE_SCRIPTS, region = DEFAULT_REGION }) {
   const [expanded, setExpanded] = useState(false);
-  const script = String(scripts?.[block?.scriptKey] ?? '');
+  const source = String(scripts?.[block?.scriptKey] ?? '');
+  const script = applyScriptRegion(source, region);
   if (!script) return null;
   const lines = script.split('\n');
   const limit = Number(block?.previewLines) > 0 ? Number(block.previewLines) : 10;

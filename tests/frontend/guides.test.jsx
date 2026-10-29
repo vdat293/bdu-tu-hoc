@@ -85,6 +85,7 @@ import BlockKeyDownloads from '../../client/src/features/learning/guides/BlockKe
 import BlockNote from '../../client/src/features/learning/guides/BlockNote.jsx';
 import BlockScript, { toBashOneLiner } from '../../client/src/features/learning/guides/BlockScript.jsx';
 import { GUIDE_SCRIPTS } from '../../client/src/features/learning/guides/inf1003/scripts.generated.js';
+import { applyScriptRegion, normalizeRegion, regionLabel } from '../../client/src/features/learning/guides/inf1003/regions.js';
 import { BAI_1_MACOS_LESSON } from '../../client/src/features/learning/guides/inf1003/bai-1-macos.js';
 import CourseLearningPage from '../../client/src/features/learning/CourseLearningPage.jsx';
 
@@ -268,7 +269,18 @@ describe('BlockScript', () => {
     expect(screen.getByText(/copy lấy lệnh 1 dòng/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /sao chép/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(writeText.mock.calls[0][0]).toBe(toBashOneLiner(GUIDE_SCRIPTS.start));
+    expect(writeText.mock.calls[0][0]).toBe(toBashOneLiner(applyScriptRegion(GUIDE_SCRIPTS.start, 'ap-southeast-1')));
+  });
+
+  it('writes the chosen region into the preview and the copied one-liner', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderWithClient(<BlockScript block={{ type: 'script', scriptKey: 'start', previewLines: 10 }} region="ap-northeast-1" />);
+    expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent.includes('AWS_DEFAULT_REGION="ap-northeast-1"'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /sao chép/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0][0]).toBe(toBashOneLiner(applyScriptRegion(GUIDE_SCRIPTS.start, 'ap-northeast-1')));
+    expect(writeText.mock.calls[0][0]).not.toBe(toBashOneLiner(GUIDE_SCRIPTS.start));
   });
 });
 
@@ -433,6 +445,30 @@ describe('GuideLessonPage original-flow wiring', () => {
     expect(screen.getByText('Thư mục lưu hai key:', { exact: false })).toHaveTextContent(directory);
     fireEvent.click(screen.getByRole('button', { name: 'Quay lại cách dùng CloudShell' }));
     expect(await screen.findByRole('button', { name: 'Bạn không mở được CloudShell?' })).toBeInTheDocument();
+  });
+
+  it('lets the student pick the AWS region and keeps cleanup on the saved region', async () => {
+    mockLessonAPIs({ steps: {}, workdir: null });
+    const first = renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-2']);
+    const select = await screen.findByRole('combobox', { name: 'Vùng AWS' });
+    expect(select).toHaveValue('ap-southeast-1');
+    fireEvent.change(select, { target: { value: 'ap-northeast-1' } });
+    expect(select).toHaveValue('ap-northeast-1');
+    expect(screen.getByText(/Asia Pacific \(Tokyo\) \(ap-northeast-1\)/)).toBeInTheDocument();
+    expect(window.localStorage.getItem('bdu:guide-region:24050001:INF1003:bai-1:cmd-be-first-v4')).toBe('ap-northeast-1');
+    first.unmount();
+
+    // Cleanup follows the result's region even if the selector holds another one.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockLessonAPIs({ steps: {}, workdir: null }, { ...LAB_FIELDS, REGION: 'ap-southeast-2' });
+    renderLessonRoutes(['/learning/INF1003/guides/bai-1/buoc-7']);
+    fireEvent.click(await screen.findByRole('button', { name: /sao chép/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const b64 = writeText.mock.calls[0][0].match(/printf '%s' '([^']+)'/)[1];
+    const decoded = new TextDecoder().decode(Uint8Array.from(atob(b64), (character) => character.charCodeAt(0)));
+    expect(decoded).toContain('AWS_DEFAULT_REGION="ap-southeast-2"');
+    window.localStorage.removeItem('bdu:guide-region:24050001:INF1003:bai-1:cmd-be-first-v4');
   });
 
   it.each(['windows', 'macos'])('shows the annotated result and accepts pasted local output on %s', async (platform) => {
@@ -769,7 +805,7 @@ describe('GuideLessonPage original-flow wiring', () => {
 
   it('existing lab result shows the reuse line linking to the next step', async () => {
     await openStep('buoc-2', { steps: {}, workdir: null }, LAB_FIELDS);
-    expect(await screen.findByText(/đã có kết quả hợp lệ cho region ap-southeast-1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/đã có kết quả hợp lệ cho vùng Asia Pacific \(Singapore\) \(ap-southeast-1\)/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /dùng kết quả đã lưu · sang bước 3/i })).toHaveAttribute(
       'href', expect.stringContaining('buoc-3')
     );

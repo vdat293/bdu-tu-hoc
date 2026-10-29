@@ -90,7 +90,7 @@ function macStep(source) {
   step.expect = source.expect.map(macCopy);
 
   if (step.id === 'buoc-2') {
-    step.blocks = step.blocks.map((block) => block.title === '3. Dán lệnh vào CloudShell và chạy'
+    step.blocks = step.blocks.map((block) => block.title === '4. Dán lệnh vào CloudShell và chạy'
       ? { ...block, text: 'Trong AWS Console, click vùng terminal ngay sau dấu nhắc ~ $. Nhấn Cmd+V để dán lệnh vừa copy vào CloudShell rồi Enter nếu lệnh chưa tự chạy. Các thông báo sẽ xuất hiện bên dưới.' }
       : block);
   }
@@ -160,7 +160,7 @@ export const BAI_1_MACOS_LESSON = {
   prerequisites: [
     'Tài khoản AWS lab có quyền tạo VPC, EC2 và RDS',
     'macOS Terminal (zsh hoặc bash), có ssh, scp, curl và unzip',
-    'AWS CloudShell tại region ap-southeast-1'
+    'AWS CloudShell; chọn vùng AWS ở bước 2 (mặc định Singapore)'
   ],
   steps: BAI_1_LESSON.steps.map(macStep)
 };

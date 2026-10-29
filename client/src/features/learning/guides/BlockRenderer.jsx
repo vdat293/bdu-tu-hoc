@@ -5,6 +5,7 @@ import BlockDownload from './BlockDownload.jsx';
 import BlockImage from './BlockImage.jsx';
 import BlockKeyDownloads from './BlockKeyDownloads.jsx';
 import BlockNote from './BlockNote.jsx';
+import BlockRegion from './BlockRegion.jsx';
 import BlockScript from './BlockScript.jsx';
 import BlockLocalBootstrap from './BlockLocalBootstrap.jsx';
 
@@ -25,7 +26,7 @@ export function GuideGateWarn({ text, href, action }) {
   );
 }
 
-function Troubleshoot({ block, workdir, vars, connection, keys, lab, labHref, workdirHref }) {
+function Troubleshoot({ block, workdir, vars, connection, keys, lab, labHref, workdirHref, region, onRegionChange, savedRegion }) {
   // Original troubleshoot titles carry a leading "+ " marker that is not shown.
   const title = typeof block?.title === 'string' ? block.title.replace(/^\+\s*/, '') : 'Gặp sự cố?';
   return (
@@ -43,6 +44,9 @@ function Troubleshoot({ block, workdir, vars, connection, keys, lab, labHref, wo
             lab={lab}
             labHref={labHref}
             workdirHref={workdirHref}
+            region={region}
+            onRegionChange={onRegionChange}
+            savedRegion={savedRegion}
           />
         ))}
       </div>
@@ -59,7 +63,7 @@ function needsLabResult(block) {
 // Per-block gate mirroring renderBlock (assets/app.js): personalized blocks
 // need the saved lab result (and the workdir for localDirectory ones);
 // key-downloads/connection always need it.
-export default function BlockRenderer({ block, workdir, vars, connection, keys, lab, labHref, workdirHref, platform, onCloudShellHelp }) {
+export default function BlockRenderer({ block, workdir, vars, connection, keys, lab, labHref, workdirHref, platform, onCloudShellHelp, region, onRegionChange, savedRegion }) {
   if (!block?.type) return null;
   switch (block.type) {
     case 'note':
@@ -67,9 +71,18 @@ export default function BlockRenderer({ block, workdir, vars, connection, keys, 
         <BlockNote block={block} feIp={lab?.FE_IP ?? vars?.FE_IP} />
         {block.cloudshellFallback && onCloudShellHelp && <button type="button" className="guide-cloudshell-help" onClick={onCloudShellHelp}>Bạn không mở được CloudShell?</button>}
       </>;
+    case 'region':
+      return <BlockRegion block={block} region={region} onChange={onRegionChange} savedRegion={savedRegion} />;
     case 'local-bootstrap':
       if (!workdir) return <GuideGateWarn text={MISSING_WORKDIR_TEXT} href={workdirHref} action="Lưu đường dẫn ở bước 1" />;
-      return <BlockLocalBootstrap block={block} workdir={workdir} platform={platform} />;
+      return (
+        <BlockLocalBootstrap
+          block={block}
+          workdir={workdir}
+          platform={platform}
+          region={block.action === 'clean' && savedRegion ? savedRegion : region}
+        />
+      );
     case 'code': {
       if (needsLabResult(block) && !lab) {
         return <GuideGateWarn text={MISSING_LAB_TEXT} href={labHref} action="→ Dán kết quả ở bước 2" />;
@@ -80,7 +93,7 @@ export default function BlockRenderer({ block, workdir, vars, connection, keys, 
       return <BlockCode block={block} workdir={workdir} vars={vars} />;
     }
     case 'script':
-      return <BlockScript block={block} />;
+      return <BlockScript block={block} region={block.scriptKey === 'clean' && savedRegion ? savedRegion : region} />;
     case 'image':
       return <BlockImage block={block} />;
     case 'download':
@@ -106,6 +119,9 @@ export default function BlockRenderer({ block, workdir, vars, connection, keys, 
           lab={lab}
           labHref={labHref}
           workdirHref={workdirHref}
+          region={region}
+          onRegionChange={onRegionChange}
+          savedRegion={savedRegion}
         />
       );
     default:

@@ -19,6 +19,7 @@ describe('local AWS setup', () => {
     const lesson = adaptLesson(original, 'local', platform);
     expect(lesson.steps).toHaveLength(7);
     expect(lesson.steps[1].blocks).toContainEqual({ type: 'local-bootstrap', action: 'start' });
+    expect(lesson.steps[1].blocks[0]).toMatchObject({ type: 'region' });
     expect(lesson.steps[6].blocks).toContainEqual({ type: 'local-bootstrap', action: 'clean' });
     expect(lesson.steps[2].blocks.some(block => block.type === 'key-downloads')).toBe(false);
     for (const index of [0, 3, 4, 5]) expect(lesson.steps[index]).toEqual(original.steps[index]);
@@ -39,8 +40,20 @@ describe('local AWS setup', () => {
     expect(source).not.toContain('Invoke-Expression');
   });
 
-  it('builds macOS commands and rejects unsafe origins and incompatible paths', () => {
-    const command = bootstrapCommand({ ...options, platform: 'macos', directory: "/Users/ten/Năm 3/O'Brien/lab1" });
+  it('passes the chosen region to both bootstrap scripts and rejects invalid ones', () => {
+    const mac = bootstrapCommand({ ...options, platform: 'macos', directory: '/Users/ten/lab1', region: 'ap-northeast-1' });
+    expect(mac).toContain("'ap-northeast-1'");
+    const windows = Buffer.from(bootstrapCommand({ ...options, region: 'ap-northeast-1' }).split(' ').at(-1), 'base64').toString('utf16le');
+    expect(windows).toContain("-AwsRegion 'ap-northeast-1'");
+    for (const region of ['Singapore', 'ap-southeast-1; rm -rf ~', '']) {
+      expect(() => bootstrapCommand({ ...options, region })).toThrow();
+    }
+    // No region keeps the documented Singapore default.
+    const fallback = Buffer.from(bootstrapCommand(options).split(' ').at(-1), 'base64').toString('utf16le');
+    expect(fallback).toContain("-AwsRegion 'ap-southeast-1'");
+  });
+
+  it('builds macOS commands and rejects unsafe origins and incompatible paths', () => {    const command = bootstrapCommand({ ...options, platform: 'macos', directory: "/Users/ten/Năm 3/O'Brien/lab1" });
     expect(command).toContain('/bin/bash -c ');
     expect(command).toContain('shasum -a 256');
     expect(command).toContain('/guides/inf1003/scripts/start-aws-local.sh');

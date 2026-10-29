@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string]$LabDirectory,
     [Parameter(Mandatory = $true)][uri]$BaseUrl,
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$ScriptSha256,
-    [ValidateSet('start', 'clean')][string]$Action = 'start'
+    [ValidateSet('start', 'clean')][string]$Action = 'start',
+    [ValidatePattern('^[a-z]{2}(-[a-z]+)+-[0-9]$')][string]$AwsRegion = 'ap-southeast-1'
 )
 
 Set-StrictMode -Version Latest
@@ -109,7 +110,7 @@ function Invoke-LocalLab {
         if (-not $bash) { throw 'Git Bash installation did not produce bash.exe.' }
         $env:PATH = (Split-Path $aws) + ';' + (Split-Path $bash) + ';' + $env:PATH
         $env:AWS_PROFILE = 'bdu-lab'
-        $env:AWS_REGION = 'ap-southeast-1'
+        $env:AWS_REGION = $AwsRegion
         $env:AWS_DEFAULT_REGION = $env:AWS_REGION
         $env:AWS_PAGER = ''
         $env:AWS_CLI_AUTO_PROMPT = 'off'
@@ -117,12 +118,12 @@ function Invoke-LocalLab {
         foreach ($name in @('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_SECURITY_TOKEN')) {
             [Environment]::SetEnvironmentVariable($name, $null, 'Process')
         }
-        Write-Host '[3/5] Sign in to your AWS lab account in the browser...'
+        Write-Host "[3/5] Sign in to your AWS lab account in the browser (region $AwsRegion)..."
         Write-Host 'If asked "Configure AWS MCP server connection? [Y/n]:", type n then press Enter (No).'
         Write-Host 'If asked "Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]:", type n then press Enter (No).'
-        & $aws login --profile bdu-lab --region ap-southeast-1
+        & $aws login --profile bdu-lab --region $AwsRegion
         if ($LASTEXITCODE -ne 0) { throw 'AWS login failed. Your identity needs SignInLocalDevelopmentAccess; IAM Identity Center uses aws sso login instead.' }
-        & $aws sts get-caller-identity --profile bdu-lab --region ap-southeast-1
+        & $aws sts get-caller-identity --profile bdu-lab --region $AwsRegion
         if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the signed-in account. The lab script was not started.' }
         Write-Host "[4/5] Downloading the $Action script..."
         $source = if ($Action -eq 'start') { '01-start-cloudshell.sh' } else { '03-clean-cloudshell.sh' }

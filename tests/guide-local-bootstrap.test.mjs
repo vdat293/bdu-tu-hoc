@@ -131,20 +131,25 @@ sudo() {
 export -f aws
 base_url='https://example.com/course/'
 if [ "$BDU_TEST_CASE" = tailscale ]; then base_url='http://100.69.225.60:4304/guides/inf1003/'; fi
-main ${shellPath(root)} "$base_url" '${checksum}'
+if [ -n "\${BDU_TEST_REGION:-}" ]; then
+  main ${shellPath(root)} "$base_url" '${checksum}' start "$BDU_TEST_REGION"
+else
+  main ${shellPath(root)} "$base_url" '${checksum}'
+fi
 `);
-    for (const scenario of ['existing-tools', 'missing-tools', 'version-one', 'not-installed', 'empty-version', 'malformed-version', 'version-fails', 'install-no-cli', 'install-fails', 'signature-macos', 'signature-notarized', 'signature-untrusted', 'signature-unsigned', 'signature-wrong-publisher', 'signature-wrong-leaf', 'signature-invalid', 'login-fails', 'tailscale']) {
+    for (const scenario of ['existing-tools', 'missing-tools', 'version-one', 'not-installed', 'empty-version', 'malformed-version', 'version-fails', 'install-no-cli', 'install-fails', 'signature-macos', 'signature-notarized', 'signature-untrusted', 'signature-unsigned', 'signature-wrong-publisher', 'signature-wrong-leaf', 'signature-invalid', 'login-fails', 'tailscale', 'custom-region', 'bad-region']) {
       const log = join(root, scenario + ".log");
+      const region = scenario === 'custom-region' ? 'ap-northeast-1' : scenario === 'bad-region' ? 'Singapore' : '';
       const output = spawnSync(bash, [harness.replace(/\\/g, "/")], {
-        env: { ...process.env, BDU_TEST_CASE: scenario, BDU_TEST_LOG: log.replace(/\\/g, "/") }, encoding: "utf8", windowsHide: true, timeout: 15000
+        env: { ...process.env, BDU_TEST_CASE: scenario, BDU_TEST_REGION: region, BDU_TEST_LOG: log.replace(/\\/g, "/") }, encoding: "utf8", windowsHide: true, timeout: 15000
       });
-      const lines = readFileSync(log, "utf8");
+      const lines = existsSync(log) ? readFileSync(log, "utf8") : "";
       const signatureRejected = scenario.startsWith('signature-') && !['signature-macos', 'signature-notarized'].includes(scenario);
-      if (['login-fails', 'install-no-cli', 'install-fails'].includes(scenario) || signatureRejected) {
+      if (['login-fails', 'install-no-cli', 'install-fails', 'bad-region'].includes(scenario) || signatureRejected) {
         assert.notEqual(output.status, 0);
         assert.ok(!lines.includes("run-lab"));
         assert.ok(!lines.includes("aws sts"));
-        if (scenario !== 'login-fails') {
+        if (!['login-fails', 'bad-region'].includes(scenario)) {
           assert.equal(lines.includes('install-aws'), !signatureRejected, scenario);
           assert.ok(!lines.includes('aws login'));
         }
@@ -156,6 +161,10 @@ main ${shellPath(root)} "$base_url" '${checksum}'
         assert.equal(lines.includes('install-aws'), ['missing-tools', 'version-one', 'not-installed', 'empty-version', 'malformed-version', 'version-fails', 'signature-macos', 'signature-notarized'].includes(scenario), scenario);
         if (lines.includes('install-aws')) assert.ok(lines.indexOf('signature-check') < lines.indexOf('install-aws'));
         if (scenario === 'tailscale') assert.ok(lines.includes('http://100.69.225.60:4304/guides/inf1003/scripts/01-start-cloudshell.sh'));
+        if (scenario === 'custom-region') {
+          assert.ok(lines.includes('--region ap-northeast-1'), lines);
+          assert.ok(!lines.includes('--region ap-southeast-1'), lines);
+        }
       }
     }
   } finally { removeTestDirectory(root); }
@@ -201,7 +210,7 @@ test("Windows pipeline installs missing tools, logs in before launch, and stops 
     writeFileSync(join(root, "fake-aws.ps1"), `Add-Content -LiteralPath $env:BDU_TEST_LOG -Value ("aws " + ($args -join ' '))
 if ($args[0] -eq 'login' -and $env:BDU_TEST_CASE -eq 'login-fails') { $global:LASTEXITCODE=1 } else { $global:LASTEXITCODE=0 }
 `);
-    writeFileSync(join(root, "fake-bash.ps1"), `if ($env:AWS_REGION -ne 'ap-southeast-1' -or $env:MSYS_NO_PATHCONV -ne '1') { throw 'missing environment' }
+    writeFileSync(join(root, "fake-bash.ps1"), `if ($env:AWS_REGION -ne $env:BDU_EXPECT_REGION -or $env:AWS_DEFAULT_REGION -ne $env:BDU_EXPECT_REGION -or $env:MSYS_NO_PATHCONV -ne '1') { throw 'missing environment' }
 if ($env:AWS_ACCESS_KEY_ID) { throw 'inherited credentials must not shadow login' }
 if ($env:BDU_LAB_DIRECTORY -ne $env:BDU_TEST_LAB) { throw 'wrong output path' }
 if ($env:ASSUME_YES) { throw 'cleanup confirmation bypassed' }
@@ -210,7 +219,9 @@ $global:LASTEXITCODE=0
 `);
     const harness = join(root, "harness.ps1");
     writeFileSync(harness, `$baseUrl = if ($env:BDU_TEST_CASE -eq 'tailscale') { 'http://100.69.225.60:4304/guides/inf1003/' } else { 'https://example.com/course/' }
-. $env:BDU_TEST_SOURCE -LabDirectory $env:BDU_TEST_LAB -BaseUrl $baseUrl -ScriptSha256 '${checksum}'
+$params = @{ LabDirectory = $env:BDU_TEST_LAB; BaseUrl = $baseUrl; ScriptSha256 = '${checksum}' }
+if ($env:BDU_TEST_REGION) { $params.AwsRegion = $env:BDU_TEST_REGION }
+. $env:BDU_TEST_SOURCE @params
 $script:awsInstalled=$false; $script:bashInstalled=$false
 function Find-AwsCli { if ($env:BDU_TEST_CASE -ne 'missing-tools' -or $script:awsInstalled) { Join-Path $env:BDU_TEST_ROOT 'fake-aws.ps1' } }
 function Find-GitBash { if ($env:BDU_TEST_CASE -ne 'missing-tools' -or $script:bashInstalled) { Join-Path $env:BDU_TEST_ROOT 'fake-bash.ps1' } }
@@ -225,10 +236,10 @@ function Get-Download($Url,$Destination) {
 try { Invoke-LocalLab } catch { Write-Output $_; exit 1 }
 if ($env:AWS_ACCESS_KEY_ID -ne 'TEST-INHERITED') { throw 'environment was not restored' }
 `, "utf8");
-    for (const scenario of ["existing-tools", "missing-tools", "login-fails", "bad-hash", "tailscale"]) {
+    for (const scenario of ["existing-tools", "missing-tools", "login-fails", "bad-hash", "tailscale", "custom-region"]) {
       const log = join(root, scenario + ".log");
       const run = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", harness], {
-        env: { ...process.env, PSModulePath: join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "Modules"), BDU_TEST_CASE: scenario, BDU_TEST_ROOT: root, BDU_TEST_LOG: log, BDU_TEST_LAB: lab, BDU_TEST_SOURCE: resolve("public/guides/inf1003/scripts/start-aws-local.ps1"), AWS_ACCESS_KEY_ID: "TEST-INHERITED", ASSUME_YES: "1" },
+        env: { ...process.env, PSModulePath: join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "Modules"), BDU_TEST_CASE: scenario, BDU_TEST_ROOT: root, BDU_TEST_LOG: log, BDU_TEST_LAB: lab, BDU_TEST_SOURCE: resolve("public/guides/inf1003/scripts/start-aws-local.ps1"), BDU_TEST_REGION: scenario === "custom-region" ? "ap-northeast-1" : "", BDU_EXPECT_REGION: scenario === "custom-region" ? "ap-northeast-1" : "ap-southeast-1", AWS_ACCESS_KEY_ID: "TEST-INHERITED", ASSUME_YES: "1" },
         encoding: "utf8", timeout: 30000, windowsHide: true
       });
       const output = existsSync(log) ? readFileSync(log, "utf8") : "";
@@ -244,6 +255,10 @@ if ($env:AWS_ACCESS_KEY_ID -ne 'TEST-INHERITED') { throw 'environment was not re
         assert.equal(output.includes("install-aws"), scenario === "missing-tools");
         assert.equal(output.includes("install-bash"), scenario === "missing-tools");
         if (scenario === 'tailscale') assert.ok(output.includes('http://100.69.225.60:4304/guides/inf1003/scripts/01-start-cloudshell.sh'));
+        if (scenario === 'custom-region') {
+          assert.ok(output.includes('aws login --profile bdu-lab --region ap-northeast-1'), output);
+          assert.ok(output.includes('aws sts get-caller-identity --profile bdu-lab --region ap-northeast-1'), output);
+        }
       }
     }
   } finally { removeTestDirectory(root); }

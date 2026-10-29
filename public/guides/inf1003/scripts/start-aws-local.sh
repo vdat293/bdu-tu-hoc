@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS bootstrap: bash start-aws-local.sh LAB_DIRECTORY BASE_URL SHA256 [start|clean]
+# macOS bootstrap: bash start-aws-local.sh LAB_DIRECTORY BASE_URL SHA256 [start|clean] [region]
 set -euo pipefail
 umask 077
 
@@ -45,10 +45,11 @@ is_lab_url() {
   (( 10#${BASH_REMATCH[1]} >= 64 && 10#${BASH_REMATCH[1]} <= 127 && 10#${BASH_REMATCH[2]} <= 255 && 10#${BASH_REMATCH[3]} <= 255 ))
 }
 main() {
-  [ "$#" -ge 3 ] && [ "$#" -le 4 ] || fail 'Can duong dan lab, URL website va SHA256.'
+  [ "$#" -ge 3 ] && [ "$#" -le 5 ] || fail 'Can duong dan lab, URL website, SHA256, action va region.'
   [ "$(uname -s)" = Darwin ] || fail 'Script nay danh cho macOS; Windows dung start-aws-local.ps1.'
-  local lab_dir="$1" base_url="${2%/}" checksum="$3" action="${4:-start}" source temp_dir
+  local lab_dir="$1" base_url="${2%/}" checksum="$3" action="${4:-start}" region="${5:-ap-southeast-1}" source temp_dir
   case "$action" in start|clean) ;; *) fail 'Action phai la start hoac clean.' ;; esac
+  [[ "$region" =~ ^[a-z]{2}(-[a-z]+)+-[0-9]$ ]] || fail "Region khong hop le: $region."
   is_lab_url "$base_url" || fail 'URL website phai dung HTTPS, localhost hoac IP Tailscale.'
   [[ "$checksum" =~ ^[a-f0-9]{64}$ ]] || fail 'SHA256 khong hop le.'
   [ -d "$lab_dir" ] || fail 'Thu muc lab chua ton tai.'
@@ -66,11 +67,11 @@ main() {
     hash -r
   fi
   aws_cli_ready || fail 'AWS CLI chua chay duoc hoac chua dat ban 2.32.0 sau khi cai. Kiem tra bo cai va duong dan lenh aws.'
-  export AWS_PROFILE=bdu-lab AWS_REGION=ap-southeast-1 AWS_DEFAULT_REGION=ap-southeast-1 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  export AWS_PROFILE=bdu-lab AWS_REGION="$region" AWS_DEFAULT_REGION="$region" AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN ASSUME_YES
-  echo '[2/4] Dang nhap tai khoan AWS lab tren trinh duyet...'
-  aws login --profile bdu-lab --region ap-southeast-1 || fail 'Dang nhap that bai. Can quyen SignInLocalDevelopmentAccess; IAM Identity Center dung aws sso login.'
-  aws sts get-caller-identity --profile bdu-lab --region ap-southeast-1
+  echo "[2/4] Dang nhap tai khoan AWS lab tren trinh duyet (region $region)..."
+  aws login --profile bdu-lab --region "$region" || fail 'Dang nhap that bai. Can quyen SignInLocalDevelopmentAccess; IAM Identity Center dung aws sso login.'
+  aws sts get-caller-identity --profile bdu-lab --region "$region"
   echo '[3/4] Tai script bai lab...'
   if [ "$action" = start ]; then source=01-start-cloudshell.sh; else source=03-clean-cloudshell.sh; fi
   curl --fail --location --retry 2 "$base_url/scripts/$source" -o "$temp_dir/$action-aws.sh"
