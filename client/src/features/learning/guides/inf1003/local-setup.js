@@ -85,6 +85,10 @@ export function adaptLesson(original, mode, platform) {
         { type: "image", src: "/guides/inf1003/macos/hinh-nhap-mat-khau-cai-aws-cli-annotated.png", alt: "Biểu tượng chìa khóa cạnh Password: trong Terminal macOS, mũi tên đỏ chỉ vào đó với ghi chú Nhập mật khẩu mở máy của bạn.", caption: "Nhập mật khẩu mở máy Mac tại dòng Password: rồi nhấn Enter. Đây là bước cài AWS CLI trên macOS.", fullSizeLink: true }
       ] : []),
       { type: "note", title: "2. Đăng nhập rồi chờ hoàn tất", text: "Trình duyệt sẽ mở để bạn đăng nhập AWS. Chọn đúng tài khoản lab, quay lại cửa sổ lệnh và chờ script tự chạy. Region dùng cho bài là ap-southeast-1. Không đóng cửa sổ trong khi chờ EC2 và RDS." },
+      ...(!mac ? [
+        { type: "note", tone: "warn", title: "Configure AWS MCP server connection? [Y/n]: No", text: "Nếu PowerShell hiện câu hỏi này, gõ n rồi nhấn Enter để chọn No. Không chỉ nhấn Enter vì câu này mặc định là Yes. Bài lab không cần cấu hình AWS MCP server." },
+        { type: "note", tone: "warn", title: "Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]: No", text: "Câu này cũng gõ n rồi nhấn Enter để chọn No. Bỏ qua cài AWS skills và cấu hình MCP cho AI coding agent, rồi tiếp tục chờ script chạy bài lab." }
+      ] : []),
       { type: "note", title: "3. Copy dòng kết quả và dán bên dưới", text: "Khi script báo hoàn tất, copy toàn bộ chuỗi bắt đầu bằng BDU-LAB-V1: trong cửa sổ lệnh rồi dán vào ô cuối bước này. Nếu chuỗi tự xuống dòng, chọn hết các dòng của chuỗi như khung đỏ trong ảnh minh họa. Thư mục bài lab chỉ cần hai file bdu-key-fe.pem và bdu-key-be.pem nằm cạnh b5." }
     ],
     explain: [], expect: ["Hai file bdu-key-fe.pem và bdu-key-be.pem nằm cạnh b5. Script báo hoàn tất và in chuỗi BDU-LAB-V1: để copy vào ô bên dưới."],

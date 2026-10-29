@@ -443,12 +443,19 @@ describe('GuideLessonPage original-flow wiring', () => {
       ? '/guides/inf1003/hinh-copy-ket-qua-local-annotated.png'
       : '/guides/inf1003/hinh-copy-ket-qua-windows-annotated.png');
     const passwordImage = screen.queryByRole('img', { name: /Biểu tượng chìa khóa cạnh Password:/ });
+    const mcpPrompt = 'Configure AWS MCP server connection? [Y/n]: No';
+    const skillsPrompt = 'Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]: No';
     if (platform === 'macos') {
       expect(passwordImage).toHaveAttribute('src', '/guides/inf1003/macos/hinh-nhap-mat-khau-cai-aws-cli-annotated.png');
       expect(screen.getByText('Nhập mật khẩu mở máy của bạn', { exact: true })).toBeInTheDocument();
+      expect(screen.queryByText(mcpPrompt, { exact: true })).not.toBeInTheDocument();
+      expect(screen.queryByText(skillsPrompt, { exact: true })).not.toBeInTheDocument();
     } else {
       expect(passwordImage).not.toBeInTheDocument();
       expect(screen.queryByText('Nhập mật khẩu mở máy của bạn', { exact: true })).not.toBeInTheDocument();
+      expect(screen.getByText(mcpPrompt, { exact: true })).toBeInTheDocument();
+      expect(screen.getByText(skillsPrompt, { exact: true })).toBeInTheDocument();
+      expect(screen.getByText(/Không chỉ nhấn Enter vì câu này mặc định là Yes/)).toBeInTheDocument();
     }
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/lab-result\.json/)).not.toBeInTheDocument();

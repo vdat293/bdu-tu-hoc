@@ -118,6 +118,8 @@ function Invoke-LocalLab {
             [Environment]::SetEnvironmentVariable($name, $null, 'Process')
         }
         Write-Host '[3/5] Sign in to your AWS lab account in the browser...'
+        Write-Host 'If asked "Configure AWS MCP server connection? [Y/n]:", type n then press Enter (No).'
+        Write-Host 'If asked "Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]:", type n then press Enter (No).'
         & $aws login --profile bdu-lab --region ap-southeast-1
         if ($LASTEXITCODE -ne 0) { throw 'AWS login failed. Your identity needs SignInLocalDevelopmentAccess; IAM Identity Center uses aws sso login instead.' }
         & $aws sts get-caller-identity --profile bdu-lab --region ap-southeast-1

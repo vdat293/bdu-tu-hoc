@@ -52,6 +52,12 @@ Bản macOS còn có ảnh `macos/hinh-nhap-mat-khau-cai-aws-cli-annotated.png` 
 lệnh khởi động, chỉ vào biểu tượng chìa khóa cạnh `Password:` và nhắc nhập mật khẩu
 mở máy. Khối ảnh và ghi chú này không xuất hiện trong bản Windows.
 
+Trong bản Windows, sau phần đăng nhập có hai ghi chú: gặp
+`Configure AWS MCP server connection? [Y/n]:` hoặc
+`Configure AWS skills and the AWS MCP server for your AI coding agent(s)? [y/n/never]:`
+thì gõ `n` rồi Enter để chọn **No** cho cả hai. Không nhấn Enter trống ở câu đầu
+vì mặc định là Yes. Bộ chạy PowerShell cũng in nhắc nhở này trước khi đăng nhập.
+
 Script tải từ `public/guides/inf1003/scripts/` được kiểm tra SHA-256. Sau khi sửa
 bất kỳ script nào, chạy `node scripts/embed-guide-local.mjs` để đồng bộ mã nhúng
 CloudShell và các checksum. Git giữ LF cho script; máy chủ yêu cầu revalidate

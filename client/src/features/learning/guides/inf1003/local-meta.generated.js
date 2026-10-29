@@ -3,5 +3,5 @@ export const GUIDE_LOCAL_META = {
   "01-start-cloudshell.sh": "e5144a72e61c9e998ddc7d5b6069273d16628e8f8fc94f6264211dfc1ead057d",
   "03-clean-cloudshell.sh": "81348e90c1d67b952ac6ebae2e0d95a9f5c80094b4585afa78602f33290c3681",
   "start-aws-local.sh": "554995b91fb6fd462b4f330c2e13be52b43f6f67fe06932304d1d70cf40ee54f",
-  "start-aws-local.ps1": "2cc23e503c28acea25a9ddecbad0fb683d9960c64eb9a8386dca65a43aa6cab2"
+  "start-aws-local.ps1": "26f3bd5c6993d76b7f9424a556ac97344972e78f815f5c37b48c31ac3b6a7e63"
 };
