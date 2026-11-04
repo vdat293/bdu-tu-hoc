@@ -11,6 +11,8 @@ export const SAFE_NODE_TESTS = [
   'test-db-maintenance-guards.mjs',
   'test-migration-ledger.mjs',
   'test-enrollment-migration.js',
+  'test-enrollment-priority.js',
+  'test-enrollment-tkb.js',
   'test-local-compose-safety.js',
   'test-queue.js',
   'test-docx-postprocessor.js',
