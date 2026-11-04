@@ -1,4 +1,5 @@
-import { request, unwrap, createEventStream } from './tools.js';
+import { request, unwrap } from './http.js';
+import { createEventStream } from './tools.js';
 
 export function getPriority(token, { signal } = {}) {
   return request('/api/enrollment/priority', { token, signal, defaultMessage: 'Không tải được danh sách ưu tiên.' })

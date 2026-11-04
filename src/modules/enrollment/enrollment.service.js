@@ -134,10 +134,12 @@ export class EnrollmentService {
     const portal = EnrollmentService.#portalData(data);
     const dsMonHoc = (Array.isArray(portal.ds_mon_hoc) ? portal.ds_mon_hoc : [])
       .map((m) => ({ ma: pickString(m?.ma), ten: pickString(m?.ten) }));
+    // BDU leaves ds_nhom_to.ten_mon empty; the code->name map lives in ds_mon_hoc.
+    const nameByCode = new Map(dsMonHoc.map((m) => [m.ma, m.ten]));
     const dsNhomTo = (Array.isArray(portal.ds_nhom_to) ? portal.ds_nhom_to : []).map((g) => ({
       idToHoc: pickString(g?.id_to_hoc),
       maMon: pickString(g?.ma_mon),
-      tenMon: pickString(g?.ten_mon),
+      tenMon: pickString(g?.ten_mon) || nameByCode.get(pickString(g?.ma_mon)) || '',
       nhomTo: pickString(g?.nhom_to),
       to: pickString(g?.to),
       lop: pickString(g?.lop),
@@ -241,6 +243,8 @@ export class EnrollmentService {
     return { ok: false, status: response.status };
   }
 }
+
+export const enrollmentService = new EnrollmentService();
 
 export function classifyRegisterResult(res = {}) {
   const httpStatus = Number(res.httpStatus) || 200;

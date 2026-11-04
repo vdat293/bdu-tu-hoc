@@ -18,7 +18,7 @@ const badges = {
   '/survey': ['Bot', 'badge-pill-purple'],
   '/training-score': ['RL', 'badge-pill-amber'],
   '/english': ['Moodle', 'badge-pill-emerald'],
-  '/enrollment': ['Soon', 'badge-pill-amber'],
+  '/enrollment': ['Auto', 'badge-pill-purple'],
   '/clans': ['Guild', 'badge-pill-emerald'],
   '/confession': ['CFS', 'badge-pill-purple'],
   '/killer-sudoku': ['Game', 'badge-pill-emerald'],

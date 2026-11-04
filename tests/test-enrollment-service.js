@@ -93,6 +93,21 @@ await section('getCatalog posts the official envelope and normalizes ds_mon_hoc/
   assert.equal(g.isCtdt, true);
 });
 
+await section('getCatalog backfills ten_mon from ds_mon_hoc when the API leaves it empty', async () => {
+  const withNames = {
+    ...catalogRaw,
+    data: {
+      ...catalogRaw.data,
+      ds_mon_hoc: [{ ma: 'ACT0032', ten: 'Tin học chuyên ngành 2' }],
+      ds_nhom_to: catalogRaw.data.ds_nhom_to.map((g) => ({ ...g, ten_mon: '' }))
+    }
+  };
+  const { fetchImpl } = createFetchMock({ [catalogKey]: withNames });
+  const service = new EnrollmentService({ fetchImpl });
+  const catalog = await service.getCatalog(TOKEN);
+  assert.equal(catalog.dsNhomTo[0].tenMon, 'Tin học chuyên ngành 2');
+});
+
 await section('getCatalog caches per (token, loaiLoc) for catalogTtlMs', async () => {
   const { calls, fetchImpl } = createFetchMock({ [catalogKey]: catalogRaw });
   const service = new EnrollmentService({ fetchImpl, catalogTtlMs: 60_000 });

@@ -155,11 +155,11 @@ export class EnrollmentRunManager {
   }
 
   async submitOtp(runId, mssv, code) {
+    const digits = String(code ?? '').trim();
+    if (!/^\d{6}$/.test(digits)) throw httpError(400, 'Mã OTP phải gồm đúng 6 chữ số.');
     const run = this.runs.get(String(runId));
     if (!run || run.mssv !== String(mssv)) return null;
     if (run.status !== 'otp_required') throw httpError(409, 'Phiên đăng ký không ở trạng thái chờ OTP.');
-    const digits = String(code ?? '').trim();
-    if (!/^\d{6}$/.test(digits)) throw httpError(400, 'Mã OTP phải gồm đúng 6 chữ số.');
     if (run.otpAttempts >= MAX_OTP_ATTEMPTS) throw httpError(409, 'Đã vượt số lần nhập OTP cho phép.');
 
     let result;
