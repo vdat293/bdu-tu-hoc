@@ -13,15 +13,17 @@ import {
   subscribeRun
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
+import { DAY_OPTIONS, SESSION_OPTIONS, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const FILTER_OPTIONS = [
+  { value: 10, label: 'Tất cả môn đang mở (không lọc)' },
   { value: 2, label: 'Môn trong CTĐT kế hoạch' },
-  { value: 6, label: 'Môn chưa học trong CTĐT kế hoạch' },
-  { value: 10, label: 'Tất cả môn đang mở' }
+  { value: 6, label: 'Môn chưa học trong CTĐT kế hoạch' }
 ];
 
 const RUN_STORAGE_KEY = 'bdu_enrollment_run_id';
+const ACTIVE_STATUSES = ['scheduled', 'running', 'otp_required'];
 
 const toInputValue = (date) => {
   const pad = (n) => String(n).padStart(2, '0');
@@ -51,6 +53,14 @@ const filterCatalog = (rows, loaiLoc) => {
   return rows;
 };
 
+const capacityTone = (row) => {
+  if (!row.slCp) return 'muted';
+  const ratio = row.slCl / row.slCp;
+  if (ratio <= 0) return 'danger';
+  if (ratio < 0.2) return 'warn';
+  return 'ok';
+};
+
 const statusLabel = {
   scheduled: 'Chờ mở cổng',
   running: 'Đang đăng ký',
@@ -60,20 +70,99 @@ const statusLabel = {
   stopped: 'Đã dừng'
 };
 
+/* ---------- icons (inline SVG, 18px) ---------- */
+const IconSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+);
+const IconRefresh = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>
+);
+const IconBolt = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" /></svg>
+);
+const IconStop = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" /></svg>
+);
+const IconUp = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6" /></svg>
+);
+const IconDown = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+);
+const IconTrash = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg>
+);
+const IconClock = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+);
+const IconCalendar = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" /></svg>
+);
+const IconCheck = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5" /></svg>
+);
+
+function OtpBoxes({ value, onChange, disabled }) {
+  const inputsRef = useRef([]);
+  const digits = value.padEnd(6, ' ').slice(0, 6).split('');
+
+  const setDigit = (index, raw) => {
+    const digit = String(raw).replace(/\D/g, '').slice(-1);
+    const next = [...digits];
+    next[index] = digit || ' ';
+    onChange(next.join('').replace(/\s/g, ' ').trimEnd());
+    if (digit && index < 5) inputsRef.current[index + 1]?.focus();
+  };
+
+  const handlePaste = (event) => {
+    event.preventDefault();
+    const text = String(event.clipboardData?.getData('text') ?? '').replace(/\D/g, '').slice(0, 6);
+    if (!text) return;
+    onChange(text);
+    inputsRef.current[Math.min(text.length, 5)]?.focus();
+  };
+
+  return (
+    <div className="enroll-otp-boxes" onPaste={handlePaste}>
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          ref={(element) => { inputsRef.current[index] = element; }}
+          className="enroll-otp-box"
+          inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          maxLength={1}
+          aria-label={`Chữ số OTP ${index + 1}`}
+          disabled={disabled}
+          value={digit.trim()}
+          onChange={(event) => setDigit(index, event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Backspace' && !digits[index].trim() && index > 0) {
+              inputsRef.current[index - 1]?.focus();
+            }
+          }}
+          onFocus={(event) => event.target.select()}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function EnrollmentPage() {
   const auth = useAuth();
   const { notify } = useToasts();
 
-  const catalogDialogRef = useRef(null);
-  const otpDialogRef = useRef(null);
   const withdrawDialogRef = useRef(null);
+  const otpDialogRef = useRef(null);
   const logRef = useRef(null);
 
   const [catalog, setCatalog] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(true);
-  const [loaiLoc, setLoaiLoc] = useState(2);
+  const [loaiLoc, setLoaiLoc] = useState(10);
   const [search, setSearch] = useState('');
+  const [thu, setThu] = useState(0);
+  const [buoi, setBuoi] = useState('all');
 
   const [selected, setSelected] = useState([]);
   const [priorityError, setPriorityError] = useState('');
@@ -100,15 +189,14 @@ export default function EnrollmentPage() {
   const unsubscribeRef = useRef(null);
   const runIdRef = useRef(null);
 
-  const activeRun = run && ['scheduled', 'running', 'otp_required'].includes(run.status);
+  const activeRun = run && ACTIVE_STATUSES.includes(run.status);
 
-  // --- tải dữ liệu ban đầu --------------------------------------------------
   const loadCatalog = useCallback(async () => {
     if (!auth.token) return;
     setLoadingCatalog(true);
     setCatalogError('');
     try {
-      const data = await getCatalog(auth.token, 2);
+      const data = await getCatalog(auth.token, 10);
       setCatalog(data);
     } catch (error) {
       setCatalogError(error.message || 'Không tải được danh sách môn học.');
@@ -149,7 +237,6 @@ export default function EnrollmentPage() {
     loadRegistered();
   }, [loadCatalog, loadPriority, loadRegistered]);
 
-  // Restore a run that was already running when the page was last closed.
   useEffect(() => {
     if (!auth.token) return;
     const storedId = window.sessionStorage.getItem(RUN_STORAGE_KEY);
@@ -158,24 +245,21 @@ export default function EnrollmentPage() {
       .then((status) => {
         if (!status) { window.sessionStorage.removeItem(RUN_STORAGE_KEY); return; }
         setRun(status);
-        if (!['scheduled', 'running', 'otp_required'].includes(status.status)) window.sessionStorage.removeItem(RUN_STORAGE_KEY);
+        if (!ACTIVE_STATUSES.includes(status.status)) window.sessionStorage.removeItem(RUN_STORAGE_KEY);
       })
       .catch(() => window.sessionStorage.removeItem(RUN_STORAGE_KEY));
   }, [auth.token]);
 
-  // Tick for the countdown.
   useEffect(() => {
     if (!activeRun) return undefined;
     const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [activeRun]);
 
-  // Live log auto-scroll.
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [run?.logs?.length]);
 
-  // --- subscribe SSE khi có run đang hoạt động --------------------------------
   useEffect(() => {
     const runId = run?.runId;
     if (!runId || !activeRun) return undefined;
@@ -187,10 +271,7 @@ export default function EnrollmentPage() {
         let payload;
         try { payload = JSON.parse(event.data); } catch { return; }
         if (!payload || typeof payload !== 'object') return;
-        if (payload.type === 'snapshot' && payload.run) {
-          setRun(payload.run);
-          return;
-        }
+        if (payload.type === 'snapshot' && payload.run) { setRun(payload.run); return; }
         if (payload.type === 'log') {
           setRun((current) => current ? { ...current, logs: [...(current.logs ?? []), payload] } : current);
           return;
@@ -241,7 +322,6 @@ export default function EnrollmentPage() {
     }
   }, [auth.token, run?.runId, notify]);
 
-  // --- danh sách ưu tiên ------------------------------------------------------
   const toggleGroup = useCallback((row) => {
     setSelected((current) => {
       const exists = current.some((item) => item.idToHoc === row.idToHoc);
@@ -298,15 +378,19 @@ export default function EnrollmentPage() {
   const grouped = useMemo(() => groupBySubject(selected), [selected]);
   const selectedIds = useMemo(() => new Set(selected.map((item) => item.idToHoc)), [selected]);
 
+  const baseRows = useMemo(() => filterCatalog(catalog?.dsNhomTo ?? [], loaiLoc), [catalog, loaiLoc]);
   const visibleCatalog = useMemo(() => {
-    const rows = catalog?.dsNhomTo ?? [];
-    const filtered = filterCatalog(rows, loaiLoc);
     const q = search.trim().toLowerCase();
-    if (!q) return filtered;
-    return filtered.filter((row) => `${row.maMon} ${row.tenMon}`.toLowerCase().includes(q));
-  }, [catalog, loaiLoc, search]);
+    return baseRows.filter((row) => {
+      if (q && !`${row.maMon} ${row.tenMon}`.toLowerCase().includes(q)) return false;
+      if (!tkbMatchesDay(row.tkb, thu)) return false;
+      if (!tkbMatchesSession(row.tkb, buoi)) return false;
+      return true;
+    });
+  }, [baseRows, search, thu, buoi]);
 
-  // --- kích hoạt run -----------------------------------------------------------
+  const monDangMo = useMemo(() => new Set(baseRows.map((row) => row.maMon)).size, [baseRows]);
+
   const canActivate = selected.length > 0 && !dirty && !activeRun && !starting;
 
   const handleStart = useCallback(async () => {
@@ -318,12 +402,11 @@ export default function EnrollmentPage() {
         notify('Giờ mở cổng không hợp lệ.', 'error');
         return;
       }
-      const triggerAt = when.toISOString();
-      const result = await startRun(auth.token, { triggerAt, autoFixScheduleConflict });
+      const result = await startRun(auth.token, { triggerAt: when.toISOString(), autoFixScheduleConflict });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
       window.sessionStorage.setItem(RUN_STORAGE_KEY, runId);
-      setRun({ runId, status: 'scheduled', triggerAt, logs: [], results: [], summary: null, error: null });
+      setRun({ runId, status: 'scheduled', triggerAt: when.toISOString(), logs: [], results: [], summary: null, error: null });
       setNowTick(Date.now());
       notify('Đã kích hoạt lượt đăng ký.', 'success');
     } catch (error) {
@@ -346,14 +429,15 @@ export default function EnrollmentPage() {
 
   const handleSubmitOtp = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
-    if (!/^\d{6}$/.test(otpCode.trim())) {
+    const digits = otpCode.replace(/\D/g, '');
+    if (digits.length !== 6) {
       setOtpError('Mã OTP phải gồm đúng 6 chữ số.');
       return;
     }
     setOtpSending(true);
     setOtpError('');
     try {
-      const result = await submitOtp(auth.token, run.runId, otpCode.trim());
+      const result = await submitOtp(auth.token, run.runId, digits);
       if (result?.ok) {
         setOtpOpen(false);
         setOtpError('');
@@ -370,7 +454,6 @@ export default function EnrollmentPage() {
     }
   }, [auth.token, run?.runId, otpCode, notify]);
 
-  // --- rút môn ------------------------------------------------------------------
   const handleWithdraw = useCallback(async () => {
     if (!auth.token || !withdrawTarget) return;
     setWithdrawing(true);
@@ -389,7 +472,6 @@ export default function EnrollmentPage() {
   useViewportDialog(Boolean(withdrawTarget), () => setWithdrawTarget(null), withdrawDialogRef);
   useViewportDialog(otpOpen, () => setOtpOpen(false), otpDialogRef);
 
-  // --- derived view values -------------------------------------------------------
   const countdown = useMemo(() => {
     if (!run?.triggerAt) return null;
     const diff = new Date(run.triggerAt).getTime() - nowTick;
@@ -399,7 +481,7 @@ export default function EnrollmentPage() {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    return { text: `Còn ${hours > 0 ? `${hours} giờ ` : ''}${minutes} phút ${seconds} giây`, tone: 'wait' };
+    return { text: `${hours > 0 ? `${hours}h ` : ''}${minutes}p ${String(seconds).padStart(2, '0')}s`, tone: 'wait' };
   }, [run?.triggerAt, nowTick]);
 
   const gateOpen = catalog?.trongThoiGianDangKy === true;
@@ -420,257 +502,358 @@ export default function EnrollmentPage() {
     });
   }, [registered]);
 
+  const filtersActive = search.trim() !== '' || thu !== 0 || buoi !== 'all';
+
   return (
     <section id="tab-enrollment" className="tab-pane active">
-      <div className="section-header-box glass-panel">
-        <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
-        <h2 className="section-title">Tự Động Đăng Ký Môn Học</h2>
-        <p className="section-desc">
-          {catalog?.hocKyDangKy || 'Đang tải thông tin học kỳ…'}
-          {' · '}
-          <span className={`enroll-gate ${gateOpen ? 'enroll-gate--open' : 'enroll-gate--closed'}`}>
-            {gateOpen ? 'ĐANG MỞ' : 'Chưa mở'}
-          </span>
-          {catalog?.dienGiaiEnableChung ? <span className="enroll-gate-note"> ({catalog.dienGiaiEnableChung})</span> : null}
-        </p>
-      </div>
+      <div className="enroll-page">
+        {/* ---------- hero ---------- */}
+        <header className="enroll-hero">
+          <div className="enroll-hero-main">
+            <span className="enroll-eyebrow">Đăng ký tín chỉ · BDU</span>
+            <h1>Tự động đăng ký môn học</h1>
+            <p>
+              {catalog?.hocKyDangKy || 'Đang tải thông tin học kỳ…'}
+              {catalog?.dienGiaiEnableChung ? <span className="enroll-hero-note"> · {catalog.dienGiaiEnableChung}</span> : null}
+            </p>
+          </div>
+          <div className="enroll-hero-stats">
+            <div className="enroll-stat">
+              <span className="enroll-stat-value">{monDangMo}</span>
+              <span className="enroll-stat-label">môn đang mở</span>
+            </div>
+            <div className="enroll-stat">
+              <span className="enroll-stat-value">{selected.length}</span>
+              <span className="enroll-stat-label">đã chọn</span>
+            </div>
+            <div className={`enroll-gate-pill ${gateOpen ? 'is-open' : 'is-closed'}`}>
+              <span className="enroll-gate-dot" aria-hidden="true" />
+              {gateOpen ? 'Cổng đang mở' : 'Cổng chưa mở'}
+            </div>
+          </div>
+        </header>
 
-      <div className="glass-panel enroll-panel">
-        <div className="enroll-panel-head">
-          <h3>Môn học đang mở</h3>
-          <div className="enroll-filters">
-            <select aria-label="Lọc điều kiện" value={loaiLoc} onChange={(event) => setLoaiLoc(Number(event.target.value))}>
-              {FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <input
-              type="search"
-              placeholder="Tìm mã hoặc tên môn…"
-              aria-label="Tìm môn học"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <button type="button" className="btn-secondary" onClick={loadCatalog} disabled={loadingCatalog}>
-              {loadingCatalog ? 'Đang tải…' : 'Làm mới'}
+        {/* ---------- catalog ---------- */}
+        <div className="enroll-card enroll-catalog">
+          <div className="enroll-card-head">
+            <div>
+              <h2>Môn học đang mở</h2>
+              <p className="enroll-sub">{visibleCatalog.length} nhóm-tổ{monDangMo ? ` · ${monDangMo} môn` : ''}{filtersActive ? ' · đang lọc' : ''}</p>
+            </div>
+            <button type="button" className="enroll-ghost" onClick={loadCatalog} disabled={loadingCatalog}>
+              <IconRefresh /> {loadingCatalog ? 'Đang tải…' : 'Làm mới'}
             </button>
           </div>
-        </div>
-        {catalogError ? <p className="enroll-error">{catalogError}</p> : null}
-        {loadingCatalog && !catalog ? <p className="enroll-empty">Đang tải danh sách môn học…</p> : null}
-        {catalog && visibleCatalog.length === 0 ? <p className="enroll-empty">Không có môn nào phù hợp bộ lọc.</p> : null}
-        {catalog ? (
-          <div className="table-scroll">
-            <table className="enroll-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Mã MH</th>
-                  <th>Tên môn học</th>
-                  <th>Nhóm-Tổ</th>
-                  <th>Lớp</th>
-                  <th>TC</th>
-                  <th>Còn lại</th>
-                  <th>Thời khóa biểu</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCatalog.map((row) => {
-                  const checked = selectedIds.has(row.idToHoc);
-                  return (
-                    <tr key={row.idToHoc} aria-disabled={!row.enable} className={row.enable ? '' : 'enroll-row-disabled'}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          aria-label={`Chọn ${row.maMon} nhóm ${row.nhomTo}`}
-                          checked={checked}
-                          disabled={!row.enable}
-                          title={row.enable ? '' : (row.gcEnable || 'Ngoài thời gian cho phép đăng ký')}
-                          onChange={() => toggleGroup(row)}
-                        />
-                      </td>
-                      <td>{row.maMon}</td>
-                      <td>{row.tenMon}</td>
-                      <td>{row.nhomTo}{row.to ? `-${row.to}` : ''}</td>
-                      <td>{row.lop}</td>
-                      <td>{row.soTc ?? ''}</td>
-                      <td>{row.slCl}/{row.slCp}</td>
-                      <td className="enroll-tkb">{row.tkb}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </div>
 
-      <div className="glass-panel enroll-panel">
-        <div className="enroll-panel-head">
-          <h3>Danh sách ưu tiên của bạn ({selected.length})</h3>
-          <button type="button" className="btn-primary" onClick={saveList} disabled={prioritySaving || selected.length === 0}>
-            {prioritySaving ? 'Đang lưu…' : dirty ? 'Lưu danh sách *' : 'Đã lưu'}
-          </button>
+          <div className="enroll-toolbar">
+            <label className="enroll-search">
+              <IconSearch />
+              <input
+                type="search"
+                placeholder="Tìm mã hoặc tên môn…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <label className="enroll-select">
+              <span>Chương trình</span>
+              <select value={loaiLoc} onChange={(event) => setLoaiLoc(Number(event.target.value))}>
+                {FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <div className="enroll-chip-group" role="group" aria-label="Lọc theo thứ">
+              {DAY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`enroll-chip ${thu === option.value ? 'is-active' : ''}`}
+                  aria-pressed={thu === option.value}
+                  onClick={() => setThu(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="enroll-chip-group" role="group" aria-label="Lọc theo buổi">
+              {SESSION_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`enroll-chip ${buoi === option.value ? 'is-active' : ''}`}
+                  aria-pressed={buoi === option.value}
+                  onClick={() => setBuoi(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {catalogError ? <p className="enroll-error">{catalogError}</p> : null}
+          {loadingCatalog && !catalog ? <div className="enroll-empty">Đang tải danh sách môn học…</div> : null}
+          {catalog && visibleCatalog.length === 0 ? (
+            <div className="enroll-empty">
+              Không có nhóm-tổ nào khớp bộ lọc.
+              {filtersActive ? (
+                <button type="button" className="enroll-link" onClick={() => { setSearch(''); setThu(0); setBuoi('all'); }}>
+                  Xoá bộ lọc
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {visibleCatalog.length > 0 ? (
+            <div className="enroll-table-wrap">
+              <table className="enroll-table">
+                <thead>
+                  <tr>
+                    <th className="enroll-col-check"><span className="sr-only">Chọn</span></th>
+                    <th>Mã môn</th>
+                    <th>Tên môn học</th>
+                    <th>Nhóm-tổ</th>
+                    <th>Lớp</th>
+                    <th>TC</th>
+                    <th>Còn lại</th>
+                    <th>Lịch học</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCatalog.map((row) => {
+                    const checked = selectedIds.has(row.idToHoc);
+                    const badges = tkbBadges(row.tkb);
+                    const tone = capacityTone(row);
+                    const ratio = row.slCp ? Math.max(0, Math.min(1, row.slCl / row.slCp)) : 0;
+                    return (
+                      <tr
+                        key={row.idToHoc}
+                        className={`${checked ? 'is-selected' : ''} ${row.enable ? '' : 'is-closed'}`}
+                        onClick={() => toggleGroup(row)}
+                        title={row.enable ? '' : (row.gcEnable || 'Ngoài thời gian cho phép đăng ký')}
+                      >
+                        <td className="enroll-col-check" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="enroll-check"
+                            checked={checked}
+                            aria-label={`Chọn ${row.maMon} nhóm ${row.nhomTo}`}
+                            onChange={() => toggleGroup(row)}
+                          />
+                        </td>
+                        <td><span className="enroll-code">{row.maMon}</span></td>
+                        <td>
+                          <span className="enroll-name">{row.tenMon || '—'}</span>
+                          {row.isCtdt ? <span className="enroll-tag">CTĐT</span> : null}
+                          {!row.enable ? <span className="enroll-tag is-warn">Ngoài giờ</span> : null}
+                        </td>
+                        <td>{row.nhomTo}{row.to ? `-${row.to}` : ''}</td>
+                        <td className="enroll-muted">{row.lop || '—'}</td>
+                        <td>{row.soTc ?? ''}</td>
+                        <td>
+                          <div className={`enroll-cap is-${tone}`}>
+                            <span>{row.slCl}/{row.slCp}</span>
+                            <span className="enroll-cap-bar" aria-hidden="true"><span style={{ width: `${ratio * 100}%` }} /></span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="enroll-tkb-chips">
+                            {badges.length ? badges.map((badge) => <span key={badge} className="enroll-tkb-chip">{badge}</span>) : <span className="enroll-muted">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </div>
-        {priorityError ? <p className="enroll-error">{priorityError}</p> : null}
-        {selected.length === 0 ? (
-          <p className="enroll-empty">Chưa chọn môn nào. Tick checkbox ở bảng phía trên, xếp thứ tự ưu tiên rồi bấm “Lưu danh sách”.</p>
-        ) : (
-          <div className="enroll-priority-list">
-            {grouped.map((group) => (
-              <div key={group.maMon} className="enroll-subject">
-                <div className="enroll-subject-head">
-                  <strong>{group.maMon}</strong>
-                  <span className="enroll-subject-name">{group.tenMon}</span>
-                  {group.soTc != null ? <span className="enroll-tc">{group.soTc} TC</span> : null}
-                </div>
-                {[group.chinh, ...group.duPhong].filter(Boolean).map((item) => (
-                  <div key={item.idToHoc} className={`enroll-priority-row${item.loai === 'chinh' ? ' is-chinh' : ' is-duphong'}`}>
-                    <span className="enroll-loai">{item.loai === 'chinh' ? 'Chính' : 'Dự phòng'}</span>
-                    <span className="enroll-nhom">Nhóm {item.nhomTo}{item.lop ? ` · ${item.lop}` : ''}</span>
-                    <span className="enroll-order">#{item.thuTu}</span>
-                    <span className="enroll-row-actions">
-                      <button type="button" className="btn-icon" aria-label="Đưa lên trước" onClick={() => moveSelected(item.idToHoc, -1)}>↑</button>
-                      <button type="button" className="btn-icon" aria-label="Đưa xuống sau" onClick={() => moveSelected(item.idToHoc, 1)}>↓</button>
-                      {item.loai === 'du_phong' ? (
-                        <button type="button" className="btn-secondary btn-xs" onClick={() => makeChinh(item)}>Đặt làm chính</button>
-                      ) : null}
-                      <button type="button" className="btn-icon btn-danger" aria-label="Bỏ khỏi danh sách" onClick={() => removeItemFromSelection(item.idToHoc)}>✕</button>
-                    </span>
+
+        {/* ---------- priority + activation ---------- */}
+        <div className="enroll-grid">
+          <div className="enroll-card">
+            <div className="enroll-card-head">
+              <div>
+                <h2>Danh sách ưu tiên</h2>
+                <p className="enroll-sub">{selected.length ? `${grouped.length} môn · ${selected.length} lựa chọn` : 'Chưa chọn môn nào'}</p>
+              </div>
+              <button type="button" className="enroll-primary sm" onClick={saveList} disabled={prioritySaving || selected.length === 0}>
+                {prioritySaving ? 'Đang lưu…' : dirty ? 'Lưu thay đổi' : 'Đã lưu'}
+                {dirty ? <span className="enroll-dirty-dot" aria-hidden="true" /> : null}
+              </button>
+            </div>
+            {priorityError ? <p className="enroll-error">{priorityError}</p> : null}
+            {selected.length === 0 ? (
+              <div className="enroll-empty">
+                Tick chọn nhóm-tổ ở bảng phía trên. Mỗi môn chọn 1 lớp chính và có thể thêm nhiều lớp dự phòng; thứ tự càng cao càng được ưu tiên.
+              </div>
+            ) : (
+              <div className="enroll-subjects">
+                {grouped.map((group) => (
+                  <div key={group.maMon} className="enroll-subject">
+                    <div className="enroll-subject-head">
+                      <span className="enroll-code">{group.maMon}</span>
+                      <span className="enroll-subject-name">{group.tenMon || '—'}</span>
+                      {group.soTc != null ? <span className="enroll-subject-tc">{group.soTc} TC</span> : null}
+                    </div>
+                    {[group.chinh, ...group.duPhong].filter(Boolean).map((item) => (
+                      <div key={item.idToHoc} className={`enroll-priority-row ${item.loai === 'chinh' ? 'is-chinh' : ''}`}>
+                        <span className="enroll-order">#{item.thuTu}</span>
+                        <span className={`enroll-pill ${item.loai === 'chinh' ? 'is-chinh' : ''}`}>{item.loai === 'chinh' ? 'Chính' : 'Dự phòng'}</span>
+                        <span className="enroll-priority-meta">Nhóm {item.nhomTo}{item.lop ? ` · ${item.lop}` : ''}</span>
+                        <span className="enroll-row-actions">
+                          <button type="button" className="enroll-icon-btn" aria-label="Đưa lên trước" onClick={() => moveSelected(item.idToHoc, -1)}><IconUp /></button>
+                          <button type="button" className="enroll-icon-btn" aria-label="Đưa xuống sau" onClick={() => moveSelected(item.idToHoc, 1)}><IconDown /></button>
+                          {item.loai === 'du_phong' ? (
+                            <button type="button" className="enroll-text-btn" onClick={() => makeChinh(item)}>Đặt chính</button>
+                          ) : null}
+                          <button type="button" className="enroll-icon-btn danger" aria-label="Bỏ khỏi danh sách" onClick={() => removeItemFromSelection(item.idToHoc)}><IconTrash /></button>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ))}
+                {dirty ? <p className="enroll-hint">Danh sách chưa lưu — lưu trước khi kích hoạt.</p> : null}
               </div>
-            ))}
+            )}
           </div>
-        )}
-        {dirty ? <p className="enroll-dirty-note">Danh sách chưa lưu — bấm “Lưu danh sách” trước khi kích hoạt.</p> : null}
-      </div>
 
-      <div className="glass-panel enroll-panel">
-        <div className="enroll-panel-head">
-          <h3>Kích hoạt Auto đăng ký</h3>
-          <label className="enroll-trigger">
-            Giờ mở cổng dự kiến
-            <input type="datetime-local" value={triggerInput} onChange={(event) => setTriggerInput(event.target.value)} disabled={activeRun} />
-          </label>
-        </div>
-        <label className="enroll-check">
-          <input type="checkbox" checked={autoFixScheduleConflict} onChange={(event) => setAutoFixScheduleConflict(event.target.checked)} disabled={activeRun} />
-          Tự động dọn trùng TKB sau khi chạy (mặc định TẮT) — tự rút môn ưu tiên thấp hơn khi 2 môn đã đăng ký bị trùng lịch
-        </label>
-        <div className="enroll-activate-row">
-          <button type="button" className="btn-primary btn-lg" onClick={handleStart} disabled={!canActivate}>
-            {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
-          </button>
-          {activeRun ? (
-            <button type="button" className="btn-secondary" onClick={handleStop}>Dừng</button>
-          ) : (
-            <button type="button" className="btn-secondary" onClick={refreshRunStatus} disabled={!run?.runId}>Làm mới trạng thái</button>
-          )}
-          {run ? <span className={`enroll-run-status is-${run.status}`}>{statusLabel[run.status] ?? run.status}</span> : null}
-          {countdown ? <span className="enroll-countdown">{countdown.text}</span> : null}
-        </div>
-        {run ? (
-          <div className="enroll-log-wrap">
-            <div className="enroll-log-head">
-              <span>Live log</span>
-              {run.status === 'otp_required' ? <span className="enroll-otp-flag">Cần OTP — kiểm tra popup</span> : null}
+          <div className="enroll-card enroll-run-card">
+            <div className="enroll-card-head">
+              <div>
+                <h2>Kích hoạt</h2>
+                <p className="enroll-sub">Canh giờ mở cổng và tự đăng ký</p>
+              </div>
+              {run ? <span className={`enroll-status is-${run.status}`}>{statusLabel[run.status] ?? run.status}</span> : null}
             </div>
-            <pre ref={logRef} className="enroll-log" aria-live="polite">
-              {(run.logs ?? []).map((entry, index) => `[${entry.timestamp ?? ''}] ${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
-            </pre>
-            {run.summary?.thanh_cong?.length || run.summary?.that_bai?.length ? (
-              <div className="enroll-summary">
-                <h4>Kết quả</h4>
-                <ul>
-                  {(run.summary?.thanh_cong ?? []).map((item) => <li key={item.id_to_hoc} className="is-ok">✔ {item.ma_mon}</li>)}
-                  {(run.summary?.that_bai ?? []).map((item) => <li key={item.id_to_hoc} className="is-fail">✖ {item.ma_mon} — {item.ly_do}</li>)}
-                  {(run.summary?.rut ?? []).map((item) => <li key={item.id_to_hoc} className="is-warn">↩ {item.ma_mon} — {item.ly_do}</li>)}
-                </ul>
+
+            <label className="enroll-field">
+              <span><IconCalendar /> Giờ mở cổng dự kiến</span>
+              <input type="datetime-local" value={triggerInput} onChange={(event) => setTriggerInput(event.target.value)} disabled={activeRun} />
+            </label>
+
+            <label className="enroll-switch">
+              <input type="checkbox" checked={autoFixScheduleConflict} onChange={(event) => setAutoFixScheduleConflict(event.target.checked)} disabled={activeRun} />
+              <span className="enroll-switch-track" aria-hidden="true" />
+              <span>
+                Tự dọn trùng TKB sau khi chạy
+                <small>Tự rút môn ưu tiên thấp hơn nếu 2 môn đã đăng ký trùng lịch. Mặc định tắt.</small>
+              </span>
+            </label>
+
+            <div className="enroll-run-actions">
+              <button type="button" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
+                <IconBolt /> {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
+              </button>
+              {activeRun ? (
+                <button type="button" className="enroll-ghost" onClick={handleStop}><IconStop /> Dừng</button>
+              ) : (
+                <button type="button" className="enroll-ghost" onClick={refreshRunStatus} disabled={!run?.runId}>
+                  <IconRefresh /> Làm mới
+                </button>
+              )}
+            </div>
+
+            {countdown ? (
+              <div className={`enroll-countdown is-${countdown.tone}`}>
+                <IconClock /> <span>{countdown.text}</span>
               </div>
             ) : null}
-            {run.error ? <p className="enroll-error">{run.error}</p> : null}
-          </div>
-        ) : null}
-        <p className="enroll-note">Tool chỉ chạy trong khung giờ BDU cho phép đăng ký. Ngoài giờ, server từ chối và lượt chạy sẽ dừng an toàn.</p>
-      </div>
 
-      <div className="glass-panel enroll-panel">
-        <div className="enroll-panel-head">
-          <h3>Mô đã đăng ký</h3>
-          <button type="button" className="btn-secondary" onClick={loadRegistered} disabled={loadingRegistered}>
-            {loadingRegistered ? 'Đang tải…' : 'Làm mới'}
-          </button>
-        </div>
-        {registeredError ? <p className="enroll-error">{registeredError}</p> : null}
-        {registered && registeredRows.length === 0 ? <p className="enroll-empty">Chưa đăng ký môn nào.</p> : null}
-        {registeredRows.length > 0 ? (
-          <div className="table-scroll">
-            <table className="enroll-table enroll-table--registered">
-              <thead>
-                <tr>
-                  <th>Mã MH</th>
-                  <th>Tên môn học</th>
-                  <th>Nhóm-Tổ</th>
-                  <th>TC</th>
-                  <th>Ngày đăng ký</th>
-                  <th>Trạng thái</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {registeredRows.map((row) => (
-                  <tr key={row.key}>
-                    <td>{row.maMon}</td>
-                    <td>{row.tenMon}</td>
-                    <td>{row.nhomTo}</td>
-                    <td>{row.soTc}</td>
-                    <td>{String(row.ngayDangKy).slice(0, 10)}</td>
-                    <td>{row.trangThai}</td>
-                    <td>
-                      {row.idToHoc ? (
-                        <button type="button" className="btn-danger btn-xs" onClick={() => setWithdrawTarget({ idToHoc: row.idToHoc, label: `${row.maMon} (${row.nhomTo})` })}>
-                          Rút
-                        </button>
-                      ) : <span className="enroll-note">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {run ? (
+              <div className="enroll-terminal">
+                <div className="enroll-terminal-bar" aria-hidden="true"><span /><span /><span /></div>
+                <pre ref={logRef} className="enroll-terminal-body" aria-live="polite">
+                  {(run.logs ?? []).map((entry, index) => `[${entry.timestamp ?? ''}] ${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
+                </pre>
+              </div>
+            ) : null}
+
+            {run?.summary?.thanh_cong?.length || run?.summary?.that_bai?.length || run?.summary?.rut?.length ? (
+              <div className="enroll-summary">
+                {(run.summary?.thanh_cong ?? []).map((item) => <div key={`ok-${item.id_to_hoc}`} className="enroll-summary-row is-ok"><IconCheck /> {item.ma_mon}</div>)}
+                {(run.summary?.that_bai ?? []).map((item) => <div key={`fail-${item.id_to_hoc}`} className="enroll-summary-row is-fail">✕ {item.ma_mon} — {item.ly_do}</div>)}
+                {(run.summary?.rut ?? []).map((item) => <div key={`rut-${item.id_to_hoc}`} className="enroll-summary-row is-warn">↩ {item.ma_mon} — {item.ly_do}</div>)}
+              </div>
+            ) : null}
+
+            {run?.error ? <p className="enroll-error">{run.error}</p> : null}
+            <p className="enroll-hint">Tool chỉ bắn request trong khung giờ BDU cho phép. Ngoài giờ, server từ chối và lượt chạy dừng an toàn.</p>
           </div>
-        ) : null}
+        </div>
+
+        {/* ---------- registered ---------- */}
+        <div className="enroll-card">
+          <div className="enroll-card-head">
+            <div>
+              <h2>Mô đã đăng ký</h2>
+              <p className="enroll-sub">{registeredRows.length ? `${registeredRows.length} môn` : 'Chưa đăng ký môn nào'}</p>
+            </div>
+            <button type="button" className="enroll-ghost" onClick={loadRegistered} disabled={loadingRegistered}>
+              <IconRefresh /> {loadingRegistered ? 'Đang tải…' : 'Làm mới'}
+            </button>
+          </div>
+          {registeredError ? <p className="enroll-error">{registeredError}</p> : null}
+          {registeredRows.length === 0 ? (
+            <div className="enroll-empty">Chưa đăng ký môn nào trong học kỳ này.</div>
+          ) : (
+            <div className="enroll-table-wrap">
+              <table className="enroll-table">
+                <thead>
+                  <tr>
+                    <th>Mã môn</th>
+                    <th>Tên môn học</th>
+                    <th>Nhóm-tổ</th>
+                    <th>TC</th>
+                    <th>Ngày đăng ký</th>
+                    <th>Trạng thái</th>
+                    <th><span className="sr-only">Thao tác</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registeredRows.map((row) => (
+                    <tr key={row.key}>
+                      <td><span className="enroll-code">{row.maMon}</span></td>
+                      <td>{row.tenMon || '—'}</td>
+                      <td>{row.nhomTo}</td>
+                      <td>{row.soTc}</td>
+                      <td className="enroll-muted">{String(row.ngayDangKy).slice(0, 10)}</td>
+                      <td>{row.trangThai}</td>
+                      <td>
+                        {row.idToHoc ? (
+                          <button type="button" className="enroll-danger-btn" onClick={() => setWithdrawTarget({ idToHoc: row.idToHoc, label: `${row.maMon} (${row.nhomTo})` })}>
+                            Rút
+                          </button>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {withdrawTarget ? (
         <ViewportModal id="enroll-withdraw-modal" title="Xác nhận rút môn" labelledBy="enroll-withdraw-title" onClose={() => setWithdrawTarget(null)} dialogRef={withdrawDialogRef}>
-          <div id="enroll-withdraw-title" className="modal-title">Xác nhận rút môn</div>
-          <p>Bạn có chắc muốn rút <strong>{withdrawTarget.label}</strong>?</p>
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={() => setWithdrawTarget(null)} autoFocus>Hủy</button>
-            <button type="button" className="btn-danger" onClick={handleWithdraw} disabled={withdrawing}>{withdrawing ? 'Đang rút…' : 'Rút môn'}</button>
+          <div id="enroll-withdraw-title" className="enroll-modal-title">Xác nhận rút môn</div>
+          <p className="enroll-modal-text">Bạn có chắc muốn rút <strong>{withdrawTarget.label}</strong>?</p>
+          <div className="enroll-modal-actions">
+            <button type="button" className="enroll-ghost" onClick={() => setWithdrawTarget(null)} autoFocus>Hủy</button>
+            <button type="button" className="enroll-danger-btn lg" onClick={handleWithdraw} disabled={withdrawing}>{withdrawing ? 'Đang rút…' : 'Rút môn'}</button>
           </div>
         </ViewportModal>
       ) : null}
 
       {otpOpen ? (
         <ViewportModal id="enroll-otp-modal" title="Xác thực OTP" labelledBy="enroll-otp-title" onClose={() => setOtpOpen(false)} dialogRef={otpDialogRef}>
-          <div id="enroll-otp-title" className="modal-title">Nhập mã OTP</div>
-          <p>Server yêu cầu xác thực trước khi đăng ký. Nhập mã OTP 6 chữ số:</p>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={otpCode}
-            onChange={(event) => { setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
-            onKeyDown={(event) => { if (event.key === 'Enter') handleSubmitOtp(); }}
-            className="enroll-otp-input"
-            autoFocus
-            aria-label="Mã OTP"
-          />
+          <div id="enroll-otp-title" className="enroll-modal-title">Nhập mã OTP</div>
+          <p className="enroll-modal-text">Server yêu cầu xác thực trước khi đăng ký. Nhập mã 6 chữ số đã gửi tới email/SMS của bạn.</p>
+          <OtpBoxes value={otpCode} onChange={setOtpCode} disabled={otpSending} />
           {otpError ? <p className="enroll-error">{otpError}</p> : null}
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={() => setOtpOpen(false)}>Để sau</button>
-            <button type="button" className="btn-primary" onClick={handleSubmitOtp} disabled={otpSending || otpCode.trim().length !== 6}>
+          <div className="enroll-modal-actions">
+            <button type="button" className="enroll-ghost" onClick={() => setOtpOpen(false)}>Để sau</button>
+            <button type="button" className="enroll-primary" onClick={handleSubmitOtp} disabled={otpSending || otpCode.replace(/\D/g, '').length !== 6}>
               {otpSending ? 'Đang gửi…' : 'Xác nhận'}
             </button>
           </div>
