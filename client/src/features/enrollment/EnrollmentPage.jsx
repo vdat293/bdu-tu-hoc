@@ -13,7 +13,7 @@ import {
   subscribeRun
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
-import { DAY_OPTIONS, SESSION_OPTIONS, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
+import { DAY_OPTIONS, SESSION_OPTIONS, parseTkb, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const FILTER_OPTIONS = [
@@ -69,6 +69,21 @@ const statusLabel = {
   failed: 'Thất bại',
   stopped: 'Đã dừng'
 };
+
+const WEEK_DAYS = [
+  { value: 2, label: 'T2' },
+  { value: 3, label: 'T3' },
+  { value: 4, label: 'T4' },
+  { value: 5, label: 'T5' },
+  { value: 6, label: 'T6' },
+  { value: 7, label: 'T7' },
+  { value: 8, label: 'CN' }
+];
+const WEEK_SESSIONS = [
+  { value: 'morning', label: 'Sáng' },
+  { value: 'afternoon', label: 'Chiều' },
+  { value: 'evening', label: 'Tối' }
+];
 
 /* ---------- icons (inline SVG, 18px) ---------- */
 const IconSearch = () => (
@@ -377,6 +392,28 @@ export default function EnrollmentPage() {
 
   const grouped = useMemo(() => groupBySubject(selected), [selected]);
   const selectedIds = useMemo(() => new Set(selected.map((item) => item.idToHoc)), [selected]);
+  const selectedCredits = useMemo(
+    () => selected.filter((item) => item.loai === 'chinh').reduce((sum, item) => sum + (Number(item.soTc) || 0), 0),
+    [selected]
+  );
+  const minCredits = Number(registered?.soTinChiMin) || null;
+
+  // Mini weekly schedule built from the selected groups (joined with the
+  // catalog for their TKB). Duplicate id_to_hoc across "tổ" variants is a BDU
+  // data quirk; matching id + nhóm picks the first variant.
+  const scheduleCells = useMemo(() => {
+    const cells = new Map();
+    const groups = catalog?.dsNhomTo ?? [];
+    for (const item of selected) {
+      const group = groups.find((g) => g.idToHoc === item.idToHoc && (!item.nhomTo || g.nhomTo === item.nhomTo));
+      for (const segment of parseTkb(group?.tkb ?? '')) {
+        const key = `${segment.thu}:${sessionOf(segment)}`;
+        if (!cells.has(key)) cells.set(key, new Map());
+        cells.get(key).set(item.maMon, { maMon: item.maMon, loai: item.loai });
+      }
+    }
+    return cells;
+  }, [selected, catalog]);
 
   const baseRows = useMemo(() => filterCatalog(catalog?.dsNhomTo ?? [], loaiLoc), [catalog, loaiLoc]);
   const visibleCatalog = useMemo(() => {
@@ -502,6 +539,11 @@ export default function EnrollmentPage() {
     });
   }, [registered]);
 
+  const registeredCredits = useMemo(
+    () => registeredRows.reduce((sum, row) => sum + (Number(row.soTc) || 0), 0),
+    [registeredRows]
+  );
+
   const filtersActive = search.trim() !== '' || thu !== 0 || buoi !== 'all';
 
   return (
@@ -525,6 +567,10 @@ export default function EnrollmentPage() {
             <div className="enroll-stat">
               <span className="enroll-stat-value">{selected.length}</span>
               <span className="enroll-stat-label">đã chọn</span>
+            </div>
+            <div className="enroll-stat">
+              <span className="enroll-stat-value">{minCredits ? `${selectedCredits}/${minCredits}` : selectedCredits}</span>
+              <span className="enroll-stat-label">{minCredits ? 'tín chỉ · tối thiểu' : 'tín chỉ đã chọn'}</span>
             </div>
             <div className={`enroll-gate-pill ${gateOpen ? 'is-open' : 'is-closed'}`}>
               <span className="enroll-gate-dot" aria-hidden="true" />
@@ -678,7 +724,7 @@ export default function EnrollmentPage() {
             <div className="enroll-card-head">
               <div>
                 <h2>Danh sách ưu tiên</h2>
-                <p className="enroll-sub">{selected.length ? `${grouped.length} môn · ${selected.length} lựa chọn` : 'Chưa chọn môn nào'}</p>
+                <p className="enroll-sub">{selected.length ? `${grouped.length} môn · ${selected.length} lựa chọn · ${selectedCredits} TC chính` : 'Chưa chọn môn nào'}</p>
               </div>
               <button type="button" className="enroll-primary sm" onClick={saveList} disabled={prioritySaving || selected.length === 0}>
                 {prioritySaving ? 'Đang lưu…' : dirty ? 'Lưu thay đổi' : 'Đã lưu'}
@@ -721,7 +767,53 @@ export default function EnrollmentPage() {
             )}
           </div>
 
-          <div className="enroll-card enroll-run-card">
+          <div className="enroll-side">
+            <div className="enroll-card">
+              <div className="enroll-card-head">
+                <div>
+                  <h2>Lịch tuần</h2>
+                  <p className="enroll-sub">Sáng · Chiều · Tối theo các môn đã chọn</p>
+                </div>
+              </div>
+              <div className="enroll-mini-wrap">
+                <table className="enroll-mini">
+                  <thead>
+                    <tr>
+                      <th className="enroll-mini-corner"><span className="sr-only">Buổi</span></th>
+                      {WEEK_DAYS.map((day) => <th key={day.value}>{day.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WEEK_SESSIONS.map((session) => (
+                      <tr key={session.value}>
+                        <th scope="row">{session.label}</th>
+                        {WEEK_DAYS.map((day) => {
+                          const entries = [...(scheduleCells.get(`${day.value}:${session.value}`)?.values() ?? [])];
+                          const conflict = entries.length > 1;
+                          return (
+                            <td
+                              key={day.value}
+                              className={`enroll-mini-cell${conflict ? ' is-conflict' : ''}`}
+                              title={entries.length ? entries.map((entry) => entry.maMon).join(', ') : ''}
+                            >
+                              {entries.length
+                                ? entries.slice(0, 2).map((entry) => (
+                                  <span key={entry.maMon} className={`enroll-mini-chip${entry.loai === 'du_phong' ? ' is-duphong' : ''}`}>{entry.maMon}</span>
+                                ))
+                                : <span className="enroll-mini-empty">·</span>}
+                              {entries.length > 2 ? <span className="enroll-mini-more">+{entries.length - 2}</span> : null}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="enroll-hint">{selected.length ? 'Ô đỏ = trùng lịch giữa các môn đã chọn.' : 'Chọn môn để xem lịch tuần.'}</p>
+            </div>
+
+            <div className="enroll-card enroll-run-card">
             <div className="enroll-card-head">
               <div>
                 <h2>Kích hoạt</h2>
@@ -782,6 +874,7 @@ export default function EnrollmentPage() {
 
             {run?.error ? <p className="enroll-error">{run.error}</p> : null}
             <p className="enroll-hint">Tool chỉ bắn request trong khung giờ BDU cho phép. Ngoài giờ, server từ chối và lượt chạy dừng an toàn.</p>
+            </div>
           </div>
         </div>
 
@@ -790,7 +883,7 @@ export default function EnrollmentPage() {
           <div className="enroll-card-head">
             <div>
               <h2>Mô đã đăng ký</h2>
-              <p className="enroll-sub">{registeredRows.length ? `${registeredRows.length} môn` : 'Chưa đăng ký môn nào'}</p>
+              <p className="enroll-sub">{registeredRows.length ? `${registeredRows.length} môn · ${registeredCredits} TC` : 'Chưa đăng ký môn nào'}</p>
             </div>
             <button type="button" className="enroll-ghost" onClick={loadRegistered} disabled={loadingRegistered}>
               <IconRefresh /> {loadingRegistered ? 'Đang tải…' : 'Làm mới'}
