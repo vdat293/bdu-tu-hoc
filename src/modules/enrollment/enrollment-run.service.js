@@ -303,6 +303,10 @@ export class EnrollmentRunManager {
           this.appendLog(run, 'error', `Dự phòng ${fallback.idToHoc} thất bại: ${fb.cls}.`);
           break;
         }
+        if (fb.cls === 'otp') {
+          this.appendLog(run, 'error', 'Máy chủ yêu cầu OTP khi thử nhóm dự phòng — dừng lượt chạy để bạn xác thực thủ công.');
+          return 'Máy chủ yêu cầu OTP khi thử dự phòng';
+        }
         // seat_full / rejected / transient / schedule_conflict → try next backup
       }
       this.recordItem(run, item, 'failed', 'hết chỗ (kể cả dự phòng)');
@@ -362,6 +366,10 @@ export class EnrollmentRunManager {
           idRs: run.lastIdRs
         }).catch(() => null);
         if (res?.idRs) run.lastIdRs = res.idRs;
+        if (res?.isThanhCong !== true) {
+          this.appendLog(run, 'warning', `Tự rút ${victim.maMon} thất bại (${res?.rawMessage || 'BDU từ chối'}). Vui lòng rút thủ công.`);
+          continue;
+        }
         run.summaryAcc.rut.push({ ma_mon: victim.maMon, id_to_hoc: victim.idToHoc, ly_do: 'trùng lịch (tự dọn)' });
         this.appendLog(run, 'info', `Đã rút ${victim.maMon}; giữ ${survivor.maMon}.`);
       }
@@ -405,6 +413,7 @@ export class EnrollmentRunManager {
       if (run.stopRequested) break;
       // eslint-disable-next-line no-await-in-loop
       const fatal = await this.registerSubject(run, item, allItems);
+      if (fatal === 'stopped') { await this.finishRun(run, 'stopped'); return; }
       if (fatal) { await this.finishRun(run, 'failed', { error: fatal }); return; }
       await this.sleep(100);
     }

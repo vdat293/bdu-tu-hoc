@@ -12,6 +12,10 @@
 
 const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
 const SERVER_TIME_URL = `${BDU_BASE_URL}/hsba/w-gettimeserver`;
+// One cached catalog is ~500KB (306 môn + 555 nhóm). Capping the number of
+// per-token entries keeps a long-running server from retaining a catalog for
+// every session that ever logged in.
+const MAX_CATALOG_CACHE_ENTRIES = 20;
 
 const CATALOG_ENVELOPE = {
   is_CVHT: false,
@@ -161,6 +165,10 @@ export class EnrollmentService {
       dsNhomTo
     };
     this.catalogCache.set(cacheKey, { value, expiresAt: this.now() + this.catalogTtlMs });
+    if (this.catalogCache.size > MAX_CATALOG_CACHE_ENTRIES) {
+      const oldestKey = this.catalogCache.keys().next().value;
+      if (oldestKey !== undefined) this.catalogCache.delete(oldestKey);
+    }
     return value;
   }
 

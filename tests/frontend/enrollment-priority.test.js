@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupBySubject, moveItem, toSavePayload, canSetAsChinh } from '../../client/src/features/enrollment/priority.js';
+import { groupBySubject, moveItem, removeItem, toSavePayload, canSetAsChinh } from '../../client/src/features/enrollment/priority.js';
 
 const item = (maMon, idToHoc, loai, thuTu, extra = {}) => ({ maMon, tenMon: 'Mon ' + maMon, soTc: 3, idToHoc, nhomTo: '01', lop: '27KT01', loai, thuTu, ...extra });
 
@@ -33,6 +33,22 @@ describe('moveItem', () => {
     const list = [item('A', 'a', 'chinh', 1), item('B', 'b', 'chinh', 2), item('C', 'c', 'chinh', 3)];
     expect(moveItem(list, 'a', -1).map((i) => i.idToHoc)).toEqual(['a', 'b', 'c']);
     expect(moveItem(list, 'c', 1).map((i) => i.idToHoc)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('removeItem', () => {
+  it('bỏ đúng một dự phòng khi bỏ dự phòng', () => {
+    const list = [item('A', 'a1', 'chinh', 1), item('A', 'a2', 'du_phong', 2), item('A', 'a3', 'du_phong', 3)];
+    const next = removeItem(list, 'a2');
+    expect(next.map((i) => i.idToHoc)).toEqual(['a1', 'a3']);
+    expect(next.map((i) => i.thuTu)).toEqual([1, 2]);
+  });
+
+  it('bỏ mục chính thì bỏ luôn dự phòng cùng môn (tránh danh sách dự phòng mồ côi gây 400 khi lưu)', () => {
+    const list = [item('A', 'a1', 'chinh', 1), item('A', 'a2', 'du_phong', 2), item('B', 'b1', 'chinh', 3)];
+    const next = removeItem(list, 'a1');
+    expect(next.map((i) => i.idToHoc)).toEqual(['b1']);
+    expect(next.map((i) => i.thuTu)).toEqual([1]);
   });
 });
 

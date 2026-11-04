@@ -12,7 +12,7 @@ import {
   submitOtp,
   subscribeRun
 } from '../../api/enrollment.js';
-import { groupBySubject, moveItem, toSavePayload } from './priority.js';
+import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const FILTER_OPTIONS = [
@@ -155,7 +155,11 @@ export default function EnrollmentPage() {
     const storedId = window.sessionStorage.getItem(RUN_STORAGE_KEY);
     if (!storedId) return;
     getRunStatus(auth.token, storedId)
-      .then((status) => { if (status) setRun(status); })
+      .then((status) => {
+        if (!status) { window.sessionStorage.removeItem(RUN_STORAGE_KEY); return; }
+        setRun(status);
+        if (!['scheduled', 'running', 'otp_required'].includes(status.status)) window.sessionStorage.removeItem(RUN_STORAGE_KEY);
+      })
       .catch(() => window.sessionStorage.removeItem(RUN_STORAGE_KEY));
   }, [auth.token]);
 
@@ -242,7 +246,7 @@ export default function EnrollmentPage() {
     setSelected((current) => {
       const exists = current.some((item) => item.idToHoc === row.idToHoc);
       setDirty(true);
-      if (exists) return current.filter((item) => item.idToHoc !== row.idToHoc);
+      if (exists) return removeItem(current, row.idToHoc);
       return [...current, {
         maMon: row.maMon,
         tenMon: row.tenMon,
@@ -256,8 +260,8 @@ export default function EnrollmentPage() {
     });
   }, []);
 
-  const removeItem = useCallback((idToHoc) => {
-    setSelected((current) => current.filter((item) => item.idToHoc !== idToHoc));
+  const removeItemFromSelection = useCallback((idToHoc) => {
+    setSelected((current) => removeItem(current, idToHoc));
     setDirty(true);
   }, []);
 
@@ -309,7 +313,12 @@ export default function EnrollmentPage() {
     if (!auth.token || !canActivate) return;
     setStarting(true);
     try {
-      const triggerAt = new Date(triggerInput).toISOString();
+      const when = new Date(triggerInput);
+      if (Number.isNaN(when.getTime())) {
+        notify('Giờ mở cổng không hợp lệ.', 'error');
+        return;
+      }
+      const triggerAt = when.toISOString();
       const result = await startRun(auth.token, { triggerAt, autoFixScheduleConflict });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
@@ -524,7 +533,7 @@ export default function EnrollmentPage() {
                       {item.loai === 'du_phong' ? (
                         <button type="button" className="btn-secondary btn-xs" onClick={() => makeChinh(item)}>Đặt làm chính</button>
                       ) : null}
-                      <button type="button" className="btn-icon btn-danger" aria-label="Bỏ khỏi danh sách" onClick={() => removeItem(item.idToHoc)}>✕</button>
+                      <button type="button" className="btn-icon btn-danger" aria-label="Bỏ khỏi danh sách" onClick={() => removeItemFromSelection(item.idToHoc)}>✕</button>
                     </span>
                   </div>
                 ))}

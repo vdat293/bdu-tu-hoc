@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Test taxonomy tính năng `src/config/feature-groups.js` (Task 1).
  *
  * Vì sao test tách riêng: `featureForPath` là hàm thuần, không đụng DB, nên chốt

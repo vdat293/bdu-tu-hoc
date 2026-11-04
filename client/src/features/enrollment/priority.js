@@ -60,6 +60,20 @@ export function moveItem(items, itemId, direction) {
   return next.map((item, i) => ({ ...item, thuTu: i + 1 }));
 }
 
+export function removeItem(items, idToHoc) {
+  const list = (items ?? []).map(normalize);
+  const target = list.find((item) => item.idToHoc === idToHoc);
+  if (!target) return list.map((item, index) => ({ ...item, thuTu: index + 1 }));
+  // A subject's backups are meaningless without its "chính" item; keep the
+  // selection valid for the server-side validator (du_phong requires chinh).
+  const kept = list.filter((item) => {
+    if (item.idToHoc === idToHoc) return false;
+    if (target.loai === 'chinh' && item.maMon === target.maMon) return false;
+    return true;
+  });
+  return kept.map((item, index) => ({ ...item, thuTu: index + 1 }));
+}
+
 export function toSavePayload(items) {
   return (items ?? []).map(normalize).map((item, index) => ({
     maMon: item.maMon,

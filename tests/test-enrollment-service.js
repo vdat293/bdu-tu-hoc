@@ -126,6 +126,19 @@ await section('getCatalog forceRefresh bypasses the cache', async () => {
   assert.equal(calls.length, 2);
 });
 
+await section('getCatalog caps the per-token cache instead of leaking one entry per session', async () => {
+  const { calls, fetchImpl } = createFetchMock({ [catalogKey]: catalogRaw });
+  const service = new EnrollmentService({ fetchImpl, catalogTtlMs: 60_000 });
+  for (let i = 0; i < 25; i += 1) {
+    await service.getCatalog(`token-${i}`);
+  }
+  assert.equal(calls.length, 25, 'mỗi token mới phải fetch một lần');
+  await service.getCatalog('token-24');
+  assert.equal(calls.length, 25, 'token vừa dùng vẫn còn trong cache');
+  await service.getCatalog('token-0');
+  assert.equal(calls.length, 26, 'token cũ nhất phải bị đẩy khỏi cache để tránh phình bộ nhớ');
+});
+
 await section('getGateStatus reflects trong_thoi_gian_dang_ky', async () => {
   const openCatalog = { ...catalogRaw, data: { ...catalogRaw.data, trong_thoi_gian_dang_ky: true } };
   const { fetchImpl } = createFetchMock({ [catalogKey]: openCatalog });

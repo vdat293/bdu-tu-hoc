@@ -259,6 +259,51 @@ await section('j) stop() prevents remaining items from firing', async () => {
   assert.equal(calls.register.length, 0);
 });
 
+await section('k) stop() while waiting for OTP ends the run as stopped, not failed', async () => {
+  const register = async () => ({ httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' });
+  const { manager } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
+  manager.stop(run.runId, 'SV001');
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'failed']);
+  assert.equal(final.status, 'stopped');
+});
+
+await section('l) 412 during a fallback attempt fails the run with OTP context instead of "hết chỗ"', async () => {
+  const register = async (args) => {
+    if (args.idToHoc === 'A-MAIN') return failResponse('Đã hết chỉ tiêu');
+    if (args.idToHoc === 'A-BACKUP-2') {
+      return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
+    }
+    return okResponse('RS-B');
+  };
+  const { manager } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, backupA2], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'failed');
+  assert.match(String(final.error), /OTP/i);
+});
+
+await section('m) autoFix only records withdrawn courses when BDU confirms the withdraw', async () => {
+  const register = async (args) => {
+    if (args.isChecked === false) {
+      return { httpStatus: 200, code: 200, isThanhCong: false, isChoose: false, idRs: 'RS-W', idToHocXoa: '', thongBaoLoi: 'Không thể rút', thongBaoTienQuyet: '', rawMessage: 'Không thể rút' };
+    }
+    return okResponse('RS-' + args.idToHoc);
+  };
+  const { manager, calls } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, conflictB], triggerAt, autoFixScheduleConflict: true });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(calls.register.filter((c) => c.isChecked === false).length, 1, 'vẫn thử rút');
+  assert.equal(final.summary.rut.length, 0, 'rút thất bại thì không được ghi như đã rút');
+});
+
 await section('singleton export exists', async () => {
   assert.ok(EnrollmentRunService, 'EnrollmentRunService singleton phải tồn tại');
 });
