@@ -13,6 +13,7 @@ export const SAFE_NODE_TESTS = [
   'test-enrollment-migration.js',
   'test-enrollment-priority.js',
   'test-enrollment-tkb.js',
+  'test-enrollment-service.js',
   'test-local-compose-safety.js',
   'test-queue.js',
   'test-docx-postprocessor.js',
@@ -198,3 +199,4 @@ export const LEGACY_DEFAULT_TESTS = [
   'test-traffic-logging.js',
   'test-admin-ranking-toggle.js'
 ];
+
