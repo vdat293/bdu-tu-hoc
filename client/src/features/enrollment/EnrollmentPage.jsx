@@ -623,9 +623,13 @@ export default function EnrollmentPage() {
                     const badges = tkbBadges(row.tkb);
                     const tone = capacityTone(row);
                     const ratio = row.slCp ? Math.max(0, Math.min(1, row.slCl / row.slCp)) : 0;
+                    // BDU occasionally returns the same id_to_hoc for two "tổ" variants
+                    // (e.g. 01-01 and 01-02). id alone is not unique, so the React key
+                    // must include nhóm/tổ to avoid stale rows after filtering.
+                    const rowKey = `${row.idToHoc}|${row.nhomTo ?? ''}|${row.to ?? ''}`;
                     return (
                       <tr
-                        key={row.idToHoc}
+                        key={rowKey}
                         className={`${checked ? 'is-selected' : ''} ${row.enable ? '' : 'is-closed'}`}
                         onClick={() => toggleGroup(row)}
                         title={row.enable ? '' : (row.gcEnable || 'Ngoài thời gian cho phép đăng ký')}
