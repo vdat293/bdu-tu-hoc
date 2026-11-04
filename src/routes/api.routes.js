@@ -23,6 +23,7 @@ import { registerAuthRoutes } from './auth.routes.js';
 import { registerWordFmtRoutes } from './wordfmt.routes.js';
 import { registerSurveyRoutes } from './survey.routes.js';
 import { registerTrainingRoutes } from './training.routes.js';
+import { registerEnrollmentRoutes } from './enrollment.routes.js';
 import { registerEnglishRoutes } from './english.routes.js';
 import { registerLearningRoutes } from './learning.routes.js';
 import {
@@ -48,6 +49,7 @@ registerAuthRoutes(router);            // 1. Auth & Portal
 registerWordFmtRoutes(router);         // 2. Word Formatting Tool
 registerSurveyRoutes(router);          // 3. Survey Automation Tool
 registerTrainingRoutes(router);        // 3b. Training Score (điểm rèn luyện)
+registerEnrollmentRoutes(router);     // 3c. Auto đăng ký môn học BDU
 registerEnglishRoutes(router);         // 4. Moodle English Exercise Automation
 registerLearningRoutes(router);        // 5. Learning Hub Resources
 registerIdentityPortalRoutes(router);  // 5b. Identity presentation + student directory

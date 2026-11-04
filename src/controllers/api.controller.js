@@ -36,6 +36,7 @@ export { ClubsController } from '../modules/clubs/clubs.controller.js';
 export { VocabController } from '../modules/vocab/vocab.controller.js';
 export { GrammarController } from '../modules/grammar/grammar.controller.js';
 export { TrainingController } from '../modules/training/training.controller.js';
+export { EnrollmentController } from '../modules/enrollment/enrollment.controller.js';
 
 import { AuthController } from '../modules/auth/auth.controller.js';
 import { AcademicsController } from '../modules/academics/academics.controller.js';
@@ -56,6 +57,7 @@ import { ClubsController } from '../modules/clubs/clubs.controller.js';
 import { VocabController } from '../modules/vocab/vocab.controller.js';
 import { GrammarController } from '../modules/grammar/grammar.controller.js';
 import { TrainingController } from '../modules/training/training.controller.js';
+import { EnrollmentController } from '../modules/enrollment/enrollment.controller.js';
 
 // Gom theo tên method để `ApiController.<method>` trong api.routes.js giữ
 // nguyên như trước khi tách. Object này chỉ để tương thích route layer; mỗi
@@ -79,5 +81,6 @@ export const ApiController = {
   ...ClubsController,
   ...VocabController,
   ...GrammarController,
-  ...TrainingController
+  ...TrainingController,
+  ...EnrollmentController
 };

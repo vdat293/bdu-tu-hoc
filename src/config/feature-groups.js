@@ -17,10 +17,11 @@
 // false: khoá portal sẽ chặn cả đăng nhập nên người dùng không còn cách tự thoát
 // khỏi màn bảo trì, buộc phải can thiệp DB/rollback.
 export const FEATURE_GROUPS = [
-  { id: 'portal', label: 'Cổng sinh viên', lockable: false, apiPrefixes: ['/profile', '/grades', '/schedule', '/rankings'], pagePrefixes: ['/gpa', '/info', '/schedule', '/leaderboard', '/enrollment'] },
+  { id: 'portal', label: 'Cổng sinh viên', lockable: false, apiPrefixes: ['/profile', '/grades', '/schedule', '/rankings'], pagePrefixes: ['/gpa', '/info', '/schedule', '/leaderboard'] },
   { id: 'wordfmt', label: 'Word Formatting', lockable: true, apiPrefixes: ['/wordfmt'], pagePrefixes: ['/wordfmt'] },
   { id: 'survey', label: 'Survey Automation', lockable: true, apiPrefixes: ['/survey', '/tool-runs'], pagePrefixes: ['/survey'] },
   { id: 'training', label: 'Điểm rèn luyện', lockable: true, apiPrefixes: ['/training-score'], pagePrefixes: ['/training-score'] },
+  { id: 'enrollment', label: 'Auto đăng ký MH', lockable: true, apiPrefixes: ['/enrollment'], pagePrefixes: ['/enrollment'] },
   { id: 'english', label: 'English (Moodle)', lockable: true, apiPrefixes: ['/english'], pagePrefixes: ['/english'] },
   { id: 'learning', label: 'Learning Hub', lockable: true, apiPrefixes: ['/learning'], pagePrefixes: ['/learning'] },
   { id: 'community', label: 'Góc Tự Học Số', lockable: true, apiPrefixes: ['/community/posts', '/community/media'], pagePrefixes: ['/confession'] },

@@ -37,8 +37,9 @@
 | Trùng TKB tự dọn (withdraw) | Tùy chọn, **mặc định TẮT**; chỉ rút môn thuộc danh sách ưu tiên của run đó, ưu tiên `thu_tu` thấp |
 | OTP (HTTP 412) | Server phát SSE `otp_required` → client popup 6 ô → `POST /runs/:id/otp` → server xác thực và chạy tiếp; OTP sai ≤ 5 lần, quá → dừng run |
 | Cách A đã chọn | Server chạy + SSE (không chọn client-run hay userscript) |
-| Kênh sự kiện | Tái dùng `/api/tool-runs/:runId/events` (SSE sẵn có) + `/api/tool-runs` helper phía client |
-| Feature gate | Thêm `enrollment` vào `src/config/feature-groups.js` (apiPrefixes `/enrollment`, pagePrefixes `/enrollment`) |
+| Kênh sự kiện | SSE riêng `/api/enrollment/runs/:id/events` (capability = `runId` uuid, không bearer — cùng model với `/api/tool-runs/:runId/events` nhưng tách domain, không đụng survey) |
+| OTP mặc định | `POST /runs/:id/otp` mặc định trả **501 OTP_NOT_CONFIGURED** tới khi cổng xác thực mở và khảo sát được endpoint thật (bật qua env `ENROLLMENT_OTP_VERIFY_URL`) |
+| Feature gate | Thêm `enrollment` vào `src/config/feature-groups.js` (apiPrefixes `/enrollment`, pagePrefixes `/enrollment`); `/enrollment` chuyển khỏi group `portal` |
 
 ## 3. Bằng chứng khảo sát (read-only, tài khoản test do chủ tài khoản cung cấp)
 
@@ -101,7 +102,7 @@ CREATE INDEX IF NOT EXISTS enrollment_runs_mssv_idx
 
 ```
 Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/modules/enrollment/
-  ▲  └─ SSE /api/tool-runs/:id/events                  ├─ enrollment.service.js      (catalog, CTĐT, withdraw, registered)
+  ▲  └─ SSE /api/enrollment/runs/:id/events              ├─ enrollment.service.js      (catalog, CTĐT, withdraw, registered)
   └─ live log + otp_required + done/error               ├─ enrollment-run.service.js  (canh giờ, bắn, retry, OTP resume)
                                                         ├─ enrollment.controller.js
                                                         ├─ enrollment.routes.js        (đăng ký trong api.routes.js)
@@ -119,7 +120,7 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
 | GET | `/runs/:id` | Trạng thái + `summary` (chỉ đúng mssv chủ run) |
 | POST | `/runs/:id/stop` | Dừng run (flag; bắn xong request hiện tại mới dừng) |
 | POST | `/runs/:id/otp` `{code}` | Gửi OTP khi server phát `otp_required` |
-| GET | `/runs/:id/events` | SSE (tái dùng kênh `/api/tool-runs/:runId/events`) |
+| GET | `/runs/:id/events` | SSE riêng của enrollment (capability = `runId` uuid, không bearer) |
 
 **Auth & ownership:** mọi request dùng `bearerToken(req)` + `BduIdentityService.resolveVerifiedMssv`; không tin mssv từ client; run/summary chỉ đọc được bởi đúng mssv chủ. 2 tab cùng bấm Auto → tab sau nhận **409** (run đang chạy).
 
@@ -139,7 +140,7 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
    - Thiếu tiên quyết (`thong_bao_tien_quyet` / message tương ứng) → **dừng hẳn môn đó**, log, sang môn kế.
    - Trùng TKB → không fallback, log "trùng lịch".
    - "Ngoài thời gian cho phép đăng ký" → từ chối vĩnh viễn, không retry; nếu xảy ra ở lệnh đầu → run `failed`.
-   - HTTP **412** → phát SSE `otp_required`; chờ tối đa 5 phút; nhận OTP qua `/runs/:id/otp` → xác thực (endpoint chốt khi cổng mở) → chạy tiếp. OTP sai ≤ 5 lần, quá → dừng run (`failed`).
+   - HTTP **412** → phát SSE `otp_required`; chờ tối đa 5 phút; nhận OTP qua `/runs/:id/otp` → xác thực (mặc định trả **501** tới khi cổng mở và khảo sát được endpoint thật — bật qua env `ENROLLMENT_OTP_VERIFY_URL`) → chạy tiếp. OTP sai ≤ 5 lần, quá → dừng run (`failed`).
    - 5xx/network/timeout/429 → retry ≤ 3 lần, backoff 200ms→500ms→1200ms; 429 ưu tiên `Retry-After` nếu có.
 4. Kết thúc: ghi `enrollment_runs.summary`, phát SSE `done`/`error`, **xóa token khỏi RAM**.
 5. **Tự động dọn trùng TKB (chỉ khi user bật, trước khi run):** sau khi run xong, nếu 2 môn đã đăng ký trùng TKB → tự `withdraw` môn có `thu_tu` cao hơn (thấp ưu tiên hơn), chỉ trong phạm vi danh sách của run đó; mọi hành động log + có xác nhận bật trước.
