@@ -82,7 +82,10 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
     listPriorities: async () => [],
     replacePriorities: async () => []
   };
-  const notify = { notifyTokenExpired: async (payload) => { calls.notify.push(payload); return true; } };
+  const notify = {
+    notifyRunDone: async (payload) => { calls.notify.push({ kind: 'done', ...payload }); return true; },
+    notifyRunFailed: async (payload) => { calls.notify.push({ kind: 'failed', ...payload }); return true; }
+  };
   const manager = new EnrollmentRunManager({ service, store, now, sleep, notify });
   return { manager, calls };
 };
@@ -352,6 +355,7 @@ await section('p) token expiry without a working refresh fails the run and alert
   assert.equal(final.status, 'failed');
   assert.match(String(final.error), /hết hạn/i);
   assert.equal(calls.notify.length, 1, 'phải enqueue cảnh báo Discord');
+  assert.equal(calls.notify[0].kind, 'failed');
   assert.equal(calls.notify[0].mssv, 'SV001');
   assert.equal(calls.notify[0].runId, run.runId);
 });
@@ -387,6 +391,20 @@ await section('r) a gate that is already open before the scheduled time does not
   assert.equal(registerClock.length, 1);
   assert.ok(registerClock[0] >= triggerMs, 'chỉ bắn đăng ký khi đã tới giờ hẹn');
   assert.ok(gateClock.every((t) => t >= triggerMs), 'không poll cổng trước giờ hẹn');
+});
+
+await section('s) a completed run notifies Discord with the success summary', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.notify.length, 1);
+  assert.equal(calls.notify[0].kind, 'done');
+  assert.match(calls.notify[0].message, /2 thành công/);
+  assert.equal(calls.notify[0].mssv, 'SV001');
+  assert.equal(calls.notify[0].runId, run.runId);
 });
 
 await section('singleton export exists', async () => {

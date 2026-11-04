@@ -146,6 +146,7 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
    - 5xx/network/timeout/429 → retry ≤ 3 lần, backoff 200ms→500ms→1200ms; 429 ưu tiên `Retry-After` nếu có.
 6. Kết thúc: ghi `enrollment_runs.summary`, phát SSE `done`/`error`, **xóa token + refresh token khỏi RAM**.
 7. **Tự động dọn trùng TKB (chỉ khi user bật, trước khi run):** sau khi run xong, nếu 2 môn đã đăng ký trùng TKB → tự `withdraw` môn có `thu_tu` cao hơn (thấp ưu tiên hơn), chỉ trong phạm vi danh sách của run đó; mọi hành động log + có xác nhận bật trước.
+8. **Thông báo Discord (tài khoản đã liên kết):** run `done` → tóm tắt số môn thành công/thất bại + danh sách lỗi (tối đa 5) + số môn tự rút; run `failed` → lý do (gồm token hết hạn). Enqueue `notification_outbox` type `enrollment_alert`, bot DM user.
 
 ## 7. Xử lý lỗi & an toàn
 

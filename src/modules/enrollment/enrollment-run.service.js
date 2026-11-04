@@ -504,10 +504,21 @@ export class EnrollmentRunManager {
     this.activeRunByMssv.delete(run.mssv);
     run.token = null;
     run.refreshToken = '';
-    if (status === 'failed' && run.authExpired && this.notify?.notifyTokenExpired) {
-      const message = `[BDU Auto đăng ký] Phiên đăng nhập đã hết hạn nên lượt auto cho ${run.mssv} không thể tiếp tục. Vui lòng đăng nhập lại và kích hoạt lại. (run ${run.id})`;
-      this.appendLog(run, 'error', 'Đã gửi cảnh báo Discord (nếu tài khoản đã liên kết) về việc token hết hạn.');
-      Promise.resolve(this.notify.notifyTokenExpired({ mssv: run.mssv, runId: run.id, message })).catch(() => {});
+    if (this.notify) {
+      if (status === 'done') {
+        const okCount = summary.thanh_cong.length;
+        const failCount = summary.that_bai.length;
+        const details = summary.that_bai.slice(0, 5).map((item) => `${item.ma_mon}: ${item.ly_do}`).join('; ');
+        const message = `✅ Auto đăng ký hoàn tất (${okCount} thành công${failCount ? `, ${failCount} thất bại` : ''})${details ? ` — ${details}` : ''}.`
+          + (summary.rut.length ? ` Đã tự rút ${summary.rut.length} môn trùng lịch.` : '')
+          + ` (run ${run.id})`;
+        this.appendLog(run, 'success', 'Đã gửi thông báo Discord (nếu tài khoản đã liên kết).');
+        Promise.resolve(this.notify.notifyRunDone?.({ mssv: run.mssv, runId: run.id, message })).catch(() => {});
+      } else if (status === 'failed') {
+        const message = `⚠️ Auto đăng ký thất bại cho ${run.mssv}: ${finalError}. (run ${run.id})`;
+        this.appendLog(run, 'error', 'Đã gửi cảnh báo Discord (nếu tài khoản đã liên kết).');
+        Promise.resolve(this.notify.notifyRunFailed?.({ mssv: run.mssv, runId: run.id, message })).catch(() => {});
+      }
     }
     this.emit(run, { type: 'done', run: this.serialize(run) });
   }
