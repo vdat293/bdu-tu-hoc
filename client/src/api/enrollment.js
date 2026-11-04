@@ -6,6 +6,11 @@ export function getPriority(token, { signal } = {}) {
     .then((data) => unwrap(data, data)?.items ?? []);
 }
 
+export function getSchedule(token, { signal } = {}) {
+  return request('/api/enrollment/schedule', { token, signal, defaultMessage: 'Không tải được lịch đăng ký.' })
+    .then((data) => unwrap(data, data));
+}
+
 export function savePriority(token, items, { signal } = {}) {
   return request('/api/enrollment/priority', { token, method: 'PUT', body: { items }, signal, defaultMessage: 'Không lưu được danh sách ưu tiên.' })
     .then((data) => unwrap(data, data)?.items ?? []);

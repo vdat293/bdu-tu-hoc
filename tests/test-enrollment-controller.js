@@ -220,6 +220,16 @@ try {
     assert.ok(res.chunks.some((chunk) => chunk.includes('"type":"snapshot"') || chunk.includes('"type": "snapshot"')));
   });
 
+  await section('getSchedule returns the hardcoded semester window for the student cohort', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => '24050126';
+    const res = response();
+    await EnrollmentController.getSchedule(reqWith({}), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.primary.opensAt, '2026-11-05T09:00');
+    assert.equal(res.body.data.primary.closesAt, '2026-11-05T20:00');
+    assert.equal(res.body.data.cohortYear, 2024);
+  });
+
   await section('getCatalog sets private cache window and returns catalog', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     enrollmentService.getCatalog = async () => ({ hocKyDangKy: 'HK2', trongThoiGianDangKy: false, dienGiaiEnableChung: 'Ngoài thời gian', dsMonHoc: [], dsNhomTo: [] });

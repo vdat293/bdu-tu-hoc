@@ -112,6 +112,7 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
 | Method | Path | Việc |
 |---|---|---|
 | GET | `/priority` | Danh sách ưu tiên của SV đang đăng nhập |
+| GET | `/schedule` | Lịch đăng ký set cứng theo kì (`src/modules/enrollment/enrollment-schedule.js`): khóa = 2 số đầu MSSV (24→2024, ≤2024 mở 05/11/2026; 25→06/11; 26→07/11; chung→10/11; bổ sung 30/11–01/12), khung giờ 09:00–20:00. Cập nhật mỗi kì tại một chỗ |
 | PUT | `/priority` | Ghi đè toàn bộ danh sách; validate: mỗi `ma_mon` tối đa 1 `chinh`; `du_phong` phải cùng `ma_mon` với mục chính/khác `id_to_hoc`; `thu_tu` liên tục ≥ 1 |
 | GET | `/catalog?loai_loc=2` | Proxy gọn của `w-locdsnhomto` (cache ~60s theo (token, loai_loc)): môn + nhóm + `slCl`/`slCp`. `loai_loc` chỉ đổi cache key — chính sách lọc CTĐT áp dụng phía client dựa trên cờ `isCtdt`/`isChctdt` (mặc định lọc "Môn trong CTĐT kế hoạch"); server không tự bịa tham số filter |
 | GET | `/registered` | Proxy `w-locdskqdkmhsinhvien` |

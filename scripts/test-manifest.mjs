@@ -12,6 +12,7 @@ export const SAFE_NODE_TESTS = [
   'test-migration-ledger.mjs',
   'test-enrollment-migration.js',
   'test-enrollment-priority.js',
+  'test-enrollment-schedule.js',
   'test-enrollment-tkb.js',
   'test-enrollment-service.js',
   'test-enrollment-run.js',

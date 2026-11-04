@@ -10,6 +10,7 @@ import { validatePriorityItems, assignOrder } from './enrollment-priority.js';
 import { priorityStore } from './priority-store.js';
 import { EnrollmentRunService } from './enrollment-run.service.js';
 import { enrollmentService, EnrollmentBduError, OtpUnavailableError } from './enrollment.service.js';
+import { resolveSchedule } from './enrollment-schedule.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
@@ -32,6 +33,15 @@ export const EnrollmentController = {
       return res.json({ result: true, data: { items } });
     } catch (error) {
       return sendError(res, error, 'Không tải được danh sách ưu tiên.');
+    }
+  },
+
+  async getSchedule(req, res) {
+    try {
+      const mssv = await resolveMssv(req);
+      return res.json({ result: true, data: resolveSchedule(mssv) });
+    } catch (error) {
+      return sendError(res, error, 'Không tải được lịch đăng ký.');
     }
   },
 

@@ -3,6 +3,7 @@ import { useAuth, useToasts } from '../../app/providers.jsx';
 import {
   getCatalog,
   getPriority,
+  getSchedule,
   savePriority,
   getRegistered,
   withdraw,
@@ -34,6 +35,13 @@ const defaultTrigger = () => {
   date.setDate(date.getDate() + 1);
   date.setHours(7, 0, 0, 0);
   return date;
+};
+
+const formatDateVN = (value) => {
+  if (!value) return '';
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  if (!year || !month || !day) return String(value);
+  return `${day}/${month}/${year}`;
 };
 
 const normalizeItems = (items) => (items ?? []).map((item) => ({
@@ -198,6 +206,7 @@ export default function EnrollmentPage() {
   const [registered, setRegistered] = useState(null);
   const [registeredError, setRegisteredError] = useState('');
   const [loadingRegistered, setLoadingRegistered] = useState(true);
+  const [schedule, setSchedule] = useState(null);
   const [withdrawTarget, setWithdrawTarget] = useState(null);
   const [withdrawing, setWithdrawing] = useState(false);
 
@@ -246,11 +255,24 @@ export default function EnrollmentPage() {
     }
   }, [auth.token]);
 
+  const loadSchedule = useCallback(async () => {
+    if (!auth.token) return;
+    try {
+      const data = await getSchedule(auth.token);
+      if (!data) return;
+      setSchedule(data);
+      if (data.primary?.opensAt) setTriggerInput(data.primary.opensAt.slice(0, 16));
+    } catch {
+      /* lịch chỉ là gợi ý; lỗi tải lịch không chặn trang */
+    }
+  }, [auth.token]);
+
   useEffect(() => {
     loadCatalog();
     loadPriority();
     loadRegistered();
-  }, [loadCatalog, loadPriority, loadRegistered]);
+    loadSchedule();
+  }, [loadCatalog, loadPriority, loadRegistered, loadSchedule]);
 
   useEffect(() => {
     if (!auth.token) return;
@@ -768,6 +790,52 @@ export default function EnrollmentPage() {
           </div>
 
           <div className="enroll-side">
+            <div className="enroll-card enroll-schedule-card">
+              <div className="enroll-card-head">
+                <div>
+                  <h2>Lịch đăng ký của bạn</h2>
+                  <p className="enroll-sub">
+                    {schedule ? `${schedule.semesterLabel} · Khóa ${schedule.cohortYear ?? '—'}` : 'Đang tải lịch…'}
+                  </p>
+                </div>
+              </div>
+              {schedule ? (
+                <>
+                  <div className="enroll-schedule-list">
+                    <div className="enroll-schedule-row is-primary">
+                      <div>
+                        <span className="enroll-schedule-round">{schedule.primary?.roundLabel}</span>
+                        <span className="enroll-schedule-label">{schedule.primary?.label}</span>
+                      </div>
+                      <strong>
+                        {schedule.primary?.date ? formatDateVN(schedule.primary.date) : `${formatDateVN(schedule.primary?.from)} – ${formatDateVN(schedule.primary?.to)}`}
+                        {' · '}
+                        {schedule.hours.open}–{schedule.hours.close}
+                      </strong>
+                      <button type="button" className="enroll-text-btn" onClick={() => setTriggerInput(schedule.primary.opensAt.slice(0, 16))}>Dùng giờ này</button>
+                    </div>
+                    {schedule.supplementary ? (
+                      <div className="enroll-schedule-row">
+                        <div>
+                          <span className="enroll-schedule-round">{schedule.supplementary.roundLabel}</span>
+                          <span className="enroll-schedule-label">{schedule.supplementary.label}</span>
+                        </div>
+                        <strong>
+                          {formatDateVN(schedule.supplementary.from)} – {formatDateVN(schedule.supplementary.to)}
+                          {' · '}
+                          {schedule.hours.open}–{schedule.hours.close}
+                        </strong>
+                        <button type="button" className="enroll-text-btn" onClick={() => setTriggerInput(schedule.supplementary.opensAt.slice(0, 16))}>Dùng giờ này</button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <p className="enroll-hint">Lịch cứng theo kì, cập nhật mỗi học kỳ khi trường công bố. Khung giờ mở cổng: {schedule.hours.open}–{schedule.hours.close}.</p>
+                </>
+              ) : (
+                <p className="enroll-hint">Chưa tải được lịch đăng ký — bạn vẫn có thể tự chọn giờ mở cổng bên dưới.</p>
+              )}
+            </div>
+
             <div className="enroll-card">
               <div className="enroll-card-head">
                 <div>

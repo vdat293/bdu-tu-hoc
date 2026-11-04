@@ -427,7 +427,9 @@ export class EnrollmentRunManager {
         await this.tryRefresh(run);
       }
       const remainingMs = run.triggerAtMs - this.now();
-      await this.sleep(Math.min(Math.max(remainingMs, 0), 60_000));
+      // Sleep in short chunks so "Dừng" is honoured within ~5s even when the
+      // schedule is a day away.
+      await this.sleep(Math.min(Math.max(remainingMs, 0), 5_000));
     }
 
     let gateOpen = false;
