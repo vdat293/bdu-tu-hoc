@@ -1,0 +1,268 @@
+/**
+ * Enrollment BDU adapter — the only place that knows how sv.bdu.edu.vn shapes
+ * its registration API. Everything here uses the student's own bearer token;
+ * the server never stores it. Response mapping is defensive because the
+ * official portal is the source of truth, not our guesses.
+ *
+ * Note: the portal sends the exact envelope below; the "Lọc theo môn học"
+ * dropdown is applied client-side from the flags already in ds_nhom_to
+ * (is_ctdt / is_chctdt). `loaiLoc` is only a cache key — we do NOT invent
+ * unconfirmed server-side filter fields.
+ */
+
+const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
+const SERVER_TIME_URL = `${BDU_BASE_URL}/hsba/w-gettimeserver`;
+
+const CATALOG_ENVELOPE = {
+  is_CVHT: false,
+  additional: {
+    paging: { limit: 99999, page: 1 },
+    ordering: [{ name: '', order_type: '' }]
+  }
+};
+const REGISTERED_ENVELOPE = { is_CVHT: false, is_Clear: false };
+
+export class EnrollmentBduError extends Error {
+  constructor(message, { status = 502, code = 'BDU_ERROR' } = {}) {
+    super(message);
+    this.name = 'EnrollmentBduError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export class OtpUnavailableError extends Error {
+  constructor(message = 'Chức năng OTP chưa được kích hoạt vì cổng xác thực chưa mở để khảo sát. Bạn vui lòng vào sv.bdu.edu.vn xác thực thủ công rồi thử lại.') {
+    super(message);
+    this.name = 'OtpUnavailableError';
+    this.status = 501;
+    this.code = 'OTP_NOT_CONFIGURED';
+  }
+}
+
+const toInt = (value, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.trunc(num) : fallback;
+};
+const toNum = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+const pickString = (...values) => {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+function tryParseDate(value, depth = 0) {
+  if (value === null || value === undefined || depth > 4) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value > 1e12 ? value : value * 1000);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{10}$/.test(trimmed)) return new Date(Number(trimmed) * 1000);
+    if (/^\d{13}$/.test(trimmed)) return new Date(Number(trimmed));
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === 'object') {
+    for (const key of Object.keys(value)) {
+      const found = tryParseDate(value[key], depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export class EnrollmentService {
+  constructor({ fetchImpl = fetch, catalogTtlMs = 60_000, now = () => Date.now() } = {}) {
+    this.fetchImpl = fetchImpl;
+    this.catalogTtlMs = catalogTtlMs;
+    this.now = now;
+    this.catalogCache = new Map();
+  }
+
+  async #post(token, path, body) {
+    let response;
+    try {
+      response = await this.fetchImpl(`${BDU_BASE_URL}/${path}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json, text/plain, */*',
+          'Content-Type': 'application/json',
+          'idpc': '0'
+        },
+        body: JSON.stringify(body)
+      });
+    } catch {
+      throw new EnrollmentBduError('Không kết nối được tới sv.bdu.edu.vn.', { status: 502, code: 'BDU_UNREACHABLE' });
+    }
+    let data = null;
+    try {
+      const text = await response.text();
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      throw new EnrollmentBduError('Phản hồi từ BDU không hợp lệ (không phải JSON).', { status: 502, code: 'BDU_BAD_RESPONSE' });
+    }
+    return { httpStatus: response.status, data };
+  }
+
+  static #portalData(payload) {
+    if (payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object') return payload.data;
+    return payload ?? {};
+  }
+
+  async getCatalog(token, { loaiLoc = 2, forceRefresh = false } = {}) {
+    const cacheKey = `${token}:${loaiLoc}`;
+    if (!forceRefresh) {
+      const hit = this.catalogCache.get(cacheKey);
+      if (hit && hit.expiresAt > this.now()) return hit.value;
+    }
+
+    const { httpStatus, data } = await this.#post(token, 'dkmh/w-locdsnhomto', CATALOG_ENVELOPE);
+    if (httpStatus === 401 || httpStatus === 426 || [400, 401, 402].includes(data?.code)) {
+      throw new EnrollmentBduError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
+    }
+
+    const portal = EnrollmentService.#portalData(data);
+    const dsMonHoc = (Array.isArray(portal.ds_mon_hoc) ? portal.ds_mon_hoc : [])
+      .map((m) => ({ ma: pickString(m?.ma), ten: pickString(m?.ten) }));
+    const dsNhomTo = (Array.isArray(portal.ds_nhom_to) ? portal.ds_nhom_to : []).map((g) => ({
+      idToHoc: pickString(g?.id_to_hoc),
+      maMon: pickString(g?.ma_mon),
+      tenMon: pickString(g?.ten_mon),
+      nhomTo: pickString(g?.nhom_to),
+      to: pickString(g?.to),
+      lop: pickString(g?.lop),
+      soTc: toNum(g?.so_tc_so ?? g?.so_tc),
+      slCp: toInt(g?.sl_cp),
+      slCl: toInt(g?.sl_cl),
+      tkb: pickString(g?.tkb),
+      enable: g?.enable === true,
+      gcEnable: pickString(g?.gc_enable),
+      isCtdt: g?.is_ctdt === true,
+      isChctdt: g?.is_chctdt === true
+    }));
+
+    const value = {
+      hocKyDangKy: pickString(portal.hoc_ky_dang_ky, data?.hoc_ky_dang_ky),
+      trongThoiGianDangKy: (portal.trong_thoi_gian_dang_ky ?? data?.trong_thoi_gian_dang_ky) === true,
+      dienGiaiEnableChung: pickString(portal.dien_giai_enable_chung, data?.dien_giai_enable_chung),
+      dsMonHoc,
+      dsNhomTo
+    };
+    this.catalogCache.set(cacheKey, { value, expiresAt: this.now() + this.catalogTtlMs });
+    return value;
+  }
+
+  async getGateStatus(token) {
+    const catalog = await this.getCatalog(token, { forceRefresh: true });
+    return catalog.trongThoiGianDangKy === true;
+  }
+
+  async getRegistered(token) {
+    const { httpStatus, data } = await this.#post(token, 'dkmh/w-locdskqdkmhsinhvien', REGISTERED_ENVELOPE);
+    if (httpStatus === 401 || httpStatus === 426 || [400, 401, 402].includes(data?.code)) {
+      throw new EnrollmentBduError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
+    }
+    const portal = EnrollmentService.#portalData(data);
+    return {
+      soTinChiMin: toNum(portal.so_tin_chi_min),
+      dsKqdkmh: Array.isArray(portal.ds_kqdkmh) ? portal.ds_kqdkmh : []
+    };
+  }
+
+  async fetchServerTime() {
+    let response;
+    try {
+      response = await this.fetchImpl(SERVER_TIME_URL, { method: 'GET', headers: { 'Accept': 'application/json, text/plain, */*' } });
+    } catch {
+      return null;
+    }
+    try {
+      const text = await response.text();
+      try {
+        return tryParseDate(JSON.parse(text));
+      } catch {
+        return tryParseDate(text);
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  async registerGroup(token, { idToHoc, isChecked, svNganh = 1, idRs = '' } = {}) {
+    if (!idToHoc) throw new EnrollmentBduError('Thiếu id_to_hoc.', { status: 400, code: 'BAD_REQUEST' });
+    const { httpStatus, data } = await this.#post(token, 'dkmh/w-xulydkmhsinhvien', {
+      filter: {
+        id_to_hoc: String(idToHoc),
+        is_checked: isChecked === true,
+        sv_nganh: Number(svNganh) || 1,
+        id_rs: String(idRs ?? '')
+      }
+    });
+    const portal = EnrollmentService.#portalData(data);
+    return {
+      httpStatus,
+      code: data?.code ?? null,
+      isThanhCong: portal.is_thanh_cong === true,
+      isChoose: portal.is_choose === true,
+      idRs: pickString(portal.id_rs),
+      idToHocXoa: pickString(portal.id_to_hoc_xoa),
+      thongBaoLoi: pickString(portal.thong_bao_loi),
+      thongBaoTienQuyet: pickString(portal.thong_bao_tien_quyet),
+      rawMessage: pickString(data?.message, portal.thong_bao_loi, portal.thong_bao_tien_quyet)
+    };
+  }
+
+  // OTP xác thực dkmh: cổng chưa mở để khảo sát → mặc định 501.
+  // Đặt ENROLLMENT_OTP_VERIFY_URL để bật khi đã xác nhận hành vi thật.
+  async verifyOtp(token, code) {
+    const url = process.env.ENROLLMENT_OTP_VERIFY_URL;
+    if (!url) throw new OtpUnavailableError();
+    let response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'idpc': '0' },
+        body: JSON.stringify({ code: String(code) })
+      });
+    } catch {
+      throw new EnrollmentBduError('Không xác thực được OTP với máy chủ BDU.', { status: 502, code: 'OTP_UNREACHABLE' });
+    }
+    if (response.status >= 200 && response.status < 300) return { ok: true };
+    return { ok: false, status: response.status };
+  }
+}
+
+export function classifyRegisterResult(res = {}) {
+  const httpStatus = Number(res.httpStatus) || 200;
+  if (httpStatus === 412) return 'otp';
+  if (httpStatus === 401 || httpStatus === 426) return 'auth';
+  if (httpStatus === 429) return 'rate_limit';
+  if (httpStatus >= 500 && httpStatus <= 599) return 'transient';
+
+  const code = res.code === undefined ? null : res.code;
+  if (code !== 200) return 'rejected';
+
+  const message = [res.rawMessage, res.thongBaoLoi, res.thongBaoTienQuyet]
+    .filter(Boolean)
+    .join(' ')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+
+  if (/het\s*(cho|chi\s*tieu)|da\s*day|khong\s*con\s*cho/.test(message)) return 'seat_full';
+  if (/tien\s*quyet/.test(message)) return 'prereq';
+  if (/trung\s*(thoi\s*khoa\s*bieu|tkb|lich\s*hoc)/.test(message)) return 'schedule_conflict';
+  if (/ngoai\s*thoi\s*gian|chua\s*den\s*gio|het\s*thoi\s*gian/.test(message)) return 'gate_closed';
+  if (res.isThanhCong === true) return 'thanh_cong';
+  return 'rejected';
+}
