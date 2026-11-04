@@ -54,17 +54,26 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null } = {}) => {
-  const calls = { register: [], insertRun: [], updateRun: [] };
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null } = {}) => {
+  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0 };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
   const service = {
-    getGateStatus: async () => gateSequence[Math.min(gateIndex++, gateSequence.length - 1)],
+    getGateStatus: async (token) => {
+      calls.gate += 1;
+      if (gateImpl) return gateImpl(token, calls.gate);
+      return gateSequence[Math.min(gateIndex++, gateSequence.length - 1)];
+    },
     registerGroup: async (token, args) => {
-      calls.register.push(args);
+      calls.register.push({ token, ...args });
       return registerImpl(args, calls.register.length);
     },
-    verifyOtp: async (token, code) => ({ ok: code === '123456' })
+    verifyOtp: async (token, code) => ({ ok: code === '123456' }),
+    refreshSession: async (refreshToken) => {
+      calls.refresh.push(refreshToken);
+      if (refresh) return refresh(refreshToken);
+      return { token: 'tok-refreshed', refreshToken };
+    }
   };
   const store = {
     insertRun: async (row) => { calls.insertRun.push(row); },
@@ -73,7 +82,8 @@ const makeManager = ({ gateSequence = [true], register = null } = {}) => {
     listPriorities: async () => [],
     replacePriorities: async () => []
   };
-  const manager = new EnrollmentRunManager({ service, store, now, sleep });
+  const notify = { notifyTokenExpired: async (payload) => { calls.notify.push(payload); return true; } };
+  const manager = new EnrollmentRunManager({ service, store, now, sleep, notify });
   return { manager, calls };
 };
 
@@ -302,6 +312,65 @@ await section('m) autoFix only records withdrawn courses when BDU confirms the w
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(calls.register.filter((c) => c.isChecked === false).length, 1, 'vẫn thử rút');
   assert.equal(final.summary.rut.length, 0, 'rút thất bại thì không được ghi như đã rút');
+});
+
+await section('n) long wait keeps the token fresh by refreshing proactively', async () => {
+  const gateSequence = [...Array(13).fill(false), true];
+  const { manager, calls } = makeManager({ gateSequence });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 90 * 60_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.ok(calls.refresh.length >= 1, 'phải refresh token trong lúc chờ dài');
+  assert.equal(calls.register[0].token, 'tok-refreshed', 'đăng ký phải dùng token mới');
+});
+
+await section('o) 401 while polling the gate refreshes the session and continues', async () => {
+  const gateImpl = (token, count) => {
+    if (count === 1) throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' });
+    return true;
+  };
+  const { manager, calls } = makeManager({ gateImpl });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.ok(calls.refresh.length >= 1);
+  assert.equal(calls.register[0].token, 'tok-refreshed');
+});
+
+await section('p) token expiry without a working refresh fails the run and alerts Discord', async () => {
+  const gateImpl = () => { throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' }); };
+  const refresh = async () => { throw new Error('refresh token dead'); };
+  const { manager, calls } = makeManager({ gateImpl, refresh });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-dead', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
+  assert.equal(final.status, 'failed');
+  assert.match(String(final.error), /hết hạn/i);
+  assert.equal(calls.notify.length, 1, 'phải enqueue cảnh báo Discord');
+  assert.equal(calls.notify[0].mssv, 'SV001');
+  assert.equal(calls.notify[0].runId, run.runId);
+});
+
+await section('q) 401 during a register call refreshes and retries the same item', async () => {
+  let attempts = 0;
+  const register = async () => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' });
+    return okResponse('RS-retry');
+  };
+  const { manager, calls } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.register.length, 2);
+  assert.equal(calls.register[1].token, 'tok-refreshed');
 });
 
 await section('singleton export exists', async () => {

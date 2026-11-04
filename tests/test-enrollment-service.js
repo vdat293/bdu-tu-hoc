@@ -238,6 +238,38 @@ await section('network errors raise EnrollmentBduError', async () => {
   });
 });
 
+await section('refreshSession exchanges a refresh token for a fresh access token', async () => {
+  const calls = [];
+  const service = new EnrollmentService({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      const body = new URLSearchParams(String(options.body || ''));
+      assert.equal(body.get('grant_type'), 'refresh_token');
+      assert.equal(body.get('refresh_token'), 'refresh-abc');
+      return {
+        status: 200,
+        ok: true,
+        async json() { return { access_token: 'new-token', refresh_token: 'refresh-new', expires_in: 17999 }; },
+        async text() { return '{}'; }
+      };
+    }
+  });
+  const next = await service.refreshSession('refresh-abc');
+  assert.equal(calls[0].url, `${BASE}/auth/login`);
+  assert.equal(next.token, 'new-token');
+  assert.equal(next.refreshToken, 'refresh-new');
+});
+
+await section('refreshSession rejects when BDU refuses the refresh token', async () => {
+  const service = new EnrollmentService({
+    fetchImpl: async () => ({ status: 400, ok: false, async json() { return { error: 'invalid_grant' }; }, async text() { return '{}'; } })
+  });
+  await assert.rejects(() => service.refreshSession('dead-refresh'), (error) => {
+    assert.equal(error.status, 401);
+    return true;
+  });
+});
+
 const classify = (body, status = 200) => classifyRegisterResult({
   httpStatus: status,
   code: body?.code ?? null,

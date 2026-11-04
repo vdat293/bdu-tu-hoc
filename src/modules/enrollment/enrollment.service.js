@@ -208,6 +208,35 @@ export class EnrollmentService {
     }
   }
 
+  // BDU access tokens live ~5h. A run scheduled for tomorrow refreshes the
+  // session with the refresh token (kept in RAM only) when the access token
+  // expires, so the schedule can actually fire the next day.
+  async refreshSession(refreshToken) {
+    if (!refreshToken) {
+      throw new EnrollmentBduError('Phiên đăng nhập BDU đã hết hạn và thiếu refresh token. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
+    }
+    let response;
+    try {
+      response = await this.fetchImpl(`${BDU_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }).toString()
+      });
+    } catch {
+      throw new EnrollmentBduError('Không kết nối được tới sv.bdu.edu.vn để làm mới phiên.', { status: 502, code: 'BDU_UNREACHABLE' });
+    }
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      throw new EnrollmentBduError('Phản hồi làm mới phiên từ BDU không hợp lệ.', { status: 502, code: 'BDU_BAD_RESPONSE' });
+    }
+    if (!data?.access_token) {
+      throw new EnrollmentBduError('Phiên đăng nhập BDU đã hết hạn. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
+    }
+    return { token: data.access_token, refreshToken: data.refresh_token || refreshToken };
+  }
+
   async registerGroup(token, { idToHoc, isChecked, svNganh = 1, idRs = '' } = {}) {
     if (!idToHoc) throw new EnrollmentBduError('Thiếu id_to_hoc.', { status: 400, code: 'BAD_REQUEST' });
     const { httpStatus, data } = await this.#post(token, 'dkmh/w-xulydkmhsinhvien', {

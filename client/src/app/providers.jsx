@@ -152,8 +152,8 @@ function AuthProvider({ children }) {
   const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [state, setState] = useState(() => {
     const stored = readStoredSession();
-    if (!stored?.token || stored.expired || stored.invalid) return { status: 'initializing', token: null, user: null, expiresAt: null };
-    return { status: 'authenticated', token: stored.token, user: stored.user, expiresAt: stored.expiresAt };
+    if (!stored?.token || stored.expired || stored.invalid) return { status: 'initializing', token: null, refreshToken: '', user: null, expiresAt: null };
+    return { status: 'authenticated', token: stored.token, refreshToken: stored.refreshToken || '', user: stored.user, expiresAt: stored.expiresAt };
   });
 
   useEffect(() => {
@@ -186,7 +186,7 @@ function AuthProvider({ children }) {
   const logout = useCallback(({ message = 'Đã đăng xuất tài khoản.', expired = false, broadcast = true } = {}) => {
     clearStoredSession();
     client.clear();
-    setState({ status: 'anonymous', token: null, user: null, expiresAt: null });
+    setState({ status: 'anonymous', token: null, refreshToken: '', user: null, expiresAt: null });
     if (broadcast) window.dispatchEvent(new CustomEvent('bdu:logout', { detail: { expired } }));
     notify(message, expired ? 'warning' : 'info');
   }, [client, notify]);
@@ -213,17 +213,17 @@ function AuthProvider({ children }) {
   useEffect(() => {
     const stored = readStoredSession();
     if (state.status === 'initializing') {
-      if (stored?.token && !stored.expired && !stored.invalid) setState({ status: 'authenticated', token: stored.token, user: stored.user, expiresAt: stored.expiresAt });
-      else setState({ status: 'anonymous', token: null, user: null, expiresAt: null });
+      if (stored?.token && !stored.expired && !stored.invalid) setState({ status: 'authenticated', token: stored.token, refreshToken: stored.refreshToken || '', user: stored.user, expiresAt: stored.expiresAt });
+      else setState({ status: 'anonymous', token: null, refreshToken: '', user: null, expiresAt: null });
     }
   }, [state.status]);
 
   const login = useCallback(async (username, password, remember) => {
     const result = await loginStudent(username, password);
     const user = { name: result.name, mssv: result.mssv, email: result.email, roles: result.roles, idsv: result.idsv || '' };
-    persistSession({ token: result.token, user, expiresIn: result.expires_in, remember });
+    persistSession({ token: result.token, refreshToken: result.refresh_token || '', user, expiresIn: result.expires_in, remember });
     client.clear();
-    setState({ status: 'authenticated', token: result.token, user, expiresAt: Number(storageForSession(remember).getItem('bdu_token_expires_at')) });
+    setState({ status: 'authenticated', token: result.token, refreshToken: result.refresh_token || '', user, expiresAt: Number(storageForSession(remember).getItem('bdu_token_expires_at')) });
     notify(`Xin chào, ${result.name}!`, 'success');
     return user;
   }, [client, notify]);

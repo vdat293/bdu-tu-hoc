@@ -1,4 +1,4 @@
-export const SESSION_KEYS = ['bdu_token', 'bdu_user', 'bdu_token_expires_at'];
+export const SESSION_KEYS = ['bdu_token', 'bdu_user', 'bdu_token_expires_at', 'bdu_refresh_token'];
 
 function storageForRemember(remember) {
   return remember ? window.localStorage : window.sessionStorage;
@@ -25,7 +25,7 @@ function readFromStorage(storage) {
     if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) return { expired: true, storage };
     const user = JSON.parse(rawUser);
     if (!user || typeof user !== 'object') return { invalid: true, storage };
-    return { token, user, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null, storage };
+    return { token, refreshToken: storage.getItem('bdu_refresh_token') || '', user, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null, storage };
   } catch {
     return { invalid: true, storage };
   }
@@ -39,10 +39,11 @@ export function readStoredSession() {
   return local?.expired || local?.invalid ? local : session?.expired || session?.invalid ? session : null;
 }
 
-export function persistSession({ token, user, expiresIn, remember }) {
+export function persistSession({ token, refreshToken, user, expiresIn, remember }) {
   clearStoredSession();
   const storage = storageForRemember(remember);
   storage.setItem('bdu_token', token);
+  if (refreshToken) storage.setItem('bdu_refresh_token', refreshToken);
   storage.setItem('bdu_user', JSON.stringify(user));
   storage.setItem('bdu_token_expires_at', String(tokenExpiry(token, expiresIn)));
 }

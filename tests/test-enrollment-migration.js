@@ -24,4 +24,10 @@ assert.doesNotMatch(sql, /DROP\s+TABLE/i, 'Migration không được chứa DROP
 assert.match(sql, /CREATE INDEX IF NOT EXISTS enrollment_priorities_mssv_idx/i, 'Thiếu index priorities');
 assert.match(sql, /CREATE INDEX IF NOT EXISTS enrollment_runs_mssv_idx/i, 'Thiếu index runs');
 
+// Migration 070 chỉnh CHECK type của notification_outbox để nhận enrollment_alert.
+const outboxSql = readFileSync(path.join(root, 'migrations', '070_enrollment_alert_outbox.sql'), 'utf8');
+assert.match(outboxSql, /notification_outbox/i, 'Migration 070 phải nhắm notification_outbox');
+assert.match(outboxSql, /enrollment_alert/i, 'Migration 070 phải thêm enrollment_alert');
+assert.doesNotMatch(outboxSql, /DROP\s+TABLE/i, 'Migration 070 không được chứa DROP TABLE');
+
 console.log('Migration 069: priorities + runs schema hợp lệ (idempotent, không DROP).');

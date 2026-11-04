@@ -596,6 +596,7 @@ export const BduService = {
     return {
       result: true,
       token: data.access_token,
+      refresh_token: data.refresh_token || '',
       idsv: data.id ?? data.id_sinh_vien ?? data.idsv ?? data.IDSV ?? '',
       name: data.name,
       mssv: data.userName,

@@ -138,6 +138,7 @@ export const EnrollmentController = {
       const { run, reused } = await EnrollmentRunService.start({
         mssv,
         token,
+        refreshToken: typeof req.body?.refreshToken === 'string' ? req.body.refreshToken.slice(0, 4096) : '',
         items,
         triggerAt: triggerDate.toISOString(),
         autoFixScheduleConflict: wantsAutoFix,

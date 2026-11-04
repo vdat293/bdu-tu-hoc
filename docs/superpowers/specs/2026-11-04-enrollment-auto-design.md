@@ -132,9 +132,10 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
 
 ## 6. Luồng chạy của run-service
 
-1. `triggerAt − 30s`: poll `w-locdsnhomto`/`w-thoigiansinhviendkmh` mỗi **0.5s**; đọc `trong_thoi_gian_dang_ky`. Quá `triggerAt + 5 phút` mà server vẫn đóng → `failed("Cổng chưa mở")`.
-2. Khi server báo mở → duyệt `snapshot` theo `thu_tu`; mỗi mục gọi `w-xulydkmhsinhvien` với `{is_checked:true, id_to_hoc, sv_nganh, id_rs}` tuần tự, giãn cách ≥100ms; `id_rs` của response trước truyền sang lệnh kế.
-3. Phân loại response:
+1. Poll cổng **ngay từ lúc kích hoạt** (không chờ tới sát giờ): >10 phút trước `triggerAt` poll mỗi 5 phút, trong 1–10 phút poll 15s, dưới 1 phút poll 0.5s. Cổng mở **sớm hơn** `triggerAt` → đăng ký ngay (không cần đợi đúng giờ hẹn). Quá `triggerAt + 5 phút` mà server vẫn đóng → `failed("Cổng chưa mở")`.
+2. **Giữ phiên BDU tươi khi chờ dài** (đặt hôm nay cho ngày mai): access token BDU sống ~5h; tool tự gọi `auth/login` với `grant_type=refresh_token` mỗi ~60 phút và khi gặp 401, cập nhật token trong RAM (refresh token chỉ giữ RAM, không ghi DB/log). Nếu refresh thất bại hoàn toàn → run `failed("Phiên đăng nhập đã hết hạn")` và **enqueue cảnh báo Discord** (`notification_outbox` type `enrollment_alert`) cho tài khoản đã liên kết Discord.
+3. Khi server báo mở → duyệt `snapshot` theo `thu_tu`; mỗi mục gọi `w-xulydkmhsinhvien` với `{is_checked:true, id_to_hoc, sv_nganh, id_rs}` tuần tự, giãn cách ≥100ms; `id_rs` của response trước truyền sang lệnh kế.
+4. Phân loại response:
    - `code:200` + `is_thanh_cong` → đánh dấu thành công, log.
    - Hết chỗ (server message nhận diện, ví dụ "hết chỗ"/`sl_cl` về 0 ở catalog kế tiếp) → **fallback**: các mục `du_phong` cùng `ma_mon` theo `thu_tu`; hết dự phòng → log "hết chỗ toàn bộ", sang môn kế.
    - Thiếu tiên quyết (`thong_bao_tien_quyet` / message tương ứng) → **dừng hẳn môn đó**, log, sang môn kế.

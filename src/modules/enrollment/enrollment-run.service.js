@@ -14,6 +14,7 @@ import {
 import { pickFallbacks } from './enrollment-priority.js';
 import { parseTkb, groupsConflict } from './enrollment-tkb.js';
 import { priorityStore } from './priority-store.js';
+import { EnrollmentNotifyService } from './enrollment-notify.service.js';
 
 const ACTIVE_STATUSES = new Set(['scheduled', 'running', 'otp_required']);
 const MAX_LOGS = 300;
@@ -21,15 +22,17 @@ const OTP_WAIT_MS = 5 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 const RETRY_BACKOFF = [200, 500, 1200];
 const GATE_LIMIT_AFTER_MS = 5 * 60 * 1000;
+const TOKEN_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const nowIso = () => new Date().toISOString();
 const clip = (value, max = 160) => String(value ?? '').slice(0, max);
 
 export class EnrollmentRunManager {
-  constructor({ service, store, sleep, now, retentionMs = 30 * 60 * 1000 } = {}) {
+  constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000 } = {}) {
     this.service = service ?? new EnrollmentService();
     this.store = store ?? priorityStore;
+    this.notify = notify ?? EnrollmentNotifyService;
     this.sleep = sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = now ?? (() => Date.now());
     this.retentionMs = retentionMs;
@@ -86,7 +89,7 @@ export class EnrollmentRunManager {
     return this.runs.has(String(runId));
   }
 
-  async start({ mssv, token, items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
+  async start({ mssv, token, refreshToken = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
     this.prune();
     const studentId = String(mssv || '').trim();
     if (!studentId) throw httpError(401, 'Không xác định được sinh viên cho lượt đăng ký.');
@@ -108,6 +111,7 @@ export class EnrollmentRunManager {
       id,
       mssv: studentId,
       token,
+      refreshToken: String(refreshToken || ''),
       snapshot,
       autoFixScheduleConflict: autoFixScheduleConflict === true,
       svNganh: Number(svNganh) || 1,
@@ -125,7 +129,10 @@ export class EnrollmentRunManager {
       pendingItem: null,
       otpAttempts: 0,
       otpResult: null,
-      lastIdRs: ''
+      lastIdRs: '',
+      refreshCount: 0,
+      lastRefreshAt: this.now(),
+      authExpired: false
     };
 
     // Persist before running anything: the run row doubles as the audit log.
@@ -226,6 +233,24 @@ export class EnrollmentRunManager {
     this.emit(run, { type: 'item_done', ...entry });
   }
 
+  // A run can outlive the 5-hour access token (e.g. scheduled today for
+  // tomorrow). Refresh once per auth failure using the RAM-only refresh token.
+  async tryRefresh(run) {
+    if (!run.refreshToken || (run.refreshCount ?? 0) >= 3) return false;
+    run.refreshCount = (run.refreshCount ?? 0) + 1;
+    try {
+      const next = await this.service.refreshSession(run.refreshToken);
+      if (!next?.token) return false;
+      run.token = next.token;
+      if (next.refreshToken) run.refreshToken = next.refreshToken;
+      run.lastRefreshAt = this.now();
+      this.appendLog(run, 'info', 'Đã gia hạn phiên BDU để tiếp tục chờ/đăng ký.');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // One attempt + up to 3 retries, only for transient/rate-limit classes.
   async attemptRegister(run, item, isChecked) {
     for (let attempt = 0; attempt <= RETRY_BACKOFF.length; attempt += 1) {
@@ -238,6 +263,14 @@ export class EnrollmentRunManager {
           idRs: run.lastIdRs
         });
       } catch (error) {
+        const isAuth = error?.status === 401 || error?.code === 'AUTH_EXPIRED';
+        if (isAuth && await this.tryRefresh(run)) {
+          continue;
+        }
+        if (isAuth) {
+          run.authExpired = true;
+          return { cls: 'auth', error };
+        }
         if (attempt < RETRY_BACKOFF.length) {
           await this.sleep(RETRY_BACKOFF[attempt]);
           continue;
@@ -246,6 +279,11 @@ export class EnrollmentRunManager {
       }
       if (res?.idRs) run.lastIdRs = res.idRs;
       const cls = classifyRegisterResult(res);
+      if (cls === 'auth') {
+        if (await this.tryRefresh(run)) continue;
+        run.authExpired = true;
+        return { cls, res };
+      }
       if ((cls === 'transient' || cls === 'rate_limit') && attempt < RETRY_BACKOFF.length) {
         await this.sleep(RETRY_BACKOFF[attempt]);
         continue;
@@ -380,20 +418,34 @@ export class EnrollmentRunManager {
     const run = this.runs.get(runId);
     if (!run || run.status !== 'scheduled') return;
 
-    const preTriggerMs = run.triggerAtMs - 30_000;
-    while (!run.stopRequested && this.now() < preTriggerMs) {
-      await this.sleep(1000);
-    }
-
     let gateOpen = false;
     const deadline = run.triggerAtMs + GATE_LIMIT_AFTER_MS;
     let polls = 0;
-    while (!run.stopRequested && this.now() <= deadline && polls < 20_000) {
+    // Poll from activation, not only near triggerAt: if BDU opens the gate
+    // earlier than the chosen time (or right now, while the user scheduled for
+    // tomorrow), the run fires as soon as the gate is actually open.
+    while (!run.stopRequested && this.now() <= deadline && polls < 40_000) {
       polls += 1;
-      // eslint-disable-next-line no-await-in-loop
-      gateOpen = await this.service.getGateStatus(run.token);
+      // Keep the BDU session warm during long waits (schedule today → tomorrow):
+      // refresh proactively instead of waiting for the 5-hour access token to die.
+      if (run.refreshToken && this.now() - run.lastRefreshAt >= TOKEN_REFRESH_INTERVAL_MS) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.tryRefresh(run);
+      }
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        gateOpen = await this.service.getGateStatus(run.token);
+      } catch (error) {
+        if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run)) {
+          continue;
+        }
+        if (error?.status === 401 || error?.code === 'AUTH_EXPIRED') run.authExpired = true;
+        throw error;
+      }
       if (gateOpen) break;
-      await this.sleep(500);
+      const remainingMs = run.triggerAtMs - this.now();
+      const interval = remainingMs > 10 * 60_000 ? 5 * 60_000 : remainingMs > 60_000 ? 15_000 : 500;
+      await this.sleep(interval);
     }
 
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
@@ -432,8 +484,11 @@ export class EnrollmentRunManager {
       fallback: [...run.summaryAcc.fallback],
       rut: [...run.summaryAcc.rut]
     };
+    const finalError = status === 'failed' && run.authExpired
+      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại và kích hoạt lại.'
+      : (error ?? null);
     const finishedAt = nowIso();
-    this.updateRun(run, { status, summary, error: error ?? null, finishedAt });
+    this.updateRun(run, { status, summary, error: finalError, finishedAt });
     try {
       await this.store.updateRun(run.id, {
         status,
@@ -446,6 +501,12 @@ export class EnrollmentRunManager {
     }
     this.activeRunByMssv.delete(run.mssv);
     run.token = null;
+    run.refreshToken = '';
+    if (status === 'failed' && run.authExpired && this.notify?.notifyTokenExpired) {
+      const message = `[BDU Auto đăng ký] Phiên đăng nhập đã hết hạn nên lượt auto cho ${run.mssv} không thể tiếp tục. Vui lòng đăng nhập lại và kích hoạt lại. (run ${run.id})`;
+      this.appendLog(run, 'error', 'Đã gửi cảnh báo Discord (nếu tài khoản đã liên kết) về việc token hết hạn.');
+      Promise.resolve(this.notify.notifyTokenExpired({ mssv: run.mssv, runId: run.id, message })).catch(() => {});
+    }
     this.emit(run, { type: 'done', run: this.serialize(run) });
   }
 }

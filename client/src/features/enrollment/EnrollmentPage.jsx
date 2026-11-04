@@ -439,7 +439,7 @@ export default function EnrollmentPage() {
         notify('Giờ mở cổng không hợp lệ.', 'error');
         return;
       }
-      const result = await startRun(auth.token, { triggerAt: when.toISOString(), autoFixScheduleConflict });
+      const result = await startRun(auth.token, { triggerAt: when.toISOString(), autoFixScheduleConflict, refreshToken: auth.refreshToken });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
       window.sessionStorage.setItem(RUN_STORAGE_KEY, runId);
@@ -451,7 +451,7 @@ export default function EnrollmentPage() {
     } finally {
       setStarting(false);
     }
-  }, [auth.token, canActivate, triggerInput, autoFixScheduleConflict, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, triggerInput, autoFixScheduleConflict, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -873,7 +873,7 @@ export default function EnrollmentPage() {
             ) : null}
 
             {run?.error ? <p className="enroll-error">{run.error}</p> : null}
-            <p className="enroll-hint">Tool chỉ bắn request trong khung giờ BDU cho phép. Ngoài giờ, server từ chối và lượt chạy dừng an toàn.</p>
+            <p className="enroll-hint">Tool canh cổng ngay từ lúc kích hoạt — cổng mở sớm hơn giờ hẹn thì đăng ký chạy luôn. Phiên BDU được tự gia hạn khi chờ lâu; nếu hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
             </div>
           </div>
         </div>
