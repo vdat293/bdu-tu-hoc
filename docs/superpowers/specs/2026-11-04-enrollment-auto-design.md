@@ -113,7 +113,7 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
 |---|---|---|
 | GET | `/priority` | Danh sách ưu tiên của SV đang đăng nhập |
 | PUT | `/priority` | Ghi đè toàn bộ danh sách; validate: mỗi `ma_mon` tối đa 1 `chinh`; `du_phong` phải cùng `ma_mon` với mục chính/khác `id_to_hoc`; `thu_tu` liên tục ≥ 1 |
-| GET | `/catalog?loai_loc=2` | Proxy gọn của `w-locdsnhomto` (cache ~60s): môn + nhóm + `sl_cl`, lọc theo `loai_loc` (mặc định 2 = CTĐT kế hoạch) |
+| GET | `/catalog?loai_loc=2` | Proxy gọn của `w-locdsnhomto` (cache ~60s theo (token, loai_loc)): môn + nhóm + `slCl`/`slCp`. `loai_loc` chỉ đổi cache key — chính sách lọc CTĐT áp dụng phía client dựa trên cờ `isCtdt`/`isChctdt` (mặc định lọc "Môn trong CTĐT kế hoạch"); server không tự bịa tham số filter |
 | GET | `/registered` | Proxy `w-locdskqdkmhsinhvien` |
 | POST | `/withdraw` `{id_to_hoc}` | Rút 1 nhóm (`is_checked:false`) |
 | POST | `/runs` `{triggerAt}` | Snapshot danh sách + token (RAM) → bắt đầu canh giờ → run |
