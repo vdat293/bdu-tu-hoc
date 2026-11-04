@@ -5504,6 +5504,48 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 
 /* activation */
 #tab-enrollment .enroll-run-card { display: grid; gap: 12px; }
+#tab-enrollment .enroll-schedule-picker { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+#tab-enrollment .enroll-schedule-picker legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  margin-bottom: 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+#tab-enrollment .enroll-schedule-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--enroll-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+#tab-enrollment .enroll-schedule-option input { margin-top: 3px; accent-color: var(--bdu-light); }
+#tab-enrollment .enroll-schedule-option.is-selected {
+  border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent);
+  background: color-mix(in srgb, var(--bdu-light) 7%, transparent);
+}
+#tab-enrollment .enroll-schedule-option.is-closed { opacity: 0.55; cursor: not-allowed; }
+#tab-enrollment .enroll-schedule-option-body { display: grid; gap: 2px; min-width: 0; }
+#tab-enrollment .enroll-schedule-option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+#tab-enrollment .enroll-schedule-option strong { font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+#tab-enrollment .enroll-gate-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--enroll-border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+#tab-enrollment .enroll-gate-time.is-ready { color: var(--bdu-light); border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); }
+#tab-enrollment .enroll-gate-time strong { font-variant-numeric: tabular-nums; }
 #tab-enrollment .enroll-status {
   padding: 4px 10px;
   border-radius: 999px;
@@ -5517,17 +5559,6 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 #tab-enrollment .enroll-status.is-otp_required { color: var(--color-purple); border-color: color-mix(in srgb, var(--color-purple) 45%, transparent); }
 #tab-enrollment .enroll-status.is-done { color: var(--color-emerald); border-color: color-mix(in srgb, var(--color-emerald) 45%, transparent); }
 #tab-enrollment .enroll-status.is-failed { color: var(--color-rose); border-color: color-mix(in srgb, var(--color-rose) 45%, transparent); }
-#tab-enrollment .enroll-field { display: grid; gap: 6px; font-size: 0.78rem; color: var(--text-muted); }
-#tab-enrollment .enroll-field > span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-#tab-enrollment .enroll-field input {
-  min-height: 42px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--enroll-border);
-  background: var(--bg-card);
-  color: var(--text-main);
-  font: inherit;
-}
 #tab-enrollment .enroll-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.82rem; }
 #tab-enrollment .enroll-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 #tab-enrollment .enroll-switch-track {
@@ -5614,13 +5645,8 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 
 /* side column + mini schedule */
 #tab-enrollment .enroll-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
-#tab-enrollment .enroll-schedule-list { display: grid; gap: 8px; }
-#tab-enrollment .enroll-schedule-row { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--enroll-border); border-radius: 12px; }
-#tab-enrollment .enroll-schedule-row.is-primary { border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); background: color-mix(in srgb, var(--bdu-light) 7%, transparent); }
 #tab-enrollment .enroll-schedule-round { margin-right: 6px; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
 #tab-enrollment .enroll-schedule-label { font-size: 0.8rem; }
-#tab-enrollment .enroll-schedule-row strong { font-size: 0.84rem; font-variant-numeric: tabular-nums; }
-#tab-enrollment .enroll-schedule-row .enroll-text-btn { justify-self: start; padding: 2px 0; }
 #tab-enrollment .enroll-mini-wrap { overflow-x: auto; border: 1px solid var(--enroll-border); border-radius: 12px; }
 #tab-enrollment .enroll-mini { width: 100%; min-width: 420px; border-collapse: collapse; table-layout: fixed; font-size: 0.7rem; }
 #tab-enrollment .enroll-mini th,

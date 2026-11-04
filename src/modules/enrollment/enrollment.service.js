@@ -154,7 +154,9 @@ export class EnrollmentService {
       enable: g?.enable === true,
       gcEnable: pickString(g?.gc_enable),
       isCtdt: g?.is_ctdt === true,
-      isChctdt: g?.is_chctdt === true
+      isChctdt: g?.is_chctdt === true,
+      isRot: g?.is_rot === true,
+      dsLop: (Array.isArray(g?.ds_lop) ? g.ds_lop : []).map((lop) => pickString(lop)).filter(Boolean)
     }));
 
     const value = {
@@ -175,6 +177,24 @@ export class EnrollmentService {
   async getGateStatus(token) {
     const catalog = await this.getCatalog(token, { forceRefresh: true });
     return catalog.trongThoiGianDangKy === true;
+  }
+
+  /**
+   * Lớp hành chính của sinh viên (vd "27TH03") — dùng cho bộ lọc "Môn học mở
+   * theo lớp sinh viên". Endpoint hồ sơ cũng trả nhiều field khác nhưng ở đây
+   * chỉ cần `lop`; lỗi mạng không được làm hỏng luồng đăng ký.
+   */
+  async getStudentClass(token) {
+    if (!token) return '';
+    try {
+      const { httpStatus, data } = await this.#post(token, 'dkmh/w-locsinhvieninfo', {});
+      if (httpStatus >= 400) return '';
+      const portal = EnrollmentService.#portalData(data);
+      const row = Array.isArray(portal) ? portal[0] : portal;
+      return pickString(row?.lop);
+    } catch {
+      return '';
+    }
   }
 
   async getRegistered(token) {

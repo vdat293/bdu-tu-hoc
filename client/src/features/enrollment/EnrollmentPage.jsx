@@ -18,30 +18,32 @@ import { DAY_OPTIONS, SESSION_OPTIONS, parseTkb, sessionOf, tkbBadges, tkbMatche
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const FILTER_OPTIONS = [
-  { value: 10, label: 'Tất cả môn đang mở (không lọc)' },
+  { value: 0, label: 'Môn mở theo lớp sinh viên' },
   { value: 2, label: 'Môn trong CTĐT kế hoạch' },
-  { value: 6, label: 'Môn chưa học trong CTĐT kế hoạch' }
+  { value: 6, label: 'Môn chưa học trong CTĐT kế hoạch' },
+  { value: 1, label: 'Môn cần học lại (đã rớt)' }
 ];
 
 const RUN_STORAGE_KEY = 'bdu_enrollment_run_id';
 const ACTIVE_STATUSES = ['scheduled', 'running', 'otp_required'];
 
-const toInputValue = (date) => {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-const defaultTrigger = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  date.setHours(7, 0, 0, 0);
-  return date;
-};
+// Lịch đăng ký là giờ Việt Nam (UTC+7) và không kèm timezone trong chuỗi
+// "YYYY-MM-DDTHH:mm" — luôn parse tường minh để server ở múi giờ khác vẫn đúng.
+const parseScheduleTime = (value) => new Date(`${value}:00+07:00`);
 
 const formatDateVN = (value) => {
   if (!value) return '';
   const [year, month, day] = String(value).slice(0, 10).split('-');
   if (!year || !month || !day) return String(value);
   return `${day}/${month}/${year}`;
+};
+
+const formatDateTimeVN = (value) => {
+  if (!value) return '';
+  const date = parseScheduleTime(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const time = value.slice(11, 16);
+  return `${formatDateVN(value)} ${time}`;
 };
 
 const normalizeItems = (items) => (items ?? []).map((item) => ({
@@ -55,7 +57,12 @@ const normalizeItems = (items) => (items ?? []).map((item) => ({
   thuTu: Number(item.thuTu ?? item.thu_tu) || 0
 }));
 
-const filterCatalog = (rows, loaiLoc) => {
+const filterCatalog = (rows, loaiLoc, studentClass) => {
+  if (loaiLoc === 0) {
+    if (!studentClass) return [];
+    return rows.filter((row) => row.lop === studentClass || (row.dsLop ?? []).includes(studentClass));
+  }
+  if (loaiLoc === 1) return rows.filter((row) => row.isRot);
   if (loaiLoc === 2) return rows.filter((row) => row.isCtdt);
   if (loaiLoc === 6) return rows.filter((row) => row.isChctdt);
   return rows;
@@ -182,7 +189,7 @@ export default function EnrollmentPage() {
   const [catalog, setCatalog] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(true);
-  const [loaiLoc, setLoaiLoc] = useState(10);
+  const [loaiLoc, setLoaiLoc] = useState(2);
   const [search, setSearch] = useState('');
   const [thu, setThu] = useState(0);
   const [buoi, setBuoi] = useState('all');
@@ -192,7 +199,7 @@ export default function EnrollmentPage() {
   const [prioritySaving, setPrioritySaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const [triggerInput, setTriggerInput] = useState(() => toInputValue(defaultTrigger()));
+  const [selectedRound, setSelectedRound] = useState('dot1');
   const [autoFixScheduleConflict, setAutoFixScheduleConflict] = useState(false);
   const [run, setRun] = useState(null);
   const [starting, setStarting] = useState(false);
@@ -261,7 +268,6 @@ export default function EnrollmentPage() {
       const data = await getSchedule(auth.token);
       if (!data) return;
       setSchedule(data);
-      if (data.primary?.opensAt) setTriggerInput(data.primary.opensAt.slice(0, 16));
     } catch {
       /* lịch chỉ là gợi ý; lỗi tải lịch không chặn trang */
     }
@@ -437,7 +443,10 @@ export default function EnrollmentPage() {
     return cells;
   }, [selected, catalog]);
 
-  const baseRows = useMemo(() => filterCatalog(catalog?.dsNhomTo ?? [], loaiLoc), [catalog, loaiLoc]);
+  const baseRows = useMemo(
+    () => filterCatalog(catalog?.dsNhomTo ?? [], loaiLoc, schedule?.studentClass ?? ''),
+    [catalog, loaiLoc, schedule?.studentClass]
+  );
   const visibleCatalog = useMemo(() => {
     const q = search.trim().toLowerCase();
     return baseRows.filter((row) => {
@@ -450,22 +459,61 @@ export default function EnrollmentPage() {
 
   const monDangMo = useMemo(() => new Set(baseRows.map((row) => row.maMon)).size, [baseRows]);
 
-  const canActivate = selected.length > 0 && !dirty && !activeRun && !starting;
+  // Các đợt đăng ký do nhà trường set cứng — người dùng chỉ chọn đợt, không tự
+  // nhập ngày/giờ. Đợt đã qua giờ đóng bị khoá, không kích hoạt được nữa.
+  const scheduleRounds = useMemo(() => {
+    if (!schedule) return [];
+    const build = (slot, id) => {
+      if (!slot) return null;
+      return {
+        id,
+        roundLabel: slot.roundLabel,
+        label: slot.label,
+        opensAt: slot.opensAt,
+        closesAt: slot.closesAt,
+        rangeText: slot.date
+          ? formatDateVN(slot.date)
+          : `${formatDateVN(slot.from)} – ${formatDateVN(slot.to)}`,
+        closed: Date.now() > parseScheduleTime(slot.closesAt).getTime()
+      };
+    };
+    return [build(schedule.primary, 'dot1'), build(schedule.supplementary, 'bo_sung')].filter(Boolean);
+  }, [schedule]);
+
+  useEffect(() => {
+    if (!scheduleRounds.length) return;
+    setSelectedRound((current) => {
+      const picked = scheduleRounds.find((round) => round.id === current);
+      if (picked && !picked.closed) return current;
+      const next = scheduleRounds.find((round) => !round.closed);
+      return next ? next.id : current;
+    });
+  }, [scheduleRounds]);
+
+  const selectedRoundInfo = scheduleRounds.find((round) => round.id === selectedRound) ?? null;
+  const canActivate = selected.length > 0 && !dirty && !activeRun && !starting && Boolean(selectedRoundInfo) && !selectedRoundInfo.closed;
 
   const handleStart = useCallback(async () => {
     if (!auth.token || !canActivate) return;
     setStarting(true);
     try {
-      const when = new Date(triggerInput);
-      if (Number.isNaN(when.getTime())) {
-        notify('Giờ mở cổng không hợp lệ.', 'error');
-        return;
-      }
-      const result = await startRun(auth.token, { triggerAt: when.toISOString(), autoFixScheduleConflict, refreshToken: auth.refreshToken });
+      const result = await startRun(auth.token, {
+        roundId: selectedRound,
+        autoFixScheduleConflict,
+        refreshToken: auth.refreshToken
+      });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
       window.sessionStorage.setItem(RUN_STORAGE_KEY, runId);
-      setRun({ runId, status: 'scheduled', triggerAt: when.toISOString(), logs: [], results: [], summary: null, error: null });
+      setRun({
+        runId,
+        status: 'scheduled',
+        triggerAt: selectedRoundInfo ? `${selectedRoundInfo.opensAt}:00+07:00` : null,
+        logs: [],
+        results: [],
+        summary: null,
+        error: null
+      });
       setNowTick(Date.now());
       notify('Đã kích hoạt lượt đăng ký.', 'success');
     } catch (error) {
@@ -473,7 +521,7 @@ export default function EnrollmentPage() {
     } finally {
       setStarting(false);
     }
-  }, [auth.token, auth.refreshToken, canActivate, triggerInput, autoFixScheduleConflict, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -626,7 +674,11 @@ export default function EnrollmentPage() {
             <label className="enroll-select">
               <span>Chương trình</span>
               <select value={loaiLoc} onChange={(event) => setLoaiLoc(Number(event.target.value))}>
-                {FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.value === 0 && schedule?.studentClass ? `${option.label} (${schedule.studentClass})` : option.label}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="enroll-chip-group" role="group" aria-label="Lọc theo thứ">
@@ -790,50 +842,107 @@ export default function EnrollmentPage() {
           </div>
 
           <div className="enroll-side">
-            <div className="enroll-card enroll-schedule-card">
+            <div className="enroll-card enroll-run-card">
               <div className="enroll-card-head">
                 <div>
-                  <h2>Lịch đăng ký của bạn</h2>
+                  <h2>Lịch đăng ký &amp; Kích hoạt</h2>
                   <p className="enroll-sub">
                     {schedule ? `${schedule.semesterLabel} · Khóa ${schedule.cohortYear ?? '—'}` : 'Đang tải lịch…'}
                   </p>
                 </div>
+                {run ? <span className={`enroll-status is-${run.status}`}>{statusLabel[run.status] ?? run.status}</span> : null}
               </div>
-              {schedule ? (
-                <>
-                  <div className="enroll-schedule-list">
-                    <div className="enroll-schedule-row is-primary">
-                      <div>
-                        <span className="enroll-schedule-round">{schedule.primary?.roundLabel}</span>
-                        <span className="enroll-schedule-label">{schedule.primary?.label}</span>
-                      </div>
-                      <strong>
-                        {schedule.primary?.date ? formatDateVN(schedule.primary.date) : `${formatDateVN(schedule.primary?.from)} – ${formatDateVN(schedule.primary?.to)}`}
-                        {' · '}
-                        {schedule.hours.open}–{schedule.hours.close}
-                      </strong>
-                      <button type="button" className="enroll-text-btn" onClick={() => setTriggerInput(schedule.primary.opensAt.slice(0, 16))}>Dùng giờ này</button>
-                    </div>
-                    {schedule.supplementary ? (
-                      <div className="enroll-schedule-row">
-                        <div>
-                          <span className="enroll-schedule-round">{schedule.supplementary.roundLabel}</span>
-                          <span className="enroll-schedule-label">{schedule.supplementary.label}</span>
-                        </div>
-                        <strong>
-                          {formatDateVN(schedule.supplementary.from)} – {formatDateVN(schedule.supplementary.to)}
-                          {' · '}
-                          {schedule.hours.open}–{schedule.hours.close}
-                        </strong>
-                        <button type="button" className="enroll-text-btn" onClick={() => setTriggerInput(schedule.supplementary.opensAt.slice(0, 16))}>Dùng giờ này</button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <p className="enroll-hint">Lịch cứng theo kì, cập nhật mỗi học kỳ khi trường công bố. Khung giờ mở cổng: {schedule.hours.open}–{schedule.hours.close}.</p>
-                </>
+
+              {scheduleRounds.length ? (
+                <fieldset className="enroll-schedule-picker" disabled={activeRun}>
+                  <legend><IconCalendar /> Chọn đợt đăng ký (lịch cố định của trường)</legend>
+                  {scheduleRounds.map((round) => {
+                    const checked = round.id === selectedRound;
+                    return (
+                      <label
+                        key={round.id}
+                        className={`enroll-schedule-option${checked ? ' is-selected' : ''}${round.closed ? ' is-closed' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="enroll-round"
+                          value={round.id}
+                          checked={checked}
+                          onChange={() => setSelectedRound(round.id)}
+                          disabled={activeRun || round.closed}
+                        />
+                        <span className="enroll-schedule-option-body">
+                          <span className="enroll-schedule-option-head">
+                            <span className="enroll-schedule-round">{round.roundLabel}</span>
+                            <span className="enroll-schedule-label">{round.label}</span>
+                            {round.closed ? <span className="enroll-pill">Đã đóng</span> : null}
+                          </span>
+                          <strong>{round.rangeText} · {schedule.hours.open}–{schedule.hours.close}</strong>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
               ) : (
-                <p className="enroll-hint">Chưa tải được lịch đăng ký — bạn vẫn có thể tự chọn giờ mở cổng bên dưới.</p>
+                <p className="enroll-hint">Chưa tải được lịch đăng ký nên chưa thể kích hoạt.</p>
               )}
+
+              <div className={`enroll-gate-time${selectedRoundInfo && !selectedRoundInfo.closed ? ' is-ready' : ''}`}>
+                <IconClock />
+                <span>
+                  {selectedRoundInfo
+                    ? <>Mở cổng lúc <strong>{formatDateTimeVN(selectedRoundInfo.opensAt)}</strong> — không thể tự đổi</>
+                    : 'Chưa chọn đợt đăng ký'}
+                </span>
+              </div>
+
+              <label className="enroll-switch">
+                <input type="checkbox" checked={autoFixScheduleConflict} onChange={(event) => setAutoFixScheduleConflict(event.target.checked)} disabled={activeRun} />
+                <span className="enroll-switch-track" aria-hidden="true" />
+                <span>
+                  Tự dọn trùng TKB sau khi chạy
+                  <small>Tự rút môn ưu tiên thấp hơn nếu 2 môn đã đăng ký trùng lịch. Mặc định tắt.</small>
+                </span>
+              </label>
+
+              <div className="enroll-run-actions">
+                <button type="button" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
+                  <IconBolt /> {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
+                </button>
+                {activeRun ? (
+                  <button type="button" className="enroll-ghost" onClick={handleStop}><IconStop /> Dừng</button>
+                ) : (
+                  <button type="button" className="enroll-ghost" onClick={refreshRunStatus} disabled={!run?.runId}>
+                    <IconRefresh /> Làm mới
+                  </button>
+                )}
+              </div>
+
+              {countdown ? (
+                <div className={`enroll-countdown is-${countdown.tone}`}>
+                  <IconClock /> <span>{countdown.text}</span>
+                </div>
+              ) : null}
+
+              {run ? (
+                <div className="enroll-terminal">
+                  <div className="enroll-terminal-bar" aria-hidden="true"><span /><span /><span /></div>
+                  <pre ref={logRef} className="enroll-terminal-body" aria-live="polite">
+                    {(run.logs ?? []).map((entry, index) => `[${entry.timestamp ?? ''}] ${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
+                  </pre>
+                </div>
+              ) : null}
+
+              {run?.summary?.thanh_cong?.length || run?.summary?.that_bai?.length || run?.summary?.rut?.length ? (
+                <div className="enroll-summary">
+                  {(run.summary?.thanh_cong ?? []).map((item) => <div key={`ok-${item.id_to_hoc}`} className="enroll-summary-row is-ok"><IconCheck /> {item.ma_mon}</div>)}
+                  {(run.summary?.that_bai ?? []).map((item) => <div key={`fail-${item.id_to_hoc}`} className="enroll-summary-row is-fail">✕ {item.ma_mon} — {item.ly_do}</div>)}
+                  {(run.summary?.rut ?? []).map((item) => <div key={`rut-${item.id_to_hoc}`} className="enroll-summary-row is-warn">↩ {item.ma_mon} — {item.ly_do}</div>)}
+                </div>
+              ) : null}
+
+              {run?.error ? <p className="enroll-error">{run.error}</p> : null}
+              <p className="enroll-hint">Lịch do nhà trường quy định theo khóa và cập nhật mỗi học kỳ; bạn chỉ chọn đợt, không tự đặt ngày/giờ. Đúng giờ hẹn tool mới bắt đầu canh cổng và bắn lệnh; trước đó chỉ giữ phiên BDU tươi. Nếu phiên hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
             </div>
 
             <div className="enroll-card">
@@ -881,68 +990,6 @@ export default function EnrollmentPage() {
               <p className="enroll-hint">{selected.length ? 'Ô đỏ = trùng lịch giữa các môn đã chọn.' : 'Chọn môn để xem lịch tuần.'}</p>
             </div>
 
-            <div className="enroll-card enroll-run-card">
-            <div className="enroll-card-head">
-              <div>
-                <h2>Kích hoạt</h2>
-                <p className="enroll-sub">Canh giờ mở cổng và tự đăng ký</p>
-              </div>
-              {run ? <span className={`enroll-status is-${run.status}`}>{statusLabel[run.status] ?? run.status}</span> : null}
-            </div>
-
-            <label className="enroll-field">
-              <span><IconCalendar /> Giờ mở cổng dự kiến</span>
-              <input type="datetime-local" value={triggerInput} onChange={(event) => setTriggerInput(event.target.value)} disabled={activeRun} />
-            </label>
-
-            <label className="enroll-switch">
-              <input type="checkbox" checked={autoFixScheduleConflict} onChange={(event) => setAutoFixScheduleConflict(event.target.checked)} disabled={activeRun} />
-              <span className="enroll-switch-track" aria-hidden="true" />
-              <span>
-                Tự dọn trùng TKB sau khi chạy
-                <small>Tự rút môn ưu tiên thấp hơn nếu 2 môn đã đăng ký trùng lịch. Mặc định tắt.</small>
-              </span>
-            </label>
-
-            <div className="enroll-run-actions">
-              <button type="button" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
-                <IconBolt /> {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
-              </button>
-              {activeRun ? (
-                <button type="button" className="enroll-ghost" onClick={handleStop}><IconStop /> Dừng</button>
-              ) : (
-                <button type="button" className="enroll-ghost" onClick={refreshRunStatus} disabled={!run?.runId}>
-                  <IconRefresh /> Làm mới
-                </button>
-              )}
-            </div>
-
-            {countdown ? (
-              <div className={`enroll-countdown is-${countdown.tone}`}>
-                <IconClock /> <span>{countdown.text}</span>
-              </div>
-            ) : null}
-
-            {run ? (
-              <div className="enroll-terminal">
-                <div className="enroll-terminal-bar" aria-hidden="true"><span /><span /><span /></div>
-                <pre ref={logRef} className="enroll-terminal-body" aria-live="polite">
-                  {(run.logs ?? []).map((entry, index) => `[${entry.timestamp ?? ''}] ${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
-                </pre>
-              </div>
-            ) : null}
-
-            {run?.summary?.thanh_cong?.length || run?.summary?.that_bai?.length || run?.summary?.rut?.length ? (
-              <div className="enroll-summary">
-                {(run.summary?.thanh_cong ?? []).map((item) => <div key={`ok-${item.id_to_hoc}`} className="enroll-summary-row is-ok"><IconCheck /> {item.ma_mon}</div>)}
-                {(run.summary?.that_bai ?? []).map((item) => <div key={`fail-${item.id_to_hoc}`} className="enroll-summary-row is-fail">✕ {item.ma_mon} — {item.ly_do}</div>)}
-                {(run.summary?.rut ?? []).map((item) => <div key={`rut-${item.id_to_hoc}`} className="enroll-summary-row is-warn">↩ {item.ma_mon} — {item.ly_do}</div>)}
-              </div>
-            ) : null}
-
-            {run?.error ? <p className="enroll-error">{run.error}</p> : null}
-            <p className="enroll-hint">Đúng giờ hẹn tool mới bắt đầu canh cổng và bắn lệnh; trước đó chỉ giữ phiên BDU tươi. Nếu phiên hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
-            </div>
           </div>
         </div>
 

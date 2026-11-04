@@ -11,7 +11,8 @@ const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunServ
 const originalBdu = {
   getCatalog: enrollmentService.getCatalog,
   getRegistered: enrollmentService.getRegistered,
-  registerGroup: enrollmentService.registerGroup
+  registerGroup: enrollmentService.registerGroup,
+  getStudentClass: enrollmentService.getStudentClass
 };
 
 function response() {
@@ -119,6 +120,15 @@ try {
     assert.match(res.body.message, /ưu tiên/i);
   });
 
+  await section('startRun 400 for unknown roundId', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
+    const res = response();
+    await EnrollmentController.startRun(reqWith({ body: { roundId: 'khong_ton_tai' } }), res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /Đợt đăng ký/);
+  });
+
   await section('startRun 400 for triggerAt too far in past', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
@@ -222,12 +232,14 @@ try {
 
   await section('getSchedule returns the hardcoded semester window for the student cohort', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => '24050126';
+    enrollmentService.getStudentClass = async () => '27TH03';
     const res = response();
     await EnrollmentController.getSchedule(reqWith({}), res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.data.primary.opensAt, '2026-11-05T09:00');
     assert.equal(res.body.data.primary.closesAt, '2026-11-05T20:00');
     assert.equal(res.body.data.cohortYear, 2024);
+    assert.equal(res.body.data.studentClass, '27TH03');
   });
 
   await section('getCatalog sets private cache window and returns catalog', async () => {

@@ -29,7 +29,9 @@ const catalogRaw = {
         enable: false,
         gc_enable: 'Ngoài thời gian cho phép đăng ký',
         is_ctdt: true,
-        is_chctdt: false
+        is_chctdt: false,
+        is_rot: true,
+        ds_lop: ['27KT01', '27TH03']
       }
     ]
   }
@@ -91,6 +93,25 @@ await section('getCatalog posts the official envelope and normalizes ds_mon_hoc/
   assert.equal(g.enable, false);
   assert.equal(g.gcEnable, 'Ngoài thời gian cho phép đăng ký');
   assert.equal(g.isCtdt, true);
+  assert.equal(g.isChctdt, false);
+  assert.equal(g.isRot, true);
+  assert.deepEqual(g.dsLop, ['27KT01', '27TH03']);
+});
+
+await section('getStudentClass reads lop from the student profile', async () => {
+  const profileKey = `POST ${BASE}/dkmh/w-locsinhvieninfo`;
+  const { calls, fetchImpl } = createFetchMock({
+    [profileKey]: { code: 200, data: [{ lop: '27TH03', ten_lop: 'CNTT' }] }
+  });
+  const service = new EnrollmentService({ fetchImpl });
+  assert.equal(await service.getStudentClass(TOKEN), '27TH03');
+  assert.equal(calls[0].url, `${BASE}/dkmh/w-locsinhvieninfo`);
+});
+
+await section('getStudentClass returns empty string when the profile call fails', async () => {
+  const service = new EnrollmentService({ fetchImpl: async () => { throw new Error('offline'); } });
+  assert.equal(await service.getStudentClass(TOKEN), '');
+  assert.equal(await service.getStudentClass(''), '');
 });
 
 await section('getCatalog backfills ten_mon from ds_mon_hoc when the API leaves it empty', async () => {

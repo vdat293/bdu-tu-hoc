@@ -39,7 +39,9 @@ export const EnrollmentController = {
   async getSchedule(req, res) {
     try {
       const mssv = await resolveMssv(req);
-      return res.json({ result: true, data: resolveSchedule(mssv) });
+      const token = bearerToken(req);
+      const studentClass = token ? await enrollmentService.getStudentClass(token) : '';
+      return res.json({ result: true, data: { ...resolveSchedule(mssv), studentClass } });
     } catch (error) {
       return sendError(res, error, 'Không tải được lịch đăng ký.');
     }
@@ -115,17 +117,42 @@ export const EnrollmentController = {
       const token = bearerToken(req);
       if (!token) return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token).' });
 
-      const { triggerAt, autoFixScheduleConflict } = req.body ?? {};
-      const triggerDate = new Date(triggerAt);
-      if (!triggerAt || Number.isNaN(triggerDate.getTime())) {
-        return res.status(400).json({ result: false, message: 'triggerAt không hợp lệ (cần chuỗi ISO, ví dụ 2027-01-05T07:00:00+07:00).' });
-      }
-      const nowMs = Date.now();
-      if (triggerDate.getTime() > nowMs + 7 * 24 * 60 * 60 * 1000) {
-        return res.status(400).json({ result: false, message: 'Giờ mở không được quá 7 ngày trong tương lai.' });
-      }
-      if (nowMs - triggerDate.getTime() > 5 * 60 * 1000) {
-        return res.status(400).json({ result: false, message: 'Giờ mở đã quá 5 phút trong quá khứ.' });
+      const { triggerAt, roundId, autoFixScheduleConflict } = req.body ?? {};
+
+      // Đợt đăng ký do nhà trường set cứng: client chỉ gửi `roundId`, server tự
+      // suy ra giờ mở cổng từ lịch của đúng khóa sinh viên — không tin giờ do
+      // client tự đặt. `triggerAt` chỉ còn là đường tương thích cho API cũ.
+      let triggerDate;
+      if (roundId !== undefined && roundId !== null && roundId !== '') {
+        const schedule = resolveSchedule(mssv);
+        const slot = roundId === 'dot1'
+          ? schedule.primary
+          : roundId === 'bo_sung'
+            ? schedule.supplementary
+            : null;
+        if (!slot) {
+          return res.status(400).json({ result: false, message: 'Đợt đăng ký không hợp lệ — chỉ được chọn đợt có trong lịch của nhà trường.' });
+        }
+        triggerDate = new Date(`${slot.opensAt}:00+07:00`);
+        if (Number.isNaN(triggerDate.getTime())) {
+          return res.status(500).json({ result: false, message: 'Lịch đăng ký đang cấu hình sai giờ mở cổng.' });
+        }
+        const closesAt = new Date(`${slot.closesAt}:00+07:00`);
+        if (Date.now() > closesAt.getTime() + 5 * 60 * 1000) {
+          return res.status(400).json({ result: false, message: 'Đợt đăng ký này đã đóng.' });
+        }
+      } else {
+        triggerDate = new Date(triggerAt);
+        if (!triggerAt || Number.isNaN(triggerDate.getTime())) {
+          return res.status(400).json({ result: false, message: 'Thiếu đợt đăng ký (roundId) hoặc triggerAt không hợp lệ.' });
+        }
+        const nowMs = Date.now();
+        if (triggerDate.getTime() > nowMs + 7 * 24 * 60 * 60 * 1000) {
+          return res.status(400).json({ result: false, message: 'Giờ mở không được quá 7 ngày trong tương lai.' });
+        }
+        if (nowMs - triggerDate.getTime() > 5 * 60 * 1000) {
+          return res.status(400).json({ result: false, message: 'Giờ mở đã quá 5 phút trong quá khứ.' });
+        }
       }
 
       let items = await priorityStore.listPriorities(mssv);

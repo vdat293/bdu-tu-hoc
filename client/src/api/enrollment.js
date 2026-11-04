@@ -30,11 +30,11 @@ export function withdraw(token, idToHoc, { signal } = {}) {
   return request('/api/enrollment/withdraw', { token, method: 'POST', body: { id_to_hoc: idToHoc }, signal, defaultMessage: 'Không rút được môn học.' });
 }
 
-export function startRun(token, { triggerAt, autoFixScheduleConflict, refreshToken } = {}, { signal } = {}) {
+export function startRun(token, { roundId, triggerAt, autoFixScheduleConflict, refreshToken } = {}, { signal } = {}) {
   return request('/api/enrollment/runs', {
     token,
     method: 'POST',
-    body: { triggerAt, autoFixScheduleConflict: !!autoFixScheduleConflict, refreshToken: refreshToken || '' },
+    body: { roundId, triggerAt, autoFixScheduleConflict: !!autoFixScheduleConflict, refreshToken: refreshToken || '' },
     signal,
     defaultMessage: 'Không khởi chạy được lượt đăng ký.'
   }).then((data) => unwrap(data, data));
