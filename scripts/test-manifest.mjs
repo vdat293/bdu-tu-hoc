@@ -14,6 +14,7 @@ export const SAFE_NODE_TESTS = [
   'test-enrollment-priority.js',
   'test-enrollment-tkb.js',
   'test-enrollment-service.js',
+  'test-enrollment-run.js',
   'test-local-compose-safety.js',
   'test-queue.js',
   'test-docx-postprocessor.js',
