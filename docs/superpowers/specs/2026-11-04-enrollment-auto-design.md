@@ -132,10 +132,11 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
 
 ## 6. Luồng chạy của run-service
 
-1. Poll cổng **ngay từ lúc kích hoạt** (không chờ tới sát giờ): >10 phút trước `triggerAt` poll mỗi 5 phút, trong 1–10 phút poll 15s, dưới 1 phút poll 0.5s. Cổng mở **sớm hơn** `triggerAt` → đăng ký ngay (không cần đợi đúng giờ hẹn). Quá `triggerAt + 5 phút` mà server vẫn đóng → `failed("Cổng chưa mở")`.
-2. **Giữ phiên BDU tươi khi chờ dài** (đặt hôm nay cho ngày mai): access token BDU sống ~5h; tool tự gọi `auth/login` với `grant_type=refresh_token` mỗi ~60 phút và khi gặp 401, cập nhật token trong RAM (refresh token chỉ giữ RAM, không ghi DB/log). Nếu refresh thất bại hoàn toàn → run `failed("Phiên đăng nhập đã hết hạn")` và **enqueue cảnh báo Discord** (`notification_outbox` type `enrollment_alert`) cho tài khoản đã liên kết Discord.
-3. Khi server báo mở → duyệt `snapshot` theo `thu_tu`; mỗi mục gọi `w-xulydkmhsinhvien` với `{is_checked:true, id_to_hoc, sv_nganh, id_rs}` tuần tự, giãn cách ≥100ms; `id_rs` của response trước truyền sang lệnh kế.
-4. Phân loại response:
+1. **Trước `triggerAt`**: không gọi cổng đăng ký. Chỉ giữ phiên BDU tươi (refresh token mỗi ~60 phút, xem mục 2) và ngủ theo từng đoạn ≤60s để thức đúng giờ hẹn.
+2. **Đúng `triggerAt`**: bắt đầu poll `w-locdsnhomto`/`w-thoigiansinhviendkmh` mỗi **0.5s**; cổng mở → chạy đăng ký ngay. Quá `triggerAt + 5 phút` mà server vẫn đóng → `failed("Cổng chưa mở")`.
+3. **Giữ phiên BDU tươi khi chờ dài** (đặt hôm nay cho ngày mai): access token BDU sống ~5h; tool tự gọi `auth/login` với `grant_type=refresh_token` mỗi ~60 phút và khi gặp 401, cập nhật token trong RAM (refresh token chỉ giữ RAM, không ghi DB/log). Nếu refresh thất bại hoàn toàn → run `failed("Phiên đăng nhập đã hết hạn")` và **enqueue cảnh báo Discord** (`notification_outbox` type `enrollment_alert`) cho tài khoản đã liên kết Discord.
+4. Khi server báo mở → duyệt `snapshot` theo `thu_tu`; mỗi mục gọi `w-xulydkmhsinhvien` với `{is_checked:true, id_to_hoc, sv_nganh, id_rs}` tuần tự, giãn cách ≥100ms; `id_rs` của response trước truyền sang lệnh kế.
+5. Phân loại response:
    - `code:200` + `is_thanh_cong` → đánh dấu thành công, log.
    - Hết chỗ (server message nhận diện, ví dụ "hết chỗ"/`sl_cl` về 0 ở catalog kế tiếp) → **fallback**: các mục `du_phong` cùng `ma_mon` theo `thu_tu`; hết dự phòng → log "hết chỗ toàn bộ", sang môn kế.
    - Thiếu tiên quyết (`thong_bao_tien_quyet` / message tương ứng) → **dừng hẳn môn đó**, log, sang môn kế.
@@ -143,12 +144,12 @@ Client (/enrollment) ──POST /api/enrollment/runs──▶ Express src/module
    - "Ngoài thời gian cho phép đăng ký" → từ chối vĩnh viễn, không retry; nếu xảy ra ở lệnh đầu → run `failed`.
    - HTTP **412** → phát SSE `otp_required`; chờ tối đa 5 phút; nhận OTP qua `/runs/:id/otp` → xác thực (mặc định trả **501** tới khi cổng mở và khảo sát được endpoint thật — bật qua env `ENROLLMENT_OTP_VERIFY_URL`) → chạy tiếp. OTP sai ≤ 5 lần, quá → dừng run (`failed`).
    - 5xx/network/timeout/429 → retry ≤ 3 lần, backoff 200ms→500ms→1200ms; 429 ưu tiên `Retry-After` nếu có.
-4. Kết thúc: ghi `enrollment_runs.summary`, phát SSE `done`/`error`, **xóa token khỏi RAM**.
-5. **Tự động dọn trùng TKB (chỉ khi user bật, trước khi run):** sau khi run xong, nếu 2 môn đã đăng ký trùng TKB → tự `withdraw` môn có `thu_tu` cao hơn (thấp ưu tiên hơn), chỉ trong phạm vi danh sách của run đó; mọi hành động log + có xác nhận bật trước.
+6. Kết thúc: ghi `enrollment_runs.summary`, phát SSE `done`/`error`, **xóa token + refresh token khỏi RAM**.
+7. **Tự động dọn trùng TKB (chỉ khi user bật, trước khi run):** sau khi run xong, nếu 2 môn đã đăng ký trùng TKB → tự `withdraw` môn có `thu_tu` cao hơn (thấp ưu tiên hơn), chỉ trong phạm vi danh sách của run đó; mọi hành động log + có xác nhận bật trước.
 
 ## 7. Xử lý lỗi & an toàn
 
-- Token hết hạn giữa chừng (401/426) → dừng run, SSE `error`, client logout theo cơ chế sẵn có.
+- Token hết hạn giữa chừng (401/426): thử refresh bằng refresh token (RAM); refresh thành công → chạy tiếp. Refresh thất bại → dừng run, SSE `error`, enqueue cảnh báo Discord (`enrollment_alert`) và client logout theo cơ chế sẵn có.
 - Dữ liệu `w-locdsnhomto` đổi cấu trúc → `enrollment.service.js` là nơi duy nhất phải sửa (adapter response); UI nhận shape gọn do server quyết định.
 - Client mất SSE → reconnect và hỏi `GET /runs/:id` để đồng bộ trạng thái.
 - Rút môn luôn qua modal xác nhận; không có endpoint rút hàng loạt không xác nhận.

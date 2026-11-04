@@ -873,7 +873,7 @@ export default function EnrollmentPage() {
             ) : null}
 
             {run?.error ? <p className="enroll-error">{run.error}</p> : null}
-            <p className="enroll-hint">Tool canh cổng ngay từ lúc kích hoạt — cổng mở sớm hơn giờ hẹn thì đăng ký chạy luôn. Phiên BDU được tự gia hạn khi chờ lâu; nếu hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
+            <p className="enroll-hint">Đúng giờ hẹn tool mới bắt đầu canh cổng và bắn lệnh; trước đó chỉ giữ phiên BDU tươi. Nếu phiên hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
             </div>
           </div>
         </div>

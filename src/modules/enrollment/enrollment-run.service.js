@@ -418,20 +418,24 @@ export class EnrollmentRunManager {
     const run = this.runs.get(runId);
     if (!run || run.status !== 'scheduled') return;
 
-    let gateOpen = false;
-    const deadline = run.triggerAtMs + GATE_LIMIT_AFTER_MS;
-    let polls = 0;
-    // Poll from activation, not only near triggerAt: if BDU opens the gate
-    // earlier than the chosen time (or right now, while the user scheduled for
-    // tomorrow), the run fires as soon as the gate is actually open.
-    while (!run.stopRequested && this.now() <= deadline && polls < 40_000) {
-      polls += 1;
-      // Keep the BDU session warm during long waits (schedule today → tomorrow):
-      // refresh proactively instead of waiting for the 5-hour access token to die.
+    // Before the scheduled time: do NOT touch the gate. Only keep the BDU
+    // session warm (refresh the 5h access token) so a next-day schedule can
+    // still fire at the chosen time.
+    while (!run.stopRequested && this.now() < run.triggerAtMs) {
       if (run.refreshToken && this.now() - run.lastRefreshAt >= TOKEN_REFRESH_INTERVAL_MS) {
         // eslint-disable-next-line no-await-in-loop
         await this.tryRefresh(run);
       }
+      const remainingMs = run.triggerAtMs - this.now();
+      await this.sleep(Math.min(Math.max(remainingMs, 0), 60_000));
+    }
+
+    let gateOpen = false;
+    const deadline = run.triggerAtMs + GATE_LIMIT_AFTER_MS;
+    let polls = 0;
+    // From the scheduled time: poll the gate and fire as soon as it is open.
+    while (!run.stopRequested && this.now() <= deadline && polls < 20_000) {
+      polls += 1;
       try {
         // eslint-disable-next-line no-await-in-loop
         gateOpen = await this.service.getGateStatus(run.token);
@@ -443,9 +447,7 @@ export class EnrollmentRunManager {
         throw error;
       }
       if (gateOpen) break;
-      const remainingMs = run.triggerAtMs - this.now();
-      const interval = remainingMs > 10 * 60_000 ? 5 * 60_000 : remainingMs > 60_000 ? 15_000 : 500;
-      await this.sleep(interval);
+      await this.sleep(500);
     }
 
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }

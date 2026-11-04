@@ -373,6 +373,22 @@ await section('q) 401 during a register call refreshes and retries the same item
   assert.equal(calls.register[1].token, 'tok-refreshed');
 });
 
+await section('r) a gate that is already open before the scheduled time does not fire early', async () => {
+  const registerClock = [];
+  const gateClock = [];
+  const register = async () => { registerClock.push(clock); return okResponse('RS'); };
+  const gateImpl = () => { gateClock.push(clock); return true; };
+  const { manager } = makeManager({ gateImpl, register });
+  clock = 1_000_000;
+  const triggerMs = clock + 60_000;
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(triggerMs).toISOString() });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(registerClock.length, 1);
+  assert.ok(registerClock[0] >= triggerMs, 'chỉ bắn đăng ký khi đã tới giờ hẹn');
+  assert.ok(gateClock.every((t) => t >= triggerMs), 'không poll cổng trước giờ hẹn');
+});
+
 await section('singleton export exists', async () => {
   assert.ok(EnrollmentRunService, 'EnrollmentRunService singleton phải tồn tại');
 });
