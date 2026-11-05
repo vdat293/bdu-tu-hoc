@@ -1257,4 +1257,48 @@ await section('w13) watching is skipped when no subject ran out of seats', async
   assert.equal(final.phase, 'registering');
 });
 
+await section('w14) resumeActiveRuns fails a watching row instead of resuming', async () => {
+  clock = 1_000_000;
+  const row = resumeRow({ status: 'running', state: { phase: 'watching', watchSlots: true, watchUntilMs: clock + 60_000 } });
+  const made = makeManager({ gateSequence: [true], activeRows: [row] });
+  made.calls.credentials.set(row.id, 'pw');
+  await made.manager.resumeActiveRuns();
+  const failed = made.calls.updateRun.find((entry) => entry.id === row.id && entry.fields.status === 'failed');
+  assert.ok(failed, 'run watching phải bị đánh failed sau restart');
+  assert.equal(made.calls.register.length, 0);
+});
+
+await section('w15) getLatestForStudent fails a watching row without resuming', async () => {
+  clock = 1_000_000;
+  const row = resumeRow({ status: 'running', state: { phase: 'watching' } });
+  const made = makeManager({ latestRow: row });
+  made.calls.credentials.set(row.id, 'pw');
+  const latest = await made.manager.getLatestForStudent('SV001');
+  assert.equal(latest.status, 'failed');
+  assert.equal(made.calls.register.length, 0);
+});
+
+await section('w16) a watching run killed by a restart carries the restart message', async () => {
+  clock = 1_000_000;
+  const expected = 'Server khởi động lại khi đang canh slot — lượt này không thể tiếp tục.';
+  // Đường resumeActiveRuns: thông điệp ghi thẳng vào row.
+  const row = resumeRow({ id: 'run-watch-1', status: 'running', state: { phase: 'watching' } });
+  const made = makeManager({ activeRows: [row] });
+  made.calls.credentials.set(row.id, 'pw');
+  await made.manager.resumeActiveRuns();
+  const failed = made.calls.updateRun.find((entry) => entry.id === row.id && entry.fields.status === 'failed');
+  assert.ok(failed, 'run watching phải bị đánh failed');
+  assert.equal(failed.fields.error, expected);
+  assert.ok(made.calls.deleteCredential.includes(row.id), 'phải xoá credential sau restart');
+  // Đường getLatestForStudent: cùng thông điệp cho người dùng.
+  const row2 = resumeRow({ id: 'run-watch-2', status: 'running', state: { phase: 'watching' } });
+  const made2 = makeManager({ latestRow: row2 });
+  made2.calls.credentials.set(row2.id, 'pw');
+  const latest = await made2.manager.getLatestForStudent('SV001');
+  assert.equal(latest.status, 'failed');
+  assert.equal(latest.error, expected);
+  assert.equal(latest.summary.reason, 'server_restart');
+  assert.ok(made2.calls.deleteCredential.includes(row2.id), 'phải xoá credential sau restart');
+});
+
 console.log('OK');

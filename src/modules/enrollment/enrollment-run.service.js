@@ -20,6 +20,9 @@ const ACTIVE_STATUSES = new Set(['scheduled', 'running']);
 // are treated as recoverable so getLatestForStudent can close them as failed.
 const RECOVERABLE_STATUSES = new Set(['scheduled', 'running', 'otp_required']);
 const MAX_LOGS = 300;
+// Server khởi động lại giữa lúc đang canh slot: vòng canh cần token chỉ sống
+// trong RAM nên lượt này không thể tiếp tục — đánh failed thay vì resume.
+const WATCHING_RESTART_ERROR = 'Server khởi động lại khi đang canh slot — lượt này không thể tiếp tục.';
 const RETRY_BACKOFF = [200, 500, 1200];
 const GATE_LIMIT_AFTER_MS = 5 * 60 * 1000;
 // Kiểm tra token định kỳ trong lúc chờ cổng. Token BDU sống ~5h, nên mỗi 8h
@@ -295,21 +298,30 @@ export class EnrollmentRunManager {
     const live = this.runs.get(String(row.id));
     if (live) return this.serialize(live);
     if (RECOVERABLE_STATUSES.has(row.status)) {
-      // Nếu startup resume chưa chạy hoặc row này chưa được nạp, thử phục hồi
-      // ngay tại đây. Thành công thì trả run live; thất bại mới đánh dấu failed.
-      try {
-        const resumed = await this.resumeRun(row);
-        if (resumed) return resumed;
-      } catch {
-        /* fall through to mark failed */
+      // Lượt đang ở pha canh slot không phục hồi được sau restart (token chỉ
+      // sống trong RAM) — đánh dấu failed, không resume.
+      const phase = row.state && typeof row.state === 'object' ? row.state.phase : null;
+      const watching = phase === 'watching';
+      if (!watching) {
+        // Nếu startup resume chưa chạy hoặc row này chưa được nạp, thử phục hồi
+        // ngay tại đây. Thành công thì trả run live; thất bại mới đánh dấu failed.
+        try {
+          const resumed = await this.resumeRun(row);
+          if (resumed) return resumed;
+        } catch {
+          /* fall through to mark failed */
+        }
       }
       const summary = { ...(row.summary && typeof row.summary === 'object' ? row.summary : {}), reason: 'server_restart' };
       const finishedAt = nowIso();
+      // Lượt bị restart cắt ngang lúc đang canh slot: ghi đúng lý do đó (không
+      // phải lỗi chung của restart) để người dùng hiểu vì sao lượt này dừng.
+      const error = watching ? WATCHING_RESTART_ERROR : row.error;
       try {
-        await this.store.updateRun(row.id, { status: 'failed', summary, finished_at: finishedAt, logs: row.logs ?? [] });
+        await this.store.updateRun(row.id, { status: 'failed', summary, finished_at: finishedAt, logs: row.logs ?? [], error });
         await this.store.deleteCredential?.(row.id);
       } catch { /* hiển thị trạng thái suy ra vẫn đúng dù ghi DB lỗi */ }
-      return serializeStoredRun({ ...row, status: 'failed', summary, finished_at: finishedAt });
+      return serializeStoredRun({ ...row, status: 'failed', summary, finished_at: finishedAt, error });
     }
     return serializeStoredRun(row);
   }
@@ -515,6 +527,13 @@ export class EnrollmentRunManager {
       }
       for (const row of rows) {
         try {
+          // Lượt đang ở pha canh slot không thể phục hồi sau restart: token
+          // chỉ sống trong RAM và vòng canh cần token đó để dò chỗ. Đánh dấu
+          // failed thay vì resume để không bắn request sai.
+          if (row?.state?.phase === 'watching') {
+            await this.markRunFailed(row, new Error(WATCHING_RESTART_ERROR));
+            continue;
+          }
           await this.resumeRun(row);
         } catch (error) {
           await this.markRunFailed(row, error);
