@@ -86,7 +86,7 @@ function formatDkmh(data, mssv) {
     ].join('\n').slice(0, 1900);
   }
   const status = data.status === 'Active'
-    ? '✅ Active — đăng nhập thử thành công'
+    ? '✅ Active — trạng thái tự động sẵn sàng'
     : data.status === 'Inactive'
       ? '❌ Inactive — mật khẩu không còn đúng'
       : data.status === 'Running'
