@@ -64,6 +64,17 @@ export const priorityStore = {
     return this.listPriorities(mssv);
   },
 
+  // Xoá ưu tiên theo nhóm môn: trả về số dòng đã xoá; danh sách rỗng không gọi DB.
+  async deletePrioritiesBySubjects(mssv, maMons) {
+    const subjects = [...new Set((maMons ?? []).filter(Boolean))];
+    if (!subjects.length) return 0;
+    const result = await query(
+      'DELETE FROM enrollment_priorities WHERE mssv = $1 AND ma_mon = ANY($2::text[])',
+      [String(mssv), subjects]
+    );
+    return result.rowCount ?? 0;
+  },
+
   async insertRun({ id, mssv, status, triggerAt, snapshot }) {
     await query(
       `INSERT INTO enrollment_runs (id, mssv, status, trigger_at, snapshot, started_at)

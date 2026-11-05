@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { validatePriorityItems, assignOrder, pickFallbacks } from '../src/modules/enrollment/enrollment-priority.js';
+import { priorityStore } from '../src/modules/enrollment/priority-store.js';
 
 const chinh = (maMon, idToHoc) => ({ ma_mon: maMon, id_to_hoc: idToHoc, loai: 'chinh', ten_mon: 'Môn ' + maMon, thu_tu: 999 });
 const duPhong = (maMon, idToHoc) => ({ ma_mon: maMon, id_to_hoc: idToHoc, loai: 'du_phong' });
@@ -93,5 +94,8 @@ section('pickFallbacks sorts by thu_tu, not array order', () => {
   ];
   assert.deepEqual(pickFallbacks(items, 'A').map((i) => i.idToHoc), ['a2', 'a3']);
 });
+
+const deleted = await priorityStore.deletePrioritiesBySubjects('SV001', []);
+assert.equal(deleted, 0, 'danh sách rỗng phải trả 0 và không gọi DB');
 
 console.log('OK');
