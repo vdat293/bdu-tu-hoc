@@ -421,7 +421,9 @@ export class EnrollmentRunManager {
       if (item?.status === 'success') {
         acc.thanh_cong.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc });
       } else if (item?.status === 'failed') {
-        acc.that_bai.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, ly_do: item.reason ?? 'thất bại' });
+        // Giữ luôn mã lý do máy đọc được khi dựng lại summary từ results
+        // (run được khôi phục sau restart).
+        acc.that_bai.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, ly_do: item.reason ?? 'thất bại', code: item.code ?? 'failed' });
       }
     }
     return acc;
@@ -742,7 +744,7 @@ export class EnrollmentRunManager {
     Object.assign(run, fields, { updatedAt: nowIso() });
   }
 
-  recordItem(run, item, status, reason, fallbackFrom) {
+  recordItem(run, item, status, reason, fallbackFrom, reasonCode) {
     const entry = {
       maMon: item.maMon,
       tenMon: item.tenMon,
@@ -751,13 +753,21 @@ export class EnrollmentRunManager {
       thuTu: item.thuTu,
       status,
       reason: reason ? clip(reason) : undefined,
-      fallbackFrom: fallbackFrom ?? undefined
+      fallbackFrom: fallbackFrom ?? undefined,
+      // Mã lý do máy đọc được (seat_full, prereq, otp...). Watcher dùng nó để
+      // biết môn nào hết chỗ mà không phải đoán lại từ chuỗi tiếng Việt.
+      code: reasonCode
     };
     run.results.push(entry);
     if (status === 'success') {
       run.summaryAcc.thanh_cong.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc });
     } else {
-      run.summaryAcc.that_bai.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, ly_do: clip(reason || 'thất bại') });
+      run.summaryAcc.that_bai.push({
+        ma_mon: item.maMon,
+        id_to_hoc: item.idToHoc,
+        ly_do: clip(reason || 'thất bại'),
+        code: reasonCode ?? 'failed'
+      });
     }
     // Ghi log ngay tại đây để log trong DB có đủ kết quả từng môn — UI không
     // phải tự sinh lại dòng log từ sự kiện item_done nữa.
@@ -967,47 +977,59 @@ export class EnrollmentRunManager {
         }
         // seat_full / rejected / transient / schedule_conflict → try next backup
       }
-      this.recordItem(run, item, 'failed', 'hết chỗ (kể cả dự phòng)');
+      this.recordItem(run, item, 'failed', 'hết chỗ (kể cả dự phòng)', undefined, 'seat_full');
       return null;
     }
 
     if (outcome.cls === 'otp') {
-      this.recordItem(run, item, 'failed', 'BDU yêu cầu OTP — không thể tự xử lý, vui lòng đăng ký thủ công');
+      this.recordItem(run, item, 'failed', 'BDU yêu cầu OTP — không thể tự xử lý, vui lòng đăng ký thủ công', undefined, 'otp');
       return null;
     }
 
     if (outcome.cls === 'prereq') {
       const detail = outcome.res?.rawMessage || outcome.res?.thongBaoTienQuyet || 'thiếu tiên quyết';
-      this.recordItem(run, item, 'failed', detail);
+      this.recordItem(run, item, 'failed', detail, undefined, 'prereq');
       return null;
     }
     if (outcome.cls === 'schedule_conflict') {
-      this.recordItem(run, item, 'failed', 'trùng lịch');
+      this.recordItem(run, item, 'failed', 'trùng lịch', undefined, 'schedule_conflict');
       return null;
     }
     if (outcome.cls === 'over_credit') {
       const reason = outcome.res?.rawMessage || outcome.res?.thongBaoLoi || 'vượt quá số tín chỉ tối đa';
-      this.recordItem(run, item, 'failed', reason);
+      this.recordItem(run, item, 'failed', reason, undefined, 'over_credit');
       return null;
     }
     if (outcome.cls === 'gate_closed') {
-      this.recordItem(run, item, 'failed', 'ngoài thời gian');
+      this.recordItem(run, item, 'failed', 'ngoài thời gian', undefined, 'gate_closed');
       return 'Ngoài thời gian cho phép đăng ký';
     }
     if (outcome.cls === 'auth') {
       this.appendLog(run, 'error', 'Phiên đăng nhập hết hạn giữa chừng. Vui lòng đăng nhập lại.');
-      this.recordItem(run, item, 'failed', 'phiên hết hạn');
+      this.recordItem(run, item, 'failed', 'phiên hết hạn', undefined, 'auth');
       return 'Phiên đăng nhập hết hạn';
     }
     if (outcome.cls === 'rejected') {
       const reason = isStaleIdResponse(outcome.res)
         ? 'mã lớp đã đổi trên cổng BDU — hãy tải lại danh sách rồi chạy lại'
         : (outcome.res?.rawMessage || 'BDU từ chối');
-      this.recordItem(run, item, 'failed', reason);
+      this.recordItem(run, item, 'failed', reason, undefined, 'rejected');
       return null;
     }
-    this.recordItem(run, item, 'failed', 'lỗi tạm thời');
+    this.recordItem(run, item, 'failed', 'lỗi tạm thời', undefined, 'transient');
     return null;
+  }
+
+  /**
+   * Danh sách mã môn bị hết chỗ (kể cả khi đã thử hết nhóm dự phòng).
+   * Watcher dùng hàm này để biết cần canh chỗ cho môn nào.
+   */
+  seatFullSubjects(run) {
+    const subjects = (run.summaryAcc?.that_bai ?? [])
+      .filter((entry) => entry?.code === 'seat_full')
+      .map((entry) => entry.ma_mon)
+      .filter(Boolean);
+    return [...new Set(subjects)];
   }
 
   async autoFixConflicts(run) {

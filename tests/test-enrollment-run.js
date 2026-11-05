@@ -930,4 +930,30 @@ await section('singleton export exists', async () => {
   assert.ok(EnrollmentRunService, 'EnrollmentRunService singleton phải tồn tại');
 });
 
+await section('w1) seat_full failures carry a machine-readable reason code', async () => {
+  const { manager } = makeManager({ register: async () => failResponse('Lớp đã hết chỗ') });
+  clock = 1_000_000;
+  const { run } = await manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString()
+  });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.summary.that_bai[0].code, 'seat_full');
+  assert.equal(final.results[0].code, 'seat_full');
+});
+
+await section('w2) seatFullSubjects dedupes and ignores other reasons', async () => {
+  const { manager } = makeManager();
+  const subjects = manager.seatFullSubjects({
+    summaryAcc: {
+      that_bai: [
+        { ma_mon: 'AAA', code: 'seat_full' },
+        { ma_mon: 'BBB', code: 'prereq' },
+        { ma_mon: 'AAA', code: 'seat_full' }
+      ]
+    }
+  });
+  assert.deepEqual(subjects, ['AAA']);
+});
+
 console.log('OK');
