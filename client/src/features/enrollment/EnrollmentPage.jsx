@@ -21,7 +21,7 @@ import CredentialsModal from './CredentialsModal.jsx';
 import ScheduleCard from './ScheduleCard.jsx';
 import ReminderSettings from '../../components/notifications/ReminderSettings.jsx';
 import { filterCatalog } from './catalog-filter.js';
-import { checkboxState } from './catalog-selection.js';
+import { checkboxState, registeredIdsFrom } from './catalog-selection.js';
 import { buildScheduleCells } from './schedule-cells.js';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
 import { DAY_OPTIONS, SESSION_OPTIONS, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
@@ -738,13 +738,14 @@ export default function EnrollmentPage() {
         ngayDangKy: entry?.ngay_dang_ky ?? '',
         trangThai: entry?.trang_thai ?? entry?.trang_thai_duyet ?? '',
         idToHoc: toHoc?.id_to_hoc ?? entry?.id_to_hoc ?? '',
+        withdrawn: entry?.is_da_rut_mon_hoc === true,
         tkb: toHoc?.tkb ?? ''
       };
     });
   }, [registered]);
 
   const registeredIds = useMemo(
-    () => new Set(registeredRows.map((row) => row.idToHoc).filter(Boolean)),
+    () => registeredIdsFrom(registeredRows),
     [registeredRows]
   );
 

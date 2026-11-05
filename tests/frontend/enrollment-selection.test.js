@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { checkboxState } from '../../client/src/features/enrollment/catalog-selection.js';
+import { checkboxState, registeredIdsFrom } from '../../client/src/features/enrollment/catalog-selection.js';
+
+describe('registeredIdsFrom', () => {
+  it('locks normal registered rows but leaves withdrawn rows toggleable', () => {
+    const registeredIds = registeredIdsFrom([
+      { idToHoc: 'WITHDRAWN', withdrawn: true },
+      { idToHoc: 'REGISTERED', withdrawn: false },
+      { idToHoc: '', withdrawn: false }
+    ]);
+
+    expect(registeredIds).toEqual(new Set(['REGISTERED']));
+    expect(checkboxState({ idToHoc: 'WITHDRAWN', selectedIds: new Set(), registeredIds }))
+      .toEqual({ checked: false, disabled: false, registered: false });
+    expect(checkboxState({ idToHoc: 'REGISTERED', selectedIds: new Set(), registeredIds }))
+      .toEqual({ checked: true, disabled: true, registered: true });
+  });
+});
 
 describe('checkboxState', () => {
   it('checks and locks a registered class', () => {
