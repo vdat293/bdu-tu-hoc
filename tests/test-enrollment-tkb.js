@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseTkb, groupsConflict } from '../src/modules/enrollment/enrollment-tkb.js';
+import { parseTkb, groupsConflict, findConflictingPairs } from '../src/modules/enrollment/enrollment-tkb.js';
 
 const section = (name, fn) => {
   try { fn(); console.log('  ok -', name); } catch (error) { console.error('  FAIL -', name); throw error; }
@@ -76,6 +76,42 @@ section('groupsConflict: empty/unparsable input never conflicts (safe no-op)', (
   const a = parseTkb('Thứ 3,tiết 1->3,Ph AI.2,GV QT050,29/12/26 đến 26/01/27');
   assert.equal(groupsConflict(a, []), false);
   assert.equal(groupsConflict([], []), false);
+});
+
+section('findConflictingPairs: reports the pair when main subjects overlap', () => {
+  const pairs = findConflictingPairs([
+    { maMon: 'AAA', tenMon: 'Môn A', loai: 'chinh', tkb: 'Thứ 3,tiết 1->3,Ph AI.2,GV G,29/12/26 đến 26/01/27' },
+    { maMon: 'BBB', tenMon: 'Môn B', loai: 'chinh', tkb: 'Thứ 3,tiết 2->4,Ph B.1,GV G,01/01/27 đến 30/01/27' }
+  ]);
+  assert.deepEqual(pairs, [{ a: { maMon: 'AAA', tenMon: 'Môn A' }, b: { maMon: 'BBB', tenMon: 'Môn B' } }]);
+});
+
+section('findConflictingPairs: ignores non-overlapping periods, weekdays and dates', () => {
+  const base = { loai: 'chinh' };
+  assert.deepEqual(findConflictingPairs([
+    { ...base, maMon: 'AAA', tkb: 'Thứ 3,tiết 1->3,Ph A,GV G,29/12/26 đến 26/01/27' },
+    { ...base, maMon: 'BBB', tkb: 'Thứ 3,tiết 4->6,Ph B,GV G,01/01/27 đến 30/01/27' }
+  ]), []);
+  assert.deepEqual(findConflictingPairs([
+    { ...base, maMon: 'AAA', tkb: 'Thứ 3,tiết 1->3,Ph A,GV G,29/12/26 đến 26/01/27' },
+    { ...base, maMon: 'BBB', tkb: 'Thứ 4,tiết 1->3,Ph B,GV G,01/01/27 đến 30/01/27' }
+  ]), []);
+  assert.deepEqual(findConflictingPairs([
+    { ...base, maMon: 'AAA', tkb: 'Thứ 3,tiết 1->3,Ph A,GV G,29/12/26 đến 26/01/27' },
+    { ...base, maMon: 'BBB', tkb: 'Thứ 3,tiết 1->3,Ph B,GV G,27/01/27 đến 20/02/27' }
+  ]), []);
+});
+
+section('findConflictingPairs: only considers "chinh", skips unparsable TKB', () => {
+  const tkb = 'Thứ 3,tiết 1->3,Ph A,GV G,29/12/26 đến 26/01/27';
+  assert.deepEqual(findConflictingPairs([
+    { maMon: 'AAA', loai: 'chinh', tkb },
+    { maMon: 'BBB', loai: 'du_phong', tkb }
+  ]), []);
+  assert.deepEqual(findConflictingPairs([
+    { maMon: 'AAA', loai: 'chinh', tkb },
+    { maMon: 'BBB', loai: 'chinh', tkb: 'không đọc được' }
+  ]), []);
 });
 
 console.log('OK');

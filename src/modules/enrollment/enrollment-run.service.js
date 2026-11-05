@@ -481,7 +481,7 @@ export class EnrollmentRunManager {
           run.summaryAcc.fallback.push({ ma_mon: fallback.maMon, tu_id_to_hoc: item.idToHoc, sang_id_to_hoc: fallback.idToHoc });
           return null;
         }
-        if (['prereq', 'gate_closed', 'auth'].includes(fb.cls)) {
+        if (['prereq', 'gate_closed', 'auth', 'over_credit'].includes(fb.cls)) {
           this.appendLog(run, 'error', `Dự phòng ${fallback.idToHoc} thất bại: ${fb.cls}.`);
           break;
         }
@@ -507,6 +507,11 @@ export class EnrollmentRunManager {
     }
     if (outcome.cls === 'schedule_conflict') {
       this.recordItem(run, item, 'failed', 'trùng lịch');
+      return null;
+    }
+    if (outcome.cls === 'over_credit') {
+      const reason = outcome.res?.rawMessage || outcome.res?.thongBaoLoi || 'vượt quá số tín chỉ tối đa';
+      this.recordItem(run, item, 'failed', reason);
       return null;
     }
     if (outcome.cls === 'gate_closed') {

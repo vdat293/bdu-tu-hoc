@@ -352,6 +352,9 @@ export function classifyRegisterResult(res = {}) {
     .toLowerCase();
 
   if (/het\s*(cho|chi\s*tieu)|da\s*day|khong\s*con\s*cho/.test(message)) return 'seat_full';
+  // BDU chặn khi tổng tín chỉ vượt trần, vd "Quá tín chỉ tối đa: 22/ 19".
+  // "đ" không bị NFD tách nên chỉ khớp tới "tối" để không phụ thuộc chữ "đa".
+  if (/qua\s*tin\s*chi\s*toi|vuot\s*qua\s*so\s*tin\s*chi/.test(message)) return 'over_credit';
   // BDU dùng cả "tiên quyết" và "vi phạm học trước" cho cùng một điều kiện.
   if (/tien\s*quyet|hoc\s*truoc/.test(message)) return 'prereq';
   if (/trung\s*(thoi\s*khoa\s*bieu|tkb|lich\s*hoc)/.test(message)) return 'schedule_conflict';

@@ -72,6 +72,11 @@ const normalizeItems = (items) => (items ?? []).map((item) => ({
   thuTu: Number(item.thuTu ?? item.thu_tu) || 0
 }));
 
+const formatConflictPair = (pair) => {
+  const label = (entry) => (entry?.tenMon ? `${entry.maMon} (${entry.tenMon})` : entry?.maMon || '?');
+  return `${label(pair?.a)} – ${label(pair?.b)}`;
+};
+
 
 const capacityTone = (row) => {
   if (!row.slCp) return 'muted';
@@ -145,6 +150,7 @@ export default function EnrollmentPage() {
   const [selected, setSelected] = useState([]);
   const [priorityError, setPriorityError] = useState('');
   const [prioritySaving, setPrioritySaving] = useState(false);
+  const [scheduleConflicts, setScheduleConflicts] = useState([]);
   const [dirty, setDirty] = useState(false);
 
   const [selectedRound, setSelectedRound] = useState('dot1');
@@ -415,6 +421,7 @@ export default function EnrollmentPage() {
   }, [auth.token, notify]);
 
   const toggleGroup = useCallback((row) => {
+    setScheduleConflicts([]);
     setSelected((current) => {
       const exists = current.some((item) => item.idToHoc === row.idToHoc);
       setDirty(true);
@@ -433,16 +440,19 @@ export default function EnrollmentPage() {
   }, []);
 
   const removeItemFromSelection = useCallback((idToHoc) => {
+    setScheduleConflicts([]);
     setSelected((current) => removeItem(current, idToHoc));
     setDirty(true);
   }, []);
 
   const moveSelected = useCallback((idToHoc, direction) => {
+    setScheduleConflicts([]);
     setSelected((current) => moveItem(current, idToHoc, direction));
     setDirty(true);
   }, []);
 
   const makeChinh = useCallback((item) => {
+    setScheduleConflicts([]);
     setSelected((current) => current.map((entry) => {
       if (entry.maMon !== item.maMon) return entry;
       if (entry.idToHoc === item.idToHoc) return { ...entry, loai: 'chinh' };
@@ -457,8 +467,12 @@ export default function EnrollmentPage() {
     setPrioritySaving(true);
     try {
       const saved = await savePriority(auth.token, toSavePayload(selected));
-      setSelected(normalizeItems(saved));
+      setSelected(normalizeItems(saved.items));
+      setScheduleConflicts(saved.conflicts);
       setDirty(false);
+      if (saved.conflicts.length) {
+        notify(`Trùng lịch học: ${saved.conflicts.map(formatConflictPair).join('; ')}`, 'warning');
+      }
       notify('Đã lưu danh sách ưu tiên.', 'success');
     } catch (error) {
       notify(error.message || 'Không lưu được danh sách.', 'error');
@@ -921,6 +935,11 @@ export default function EnrollmentPage() {
               </button>
             </div>
             {priorityError ? <p className="enroll-error">{priorityError}</p> : null}
+            {scheduleConflicts.length ? (
+              <p className="enroll-warning" role="status">
+                Trùng lịch học: {scheduleConflicts.map(formatConflictPair).join('; ')}
+              </p>
+            ) : null}
             {selected.length === 0 ? (
               <div className="enroll-empty">
                 Tick chọn nhóm-tổ ở bảng phía trên. Mỗi môn chọn 1 lớp chính và có thể thêm nhiều lớp dự phòng; thứ tự càng cao càng được ưu tiên.

@@ -11,11 +11,28 @@ import { priorityStore } from './priority-store.js';
 import { EnrollmentRunService } from './enrollment-run.service.js';
 import { enrollmentService, EnrollmentBduError } from './enrollment.service.js';
 import { resolveSchedule } from './enrollment-schedule.js';
+import { findConflictingPairs } from './enrollment-tkb.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
 async function resolveMssv(req) {
   return BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+}
+
+// Best-effort: lưu ưu tiên không được fail vì catalog BDU. Nếu thiếu token hoặc
+// BDU lỗi, trả [] — người dùng vẫn lưu được danh sách.
+async function findPriorityConflicts(req, items) {
+  const token = bearerToken(req);
+  if (!token || !items?.length) return [];
+  try {
+    // Dùng cùng loaiLoc với trang (10) để tận dụng cache catalog đã tải, tránh
+    // gọi BDU thêm lần nữa khi bấm Lưu.
+    const catalog = await enrollmentService.getCatalog(token, { loaiLoc: 10 });
+    const tkbById = new Map((catalog.dsNhomTo ?? []).map((group) => [group.idToHoc, group.tkb]));
+    return findConflictingPairs(items.map((item) => ({ ...item, tkb: tkbById.get(item.idToHoc) || '' })));
+  } catch {
+    return [];
+  }
 }
 
 function sendError(res, error, fallbackMessage) {
@@ -57,7 +74,8 @@ export const EnrollmentController = {
       }
       const ordered = assignOrder(validation.items);
       const saved = await priorityStore.replacePriorities(mssv, ordered);
-      return res.json({ result: true, data: { items: saved } });
+      const conflicts = await findPriorityConflicts(req, saved);
+      return res.json({ result: true, data: { items: saved, conflicts } });
     } catch (error) {
       return sendError(res, error, 'Không lưu được danh sách ưu tiên.');
     }

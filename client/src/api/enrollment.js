@@ -13,7 +13,13 @@ export function getSchedule(token, { signal } = {}) {
 
 export function savePriority(token, items, { signal } = {}) {
   return request('/api/enrollment/priority', { token, method: 'PUT', body: { items }, signal, defaultMessage: 'Không lưu được danh sách ưu tiên.' })
-    .then((data) => unwrap(data, data)?.items ?? []);
+    .then((data) => {
+      const payload = unwrap(data, data);
+      return {
+        items: payload?.items ?? [],
+        conflicts: Array.isArray(payload?.conflicts) ? payload.conflicts : []
+      };
+    });
 }
 
 export function getCatalog(token, loaiLoc = 2, { signal } = {}) {

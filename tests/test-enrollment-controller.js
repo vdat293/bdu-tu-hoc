@@ -87,6 +87,12 @@ try {
 
   await section('replacePriority assigns thu_tu by array order and returns saved list', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    enrollmentService.getCatalog = async () => ({
+      dsNhomTo: [
+        { idToHoc: 'B-MAIN', tkb: 'Thứ 2,tiết 1->3,Ph X,GV G,01/03/27 đến 30/04/27' },
+        { idToHoc: 'A-MAIN', tkb: 'Thứ 2,tiết 2->4,Ph X,GV G,01/03/27 đến 30/04/27' }
+      ]
+    });
     let received = null;
     priorityStore.replacePriorities = async (mssv, items) => {
       received = { mssv, items };
@@ -111,6 +117,22 @@ try {
     const saved = res.body.data.items;
     assert.deepEqual(saved.map((i) => i.thuTu), [1, 2, 3]);
     assert.deepEqual(saved.map((i) => i.idToHoc), ['B-MAIN', 'A-MAIN', 'B-BACKUP']);
+    assert.deepEqual(res.body.data.conflicts, [{
+      a: { maMon: 'BBB', tenMon: 'Mon B' },
+      b: { maMon: 'AAA', tenMon: 'Mon A' }
+    }], 'trả cặp môn chính trùng lịch để UI cảnh báo');
+  });
+
+  await section('replacePriority still saves when the catalog lookup fails', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    enrollmentService.getCatalog = async () => { throw new Error('BDU down'); };
+    priorityStore.replacePriorities = async (mssv, items) => items.map((item, index) => ({ ...item, thuTu: index + 1 }));
+    const res = response();
+    await EnrollmentController.replacePriority(reqWith({
+      body: { items: [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh' }] }
+    }), res);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.data.conflicts, []);
   });
 
   await section('startRun 400 when priority list is empty', async () => {

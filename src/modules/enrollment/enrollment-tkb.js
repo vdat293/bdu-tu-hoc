@@ -70,3 +70,33 @@ export function groupsConflict(a, b) {
   }
   return false;
 }
+
+/**
+ * Các cặp môn "chinh" trong danh sách ưu tiên bị trùng lịch học.
+ * Chỉ xét môn chính: dự phòng là phương án thay thế, không đăng ký cùng lúc.
+ * Môn không đọc được TKB bị bỏ qua (không báo trùng oan).
+ */
+export function findConflictingPairs(items = []) {
+  const parsed = (Array.isArray(items) ? items : [])
+    .filter((item) => item && item.maMon && item.loai === 'chinh')
+    .map((item) => ({
+      maMon: String(item.maMon),
+      tenMon: item.tenMon ? String(item.tenMon) : '',
+      segments: parseTkb(item.tkb)
+    }));
+
+  const pairs = [];
+  for (let i = 0; i < parsed.length; i += 1) {
+    for (let j = i + 1; j < parsed.length; j += 1) {
+      const a = parsed[i];
+      const b = parsed[j];
+      if (a.segments.length === 0 || b.segments.length === 0) continue;
+      if (!groupsConflict(a.segments, b.segments)) continue;
+      pairs.push({
+        a: { maMon: a.maMon, tenMon: a.tenMon },
+        b: { maMon: b.maMon, tenMon: b.tenMon }
+      });
+    }
+  }
+  return pairs;
+}

@@ -279,6 +279,24 @@ await section('d) prereq failure stops that subject but lets other subjects thro
   assert.match(final.summary.that_bai[0].ly_do, /tiên quyết/i);
 });
 
+await section('d2) over-credit failure reports BDU’s cap and skips same-subject fallbacks', async () => {
+  const register = async (args) => {
+    if (args.idToHoc === 'A-MAIN') return failResponse('Quá tín chỉ tối đa: 22/ 19');
+    if (args.idToHoc === 'B-MAIN') return okResponse('RS-B');
+    throw new Error('unexpected ' + args.idToHoc);
+  };
+  const { manager, calls } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, backupA2, chinhB], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-MAIN', 'B-MAIN'], 'vượt tín chỉ thì đổi nhóm cùng môn cũng vô ích');
+  assert.equal(final.summary.that_bai.length, 1);
+  assert.match(final.summary.that_bai[0].ly_do, /Quá tín chỉ tối đa: 22\/ 19/);
+  assert.ok(final.logs.some((entry) => entry.message.includes('Quá tín chỉ tối đa: 22/ 19')), 'log phải nêu rõ lý do vượt tín chỉ');
+});
+
 await section('e) refresh failure falls back to a password login', async () => {
   let attempts = 0;
   const login = async () => { attempts += 1; return { token: 'tok-pw', refreshToken: '' }; };
