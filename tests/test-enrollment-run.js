@@ -99,11 +99,35 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
 
 console.log('enrollment-run');
 
+await section('a1) start rejects a missing password', async () => {
+  const { manager } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  await assert.rejects(
+    () => manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(clock).toISOString() }),
+    (error) => error.status === 400 && /mật khẩu/i.test(error.message)
+  );
+});
+
+await section('a2) serialize never exposes the password', async () => {
+  const { manager } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const { run } = await manager.start({
+    password: 'super-secret',
+    mssv: 'SV001',
+    token: 'tok',
+    items: [chinhA],
+    triggerAt: new Date(clock + 60_000).toISOString()
+  });
+  const serialized = manager.getForStudent(run.runId, 'SV001');
+  assert.ok(!JSON.stringify(serialized).includes('super-secret'));
+  manager.stop(run.runId, 'SV001');
+});
+
 await section('a) gate never opens: no register call, run failed after deadline', async () => {
   const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
   assert.equal(final.status, 'failed');
   assert.equal(calls.register.length, 0, 'cổng chưa mở thì không được bắn request đăng ký');
@@ -114,7 +138,7 @@ await section('b) gate opens at 3rd poll: fires in thuTu order and chains idRs',
   const { manager, calls } = makeManager({ gateSequence: [false, false, true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhB, chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhB, chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register.length, 2);
@@ -134,7 +158,7 @@ await section('c) seat_full on main: fallback same mon fired, other mon never to
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB, backupA2, backupA3], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB, backupA2, backupA3], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-MAIN', 'A-BACKUP-2', 'A-BACKUP-3', 'B-MAIN']);
@@ -151,7 +175,7 @@ await section('d) prereq failure stops that subject but lets other subjects thro
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, backupA2, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, backupA2, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-MAIN', 'B-MAIN'], 'dự phòng cùng môn có tiên quyết cũng không được gọi');
@@ -169,7 +193,7 @@ await section('e) 412 -> otp_required; wrong OTP 5 times -> failed; pending item
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const waiting = await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
   assert.equal(waiting.status, 'otp_required');
 
@@ -198,7 +222,7 @@ await section('e2) 412 -> correct OTP resumes the pending item exactly once', as
   };
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
   const result = await manager.submitOtp(run.runId, 'SV001', '123456');
   assert.equal(result.ok, true);
@@ -216,7 +240,7 @@ await section('f) transient 5xx retries 3 times then item fails but run continue
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register.filter((c) => c.idToHoc === 'A-MAIN').length, 4, '1 lần gọi + 3 retry');
@@ -228,7 +252,7 @@ await section('g) autoFixScheduleConflict withdraws the lower-priority overlappi
   const { manager, calls } = makeManager({ gateSequence: [true], register: async (args) => okResponse('RS-' + args.idToHoc) });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, conflictB], triggerAt, autoFixScheduleConflict: true });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, conflictB], triggerAt, autoFixScheduleConflict: true });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   const withdraws = calls.register.filter((c) => c.isChecked === false);
@@ -242,7 +266,7 @@ await section('g2) autoFixScheduleConflict skips pairs whose TKB cannot be parse
   const { manager, calls } = makeManager({ gateSequence: [true], register: async (args) => okResponse('RS-' + args.idToHoc) });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, broken], triggerAt, autoFixScheduleConflict: true });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, broken], triggerAt, autoFixScheduleConflict: true });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register.filter((c) => c.isChecked === false).length, 0, 'TKB không parse được thì không tự rút');
@@ -252,8 +276,8 @@ await section('h) second start for same mssv reuses the active run', async () =>
   const { manager } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 60_000).toISOString();
-  const first = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
-  const second = await manager.start({ mssv: 'SV001', token: 'tok2', items: [chinhB], triggerAt });
+  const first = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const second = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok2', items: [chinhB], triggerAt });
   assert.equal(second.reused, true);
   assert.equal(second.run.runId, first.run.runId);
 });
@@ -262,7 +286,7 @@ await section('i) serialized run never contains the token', async () => {
   const { manager } = makeManager({ gateSequence: [true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'super-secret-token', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'super-secret-token', items: [chinhA], triggerAt });
   await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   const serialized = manager.getForStudent(run.runId, 'SV001');
   assert.ok(!JSON.stringify(serialized).includes('super-secret-token'), 'token không được rò ra snapshot');
@@ -272,7 +296,7 @@ await section('j) stop() prevents remaining items from firing', async () => {
   const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   manager.stop(run.runId, 'SV001');
   const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'done', 'failed']);
   assert.equal(final.status, 'stopped');
@@ -284,7 +308,7 @@ await section('k) stop() while waiting for OTP ends the run as stopped, not fail
   const { manager } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
   manager.stop(run.runId, 'SV001');
   const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'failed']);
@@ -302,7 +326,7 @@ await section('l) 412 during a fallback attempt fails the run with OTP context i
   const { manager } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, backupA2], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, backupA2], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'failed');
   assert.match(String(final.error), /OTP/i);
@@ -318,7 +342,7 @@ await section('m) autoFix only records withdrawn courses when BDU confirms the w
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, conflictB], triggerAt, autoFixScheduleConflict: true });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, conflictB], triggerAt, autoFixScheduleConflict: true });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(calls.register.filter((c) => c.isChecked === false).length, 1, 'vẫn thử rút');
   assert.equal(final.summary.rut.length, 0, 'rút thất bại thì không được ghi như đã rút');
@@ -329,7 +353,7 @@ await section('n) long wait keeps the token fresh by refreshing proactively', as
   const { manager, calls } = makeManager({ gateSequence });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 90 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.ok(calls.refresh.length >= 1, 'phải refresh token trong lúc chờ dài');
@@ -344,7 +368,7 @@ await section('o) 401 while polling the gate refreshes the session and continues
   const { manager, calls } = makeManager({ gateImpl });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.ok(calls.refresh.length >= 1);
@@ -357,7 +381,7 @@ await section('p) token expiry without a working refresh fails the run and alert
   const { manager, calls } = makeManager({ gateImpl, refresh });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-dead', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-dead', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
   assert.equal(final.status, 'failed');
   assert.match(String(final.error), /hết hạn/i);
@@ -377,7 +401,7 @@ await section('q) 401 during a register call refreshes and retries the same item
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register.length, 2);
@@ -392,7 +416,7 @@ await section('r) a gate that is already open before the scheduled time does not
   const { manager } = makeManager({ gateImpl, register });
   clock = 1_000_000;
   const triggerMs = clock + 60_000;
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(triggerMs).toISOString() });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(triggerMs).toISOString() });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(registerClock.length, 1);
@@ -404,7 +428,7 @@ await section('s) a completed run notifies Discord with the success summary', as
   const { manager, calls } = makeManager({ gateSequence: [true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.notify.length, 1);
@@ -422,7 +446,7 @@ await section('t) ids saved before the round opened are re-mapped to the current
   const { manager, calls } = makeManager({ gateSequence: [true], catalog });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-FRESH', 'B-FRESH'], 'phải dùng id_to_hoc mới, không dùng id đã lưu');
@@ -435,7 +459,7 @@ await section('u) re-mapping matches mã môn + nhóm tổ even when the class c
   const { manager, calls } = makeManager({ gateSequence: [true], catalog });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register[0].idToHoc, 'A-FRESH');
@@ -455,7 +479,7 @@ await section('v) a "Warning" rejection refreshes the catalog and retries the it
   const { manager, calls } = makeManager({ gateSequence: [true], catalog, register });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-MAIN', 'A-NEW']);
@@ -466,7 +490,7 @@ await section('w) an unmappable "Warning" is reported meaningfully, not as the r
   const { manager, calls } = makeManager({ gateSequence: [true], catalog: [], register: async () => failResponse('Warning') });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register.length, 1, 'không map được thì không retry vô ích');
@@ -481,7 +505,7 @@ await section('x) ambiguous nhóm tổ duplicates are left untouched instead of 
   const { manager, calls } = makeManager({ gateSequence: [true], catalog });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register[0].idToHoc, 'A-MAIN', 'không đủ căn cứ thì giữ nguyên id đã lưu');
@@ -491,7 +515,7 @@ await section('y) finishRun persists the log tail and error to the DB row', asyn
   const { manager, calls } = makeManager({ gateSequence: [true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   const stored = calls.updateRun.filter((call) => call.fields.status === 'done').at(-1);
@@ -505,7 +529,7 @@ await section('z) recordItem logs each subject exactly once (no duplicate log li
   const { manager } = makeManager({ gateSequence: [true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   const lines = final.logs.filter((log) => /✔ AAA/.test(log.message));
   assert.equal(lines.length, 1, 'mỗi môn chỉ một dòng kết quả');
@@ -515,7 +539,7 @@ await section('aa) getLatestForStudent prefers the live in-memory run', async ()
   const { manager } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   manager.store.getLatestRun = async () => ({ id: run.runId, mssv: 'SV001', status: 'scheduled' });
   const latest = await manager.getLatestForStudent('SV001');
   assert.equal(latest.runId, run.runId);
@@ -600,7 +624,7 @@ await section('ae) pressing Auto after the gate window still polls from now and 
   const { manager, calls } = makeManager({ gateSequence: [true] });
   clock = 1_000_000;
   const triggerAt = new Date(clock - 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done', 'bấm muộn nhưng cổng đang mở thì vẫn phải đăng ký');
   assert.equal(calls.register.length, 1);
@@ -611,7 +635,7 @@ await section('af) a late start with a closed gate still waits a fresh window be
   const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const triggerAt = new Date(clock - 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'failed');
   assert.ok(calls.gate > 1, 'không được fail ngay khi deadline cũ đã trôi qua');

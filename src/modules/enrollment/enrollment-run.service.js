@@ -23,6 +23,8 @@ const MAX_OTP_ATTEMPTS = 5;
 const RETRY_BACKOFF = [200, 500, 1200];
 const GATE_LIMIT_AFTER_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+const LOGIN_LEAD_MS = 5 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 3;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const nowIso = () => new Date().toISOString();
@@ -171,11 +173,13 @@ export class EnrollmentRunManager {
     return serializeStoredRun(row);
   }
 
-  async start({ mssv, token, refreshToken = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
+  async start({ mssv, token, refreshToken = '', password = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
     this.prune();
     const studentId = String(mssv || '').trim();
     if (!studentId) throw httpError(401, 'Không xác định được sinh viên cho lượt đăng ký.');
     if (!token) throw httpError(401, 'Thiếu mã xác thực (Token).');
+    const secret = String(password || '').trim();
+    if (!secret) throw httpError(400, 'Thiếu mật khẩu BDU để đăng nhập lại trước giờ mở.');
     const triggerAtMs = triggerAt instanceof Date ? triggerAt.getTime() : new Date(triggerAt).getTime();
     if (!Number.isFinite(triggerAtMs)) throw httpError(400, 'triggerAt không hợp lệ.');
     // Copy each item so re-mapping ids on the snapshot never mutates the
@@ -196,6 +200,11 @@ export class EnrollmentRunManager {
       mssv: studentId,
       token,
       refreshToken: String(refreshToken || ''),
+      password: secret,
+      loginAtMs: triggerAtMs - LOGIN_LEAD_MS,
+      loginAttempts: 0,
+      loginDone: false,
+      passwordInvalid: false,
       snapshot,
       autoFixScheduleConflict: autoFixScheduleConflict === true,
       svNganh: Number(svNganh) || 1,

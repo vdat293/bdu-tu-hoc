@@ -160,6 +160,14 @@ export const EnrollmentController = {
         return res.status(400).json({ result: false, message: 'Chưa có danh sách ưu tiên. Hãy lưu danh sách trước khi kích hoạt.' });
       }
 
+      const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+      if (!password) {
+        return res.status(400).json({ result: false, message: 'Thiếu mật khẩu BDU để đăng nhập lại trước giờ mở.' });
+      }
+      if (password.length > 200) {
+        return res.status(400).json({ result: false, message: 'Mật khẩu BDU quá dài.' });
+      }
+
       // Enrich snapshot with TKB so the post-run conflict pass can work.
       const wantsAutoFix = autoFixScheduleConflict === true;
       if (wantsAutoFix) {
@@ -176,6 +184,7 @@ export const EnrollmentController = {
         mssv,
         token,
         refreshToken: typeof req.body?.refreshToken === 'string' ? req.body.refreshToken.slice(0, 4096) : '',
+        password,
         items,
         triggerAt: triggerDate.toISOString(),
         autoFixScheduleConflict: wantsAutoFix,

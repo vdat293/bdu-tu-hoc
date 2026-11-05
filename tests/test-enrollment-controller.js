@@ -115,7 +115,7 @@ try {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [];
     const res = response();
-    await EnrollmentController.startRun(reqWith({ body: { triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
+    await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
     assert.equal(res.statusCode, 400);
     assert.match(res.body.message, /ưu tiên/i);
   });
@@ -124,16 +124,25 @@ try {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
     const res = response();
-    await EnrollmentController.startRun(reqWith({ body: { roundId: 'khong_ton_tai' } }), res);
+    await EnrollmentController.startRun(reqWith({ body: { password: 'pw', roundId: 'khong_ton_tai' } }), res);
     assert.equal(res.statusCode, 400);
     assert.match(res.body.message, /Đợt đăng ký/);
+  });
+
+  await section('startRun 400 when password is missing', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
+    const res = response();
+    await EnrollmentController.startRun(reqWith({ body: { triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /mật khẩu/i);
   });
 
   await section('startRun 400 for triggerAt too far in past', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
     const res = response();
-    await EnrollmentController.startRun(reqWith({ body: { triggerAt: new Date(Date.now() - 3600_000).toISOString() } }), res);
+    await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() - 3600_000).toISOString() } }), res);
     assert.equal(res.statusCode, 400);
   });
 
@@ -142,7 +151,7 @@ try {
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
     EnrollmentRunService.start = async () => ({ run: { runId: 'run-1', status: 'running' }, reused: true });
     const res = response();
-    await EnrollmentController.startRun(reqWith({ body: { triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
+    await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
     assert.equal(res.statusCode, 409);
   });
 
@@ -151,7 +160,7 @@ try {
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', tenMon: 'Mon A', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1, tkb: 'Thứ 2,tiết 1->3,Ph X,GV G,01/03/27 đến 30/04/27' }];
     EnrollmentRunService.start = async () => ({ run: { runId: 'run-abc', status: 'scheduled' }, reused: false });
     const res = response();
-    await EnrollmentController.startRun(reqWith({ body: { triggerAt: new Date(Date.now() + 3600_000).toISOString(), autoFixScheduleConflict: true } }), res);
+    await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() + 3600_000).toISOString(), autoFixScheduleConflict: true } }), res);
     assert.equal(res.statusCode, 202);
     assert.equal(res.body.data.runId, 'run-abc');
   });
