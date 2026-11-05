@@ -19,7 +19,7 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
     >
       <div id="enroll-credential-title" className="enroll-modal-title">Xác thực tài khoản BDU</div>
       <p className="enroll-modal-text">
-        Xác nhận lại mật khẩu để có thể auto đăng kí môn học
+        Xác nhận lại mật khẩu để có thể auto đăng kí môn học. Mật khẩu được mã hoá và lưu tạm trong DB để lượt chạy tiếp tục sau khi server restart; tự xoá khi lượt chạy kết thúc.
       </p>
       <label className="enroll-credential-field">
         <span>MSSV</span>

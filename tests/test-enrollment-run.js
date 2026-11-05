@@ -54,8 +54,8 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null } = {}) => {
-  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [] };
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null, activeRows = null, credentialPassword = null } = {}) => {
+  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [], deleteCredential: [], credentials: new Map() };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
   const service = {
@@ -87,6 +87,21 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
   }
   const store = {
     insertRun: async (row) => { calls.insertRun.push(row); },
+    insertRunWithCredential: async (row) => {
+      calls.insertRun.push({ ...row, password: undefined });
+      calls.credentials.set(String(row.id), row.password);
+    },
+    getRunPassword: async (id) => {
+      if (calls.credentials.has(String(id))) return calls.credentials.get(String(id));
+      return credentialPassword;
+    },
+    deleteCredential: async (id) => {
+      calls.deleteCredential.push(String(id));
+      calls.credentials.delete(String(id));
+      return true;
+    },
+    listActiveRuns: async () => activeRows ?? [],
+    deleteOrphanCredentials: async () => 0,
     updateRun: async (id, fields) => { calls.updateRun.push({ id, fields }); },
     getRun: async () => null,
     getLatestRun: async (mssv) => { calls.latestMssv = mssv; return latestRow; },
@@ -780,6 +795,98 @@ await section('aj) testActiveCredentials does not re-login while the run is regi
   assert.equal(result.token, 'tok-old');
   assert.equal(calls.login.length, 0, 'đang chạy thì không login lại');
   manager.stop(run.runId, 'SV001');
+});
+
+await section('ak) start stores the credential and finish deletes it', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const { run } = await manager.start({
+    password: 'pw',
+    mssv: 'SV001',
+    token: 'tok',
+    items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString()
+  });
+  assert.equal(calls.credentials.get(run.runId), 'pw', 'credential phải được lưu khi start');
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.ok(calls.deleteCredential.includes(run.runId), 'finish phải xoá credential');
+  assert.equal(calls.credentials.has(run.runId), false);
+});
+
+const resumeRow = (overrides = {}) => ({
+  id: 'run-resume-1',
+  mssv: 'SV001',
+  status: 'scheduled',
+  trigger_at: new Date(clock + 1_000).toISOString(),
+  snapshot: [chinhA],
+  summary: null,
+  logs: [],
+  error: null,
+  results: [],
+  state: {},
+  restart_count: 0,
+  started_at: null,
+  finished_at: null,
+  created_at: new Date(clock).toISOString(),
+  ...overrides
+});
+
+await section('al) resumeActiveRuns restores a scheduled run from DB', async () => {
+  clock = 1_000_000;
+  const row = resumeRow();
+  const { manager, calls } = makeManager({ gateSequence: [true], activeRows: [row] });
+  calls.credentials.set(row.id, 'pw');
+  await manager.resumeActiveRuns();
+  const live = manager.getForStudent(row.id, 'SV001');
+  assert.ok(live, 'run phải được nạp lại vào RAM');
+  assert.equal(live.status, 'scheduled');
+  const final = await waitForStatus(manager, row.id, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.login[0].password, 'pw', 'phải login lại bằng credential đã lưu');
+  assert.equal(calls.register[0].idToHoc, 'A-MAIN');
+  assert.ok(calls.deleteCredential.includes(row.id));
+});
+
+await section('am) resumeActiveRuns continues a running run and skips processed items', async () => {
+  clock = 1_000_000;
+  const row = resumeRow({
+    id: 'run-resume-2',
+    status: 'running',
+    trigger_at: new Date(clock - 60_000).toISOString(),
+    started_at: new Date(clock - 30_000).toISOString(),
+    snapshot: [chinhA, chinhB],
+    results: [{ maMon: 'AAA', idToHoc: 'A-MAIN', status: 'success' }],
+    state: {
+      autoFixScheduleConflict: false,
+      svNganh: 1,
+      summaryAcc: {
+        thanh_cong: [{ ma_mon: 'AAA', id_to_hoc: 'A-MAIN' }],
+        that_bai: [],
+        fallback: [],
+        rut: []
+      }
+    }
+  });
+  const { manager, calls } = makeManager({ gateSequence: [true], activeRows: [row] });
+  calls.credentials.set(row.id, 'pw');
+  await manager.resumeActiveRuns();
+  const final = await waitForStatus(manager, row.id, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.deepEqual(calls.register.map((call) => call.idToHoc), ['B-MAIN'], 'môn đã xong trước restart phải được bỏ qua');
+  assert.equal(calls.login[0].password, 'pw');
+});
+
+await section('an) resumeActiveRuns fails a run when the credential is missing', async () => {
+  clock = 1_000_000;
+  const row = resumeRow({ id: 'run-resume-3' });
+  const { manager, calls } = makeManager({ activeRows: [row], credentialPassword: null });
+  await manager.resumeActiveRuns();
+  assert.equal(manager.getForStudent(row.id, 'SV001'), null);
+  const failed = calls.updateRun.find((write) => write.id === row.id && write.fields.status === 'failed');
+  assert.ok(failed, 'run thiếu credential phải bị đánh dấu failed');
+  assert.match(String(failed.fields.error), /mật khẩu/i);
+  assert.ok(calls.deleteCredential.includes(row.id));
 });
 
 await section('singleton export exists', async () => {

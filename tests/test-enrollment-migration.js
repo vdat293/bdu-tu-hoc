@@ -37,4 +37,13 @@ assert.match(logsSql, /ADD COLUMN IF NOT EXISTS logs\s+JSONB/i, 'Thiếu cột l
 assert.match(logsSql, /ADD COLUMN IF NOT EXISTS error\s+TEXT/i, 'Thiếu cột error TEXT (idempotent)');
 assert.doesNotMatch(logsSql, /DROP\s+TABLE/i, 'Migration 071 không được chứa DROP TABLE');
 
+// Migration 072 lưu tiến độ đầy đủ + credential mã hoá theo run.
+const stateSql = readFileSync(path.join(root, 'migrations', '072_enrollment_run_state.sql'), 'utf8');
+assert.match(stateSql, /ADD COLUMN IF NOT EXISTS results\s+JSONB/i, 'Thiếu cột results JSONB (idempotent)');
+assert.match(stateSql, /ADD COLUMN IF NOT EXISTS state\s+JSONB/i, 'Thiếu cột state JSONB (idempotent)');
+assert.match(stateSql, /ADD COLUMN IF NOT EXISTS restart_count\s+INTEGER/i, 'Thiếu cột restart_count');
+assert.match(stateSql, /CREATE TABLE IF NOT EXISTS enrollment_run_credentials/i, 'Thiếu bảng enrollment_run_credentials');
+assert.match(stateSql, /REFERENCES enrollment_runs\(id\)\s+ON DELETE CASCADE/i, 'Credential phải cascade theo run');
+assert.doesNotMatch(stateSql, /DROP\s+TABLE/i, 'Migration 072 không được chứa DROP TABLE');
+
 console.log('Migration 069: priorities + runs schema hợp lệ (idempotent, không DROP).');

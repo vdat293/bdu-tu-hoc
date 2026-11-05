@@ -82,7 +82,7 @@ export function serializeStoredRun(row) {
     // Lượt cũ (trước migration 071) không có logs — dựng lại từ summary để
     // người dùng vẫn đọc được kết quả thay vì thấy "Chưa có log".
     logs: storedLogs.length ? storedLogs : summaryToLogs(summary),
-    results: [],
+    results: Array.isArray(row.results) ? row.results : [],
     summary: summary
       ? {
         ...summary,
@@ -109,15 +109,10 @@ export class EnrollmentRunManager {
     this.runs = new Map();
     this.activeRunByMssv = new Map();
     this.listeners = new Map();
-    // Best-effort: a crashed process left rows in 'scheduled/running'; close
-    // them out. Skipped under NODE_ENV=test to avoid touching the local DB.
-    if (process.env.NODE_ENV !== 'test') {
-      try {
-        Promise.resolve(this.store?.failStaleRuns?.(15)).catch(() => {});
-      } catch {
-        /* stale cleanup is non-critical */
-      }
-    }
+    // Việc phục hồi run active được gọi từ startJobs() (chỉ worker chính),
+    // không tự chạy trong constructor để tránh mỗi worker cùng resume.
+    this.resumeStarted = false;
+    this.resumePromise = null;
   }
 
   serialize(run) {
@@ -172,10 +167,19 @@ export class EnrollmentRunManager {
     const live = this.runs.get(String(row.id));
     if (live) return this.serialize(live);
     if (RECOVERABLE_STATUSES.has(row.status)) {
+      // Nếu startup resume chưa chạy hoặc row này chưa được nạp, thử phục hồi
+      // ngay tại đây. Thành công thì trả run live; thất bại mới đánh dấu failed.
+      try {
+        const resumed = await this.resumeRun(row);
+        if (resumed) return resumed;
+      } catch {
+        /* fall through to mark failed */
+      }
       const summary = { ...(row.summary && typeof row.summary === 'object' ? row.summary : {}), reason: 'server_restart' };
       const finishedAt = nowIso();
       try {
         await this.store.updateRun(row.id, { status: 'failed', summary, finished_at: finishedAt, logs: row.logs ?? [] });
+        await this.store.deleteCredential?.(row.id);
       } catch { /* hiển thị trạng thái suy ra vẫn đúng dù ghi DB lỗi */ }
       return serializeStoredRun({ ...row, status: 'failed', summary, finished_at: finishedAt });
     }
@@ -235,15 +239,31 @@ export class EnrollmentRunManager {
       lastTokenCheckAt: this.now(),
       tokenExpiresAtMs: tokenExpiresAtFrom(this.now(), tokenExpiresIn),
       authExpired: false,
-      staleIdRetried: false
+      staleIdRetried: false,
+      restartCount: 0
     };
 
-    // Persist before running anything: the run row doubles as the audit log.
-    await this.store.insertRun({ id, mssv: studentId, status: 'scheduled', triggerAt: new Date(triggerAtMs), snapshot });
+    // Persist run + encrypted credential before running anything. The run row
+    // doubles as the audit log; the credential row is what lets a restart
+    // resume the run without asking the user to type the password again.
+    if (typeof this.store.insertRunWithCredential === 'function') {
+      await this.store.insertRunWithCredential({
+        id,
+        mssv: studentId,
+        status: 'scheduled',
+        triggerAt: new Date(triggerAtMs),
+        snapshot,
+        password: secret
+      });
+    } else {
+      // Tương thích store cũ/test cũ chưa có credential vault.
+      await this.store.insertRun({ id, mssv: studentId, status: 'scheduled', triggerAt: new Date(triggerAtMs), snapshot });
+    }
 
     this.runs.set(id, run);
     this.activeRunByMssv.set(studentId, id);
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
+    await this.persistRun(run);
     queueMicrotask(() => {
       this.execute(id).catch((error) => {
         const target = this.runs.get(id);
@@ -262,6 +282,275 @@ export class EnrollmentRunManager {
     this.updateRun(run, {});
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     return this.serialize(run);
+  }
+
+  summaryOf(run) {
+    return {
+      thanh_cong: [...(run.summaryAcc?.thanh_cong ?? [])],
+      that_bai: [...(run.summaryAcc?.that_bai ?? [])],
+      fallback: [...(run.summaryAcc?.fallback ?? [])],
+      rut: [...(run.summaryAcc?.rut ?? [])]
+    };
+  }
+
+  stateOf(run) {
+    return {
+      lastIdRs: run.lastIdRs ?? '',
+      loginDone: run.loginDone === true,
+      passwordInvalid: run.passwordInvalid === true,
+      tokenExpiresAtMs: run.tokenExpiresAtMs ?? null,
+      refreshCount: run.refreshCount ?? 0,
+      lastRefreshAt: run.lastRefreshAt ?? null,
+      lastTokenCheckAt: run.lastTokenCheckAt ?? null,
+      staleIdRetried: run.staleIdRetried === true,
+      svNganh: Number(run.svNganh) || 1,
+      autoFixScheduleConflict: run.autoFixScheduleConflict === true,
+      summaryAcc: this.summaryOf(run)
+    };
+  }
+
+  summaryAccFromResults(results = []) {
+    const acc = { thanh_cong: [], that_bai: [], fallback: [], rut: [] };
+    for (const item of Array.isArray(results) ? results : []) {
+      if (item?.status === 'success') {
+        acc.thanh_cong.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc });
+      } else if (item?.status === 'failed') {
+        acc.that_bai.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, ly_do: item.reason ?? 'thất bại' });
+      }
+    }
+    return acc;
+  }
+
+  // Ghi tiến độ thật xuống DB sau mỗi môn/trạng thái để restart không mất lượt.
+  async persistRun(run) {
+    if (!run || typeof this.store?.updateRun !== 'function') return;
+    try {
+      await this.store.updateRun(run.id, {
+        status: run.status,
+        summary: this.summaryOf(run),
+        started_at: run.startedAt,
+        finished_at: run.finishedAt,
+        logs: run.logs,
+        error: run.error,
+        results: run.results,
+        state: this.stateOf(run),
+        restart_count: run.restartCount ?? 0
+      });
+    } catch (error) {
+      this.appendLog(run, 'warning', `Không ghi được tiến độ vào DB: ${clip(error?.message || error)}`);
+    }
+  }
+
+  /**
+   * Quét các run đang active trong DB và phục hồi. Chỉ gọi từ worker chính
+   * (startJobs) để tránh nhiều process cùng resume một run.
+   */
+  async resumeActiveRuns() {
+    if (this.resumeStarted) return this.resumePromise;
+    this.resumeStarted = true;
+    this.resumePromise = (async () => {
+      if (typeof this.store?.listActiveRuns !== 'function') return;
+      let rows = [];
+      try {
+        rows = await this.store.listActiveRuns();
+      } catch (error) {
+        console.warn('[enrollment] Không quét được run active:', error.message);
+        return;
+      }
+      for (const row of rows) {
+        try {
+          await this.resumeRun(row);
+        } catch (error) {
+          await this.markRunFailed(row, error);
+        }
+      }
+      if (typeof this.store?.deleteOrphanCredentials === 'function') {
+        await this.store.deleteOrphanCredentials(7).catch(() => {});
+      }
+    })();
+    return this.resumePromise;
+  }
+
+  async resumeRun(row) {
+    const id = String(row?.id || '');
+    if (!id) throw new Error('Row run không hợp lệ.');
+    if (this.runs.has(id)) return this.serialize(this.runs.get(id));
+
+    const password = await this.store.getRunPassword?.(id);
+    if (!password) throw new Error('Không tìm thấy mật khẩu đã lưu cho lượt chạy.');
+
+    const triggerAtMs = row.trigger_at ? new Date(row.trigger_at).getTime() : NaN;
+    if (!Number.isFinite(triggerAtMs)) throw new Error('Lượt chạy thiếu giờ mở hợp lệ.');
+
+    const state = row.state && typeof row.state === 'object' ? row.state : {};
+    const results = Array.isArray(row.results) ? row.results : [];
+    const summaryAcc = {
+      thanh_cong: Array.isArray(state.summaryAcc?.thanh_cong) ? state.summaryAcc.thanh_cong : [],
+      that_bai: Array.isArray(state.summaryAcc?.that_bai) ? state.summaryAcc.that_bai : [],
+      fallback: Array.isArray(state.summaryAcc?.fallback) ? state.summaryAcc.fallback : [],
+      rut: Array.isArray(state.summaryAcc?.rut) ? state.summaryAcc.rut : []
+    };
+    if (!summaryAcc.thanh_cong.length && !summaryAcc.that_bai.length && results.length) {
+      Object.assign(summaryAcc, this.summaryAccFromResults(results));
+    }
+
+    const run = {
+      id,
+      mssv: String(row.mssv),
+      token: null,
+      refreshToken: '',
+      password,
+      loginAtMs: triggerAtMs - LOGIN_LEAD_MS,
+      loginAttempts: 0,
+      loginDone: false,
+      loginRetryAtMs: null,
+      passwordInvalid: false,
+      snapshot: Array.isArray(row.snapshot) ? row.snapshot : [],
+      autoFixScheduleConflict: state.autoFixScheduleConflict === true,
+      svNganh: Number(state.svNganh) || 1,
+      triggerAtMs,
+      status: row.status,
+      startedAt: asIso(row.started_at),
+      updatedAt: nowIso(),
+      finishedAt: asIso(row.finished_at),
+      logs: Array.isArray(row.logs) ? row.logs : [],
+      results,
+      summaryAcc,
+      summary: row.summary && typeof row.summary === 'object' ? row.summary : null,
+      error: row.error ?? null,
+      stopRequested: false,
+      lastIdRs: state.lastIdRs || '',
+      refreshCount: 0,
+      lastRefreshAt: this.now(),
+      lastTokenCheckAt: this.now(),
+      tokenExpiresAtMs: null,
+      authExpired: false,
+      staleIdRetried: false,
+      restartCount: Number(row.restart_count || 0) + 1
+    };
+
+    this.runs.set(id, run);
+    this.activeRunByMssv.set(run.mssv, id);
+    this.emit(run, { type: 'snapshot', run: this.serialize(run) });
+    this.appendLog(run, 'warning', 'Server khởi động lại — đã khôi phục lượt chạy từ DB.');
+    await this.persistRun(run);
+
+    if (run.status === 'scheduled') {
+      queueMicrotask(() => {
+        this.execute(id).catch((error) => {
+          const target = this.runs.get(id);
+          if (target) this.finishRun(target, 'failed', { error: clip(error?.message || error) });
+        });
+      });
+    } else if (run.status === 'running') {
+      queueMicrotask(() => {
+        this.resumeRunning(run).catch((error) => {
+          this.finishRun(run, 'failed', { error: clip(error?.message || error) });
+        });
+      });
+    }
+    return this.serialize(run);
+  }
+
+  async resumeRunning(run) {
+    this.appendLog(run, 'info', 'Tiếp tục lượt đăng ký sau khi server khởi động lại.');
+    let login = await this.loginWithPassword(run);
+    let retries = 0;
+    while (login === 'transient' && retries < 2 && !run.stopRequested) {
+      retries += 1;
+      await this.sleep(1_000);
+      login = await this.loginWithPassword(run);
+    }
+    if (login !== 'ok') {
+      await this.finishRun(run, 'failed', { error: 'Không đăng nhập lại được sau khi server khởi động lại.' });
+      return;
+    }
+    run.loginDone = true;
+
+    let gateOpen = false;
+    try {
+      gateOpen = await this.service.getGateStatus(run.token);
+    } catch (error) {
+      if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run, { allowPassword: true })) {
+        gateOpen = await this.service.getGateStatus(run.token).catch(() => false);
+      }
+    }
+    if (!gateOpen) {
+      await this.finishRun(run, 'failed', { error: 'Cổng đã đóng khi server khởi động lại — không thể tiếp tục.' });
+      return;
+    }
+
+    this.updateRun(run, { status: 'running', startedAt: run.startedAt ?? nowIso() });
+    await this.persistRun(run);
+    await this.refreshCatalogIds(run);
+    await this.persistRun(run);
+
+    const processed = new Set();
+    const markProcessed = (entry) => {
+      if (entry?.ma_mon) processed.add(`mon:${entry.ma_mon}`);
+      if (entry?.id_to_hoc) processed.add(`id:${entry.id_to_hoc}`);
+    };
+    for (const item of run.summaryAcc.thanh_cong) markProcessed(item);
+    for (const item of run.summaryAcc.that_bai) markProcessed(item);
+    for (const item of run.summaryAcc.fallback) {
+      markProcessed(item);
+      if (item.tu_id_to_hoc) processed.add(`id:${item.tu_id_to_hoc}`);
+      if (item.sang_id_to_hoc) processed.add(`id:${item.sang_id_to_hoc}`);
+    }
+
+    const allItems = [...run.snapshot].sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
+    const chinhItems = allItems.filter((item) => item.loai === 'chinh');
+    for (const item of chinhItems) {
+      if (run.stopRequested) break;
+      if (processed.has(`mon:${item.maMon}`) || processed.has(`id:${item.idToHoc}`)) {
+        this.appendLog(run, 'info', `${item.maMon}: đã xử lý trước khi restart — bỏ qua.`);
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const fatal = await this.registerSubject(run, item, allItems);
+      await this.persistRun(run);
+      if (fatal === 'stopped') { await this.finishRun(run, 'stopped'); return; }
+      if (fatal) { await this.finishRun(run, 'failed', { error: fatal }); return; }
+      await this.sleep(100);
+    }
+
+    if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
+    if (run.autoFixScheduleConflict) {
+      await this.autoFixConflicts(run);
+      await this.persistRun(run);
+    }
+    await this.finishRun(run, 'done');
+  }
+
+  async markRunFailed(row, error) {
+    const id = String(row?.id || '');
+    const message = clip(error?.message || error || 'Không phục hồi được lượt chạy.');
+    this.runs.delete(id);
+    if (this.activeRunByMssv.get(String(row?.mssv)) === id) {
+      this.activeRunByMssv.delete(String(row?.mssv));
+    }
+    try {
+      await this.store.updateRun(id, {
+        status: 'failed',
+        error: message,
+        summary: {
+          ...(row.summary && typeof row.summary === 'object' ? row.summary : {}),
+          reason: 'resume_failed'
+        },
+        finished_at: nowIso(),
+        logs: Array.isArray(row.logs) ? row.logs : [],
+        results: Array.isArray(row.results) ? row.results : [],
+        state: row.state && typeof row.state === 'object' ? row.state : {}
+      });
+      await this.store.deleteCredential?.(id);
+      Promise.resolve(this.notify?.notifyRunFailed?.({
+        mssv: row?.mssv,
+        runId: id,
+        message: `⚠️ Không phục hồi được lượt auto đăng ký: ${message}`
+      })).catch(() => {});
+    } catch {
+      /* best-effort */
+    }
   }
 
   /**
@@ -662,6 +951,7 @@ export class EnrollmentRunManager {
           return;
         }
         if (outcome === 'ok') run.loginDone = true;
+        await this.persistRun(run);
       }
       if (this.now() - (run.lastTokenCheckAt ?? 0) >= TOKEN_CHECK_INTERVAL_MS) {
         run.lastTokenCheckAt = this.now();
@@ -674,6 +964,7 @@ export class EnrollmentRunManager {
             await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' });
             return;
           }
+          await this.persistRun(run);
         }
       }
       const remainingMs = run.triggerAtMs - this.now();
@@ -691,6 +982,7 @@ export class EnrollmentRunManager {
         return;
       }
       if (outcome === 'ok') run.loginDone = true;
+      await this.persistRun(run);
     }
 
     let gateOpen = false;
@@ -728,10 +1020,12 @@ export class EnrollmentRunManager {
     this.updateRun(run, { status: 'running', startedAt: nowIso() });
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     this.appendLog(run, 'success', 'Cổng đã mở. Bắt đầu đăng ký theo thứ tự ưu tiên.');
+    await this.persistRun(run);
 
     // BDU rebuilds the class catalog when the round opens, so ids saved before
     // today point at groups the server no longer has. Re-map them first.
     await this.refreshCatalogIds(run);
+    await this.persistRun(run);
 
     const allItems = [...run.snapshot].sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
     const chinhItems = allItems.filter((item) => item.loai === 'chinh');
@@ -739,6 +1033,7 @@ export class EnrollmentRunManager {
       if (run.stopRequested) break;
       // eslint-disable-next-line no-await-in-loop
       const fatal = await this.registerSubject(run, item, allItems);
+      await this.persistRun(run);
       if (fatal === 'stopped') { await this.finishRun(run, 'stopped'); return; }
       if (fatal) { await this.finishRun(run, 'failed', { error: fatal }); return; }
       await this.sleep(100);
@@ -747,6 +1042,7 @@ export class EnrollmentRunManager {
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
     if (run.autoFixScheduleConflict) {
       await this.autoFixConflicts(run);
+      await this.persistRun(run);
     }
     await this.finishRun(run, 'done');
   }
@@ -767,17 +1063,12 @@ export class EnrollmentRunManager {
     run.password = null;
     const finishedAt = nowIso();
     this.updateRun(run, { status, summary, error: finalError, finishedAt });
+    await this.persistRun(run);
+    // Run đã kết thúc: không cần giữ mật khẩu trong DB nữa.
     try {
-      await this.store.updateRun(run.id, {
-        status,
-        summary,
-        started_at: run.startedAt,
-        finished_at: finishedAt,
-        logs: run.logs,
-        error: finalError
-      });
+      await this.store.deleteCredential?.(run.id);
     } catch (storeError) {
-      this.appendLog(run, 'warning', `Không ghi được kết quả vào DB: ${clip(storeError?.message || storeError)}`);
+      this.appendLog(run, 'warning', `Không xoá được mật khẩu tạm: ${clip(storeError?.message || storeError)}`);
     }
     this.activeRunByMssv.delete(run.mssv);
     run.token = null;
@@ -798,6 +1089,8 @@ export class EnrollmentRunManager {
         Promise.resolve(this.notify.notifyRunFailed?.({ mssv: run.mssv, runId: run.id, message })).catch(() => {});
       }
     }
+    // Ghi lại lần cuối để log thông báo cũng nằm trong DB.
+    await this.persistRun(run);
     this.emit(run, { type: 'done', run: this.serialize(run) });
   }
 }

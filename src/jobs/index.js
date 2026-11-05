@@ -16,6 +16,7 @@ import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
 import { TrafficService } from '../services/traffic.service.js';
 import { AssetHistoryService } from '../services/asset-history.service.js';
+import { EnrollmentRunService } from '../modules/enrollment/enrollment-run.service.js';
 
 export function startJobs() {
   RankingSchedulerService.start();
@@ -24,6 +25,9 @@ export function startJobs() {
   TrafficService.start();
   AssetHistoryService.start();
   MediaCleanupService.start();
+  EnrollmentRunService.resumeActiveRuns().catch((err) => {
+    console.warn('[enrollment] Không phục hồi được run active:', err.message);
+  });
   IdentityAdminService.syncCatalogFromJson().then((res) => {
     if (res?.synced) {
       console.log(`[catalog-sync] Đã đồng bộ ${res.synced} items từ identity-items.json vào database.`);

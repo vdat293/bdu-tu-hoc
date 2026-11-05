@@ -3,6 +3,7 @@
  * Only place that talks SQL; column names mirror migrations/069_enrollment.sql.
  */
 import { query, transaction } from '../../db/database.js';
+import { decryptPassword, encryptPassword } from './enrollment-credential.service.js';
 
 function toNumber(value) {
   if (value === null || value === undefined) return null;
@@ -78,6 +79,73 @@ export const priorityStore = {
     );
   },
 
+  /**
+   * Tạo run + credential trong cùng một transaction. Nếu mã hoá mật khẩu lỗi
+   * (thiếu/sai key) thì không có row nào được tạo — fail-closed.
+   */
+  async insertRunWithCredential({ id, mssv, status, triggerAt, snapshot, password }) {
+    const credential = encryptPassword(id, password);
+    await transaction(async (client) => {
+      await client.query(
+        `INSERT INTO enrollment_runs (id, mssv, status, trigger_at, snapshot, started_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          id,
+          String(mssv),
+          status,
+          triggerAt ? new Date(triggerAt).toISOString() : null,
+          JSON.stringify(snapshot ?? []),
+          status === 'running' ? new Date().toISOString() : null
+        ]
+      );
+      await client.query(
+        `INSERT INTO enrollment_run_credentials (run_id, mssv, enc_password, iv, auth_tag)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, String(mssv), credential.enc_password, credential.iv, credential.auth_tag]
+      );
+    });
+  },
+
+  async getRunPassword(runId) {
+    const result = await query(
+      'SELECT run_id, enc_password, iv, auth_tag FROM enrollment_run_credentials WHERE run_id = $1 LIMIT 1',
+      [String(runId)]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return decryptPassword(String(row.run_id), row);
+  },
+
+  async deleteCredential(runId) {
+    const result = await query('DELETE FROM enrollment_run_credentials WHERE run_id = $1', [String(runId)]);
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  // Dọn credential mồ côi: run đã kết thúc hoặc credential quá cũ.
+  async deleteOrphanCredentials(olderThanDays = 7) {
+    const days = Math.max(1, Number(olderThanDays) || 7);
+    const result = await query(
+      `DELETE FROM enrollment_run_credentials c
+       USING enrollment_runs r
+       WHERE c.run_id = r.id
+         AND (r.status IN ('done', 'failed', 'stopped')
+              OR c.created_at < NOW() - ($1 || ' days')::interval)`,
+      [String(days)]
+    );
+    return result.rowCount ?? 0;
+  },
+
+  async listActiveRuns() {
+    const result = await query(
+      `SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error,
+              results, state, restart_count, started_at, finished_at, created_at
+       FROM enrollment_runs
+       WHERE status IN ('scheduled', 'running')
+       ORDER BY created_at ASC`
+    );
+    return result.rows;
+  },
+
   async updateRun(id, fields = {}) {
     const sets = [];
     const params = [id];
@@ -94,13 +162,17 @@ export const priorityStore = {
     if (fields.trigger_at !== undefined) push('trigger_at', fields.trigger_at);
     if (fields.logs !== undefined) push('logs', JSON.stringify(fields.logs ?? []));
     if (fields.error !== undefined) push('error', fields.error);
+    if (fields.results !== undefined) push('results', JSON.stringify(fields.results ?? []));
+    if (fields.state !== undefined) push('state', JSON.stringify(fields.state ?? {}));
+    if (fields.restart_count !== undefined) push('restart_count', Number(fields.restart_count) || 0);
+    else if (fields.restartCount !== undefined) push('restart_count', Number(fields.restartCount) || 0);
     if (sets.length === 0) return;
     await query(`UPDATE enrollment_runs SET ${sets.join(', ')} WHERE id = $1`, params);
   },
 
   async getRun(id, mssv) {
     const result = await query(
-      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, started_at, finished_at, created_at FROM enrollment_runs WHERE id = $1 AND mssv = $2 LIMIT 1',
+      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, results, state, restart_count, started_at, finished_at, created_at FROM enrollment_runs WHERE id = $1 AND mssv = $2 LIMIT 1',
       [id, String(mssv)]
     );
     return result.rows[0] ?? null;
@@ -110,7 +182,7 @@ export const priorityStore = {
   // run không còn trong RAM.
   async getLatestRun(mssv) {
     const result = await query(
-      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, started_at, finished_at, created_at FROM enrollment_runs WHERE mssv = $1 ORDER BY created_at DESC LIMIT 1',
+      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, results, state, restart_count, started_at, finished_at, created_at FROM enrollment_runs WHERE mssv = $1 ORDER BY created_at DESC LIMIT 1',
       [String(mssv)]
     );
     return result.rows[0] ?? null;
