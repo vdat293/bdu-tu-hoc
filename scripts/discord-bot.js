@@ -66,7 +66,11 @@ function formatUpcoming(rows) {
 
 function formatAutoItems(items) {
   if (!items?.length) return ['Danh sách auto: chưa lưu môn nào.'];
-  const lines = [`Danh sách auto (${items.length} mục):`];
+  const subjects = new Set(items.map((item) => String(item.maMon || '').trim()).filter(Boolean));
+  const totalCredits = items
+    .filter((item) => item.loai !== 'du_phong')
+    .reduce((sum, item) => sum + (Number(item.soTc) || 0), 0);
+  const lines = [`Danh sách auto (${subjects.size} môn · ${totalCredits} chỉ):`];
   for (const [index, item] of items.slice(0, 20).entries()) {
     const nhom = item.nhomTo ? `, nhóm ${item.nhomTo}` : '';
     const loai = item.loai === 'du_phong' ? 'dự phòng' : 'chính';
