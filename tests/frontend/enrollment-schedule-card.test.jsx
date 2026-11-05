@@ -28,4 +28,9 @@ describe('ScheduleCard', () => {
     expect(screen.getByText('Chưa đăng ký môn nào để dựng lịch tuần.')).toBeInTheDocument();
     expect(screen.queryByText('conflict')).not.toBeInTheDocument();
   });
+
+  it('renders the explanatory note under the schedule', () => {
+    render(<ScheduleCard title="Lịch tuần dự kiến" subtitle="0 môn" cells={new Map()} hasEntries={false} emptyHint="empty" conflictHint="conflict" note="Lịch dự kiến là lịch của các môn đang chọn để Auto đăng ký." />);
+    expect(screen.getByText('Lịch dự kiến là lịch của các môn đang chọn để Auto đăng ký.')).toHaveClass('enroll-schedule-note');
+  });
 });

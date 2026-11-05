@@ -5819,6 +5819,7 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 
 /* weekly schedules (registered + planned) */
 #tab-enrollment .enroll-schedules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+#tab-enrollment .enroll-schedule-note { margin-top: 4px; font-size: 0.72rem; opacity: 0.85; }
 
 /* responsive */
 @media (max-width: 1100px) {

@@ -17,7 +17,7 @@ const WEEK_SESSIONS = [
 /**
  * One weekly mini-schedule card. `cells` comes from buildScheduleCells().
  */
-export default function ScheduleCard({ title, subtitle, cells, hasEntries, emptyHint, conflictHint }) {
+export default function ScheduleCard({ title, subtitle, cells, hasEntries, emptyHint, conflictHint, note }) {
   return (
     <div className="enroll-card">
       <div className="enroll-card-head">
@@ -62,6 +62,7 @@ export default function ScheduleCard({ title, subtitle, cells, hasEntries, empty
         </table>
       </div>
       <p className="enroll-hint">{hasEntries ? conflictHint : emptyHint}</p>
+      {note ? <p className="enroll-hint enroll-schedule-note">{note}</p> : null}
     </div>
   );
 }

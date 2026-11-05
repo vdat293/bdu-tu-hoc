@@ -1086,20 +1086,22 @@ export default function EnrollmentPage() {
         {/* ---------- weekly schedules ---------- */}
         <div className="enroll-schedules">
           <ScheduleCard
-            title="Lịch tuần đã đăng ký"
-            subtitle={registeredRows.length ? `${registeredRows.length} môn đã đăng ký thành công` : 'Chưa có môn nào'}
-            cells={registeredCells}
-            hasEntries={registeredRows.length > 0}
-            emptyHint="Chưa đăng ký môn nào để dựng lịch tuần."
-            conflictHint="Ô đỏ = trùng lịch giữa các môn đã đăng ký."
-          />
-          <ScheduleCard
             title="Lịch tuần dự kiến"
             subtitle={selected.length ? `${grouped.length} môn trong danh sách ưu tiên` : 'Chưa chọn môn nào'}
             cells={plannedCells}
             hasEntries={selected.length > 0}
             emptyHint="Chọn môn ở Danh sách ưu tiên để xem lịch dự kiến."
             conflictHint="Ô đỏ = trùng lịch giữa các môn dự kiến."
+            note="Lịch dự kiến là lịch của các môn đang chọn để Auto đăng ký."
+          />
+          <ScheduleCard
+            title="Lịch tuần đã đăng ký"
+            subtitle={registeredRows.length ? `${registeredRows.length} môn đã đăng ký thành công` : 'Chưa có môn nào'}
+            cells={registeredCells}
+            hasEntries={registeredRows.length > 0}
+            emptyHint="Chưa đăng ký môn nào để dựng lịch tuần."
+            conflictHint="Ô đỏ = trùng lịch giữa các môn đã đăng ký."
+            note="Lịch đã đăng ký là lịch của các môn đã đăng ký thành công."
           />
         </div>
 
