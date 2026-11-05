@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { EnrollmentService, EnrollmentBduError, classifyRegisterResult } from '../src/modules/enrollment/enrollment.service.js';
 
-const BASE = 'https://sv.bdu.edu.vn/public/api';
+const BASE = 'https://sv.bdu.edu.vn/dkmh/api';
 const TOKEN = 'test-token';
 
 const catalogRaw = {

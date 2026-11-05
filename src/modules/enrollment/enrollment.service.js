@@ -10,7 +10,10 @@
  * unconfirmed server-side filter fields.
  */
 
-const BDU_BASE_URL = 'https://sv.bdu.edu.vn/public/api';
+// The official registration page talks to /dkmh/api, not /public/api. The
+// public alias does not see registrations created through the portal (it
+// returned an empty list while the portal showed the same student's rows).
+const BDU_BASE_URL = 'https://sv.bdu.edu.vn/dkmh/api';
 const SERVER_TIME_URL = `${BDU_BASE_URL}/hsba/w-gettimeserver`;
 // One cached catalog is ~500KB (306 môn + 555 nhóm). Capping the number of
 // per-token entries keeps a long-running server from retaining a catalog for
