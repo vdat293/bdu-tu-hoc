@@ -229,7 +229,10 @@ export const EnrollmentController = {
         verified = await enrollmentService.login(mssv, password);
       } catch (error) {
         if (error?.status === 401) {
-          return res.status(401).json({
+          // Không dùng HTTP 401 ở đây: tầng client coi 401 là phiên app hết hạn
+          // và sẽ đăng xuất. Sai mật khẩu BDU là lỗi dữ liệu nhập, trả 400 để
+          // modal hiện đúng lỗi.
+          return res.status(400).json({
             result: false,
             code: 'INVALID_CREDENTIALS',
             message: error.message || 'Mật khẩu BDU không đúng.'

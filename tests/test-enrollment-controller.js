@@ -182,7 +182,7 @@ try {
     assert.equal(res.statusCode, 409);
   });
 
-  await section('startRun 401 when the password is wrong and does not create a run', async () => {
+  await section('startRun 400 when the password is wrong and does not create a run', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
     enrollmentService.login = async () => {
@@ -192,7 +192,7 @@ try {
     EnrollmentRunService.start = async () => { started = true; return { run: {}, reused: false }; };
     const res = response();
     await EnrollmentController.startRun(reqWith({ body: { password: 'wrong', triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
-    assert.equal(res.statusCode, 401);
+    assert.equal(res.statusCode, 400);
     assert.equal(res.body.code, 'INVALID_CREDENTIALS');
     assert.equal(started, false, 'không được tạo run khi mật khẩu sai');
   });
