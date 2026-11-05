@@ -578,9 +578,14 @@ export class EnrollmentRunManager {
     }
 
     let gateOpen = false;
-    const deadline = run.triggerAtMs + GATE_LIMIT_AFTER_MS;
+    // Người dùng có thể bấm Auto sau giờ mở (ví dụ 10:00 cho đợt mở 09:00).
+    // Cửa sổ canh cổng phải tính từ lúc bắt đầu chạy, không phải từ triggerAt,
+    // nếu không deadline đã trôi qua và run fail ngay dù cổng đang mở.
+    const pollFromMs = Math.max(run.triggerAtMs, this.now());
+    const deadline = pollFromMs + GATE_LIMIT_AFTER_MS;
     let polls = 0;
-    // From the scheduled time: poll the gate and fire as soon as it is open.
+    // From the scheduled time (or from now, when started late): poll the gate
+    // and fire as soon as it is open.
     while (!run.stopRequested && this.now() <= deadline && polls < 20_000) {
       polls += 1;
       try {
@@ -599,7 +604,7 @@ export class EnrollmentRunManager {
 
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
     if (!gateOpen) {
-      this.appendLog(run, 'error', 'Đã quá 5 phút kể từ giờ mở dự kiến mà cổng vẫn chưa mở. Không bắn request nào.');
+      this.appendLog(run, 'error', 'Đã canh cổng 5 phút nhưng cổng vẫn chưa mở. Không bắn request nào.');
       await this.finishRun(run, 'failed', { error: 'Cổng chưa mở' });
       return;
     }

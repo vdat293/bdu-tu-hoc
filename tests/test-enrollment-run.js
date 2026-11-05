@@ -596,6 +596,28 @@ await section('ad) legacy rows without logs rebuild them from the summary', asyn
   assert.match(latest.logs[1].message, /✖ BBB.*tiên quyết/);
 });
 
+await section('ae) pressing Auto after the gate window still polls from now and registers', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock - 10 * 60_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done', 'bấm muộn nhưng cổng đang mở thì vẫn phải đăng ký');
+  assert.equal(calls.register.length, 1);
+  assert.ok(calls.gate >= 1, 'phải poll cổng lại từ lúc bắt đầu chạy');
+});
+
+await section('af) a late start with a closed gate still waits a fresh window before failing', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock - 10 * 60_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'failed');
+  assert.ok(calls.gate > 1, 'không được fail ngay khi deadline cũ đã trôi qua');
+  assert.equal(calls.register.length, 0);
+});
+
 await section('singleton export exists', async () => {
   assert.ok(EnrollmentRunService, 'EnrollmentRunService singleton phải tồn tại');
 });
