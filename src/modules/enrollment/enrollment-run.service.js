@@ -1114,12 +1114,12 @@ export class EnrollmentRunManager {
   async watchTick(run) {
     let pauseMs = 0;
     for (const maMon of this.watchSubjects(run)) {
-      if (run.stopRequested) break;
+      if (run.stopRequested) return { pauseMs };
       const items = [...run.snapshot]
         .filter((item) => item.maMon === maMon)
         .sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
       for (const item of items) {
-        if (run.stopRequested) break;
+        if (run.stopRequested) return { pauseMs };
         const key = String(item.idToHoc ?? `${item.maMon}:${item.thuTu}`);
         if (run.watchDropped.has(key)) continue;
 
@@ -1149,7 +1149,14 @@ export class EnrollmentRunManager {
           }
 
           if (cls !== 'auth') break;
-          if (authRetried || !(await this.tryRefresh(run, { allowPassword: true }))) {
+          if (run.stopRequested) return { pauseMs: 0 };
+          if (authRetried) {
+            run.authExpired = true;
+            return { pauseMs, failed: 'Phiên đăng nhập đã hết hạn' };
+          }
+          const refreshed = await this.tryRefresh(run, { allowPassword: true });
+          if (run.stopRequested) return { pauseMs: 0 };
+          if (!refreshed) {
             run.authExpired = true;
             return { pauseMs, failed: 'Phiên đăng nhập đã hết hạn' };
           }
@@ -1401,7 +1408,7 @@ export class EnrollmentRunManager {
     }
 
     run.phase = 'watching';
-    this.appendLog(run, 'info', `Bắt đầu canh slot ${this.watchSubjects(run).length} môn tới ${new Date(run.watchUntilMs).toLocaleTimeString('vi-VN')}. Thử lại mỗi 60s.`);
+    this.appendLog(run, 'info', `Bắt đầu canh slot ${this.watchSubjects(run).length} môn tới ${new Date(run.watchUntilMs).toLocaleTimeString('vi-VN')}. Thử lại mỗi ${this.watchIntervalMs / 1000}s.`);
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     await this.persistRun(run);
     const outcome = await this.runWatcher(run);

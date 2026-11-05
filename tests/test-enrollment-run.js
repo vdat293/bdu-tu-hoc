@@ -1119,6 +1119,35 @@ await section('w9) seat_full is retried every interval until a slot opens', asyn
   assert.match(made.calls.notify.find((call) => call.kind === 'done').message, /Canh slot: 1 môn/);
 });
 
+await section('w9b) watcher makes exactly one request per class on each interval', async () => {
+  const registerTimes = [];
+  const made = makeManager({
+    gateSequence: [true],
+    watchIntervalMs: 60_000,
+    register: async () => {
+      registerTimes.push(clock);
+      return registerTimes.length <= 3 ? failResponse('hết chỗ') : okResponse('RS-OK');
+    }
+  });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  let final;
+  for (let i = 0; i < 1_000; i += 1) {
+    final = made.manager.getForStudent(run.runId, 'SV001');
+    if (['done', 'failed', 'stopped'].includes(final?.status)) break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(final.status, 'done');
+  assert.equal(registerTimes.length, 4, 'one initial request plus one request on each of three watcher ticks');
+  assert.deepEqual(registerTimes.slice(2).map((at, index) => at - registerTimes[index + 1]), [60_000, 60_000]);
+  assert.ok(final.logs.some((entry) => /Thử lại mỗi 60s/.test(entry.message)));
+});
+
 await section('w10) stop during watching stops within the chunk window', async () => {
   const made = makeManager({ gateSequence: [true], register: async () => failResponse('hết chỗ') });
   clock = 1_000_000;
@@ -1182,6 +1211,37 @@ await section('w12) auth loss while watching fails the run', async () => {
   });
   const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'failed');
+});
+
+await section('w12b) stop during auth refresh prevents retrying the watched class', async () => {
+  let manager;
+  let runId;
+  let calls = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    watchIntervalMs: 1_000,
+    register: async () => {
+      calls += 1;
+      if (calls === 1) return failResponse('hết chỗ');
+      if (calls === 2) throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' });
+      return failResponse('hết chỗ');
+    },
+    refresh: async () => {
+      manager.stop(runId, 'SV001');
+      return { token: 'tok-refreshed', refreshToken: 'refreshed' };
+    }
+  });
+  manager = made.manager;
+  clock = 1_000_000;
+  const { run } = await manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', refreshToken: 'ref', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  runId = run.runId;
+  const final = await waitForStatus(manager, runId, 'SV001', ['stopped', 'failed']);
+  assert.equal(final.status, 'stopped');
+  assert.equal(made.calls.register.length, 2, 'the 401 refresh must not be followed by a third registration');
 });
 
 await section('w13) watching is skipped when no subject ran out of seats', async () => {
