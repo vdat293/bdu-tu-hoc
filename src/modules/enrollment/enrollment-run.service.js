@@ -28,6 +28,11 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 const nowIso = () => new Date().toISOString();
 const clip = (value, max = 160) => String(value ?? '').slice(0, max);
 
+// BDU regenerates `id_to_hoc` when a registration round opens, so a list saved
+// before the gate opens points at ids the server no longer knows. The portal
+// answers those with `is_thanh_cong: false, thong_bao_loi: "Warning"`.
+const isStaleIdResponse = (res) => /^warning$/i.test(String(res?.thongBaoLoi || res?.rawMessage || '').trim());
+
 export class EnrollmentRunManager {
   constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000 } = {}) {
     this.service = service ?? new EnrollmentService();
@@ -96,7 +101,9 @@ export class EnrollmentRunManager {
     if (!token) throw httpError(401, 'Thiếu mã xác thực (Token).');
     const triggerAtMs = triggerAt instanceof Date ? triggerAt.getTime() : new Date(triggerAt).getTime();
     if (!Number.isFinite(triggerAtMs)) throw httpError(400, 'triggerAt không hợp lệ.');
-    const snapshot = Array.isArray(items) ? [...items].sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0)) : [];
+    // Copy each item so re-mapping ids on the snapshot never mutates the
+    // caller's array (the controller may still hold it).
+    const snapshot = Array.isArray(items) ? items.map((item) => ({ ...item })).sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0)) : [];
     if (snapshot.length === 0) throw httpError(400, 'Danh sách ưu tiên đang trống. Hãy lưu danh sách trước khi kích hoạt.');
 
     const currentId = this.activeRunByMssv.get(studentId);
@@ -132,7 +139,8 @@ export class EnrollmentRunManager {
       lastIdRs: '',
       refreshCount: 0,
       lastRefreshAt: this.now(),
-      authExpired: false
+      authExpired: false,
+      staleIdRetried: false
     };
 
     // Persist before running anything: the run row doubles as the audit log.
@@ -251,6 +259,50 @@ export class EnrollmentRunManager {
     }
   }
 
+  /**
+   * Re-map the saved priority list onto the ids the portal is serving right
+   * now. Matching goes by mã môn + nhóm tổ (the class code may shift), with
+   * TKB as a tie-breaker, so a list saved before the round opened still
+   * registers the same class instead of failing with "Warning".
+   *
+   * Returns the number of changed items, or -1 when the catalog is unavailable.
+   */
+  async refreshCatalogIds(run) {
+    if (typeof this.service.getCatalog !== 'function') return 0;
+    let catalog;
+    try {
+      catalog = await this.service.getCatalog(run.token, { forceRefresh: true });
+    } catch {
+      return -1;
+    }
+    const byMaNhom = new Map();
+    for (const group of catalog?.dsNhomTo ?? []) {
+      const key = `${group.maMon}|${group.nhomTo}`;
+      if (!byMaNhom.has(key)) byMaNhom.set(key, []);
+      byMaNhom.get(key).push(group);
+    }
+    let changed = 0;
+    for (const item of run.snapshot) {
+      const candidates = byMaNhom.get(`${item.maMon}|${item.nhomTo}`) ?? [];
+      // TKB is the strongest signal (nhóm tổ duplicates share maMon+nhóm but
+      // differ by tổ/lịch); lớp is only trusted when it is unambiguous.
+      const byTkb = candidates.find((group) => group.tkb && group.tkb === item.tkb);
+      const byLop = candidates.filter((group) => group.lop && group.lop === item.lop);
+      const match = byTkb
+        ?? (byLop.length === 1 ? byLop[0] : null)
+        ?? (candidates.length === 1 ? candidates[0] : null);
+      if (!match?.idToHoc) continue;
+      if (item.idToHoc !== match.idToHoc) changed += 1;
+      item.idToHoc = match.idToHoc;
+      if (match.lop) item.lop = match.lop;
+      if (match.tkb) item.tkb = match.tkb;
+    }
+    if (changed > 0) {
+      this.appendLog(run, 'info', `BDU đã cấp lại mã lớp khi mở cổng — đã cập nhật ${changed} môn trong danh sách ưu tiên.`);
+    }
+    return changed;
+  }
+
   // One attempt + up to 3 retries, only for transient/rate-limit classes.
   async attemptRegister(run, item, isChecked) {
     for (let attempt = 0; attempt <= RETRY_BACKOFF.length; attempt += 1) {
@@ -295,6 +347,14 @@ export class EnrollmentRunManager {
 
   async registerSubject(run, item, allItems) {
     let outcome = await this.attemptRegister(run, item, true);
+
+    // Safety net: if the portal still says "Warning" (id no longer valid),
+    // refresh the catalog once and retry the same item with the new id.
+    if (outcome.cls === 'rejected' && isStaleIdResponse(outcome.res) && !run.staleIdRetried) {
+      run.staleIdRetried = true;
+      const changed = await this.refreshCatalogIds(run);
+      if (changed > 0) outcome = await this.attemptRegister(run, item, true);
+    }
 
     if (outcome.cls === 'otp') {
       this.updateRun(run, { status: 'otp_required' });
@@ -352,8 +412,9 @@ export class EnrollmentRunManager {
     }
 
     if (outcome.cls === 'prereq') {
-      this.appendLog(run, 'error', `${item.maMon}: thiếu điều kiện tiên quyết — bỏ qua môn này.`);
-      this.recordItem(run, item, 'failed', 'thiếu tiên quyết');
+      const detail = outcome.res?.rawMessage || outcome.res?.thongBaoTienQuyet || 'thiếu tiên quyết';
+      this.appendLog(run, 'error', `${item.maMon}: ${detail} — bỏ qua môn này.`);
+      this.recordItem(run, item, 'failed', detail);
       return null;
     }
     if (outcome.cls === 'schedule_conflict') {
@@ -372,7 +433,10 @@ export class EnrollmentRunManager {
       return 'Phiên đăng nhập hết hạn';
     }
     if (outcome.cls === 'rejected') {
-      this.recordItem(run, item, 'failed', outcome.res?.rawMessage || 'BDU từ chối');
+      const reason = isStaleIdResponse(outcome.res)
+        ? 'mã lớp đã đổi trên cổng BDU — hãy tải lại danh sách rồi chạy lại'
+        : (outcome.res?.rawMessage || 'BDU từ chối');
+      this.recordItem(run, item, 'failed', reason);
       return null;
     }
     this.recordItem(run, item, 'failed', 'lỗi tạm thời');
@@ -462,6 +526,10 @@ export class EnrollmentRunManager {
     this.updateRun(run, { status: 'running', startedAt: nowIso() });
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     this.appendLog(run, 'success', 'Cổng đã mở. Bắt đầu đăng ký theo thứ tự ưu tiên.');
+
+    // BDU rebuilds the class catalog when the round opens, so ids saved before
+    // today point at groups the server no longer has. Re-map them first.
+    await this.refreshCatalogIds(run);
 
     const allItems = [...run.snapshot].sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
     const chinhItems = allItems.filter((item) => item.loai === 'chinh');

@@ -54,8 +54,8 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null } = {}) => {
-  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0 };
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null } = {}) => {
+  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0 };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
   const service = {
@@ -75,6 +75,12 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
       return { token: 'tok-refreshed', refreshToken };
     }
   };
+  if (catalog) {
+    service.getCatalog = async () => {
+      calls.catalog += 1;
+      return { dsNhomTo: typeof catalog === 'function' ? catalog(calls.catalog) : catalog };
+    };
+  }
   const store = {
     insertRun: async (row) => { calls.insertRun.push(row); },
     updateRun: async (id, fields) => { calls.updateRun.push({ id, fields }); },
@@ -405,6 +411,79 @@ await section('s) a completed run notifies Discord with the success summary', as
   assert.match(calls.notify[0].message, /2 thành công/);
   assert.equal(calls.notify[0].mssv, 'SV001');
   assert.equal(calls.notify[0].runId, run.runId);
+});
+
+await section('t) ids saved before the round opened are re-mapped to the current catalog', async () => {
+  const catalog = [
+    { maMon: 'AAA', nhomTo: '01', lop: '27KT01', idToHoc: 'A-FRESH', tkb: chinhA.tkb },
+    { maMon: 'BBB', nhomTo: '02', lop: '27KT99', idToHoc: 'B-FRESH', tkb: chinhB.tkb }
+  ];
+  const { manager, calls } = makeManager({ gateSequence: [true], catalog });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-FRESH', 'B-FRESH'], 'phải dùng id_to_hoc mới, không dùng id đã lưu');
+  assert.ok(final.logs.some((log) => /cấp lại mã lớp/.test(log.message)), 'phải ghi log khi id thay đổi');
+  assert.equal(final.summary.thanh_cong.length, 2);
+});
+
+await section('u) re-mapping matches mã môn + nhóm tổ even when the class code changes', async () => {
+  const catalog = [{ maMon: 'AAA', nhomTo: '01', lop: '27KHAC', idToHoc: 'A-FRESH', tkb: 'lịch khác' }];
+  const { manager, calls } = makeManager({ gateSequence: [true], catalog });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.register[0].idToHoc, 'A-FRESH');
+});
+
+await section('v) a "Warning" rejection refreshes the catalog and retries the item once', async () => {
+  const catalog = () => {
+    const idToHoc = catalog.calls === 0 ? 'A-MAIN' : 'A-NEW';
+    catalog.calls += 1;
+    return [{ maMon: 'AAA', nhomTo: '01', lop: '27KT01', idToHoc, tkb: chinhA.tkb }];
+  };
+  catalog.calls = 0;
+  const register = async (args) => {
+    if (args.idToHoc === 'A-MAIN') return failResponse('Warning');
+    return okResponse('RS-OK');
+  };
+  const { manager, calls } = makeManager({ gateSequence: [true], catalog, register });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.deepEqual(calls.register.map((c) => c.idToHoc), ['A-MAIN', 'A-NEW']);
+  assert.equal(final.summary.thanh_cong.length, 1);
+});
+
+await section('w) an unmappable "Warning" is reported meaningfully, not as the raw portal text', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [true], catalog: [], register: async () => failResponse('Warning') });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.register.length, 1, 'không map được thì không retry vô ích');
+  assert.match(final.summary.that_bai[0].ly_do, /mã lớp đã đổi/);
+});
+
+await section('x) ambiguous nhóm tổ duplicates are left untouched instead of grabbing the wrong tổ', async () => {
+  const catalog = [
+    { maMon: 'AAA', nhomTo: '01', lop: '27KT01', idToHoc: 'A-TO-1', tkb: 'Thứ 6,tiết 1->5,Ph Z' },
+    { maMon: 'AAA', nhomTo: '01', lop: '27KT01', idToHoc: 'A-TO-2', tkb: 'Thứ 6,tiết 6->10,Ph Z' }
+  ];
+  const { manager, calls } = makeManager({ gateSequence: [true], catalog });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.register[0].idToHoc, 'A-MAIN', 'không đủ căn cứ thì giữ nguyên id đã lưu');
 });
 
 await section('singleton export exists', async () => {

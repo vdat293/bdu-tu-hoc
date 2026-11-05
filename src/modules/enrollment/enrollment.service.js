@@ -321,7 +321,8 @@ export function classifyRegisterResult(res = {}) {
     .toLowerCase();
 
   if (/het\s*(cho|chi\s*tieu)|da\s*day|khong\s*con\s*cho/.test(message)) return 'seat_full';
-  if (/tien\s*quyet/.test(message)) return 'prereq';
+  // BDU dùng cả "tiên quyết" và "vi phạm học trước" cho cùng một điều kiện.
+  if (/tien\s*quyet|hoc\s*truoc/.test(message)) return 'prereq';
   if (/trung\s*(thoi\s*khoa\s*bieu|tkb|lich\s*hoc)/.test(message)) return 'schedule_conflict';
   if (/ngoai\s*thoi\s*gian|chua\s*den\s*gio|het\s*thoi\s*gian/.test(message)) return 'gate_closed';
   if (res.isThanhCong === true) return 'thanh_cong';

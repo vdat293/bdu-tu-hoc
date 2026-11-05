@@ -313,6 +313,7 @@ const cases = [
   ['Ngoài thời gian → gate_closed', classify({ code: 200, message: 'Ngoài thời gian cho phép đăng ký' }), 'gate_closed'],
   ['hết chỉ tiêu → seat_full', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Đã hết chỉ tiêu tuyển' } }), 'seat_full'],
   ['tiên quyết → prereq', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Không đủ điều kiện tiên quyết' } }), 'prereq'],
+  ['vi phạm học trước → prereq', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Vi phạm học trước:  INF1063' } }), 'prereq'],
   ['trùng thời khóa biểu → schedule_conflict', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Trùng thời khóa biểu' } }), 'schedule_conflict'],
   ['unknown → rejected', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Lỗi khó hiểu' } }), 'rejected'],
   ['code != 200 → rejected', classify({ code: 999, message: 'x' }), 'rejected'],
