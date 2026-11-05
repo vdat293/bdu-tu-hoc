@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { validatePriorityItems, assignOrder, pickFallbacks } from '../src/modules/enrollment/enrollment-priority.js';
+import { validatePriorityItems, assignOrder, pickFallbacks, normalizeSubjectCodes } from '../src/modules/enrollment/enrollment-priority.js';
 import { priorityStore } from '../src/modules/enrollment/priority-store.js';
 
 const chinh = (maMon, idToHoc) => ({ ma_mon: maMon, id_to_hoc: idToHoc, loai: 'chinh', ten_mon: 'Môn ' + maMon, thu_tu: 999 });
 const duPhong = (maMon, idToHoc) => ({ ma_mon: maMon, id_to_hoc: idToHoc, loai: 'du_phong' });
 const section = (name, fn) => {
   try { fn(); console.log('  ok -', name); } catch (error) { console.error('  FAIL -', name); throw error; }
+};
+const sectionAsync = async (name, fn) => {
+  try { await fn(); console.log('  ok -', name); } catch (error) { console.error('  FAIL -', name); throw error; }
 };
 
 console.log('enrollment-priority');
@@ -95,7 +98,31 @@ section('pickFallbacks sorts by thu_tu, not array order', () => {
   assert.deepEqual(pickFallbacks(items, 'A').map((i) => i.idToHoc), ['a2', 'a3']);
 });
 
-const deleted = await priorityStore.deletePrioritiesBySubjects('SV001', []);
-assert.equal(deleted, 0, 'danh sách rỗng phải trả 0 và không gọi DB');
+section('normalizeSubjectCodes returns [] for empty input', () => {
+  assert.deepEqual(normalizeSubjectCodes([]), []);
+  assert.deepEqual(normalizeSubjectCodes(undefined), []);
+  assert.deepEqual(normalizeSubjectCodes(null), []);
+});
+
+section('normalizeSubjectCodes dedupes and keeps first-seen order', () => {
+  assert.deepEqual(normalizeSubjectCodes(['M02', 'M01', 'M02', 'M01', 'M03']), ['M02', 'M01', 'M03']);
+});
+
+section('normalizeSubjectCodes trims whitespace and drops empty codes', () => {
+  assert.deepEqual(normalizeSubjectCodes(['  M01  ', '', '   ', null, undefined]), ['M01']);
+});
+
+section('normalizeSubjectCodes truncates codes longer than 32 chars', () => {
+  assert.deepEqual(normalizeSubjectCodes(['A'.repeat(40)]), ['A'.repeat(32)]);
+});
+
+section('normalizeSubjectCodes coerces non-string values to strings', () => {
+  assert.deepEqual(normalizeSubjectCodes([123, 0]), ['123', '0']);
+});
+
+await sectionAsync('deletePrioritiesBySubjects returns 0 for empty list', async () => {
+  const deleted = await priorityStore.deletePrioritiesBySubjects('SV001', []);
+  assert.equal(deleted, 0, 'mảng rỗng trả về 0');
+});
 
 console.log('OK');

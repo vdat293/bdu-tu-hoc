@@ -4,6 +4,7 @@
  */
 import { query, transaction } from '../../db/database.js';
 import { decryptPassword, encryptPassword } from './enrollment-credential.service.js';
+import { normalizeSubjectCodes } from './enrollment-priority.js';
 
 function toNumber(value) {
   if (value === null || value === undefined) return null;
@@ -66,7 +67,7 @@ export const priorityStore = {
 
   // Xoá ưu tiên theo nhóm môn: trả về số dòng đã xoá; danh sách rỗng không gọi DB.
   async deletePrioritiesBySubjects(mssv, maMons) {
-    const subjects = [...new Set((maMons ?? []).filter(Boolean))];
+    const subjects = normalizeSubjectCodes(maMons);
     if (!subjects.length) return 0;
     const result = await query(
       'DELETE FROM enrollment_priorities WHERE mssv = $1 AND ma_mon = ANY($2::text[])',

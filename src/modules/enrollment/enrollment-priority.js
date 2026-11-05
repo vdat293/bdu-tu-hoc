@@ -96,3 +96,19 @@ export function pickFallbacks(items, maMon) {
     .filter((item) => item.loai === 'du_phong' && item.maMon === maMon)
     .sort((a, b) => (a.thuTu ?? Number.MAX_SAFE_INTEGER) - (b.thuTu ?? Number.MAX_SAFE_INTEGER));
 }
+
+// Chuẩn hoá danh sách mã môn cho câu lệnh DELETE theo nhóm: ép kiểu chuỗi,
+// trim, bỏ mã rỗng, cắt 32 ký tự (độ dài cột ma_mon), khử trùng lặp,
+// giữ thứ tự xuất hiện lần đầu.
+export function normalizeSubjectCodes(maMons) {
+  const codes = [];
+  const seen = new Set();
+  for (const value of Array.isArray(maMons) ? maMons : []) {
+    const text = value === undefined || value === null ? '' : String(value).trim();
+    const code = text.slice(0, 32);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    codes.push(code);
+  }
+  return codes;
+}
