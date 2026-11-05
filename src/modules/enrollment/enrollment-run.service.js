@@ -336,6 +336,34 @@ export class EnrollmentRunManager {
     this.emit(run, { type: 'item_done', ...entry });
   }
 
+  // Đăng nhập lại bằng MSSV + mật khẩu (chỉ RAM). Trả:
+  // - 'ok'        token mới đã thay vào run
+  // - 'fatal'     mật khẩu sai (401) — run phải dừng
+  // - 'transient' lỗi mạng/5xx hoặc đã chạm MAX_LOGIN_ATTEMPTS — thử lại sau
+  async loginWithPassword(run) {
+    if (!run.password) return 'fatal';
+    if ((run.loginAttempts ?? 0) >= MAX_LOGIN_ATTEMPTS) return 'transient';
+    run.loginAttempts = (run.loginAttempts ?? 0) + 1;
+    try {
+      const next = await this.service.login(run.mssv, run.password);
+      if (!next?.token) return 'transient';
+      run.token = next.token;
+      if (next.refreshToken) run.refreshToken = next.refreshToken;
+      run.lastRefreshAt = this.now();
+      run.passwordInvalid = false;
+      this.appendLog(run, 'success', 'Đã kiểm tra và đăng nhập lại BDU trước giờ mở.');
+      return 'ok';
+    } catch (error) {
+      if (error?.status === 401) {
+        run.passwordInvalid = true;
+        this.appendLog(run, 'error', 'Mật khẩu BDU không đúng.');
+        return 'fatal';
+      }
+      this.appendLog(run, 'warning', 'Không đăng nhập lại được BDU (lỗi tạm thời) — sẽ thử lại đúng giờ mở.');
+      return 'transient';
+    }
+  }
+
   // A run can outlive the 5-hour access token (e.g. scheduled today for
   // tomorrow). Refresh once per auth failure using the RAM-only refresh token.
   async tryRefresh(run) {
@@ -572,10 +600,19 @@ export class EnrollmentRunManager {
     const run = this.runs.get(runId);
     if (!run || run.status !== 'scheduled') return;
 
-    // Before the scheduled time: do NOT touch the gate. Only keep the BDU
-    // session warm (refresh the 5h access token) so a next-day schedule can
-    // still fire at the chosen time.
+    // Before the scheduled time: do NOT touch the gate. Keep the BDU session
+    // warm (hourly refresh) and re-login with the password 5 minutes before
+    // the trigger so the credentials are proven and the token is fresh.
     while (!run.stopRequested && this.now() < run.triggerAtMs) {
+      if (!run.loginDone && this.now() >= run.loginAtMs) {
+        // eslint-disable-next-line no-await-in-loop
+        const outcome = await this.loginWithPassword(run);
+        if (outcome === 'fatal') {
+          await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' });
+          return;
+        }
+        if (outcome === 'ok') run.loginDone = true;
+      }
       if (run.refreshToken && this.now() - run.lastRefreshAt >= TOKEN_REFRESH_INTERVAL_MS) {
         // eslint-disable-next-line no-await-in-loop
         await this.tryRefresh(run);
@@ -584,6 +621,17 @@ export class EnrollmentRunManager {
       // Sleep in short chunks so "Dừng" is honoured within ~5s even when the
       // schedule is a day away.
       await this.sleep(Math.min(Math.max(remainingMs, 0), 5_000));
+    }
+
+    // Bắt đầu muộn hơn mốc T−5 (hoặc lần login ở T−5 lỗi tạm thời): thử lại
+    // ngay trước khi poll cổng.
+    if (!run.loginDone && !run.stopRequested) {
+      const outcome = await this.loginWithPassword(run);
+      if (outcome === 'fatal') {
+        await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' });
+        return;
+      }
+      if (outcome === 'ok') run.loginDone = true;
     }
 
     let gateOpen = false;
@@ -651,9 +699,13 @@ export class EnrollmentRunManager {
       fallback: [...run.summaryAcc.fallback],
       rut: [...run.summaryAcc.rut]
     };
-    const finalError = status === 'failed' && run.authExpired
-      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại và kích hoạt lại.'
-      : (error ?? null);
+    const finalError = status === 'failed' && run.passwordInvalid
+      ? 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.'
+      : status === 'failed' && run.authExpired
+        ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại và kích hoạt lại.'
+        : (error ?? null);
+    // Xoá mật khẩu khỏi RAM trước khi ghi DB/phát sự kiện cuối.
+    run.password = null;
     const finishedAt = nowIso();
     this.updateRun(run, { status, summary, error: finalError, finishedAt });
     try {

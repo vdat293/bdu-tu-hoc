@@ -54,8 +54,8 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null } = {}) => {
-  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0 };
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null } = {}) => {
+  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [] };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
   const service = {
@@ -69,6 +69,11 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
       return registerImpl(args, calls.register.length);
     },
     verifyOtp: async (token, code) => ({ ok: code === '123456' }),
+    login: async (mssv, password) => {
+      calls.login.push({ mssv, password });
+      if (login) return login(mssv, password, calls.login.length);
+      return { token: 'tok-login', refreshToken: 'ref-login' };
+    },
     refreshSession: async (refreshToken) => {
       calls.refresh.push(refreshToken);
       if (refresh) return refresh(refreshToken);
@@ -121,6 +126,60 @@ await section('a2) serialize never exposes the password', async () => {
   const serialized = manager.getForStudent(run.runId, 'SV001');
   assert.ok(!JSON.stringify(serialized).includes('super-secret'));
   manager.stop(run.runId, 'SV001');
+});
+
+const startWithPassword = async (overrides = {}) => {
+  const made = makeManager({ gateSequence: [true], ...overrides });
+  clock = 1_000_000;
+  const offsetMs = overrides.offsetMs ?? 10 * 60_000;
+  const { run } = await made.manager.start({
+    password: 'pw',
+    mssv: 'SV001',
+    token: 'tok-old',
+    items: [chinhA],
+    triggerAt: new Date(clock + offsetMs).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed', 'stopped']);
+  return { ...made, run, final };
+};
+
+await section('a3) logs in 5 minutes before the trigger and uses the new token', async () => {
+  const { final, calls } = await startWithPassword();
+  assert.equal(final.status, 'done');
+  assert.deepEqual(calls.login, [{ mssv: 'SV001', password: 'pw' }]);
+  assert.equal(calls.register[0].token, 'tok-login');
+});
+
+await section('a4) a wrong password fails the run before the gate opens', async () => {
+  const login = async () => { throw Object.assign(new Error('bad'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
+  const { final, calls } = await startWithPassword({ login });
+  assert.match(String(final.error), /Mật khẩu BDU không đúng/);
+  assert.equal(calls.register.length, 0);
+});
+
+await section('a5) a transient login failure at T-5 is retried at the trigger time', async () => {
+  let attempts = 0;
+  const login = async () => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('offline'), { status: 502 });
+    return { token: 'tok-late', refreshToken: '' };
+  };
+  const { final, calls } = await startWithPassword({ login });
+  assert.equal(final.status, 'done');
+  assert.equal(calls.login.length, 2);
+  assert.equal(calls.register[0].token, 'tok-late');
+});
+
+await section('a6) starting late logs in immediately before polling the gate', async () => {
+  const { calls, final } = await startWithPassword({ offsetMs: -10 * 60_000 });
+  assert.equal(final.status, 'done');
+  assert.equal(calls.login.length, 1);
+  assert.equal(calls.register[0].token, 'tok-login');
+});
+
+await section('a7) finishRun wipes the password from RAM', async () => {
+  const { manager, run } = await startWithPassword({ offsetMs: 1_000 });
+  assert.equal(manager.runs.get(run.runId).password, null);
 });
 
 await section('a) gate never opens: no register call, run failed after deadline', async () => {
@@ -350,7 +409,10 @@ await section('m) autoFix only records withdrawn courses when BDU confirms the w
 
 await section('n) long wait keeps the token fresh by refreshing proactively', async () => {
   const gateSequence = [...Array(13).fill(false), true];
-  const { manager, calls } = makeManager({ gateSequence });
+  const { manager, calls } = makeManager({
+    gateSequence,
+    login: async () => ({ token: 'tok-refreshed', refreshToken: 'refresh-1' })
+  });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 90 * 60_000).toISOString();
   const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
