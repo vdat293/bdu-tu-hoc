@@ -215,6 +215,9 @@ export default function NotificationBell() {
             >
               🔔 Nhận thông báo lịch học
             </button>
+            <p className="notif-reminder-hint">
+              💡 Bật Discord để nhận nhắc lịch và tin nhắc tên ngay khi có người tag bạn.
+            </p>
           </footer>
         </section>
       )}
