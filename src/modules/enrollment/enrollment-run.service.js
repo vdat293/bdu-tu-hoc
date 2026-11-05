@@ -29,6 +29,59 @@ const TOKEN_CHECK_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const TOKEN_EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 const LOGIN_LEAD_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 3;
+// Trạng thái cổng là chung cho cả trường, nên mọi run đang chờ dùng chung một
+// lần dò: thay vì mỗi run gọi BDU 2 lần/giây (mỗi lần tải cả catalog), chỉ một
+// request mỗi GATE_TTL_MS cho toàn bộ process. 500ms giữ nguyên độ trễ phát
+// hiện cổng mở như cách poll cũ, nhưng chi phí không còn tăng theo số run.
+const GATE_TTL_MS = 500;
+// Giới hạn số request đồng thời bắn sang BDU. Mỗi request w-locdsnhomto nặng
+// ~500KB, nên 8 request cùng lúc đã đủ làm căng VPS 2 vCPU/4GB. Khoảng cách
+// tối thiểu 25ms giữ trần ~40 request/giây để BDU không chặn IP.
+const BDU_MAX_CONCURRENT = 8;
+const BDU_MIN_INTERVAL_MS = 25;
+
+const intEnv = (name, fallback, min) => {
+  const value = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isSafeInteger(value) && value >= min ? value : fallback;
+};
+
+/**
+ * FIFO limiter: `maxConcurrent` việc chạy song song, mỗi việc cách nhau ít nhất
+ * `minIntervalMs`. Dùng `now`/`sleep` của manager để test bằng đồng hồ ảo.
+ */
+export const createBduLimiter = ({ maxConcurrent, minIntervalMs, now, sleep }) => {
+  const limit = Math.max(1, Number(maxConcurrent) || 1);
+  const gap = Math.max(0, Number(minIntervalMs) || 0);
+  let active = 0;
+  let nextSlotAt = 0;
+  const queue = [];
+
+  const pump = () => {
+    if (active >= limit || queue.length === 0) return;
+    const task = queue.shift();
+    active += 1;
+    // Đặt lịch ngay (không đợi await) để các việc kế tiếp nhận slot đúng thứ tự.
+    const startAt = Math.max(now(), nextSlotAt);
+    nextSlotAt = startAt + gap;
+    (async () => {
+      try {
+        const waitMs = startAt - now();
+        if (waitMs > 0) await sleep(waitMs);
+        task.resolve(await task.fn());
+      } catch (error) {
+        task.reject(error);
+      } finally {
+        active -= 1;
+        pump();
+      }
+    })();
+  };
+
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    pump();
+  });
+};
 
 const tokenExpiresAtFrom = (nowMs, expiresIn) => {
   const seconds = Number(expiresIn);
@@ -99,7 +152,7 @@ export function serializeStoredRun(row) {
 }
 
 export class EnrollmentRunManager {
-  constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000 } = {}) {
+  constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000, gateTtlMs, bduMaxConcurrent, bduMinIntervalMs } = {}) {
     this.service = service ?? new EnrollmentService();
     this.store = store ?? priorityStore;
     this.notify = notify ?? EnrollmentNotifyService;
@@ -109,10 +162,63 @@ export class EnrollmentRunManager {
     this.runs = new Map();
     this.activeRunByMssv = new Map();
     this.listeners = new Map();
+    // Cổng dùng chung: cache kết quả dò + promise đang bay để gộp mọi run.
+    this.gateTtlMs = Number.isSafeInteger(gateTtlMs) && gateTtlMs > 0
+      ? gateTtlMs
+      : intEnv('ENROLLMENT_GATE_TTL_MS', GATE_TTL_MS, 100);
+    this.gateCache = { value: null, expiresAt: 0 };
+    this.gateInflight = null;
+    this.gateInflightToken = '';
+    // Hàng đợi nội bộ cho request ra BDU (login, catalog, đăng ký, rút).
+    this.bduLimiter = createBduLimiter({
+      maxConcurrent: Number.isSafeInteger(bduMaxConcurrent) && bduMaxConcurrent > 0
+        ? bduMaxConcurrent
+        : intEnv('ENROLLMENT_BDU_MAX_CONCURRENT', BDU_MAX_CONCURRENT, 1),
+      minIntervalMs: Number.isSafeInteger(bduMinIntervalMs) && bduMinIntervalMs >= 0
+        ? bduMinIntervalMs
+        : intEnv('ENROLLMENT_BDU_MIN_INTERVAL_MS', BDU_MIN_INTERVAL_MS, 0),
+      now: this.now,
+      sleep: this.sleep
+    });
     // Việc phục hồi run active được gọi từ startJobs() (chỉ worker chính),
     // không tự chạy trong constructor để tránh mỗi worker cùng resume.
     this.resumeStarted = false;
     this.resumePromise = null;
+  }
+
+  bduCall(fn) {
+    return this.bduLimiter(fn);
+  }
+
+  /**
+   * Đọc trạng thái cổng qua cache dùng chung. Trước đây mỗi run gọi BDU
+   * 2 lần/giây; gộp lại còn ~2 request/giây cho cả process, và một request
+   * lỗi chỉ ảnh hưởng run sở hữu token đó.
+   */
+  async checkGate(token) {
+    if (this.gateCache.value !== null && this.now() < this.gateCache.expiresAt) {
+      return this.gateCache.value;
+    }
+    if (!this.gateInflight) {
+      this.gateInflightToken = token;
+      this.gateInflight = (async () => {
+        try {
+          const open = (await this.bduCall(() => this.service.getGateStatus(token))) === true;
+          this.gateCache = { value: open, expiresAt: this.now() + this.gateTtlMs };
+          return open;
+        } finally {
+          this.gateInflight = null;
+        }
+      })();
+    }
+    try {
+      return await this.gateInflight;
+    } catch (error) {
+      // Lỗi (401/5xx) không được gán cho mọi run: chỉ run dùng token vừa gọi
+      // phải xử lý (refresh), các run khác coi như cổng còn đóng và thử lại.
+      if (this.gateInflightToken === token) throw error;
+      return false;
+    }
   }
 
   serialize(run) {
@@ -469,10 +575,10 @@ export class EnrollmentRunManager {
 
     let gateOpen = false;
     try {
-      gateOpen = await this.service.getGateStatus(run.token);
+      gateOpen = await this.checkGate(run.token);
     } catch (error) {
       if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run, { allowPassword: true })) {
-        gateOpen = await this.service.getGateStatus(run.token).catch(() => false);
+        gateOpen = await this.checkGate(run.token).catch(() => false);
       }
     }
     if (!gateOpen) {
@@ -593,7 +699,7 @@ export class EnrollmentRunManager {
     if (!run.password) return { ...base, status: 'no_password' };
 
     try {
-      const next = await this.service.login(run.mssv, run.password);
+      const next = await this.bduCall(() => this.service.login(run.mssv, run.password));
       run.token = next.token;
       if (next.refreshToken) run.refreshToken = next.refreshToken;
       run.tokenExpiresAtMs = tokenExpiresAtFrom(this.now(), next.expiresIn);
@@ -673,7 +779,7 @@ export class EnrollmentRunManager {
     if (!run.password) return 'fatal';
     if ((run.loginAttempts ?? 0) >= MAX_LOGIN_ATTEMPTS) return 'transient';
     try {
-      const next = await this.service.login(run.mssv, run.password);
+      const next = await this.bduCall(() => this.service.login(run.mssv, run.password));
       if (!next?.token) return 'transient';
       run.token = next.token;
       if (next.refreshToken) run.refreshToken = next.refreshToken;
@@ -708,7 +814,7 @@ export class EnrollmentRunManager {
     if (run.refreshToken && (run.refreshCount ?? 0) < 3) {
       run.refreshCount = (run.refreshCount ?? 0) + 1;
       try {
-        const next = await this.service.refreshSession(run.refreshToken);
+        const next = await this.bduCall(() => this.service.refreshSession(run.refreshToken));
         if (next?.token) {
           run.token = next.token;
           if (next.refreshToken) run.refreshToken = next.refreshToken;
@@ -740,7 +846,7 @@ export class EnrollmentRunManager {
     if (typeof this.service.getCatalog !== 'function') return 0;
     let catalog;
     try {
-      catalog = await this.service.getCatalog(run.token, { forceRefresh: true });
+      catalog = await this.bduCall(() => this.service.getCatalog(run.token, { forceRefresh: true }));
     } catch {
       return -1;
     }
@@ -777,12 +883,12 @@ export class EnrollmentRunManager {
     for (let attempt = 0; attempt <= RETRY_BACKOFF.length; attempt += 1) {
       let res;
       try {
-        res = await this.service.registerGroup(run.token, {
+        res = await this.bduCall(() => this.service.registerGroup(run.token, {
           idToHoc: item.idToHoc,
           isChecked,
           svNganh: run.svNganh,
           idRs: run.lastIdRs
-        });
+        }));
       } catch (error) {
         const isAuth = error?.status === 401 || error?.code === 'AUTH_EXPIRED';
         if (isAuth && await this.tryRefresh(run, { allowPassword: true })) {
@@ -922,12 +1028,12 @@ export class EnrollmentRunManager {
         const survivor = victim === a ? b : a;
         this.appendLog(run, 'warning', `${a.maMon} và ${b.maMon} trùng lịch — tự rút ${victim.maMon} (ưu tiên thấp hơn).`);
         // eslint-disable-next-line no-await-in-loop
-        const res = await this.service.registerGroup(run.token, {
+        const res = await this.bduCall(() => this.service.registerGroup(run.token, {
           idToHoc: victim.idToHoc,
           isChecked: false,
           svNganh: run.svNganh,
           idRs: run.lastIdRs
-        }).catch(() => null);
+        })).catch(() => null);
         if (res?.idRs) run.lastIdRs = res.idRs;
         if (res?.isThanhCong !== true) {
           this.appendLog(run, 'warning', `Tự rút ${victim.maMon} thất bại (${res?.rawMessage || 'BDU từ chối'}). Vui lòng rút thủ công.`);
@@ -1003,7 +1109,7 @@ export class EnrollmentRunManager {
       polls += 1;
       try {
         // eslint-disable-next-line no-await-in-loop
-        gateOpen = await this.service.getGateStatus(run.token);
+        gateOpen = await this.checkGate(run.token);
       } catch (error) {
         if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run, { allowPassword: true })) {
           continue;

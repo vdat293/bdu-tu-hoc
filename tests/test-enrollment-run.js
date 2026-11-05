@@ -1,5 +1,5 @@
 ﻿import assert from 'node:assert/strict';
-import { EnrollmentRunManager, EnrollmentRunService } from '../src/modules/enrollment/enrollment-run.service.js';
+import { EnrollmentRunManager, EnrollmentRunService, createBduLimiter } from '../src/modules/enrollment/enrollment-run.service.js';
 
 let clock = 1_000_000;
 const now = () => clock;
@@ -887,6 +887,43 @@ await section('an) resumeActiveRuns fails a run when the credential is missing',
   assert.ok(failed, 'run thiếu credential phải bị đánh dấu failed');
   assert.match(String(failed.fields.error), /mật khẩu/i);
   assert.ok(calls.deleteCredential.includes(row.id));
+});
+
+await section('ao) gate polling is shared by every waiting run instead of per-run', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false, true] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const started = [];
+  for (let i = 0; i < 5; i += 1) {
+    const mssv = `SV50${i}`;
+    // eslint-disable-next-line no-await-in-loop
+    const { run } = await manager.start({ password: 'pw', mssv, token: `tok-${i}`, items: [chinhA], triggerAt });
+    started.push({ run, mssv });
+  }
+  for (const { run, mssv } of started) {
+    // eslint-disable-next-line no-await-in-loop
+    const final = await waitForStatus(manager, run.runId, mssv, ['done', 'failed']);
+    assert.equal(final.status, 'done');
+  }
+  assert.equal(calls.register.length, 5);
+  assert.ok(calls.gate <= 3, `5 run chỉ được dò cổng dùng chung, thực tế ${calls.gate} lần`);
+});
+
+await section('ap) BDU limiter caps concurrent requests and keeps FIFO order', async () => {
+  const limit = createBduLimiter({ maxConcurrent: 2, minIntervalMs: 0, now: () => 0, sleep: async () => {} });
+  const order = [];
+  let active = 0;
+  let peak = 0;
+  await Promise.all(Array.from({ length: 6 }, (_, index) => limit(async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setImmediate(resolve));
+    order.push(index);
+    active -= 1;
+    return index;
+  })));
+  assert.equal(peak, 2, 'không được có quá 2 request cùng lúc');
+  assert.deepEqual(order, [0, 1, 2, 3, 4, 5], 'thứ tự phải là FIFO');
 });
 
 await section('singleton export exists', async () => {

@@ -409,6 +409,12 @@ Một số điều chỉnh cho VPS đơn 2 vCPU / 4GB:
   `/api/vocab`) — xem `src/utils/rate-limit.js`.
 - **Cache**: `SystemSettingsService` cache 5s (per-process); token BDU cache
   theo LRU có trần (`BDU_IDENTITY_CACHE_MAX`, mặc định 20000).
+- **Auto đăng ký (`/enrollment`)**: mọi run đang chờ dùng chung một lần dò
+  cổng (`ENROLLMENT_GATE_TTL_MS`, mặc định 500ms) thay vì mỗi run gọi BDU
+  2 lần/giây. Request ra BDU bị giới hạn bởi
+  `ENROLLMENT_BDU_MAX_CONCURRENT` (mặc định 8) và
+  `ENROLLMENT_BDU_MIN_INTERVAL_MS` (mặc định 25ms ≈ 40 request/giây), nên
+  50–100 run cùng mở cổng vẫn không dồn quá tải lên VPS và BDU.
 - **fb-import**: đã gỡ khỏi runtime (không còn scheduler/route/static). Service
   và script vẫn giữ ở dạng dormant, chỉ chạy tay khi cần (`npm run fb:login`,
   `npm run fb:import`).
