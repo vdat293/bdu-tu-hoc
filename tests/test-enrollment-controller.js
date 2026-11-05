@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { EnrollmentController } from '../src/modules/enrollment/enrollment.controller.js';
 import { BduIdentityService } from '../src/services/bdu-identity.service.js';
 import { priorityStore } from '../src/modules/enrollment/priority-store.js';
@@ -197,27 +198,10 @@ try {
     assert.match(res.body.message, /Ngoài thời gian/);
   });
 
-  await section('submitOtp 400 for malformed code', async () => {
-    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
-    const res = response();
-    await EnrollmentController.submitOtp(reqWith({ params: { id: 'run-1' }, body: { code: '12' } }), res);
-    assert.equal(res.statusCode, 400);
-  });
-
-  await section('submitOtp 409 when run is not waiting for OTP', async () => {
-    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
-    EnrollmentRunService.submitOtp = async () => { throw Object.assign(new Error('Phiên đăng ký không ở trạng thái chờ OTP.'), { status: 409 }); };
-    const res = response();
-    await EnrollmentController.submitOtp(reqWith({ params: { id: 'run-1' }, body: { code: '123456' } }), res);
-    assert.equal(res.statusCode, 409);
-  });
-
-  await section('submitOtp 501 when OTP is not configured yet', async () => {
-    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
-    EnrollmentRunService.submitOtp = async () => { throw Object.assign(new Error('Chức năng OTP chưa được kích hoạt'), { status: 501, code: 'OTP_NOT_CONFIGURED' }); };
-    const res = response();
-    await EnrollmentController.submitOtp(reqWith({ params: { id: 'run-1' }, body: { code: '123456' } }), res);
-    assert.equal(res.statusCode, 501);
+  await section('submitOtp and its route are gone', async () => {
+    assert.equal(EnrollmentController.submitOtp, undefined);
+    const routes = readFileSync(new URL('../src/routes/enrollment.routes.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(routes, /\/otp/);
   });
 
   await section('streamRunEvents returns 404 for unknown run', async () => {

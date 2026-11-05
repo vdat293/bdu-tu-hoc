@@ -242,53 +242,48 @@ await section('d) prereq failure stops that subject but lets other subjects thro
   assert.match(final.summary.that_bai[0].ly_do, /tiên quyết/i);
 });
 
-await section('e) 412 -> otp_required; wrong OTP 5 times -> failed; pending item not re-issued', async () => {
-  const register = async (args) => {
-    if (args.idToHoc === 'A-MAIN' && args.idRs === '') {
-      return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
-    }
-    return okResponse('RS-A');
+await section('e) refresh failure falls back to a password login', async () => {
+  let attempts = 0;
+  const login = async () => { attempts += 1; return { token: 'tok-pw', refreshToken: '' }; };
+  const register = async (args, count) => {
+    if (count === 1) throw Object.assign(new Error('expired'), { status: 401 });
+    return okResponse('RS-' + count);
   };
-  const { manager, calls } = makeManager({ gateSequence: [true], register });
+  const { manager, calls } = makeManager({ gateSequence: [true], login, register, refresh: async () => { throw new Error('refresh dead'); } });
   clock = 1_000_000;
-  const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
-  const waiting = await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
-  assert.equal(waiting.status, 'otp_required');
-
-  for (let i = 0; i < 5; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
-    const result = await manager.submitOtp(run.runId, 'SV001', '000000');
-    assert.equal(result.ok, false);
-  }
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
-  assert.equal(final.status, 'failed');
-  assert.equal(calls.register.length, 1, 'item đang dở không được bắn lại sau khi OTP thất bại');
-});
-
-await section('e2) 412 -> correct OTP resumes the pending item exactly once', async () => {
-  const state = { otpOk: false };
-  const register = async (args) => {
-    if (args.idToHoc === 'A-MAIN' && !state.otpOk) {
-      return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
-    }
-    return okResponse('RS-A');
-  };
-  const { manager, calls } = makeManager({ gateSequence: [true], register });
-  manager.service.verifyOtp = async (token, code) => {
-    if (code === '123456') state.otpOk = true;
-    return { ok: code === '123456' };
-  };
-  clock = 1_000_000;
-  const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
-  await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
-  const result = await manager.submitOtp(run.runId, 'SV001', '123456');
-  assert.equal(result.ok, true);
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'ref', items: [chinhA], triggerAt: new Date(clock + 1_000).toISOString() });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
-  assert.equal(calls.register.length, 2, 'item dở phải được re-issue sau khi OTP đúng');
-  assert.equal(calls.register[1].idToHoc, 'A-MAIN');
+  assert.equal(calls.register.at(-1).token, 'tok-pw');
+});
+
+await section('f2) 412 logs in again and retries the item exactly once', async () => {
+  let res412 = 1;
+  const register = async () => (res412-- > 0
+    ? { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' }
+    : okResponse('RS-ok'));
+  const { manager, calls } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(clock + 1_000).toISOString() });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(calls.register.length, 2);
+  assert.ok(calls.login.length >= 1);
+});
+
+await section('f3) 412 twice fails the item but lets the next subject run (no 5-minute wait)', async () => {
+  const register = async (args) => (args.idToHoc === 'A-MAIN'
+    ? { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' }
+    : okResponse('RS-B'));
+  const { manager } = makeManager({ gateSequence: [true], register });
+  clock = 1_000_000;
+  const started = clock;
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt: new Date(clock + 1_000).toISOString() });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.match(final.summary.that_bai[0].ly_do, /OTP/);
+  assert.equal(final.summary.thanh_cong.length, 1);
+  assert.ok(clock - started < 60_000);
 });
 
 await section('f) transient 5xx retries 3 times then item fails but run continues', async () => {
@@ -362,33 +357,14 @@ await section('j) stop() prevents remaining items from firing', async () => {
   assert.equal(calls.register.length, 0);
 });
 
-await section('k) stop() while waiting for OTP ends the run as stopped, not failed', async () => {
-  const register = async () => ({ httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' });
-  const { manager } = makeManager({ gateSequence: [true], register });
+await section('k) stop() while waiting for the gate ends the run as stopped', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
-  const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
-  await waitForStatus(manager, run.runId, 'SV001', ['otp_required']);
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt: new Date(clock + 60_000).toISOString() });
   manager.stop(run.runId, 'SV001');
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'failed']);
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'done', 'failed']);
   assert.equal(final.status, 'stopped');
-});
-
-await section('l) 412 during a fallback attempt fails the run with OTP context instead of "hết chỗ"', async () => {
-  const register = async (args) => {
-    if (args.idToHoc === 'A-MAIN') return failResponse('Đã hết chỉ tiêu');
-    if (args.idToHoc === 'A-BACKUP-2') {
-      return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
-    }
-    return okResponse('RS-B');
-  };
-  const { manager } = makeManager({ gateSequence: [true], register });
-  clock = 1_000_000;
-  const triggerAt = new Date(clock + 1_000).toISOString();
-  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, backupA2], triggerAt });
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
-  assert.equal(final.status, 'failed');
-  assert.match(String(final.error), /OTP/i);
+  assert.equal(calls.register.length, 0);
 });
 
 await section('m) autoFix only records withdrawn courses when BDU confirms the withdraw', async () => {
@@ -437,16 +413,17 @@ await section('o) 401 while polling the gate refreshes the session and continues
   assert.equal(calls.register[0].token, 'tok-refreshed');
 });
 
-await section('p) token expiry without a working refresh fails the run and alerts Discord', async () => {
+await section('p) token expiry without a working refresh or password fails the run and alerts Discord', async () => {
   const gateImpl = () => { throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' }); };
   const refresh = async () => { throw new Error('refresh token dead'); };
-  const { manager, calls } = makeManager({ gateImpl, refresh });
+  const login = async () => { throw Object.assign(new Error('bad password'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
+  const { manager, calls } = makeManager({ gateImpl, refresh, login });
   clock = 1_000_000;
   const triggerAt = new Date(clock + 1_000).toISOString();
   const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-dead', items: [chinhA], triggerAt });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
   assert.equal(final.status, 'failed');
-  assert.match(String(final.error), /hết hạn/i);
+  assert.match(String(final.error), /Mật khẩu BDU không đúng/);
   assert.equal(calls.notify.length, 1, 'phải enqueue cảnh báo Discord');
   assert.equal(calls.notify[0].kind, 'failed');
   assert.equal(calls.notify[0].mssv, 'SV001');

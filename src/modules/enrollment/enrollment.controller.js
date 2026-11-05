@@ -9,7 +9,7 @@ import { bearerToken } from '../_shared/bearer-token.js';
 import { validatePriorityItems, assignOrder } from './enrollment-priority.js';
 import { priorityStore } from './priority-store.js';
 import { EnrollmentRunService } from './enrollment-run.service.js';
-import { enrollmentService, EnrollmentBduError, OtpUnavailableError } from './enrollment.service.js';
+import { enrollmentService, EnrollmentBduError } from './enrollment.service.js';
 import { resolveSchedule } from './enrollment-schedule.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
@@ -255,20 +255,6 @@ export const EnrollmentController = {
       return res.json({ result: true, data: run });
     } catch (error) {
       return sendError(res, error, 'Không dừng được lượt đăng ký.');
-    }
-  },
-
-  async submitOtp(req, res) {
-    try {
-      const mssv = await resolveMssv(req);
-      const result = await EnrollmentRunService.submitOtp(req.params?.id, mssv, req.body?.code);
-      if (!result) return res.status(404).json({ result: false, message: 'Không tìm thấy lượt đăng ký hoặc lượt này thuộc tài khoản khác.' });
-      return res.json({ result: true, data: result });
-    } catch (error) {
-      if (error instanceof OtpUnavailableError || error?.code === 'OTP_NOT_CONFIGURED') {
-        return res.status(501).json({ result: false, message: error.message, code: 'OTP_NOT_CONFIGURED' });
-      }
-      return sendError(res, error, 'Không gửi được OTP.');
     }
   },
 

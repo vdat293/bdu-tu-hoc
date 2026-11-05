@@ -8,7 +8,6 @@
 import { randomUUID } from 'node:crypto';
 import {
   classifyRegisterResult,
-  OtpUnavailableError,
   EnrollmentService
 } from './enrollment.service.js';
 import { pickFallbacks } from './enrollment-priority.js';
@@ -16,10 +15,11 @@ import { parseTkb, groupsConflict } from './enrollment-tkb.js';
 import { priorityStore } from './priority-store.js';
 import { EnrollmentNotifyService } from './enrollment-notify.service.js';
 
-const ACTIVE_STATUSES = new Set(['scheduled', 'running', 'otp_required']);
+const ACTIVE_STATUSES = new Set(['scheduled', 'running']);
+// Rows in DB from before the OTP removal may still carry 'otp_required'. They
+// are treated as recoverable so getLatestForStudent can close them as failed.
+const RECOVERABLE_STATUSES = new Set(['scheduled', 'running', 'otp_required']);
 const MAX_LOGS = 300;
-const OTP_WAIT_MS = 5 * 60 * 1000;
-const MAX_OTP_ATTEMPTS = 5;
 const RETRY_BACKOFF = [200, 500, 1200];
 const GATE_LIMIT_AFTER_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
@@ -162,7 +162,7 @@ export class EnrollmentRunManager {
     if (!row) return null;
     const live = this.runs.get(String(row.id));
     if (live) return this.serialize(live);
-    if (ACTIVE_STATUSES.has(row.status)) {
+    if (RECOVERABLE_STATUSES.has(row.status)) {
       const summary = { ...(row.summary && typeof row.summary === 'object' ? row.summary : {}), reason: 'server_restart' };
       const finishedAt = nowIso();
       try {
@@ -219,9 +219,6 @@ export class EnrollmentRunManager {
       summary: null,
       error: null,
       stopRequested: false,
-      pendingItem: null,
-      otpAttempts: 0,
-      otpResult: null,
       lastIdRs: '',
       refreshCount: 0,
       lastRefreshAt: this.now(),
@@ -253,32 +250,6 @@ export class EnrollmentRunManager {
     this.updateRun(run, {});
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     return this.serialize(run);
-  }
-
-  async submitOtp(runId, mssv, code) {
-    const digits = String(code ?? '').trim();
-    if (!/^\d{6}$/.test(digits)) throw httpError(400, 'Mã OTP phải gồm đúng 6 chữ số.');
-    const run = this.runs.get(String(runId));
-    if (!run || run.mssv !== String(mssv)) return null;
-    if (run.status !== 'otp_required') throw httpError(409, 'Phiên đăng ký không ở trạng thái chờ OTP.');
-    if (run.otpAttempts >= MAX_OTP_ATTEMPTS) throw httpError(409, 'Đã vượt số lần nhập OTP cho phép.');
-
-    let result;
-    try {
-      result = await this.service.verifyOtp(run.token, digits);
-    } catch (error) {
-      if (error?.code === 'OTP_NOT_CONFIGURED' || error instanceof OtpUnavailableError) throw error;
-      throw httpError(502, 'Không xác thực được OTP với máy chủ BDU.');
-    }
-    if (result?.ok) {
-      run.otpResult = { ok: true };
-      this.appendLog(run, 'success', 'OTP hợp lệ. Tiếp tục đăng ký.');
-      return { ok: true, attemptsLeft: Math.max(0, MAX_OTP_ATTEMPTS - run.otpAttempts) };
-    }
-    run.otpAttempts += 1;
-    this.appendLog(run, 'warning', `OTP không hợp lệ (lần ${run.otpAttempts}/${MAX_OTP_ATTEMPTS}).`);
-    if (run.otpAttempts >= MAX_OTP_ATTEMPTS) run.otpResult = { ok: false, fatal: true };
-    return { ok: false, attemptsLeft: Math.max(0, MAX_OTP_ATTEMPTS - run.otpAttempts) };
   }
 
   subscribe(runId, listener) {
@@ -365,21 +336,26 @@ export class EnrollmentRunManager {
   }
 
   // A run can outlive the 5-hour access token (e.g. scheduled today for
-  // tomorrow). Refresh once per auth failure using the RAM-only refresh token.
+  // tomorrow). Try the RAM-only refresh token first; if that is dead, fall
+  // back to a full password login (also RAM-only).
   async tryRefresh(run) {
-    if (!run.refreshToken || (run.refreshCount ?? 0) >= 3) return false;
-    run.refreshCount = (run.refreshCount ?? 0) + 1;
-    try {
-      const next = await this.service.refreshSession(run.refreshToken);
-      if (!next?.token) return false;
-      run.token = next.token;
-      if (next.refreshToken) run.refreshToken = next.refreshToken;
-      run.lastRefreshAt = this.now();
-      this.appendLog(run, 'info', 'Đã gia hạn phiên BDU để tiếp tục chờ/đăng ký.');
-      return true;
-    } catch {
-      return false;
+    if (run.refreshToken && (run.refreshCount ?? 0) < 3) {
+      run.refreshCount = (run.refreshCount ?? 0) + 1;
+      try {
+        const next = await this.service.refreshSession(run.refreshToken);
+        if (next?.token) {
+          run.token = next.token;
+          if (next.refreshToken) run.refreshToken = next.refreshToken;
+          run.lastRefreshAt = this.now();
+          this.appendLog(run, 'info', 'Đã gia hạn phiên BDU để tiếp tục chờ/đăng ký.');
+          return true;
+        }
+      } catch {
+        /* fall through to a password login */
+      }
     }
+    if (!run.password) return false;
+    return (await this.loginWithPassword(run)) === 'ok';
   }
 
   /**
@@ -480,26 +456,8 @@ export class EnrollmentRunManager {
     }
 
     if (outcome.cls === 'otp') {
-      this.updateRun(run, { status: 'otp_required' });
-      run.pendingItem = item;
-      run.otpAttempts = 0;
-      run.otpResult = null;
-      this.emit(run, { type: 'otp_required', pendingIdToHoc: item.idToHoc });
-      const otpDeadline = this.now() + OTP_WAIT_MS;
-      while (!run.otpResult && !run.stopRequested && this.now() < otpDeadline) {
-        await this.sleep(500);
-      }
-      if (run.stopRequested) { this.appendLog(run, 'warning', 'Đã dừng khi đang chờ OTP.'); return 'stopped'; }
-      if (!run.otpResult?.ok) {
-        this.recordItem(run, item, 'failed', 'Xác thực OTP thất bại');
-        return 'Xác thực OTP thất bại';
-      }
-      outcome = await this.attemptRegister(run, item, true);
-      if (outcome.cls === 'otp') {
-        // OTP accepted but the action still demands OTP — do not loop forever.
-        this.recordItem(run, item, 'failed', 'Máy chủ vẫn yêu cầu OTP sau khi xác thực');
-        return 'Máy chủ vẫn yêu cầu OTP';
-      }
+      const login = await this.loginWithPassword(run);
+      if (login === 'ok') outcome = await this.attemptRegister(run, item, true);
     }
 
     if (outcome.cls === 'thanh_cong') {
@@ -523,12 +481,17 @@ export class EnrollmentRunManager {
           break;
         }
         if (fb.cls === 'otp') {
-          this.appendLog(run, 'error', 'Máy chủ yêu cầu OTP khi thử nhóm dự phòng — dừng lượt chạy để bạn xác thực thủ công.');
-          return 'Máy chủ yêu cầu OTP khi thử dự phòng';
+          this.appendLog(run, 'error', 'Nhóm dự phòng bị yêu cầu OTP — thử nhóm dự phòng kế tiếp.');
+          continue;
         }
         // seat_full / rejected / transient / schedule_conflict → try next backup
       }
       this.recordItem(run, item, 'failed', 'hết chỗ (kể cả dự phòng)');
+      return null;
+    }
+
+    if (outcome.cls === 'otp') {
+      this.recordItem(run, item, 'failed', 'BDU yêu cầu OTP — không thể tự xử lý, vui lòng đăng ký thủ công');
       return null;
     }
 

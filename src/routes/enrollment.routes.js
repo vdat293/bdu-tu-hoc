@@ -17,7 +17,6 @@ export function registerEnrollmentRoutes(router) {
   router.get('/enrollment/runs/latest', ApiController.getLatestRun);
   router.get('/enrollment/runs/:id', ApiController.getRun);
   router.post('/enrollment/runs/:id/stop', ApiController.stopRun);
-  router.post('/enrollment/runs/:id/otp', ApiController.submitOtp);
   router.get('/enrollment/runs/:id/events', ApiController.streamRunEvents);
   router.get('/enrollment/session', ApiController.checkSession);
 }
