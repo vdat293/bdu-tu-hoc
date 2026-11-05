@@ -6,6 +6,7 @@
 import { ApiController } from './_shared/http-deps.js';
 
 export function registerEnrollmentRoutes(router) {
+  router.get('/internal/enrollment/dkmh', ApiController.internalDkmh);
   router.get('/enrollment/priority', ApiController.getPriority);
   router.get('/enrollment/schedule', ApiController.getEnrollmentSchedule);
   router.put('/enrollment/priority', ApiController.replacePriority);

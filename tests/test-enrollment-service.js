@@ -298,6 +298,7 @@ await section('refreshSession exchanges a refresh token for a fresh access token
   assert.equal(calls[0].url, `${BASE}/auth/login`);
   assert.equal(next.token, 'new-token');
   assert.equal(next.refreshToken, 'refresh-new');
+  assert.equal(next.expiresIn, 17999);
 });
 
 await section('refreshSession rejects when BDU refuses the refresh token', async () => {
@@ -312,10 +313,10 @@ await section('refreshSession rejects when BDU refuses the refresh token', async
 
 await section('login exchanges MSSV + password for a token', async () => {
   const { calls, fetchImpl } = createFetchMock({
-    [`POST ${BASE}/auth/login`]: { access_token: 'tok-new', refresh_token: 'ref-new' }
+    [`POST ${BASE}/auth/login`]: { access_token: 'tok-new', refresh_token: 'ref-new', expires_in: 18000 }
   });
   const result = await new EnrollmentService({ fetchImpl }).login('24050126', 'secret');
-  assert.deepEqual(result, { token: 'tok-new', refreshToken: 'ref-new' });
+  assert.deepEqual(result, { token: 'tok-new', refreshToken: 'ref-new', expiresIn: 18000 });
   assert.equal(calls[0].url, `${BASE}/auth/login`);
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[0].options.headers['Content-Type'], 'application/x-www-form-urlencoded');

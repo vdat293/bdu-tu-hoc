@@ -5,8 +5,8 @@ let clock = 1_000_000;
 const now = () => clock;
 const sleep = async (ms) => { clock += ms; await new Promise((resolve) => setImmediate(resolve)); };
 
-const waitForStatus = async (manager, runId, mssv, statuses) => {
-  for (let i = 0; i < 3000; i += 1) {
+const waitForStatus = async (manager, runId, mssv, statuses, maxIterations = 3000) => {
+  for (let i = 0; i < maxIterations; i += 1) {
     const serialized = manager.getForStudent(runId, mssv);
     if (serialized && statuses.includes(serialized.status)) return serialized;
     await sleep(500);
@@ -445,9 +445,9 @@ await section('n) long wait keeps the token fresh by refreshing proactively', as
     login: async () => ({ token: 'tok-refreshed', refreshToken: 'refresh-1' })
   });
   clock = 1_000_000;
-  const triggerAt = new Date(clock + 90 * 60_000).toISOString();
+  const triggerAt = new Date(clock + 9 * 60 * 60_000).toISOString();
   const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'refresh-1', items: [chinhA], triggerAt });
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed'], 20_000);
   assert.equal(final.status, 'done');
   assert.ok(calls.refresh.length >= 1, 'phải refresh token trong lúc chờ dài');
   assert.equal(calls.register[0].token, 'tok-refreshed', 'đăng ký phải dùng token mới');
@@ -734,6 +734,52 @@ await section('af) a late start with a closed gate still waits a fresh window be
   assert.equal(final.status, 'failed');
   assert.ok(calls.gate > 1, 'không được fail ngay khi deadline cũ đã trôi qua');
   assert.equal(calls.register.length, 0);
+});
+
+await section('ag) testActiveCredentials reports no active run', async () => {
+  const { manager } = makeManager({ gateSequence: [false] });
+  const result = await manager.testActiveCredentials('SV999');
+  assert.deepEqual(result, { active: false });
+});
+
+await section('ah) testActiveCredentials tests the stored password and returns a fresh token', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 60 * 60_000).toISOString();
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', items: [chinhA], triggerAt });
+  const result = await manager.testActiveCredentials('SV001');
+  assert.equal(result.active, true);
+  assert.equal(result.status, 'active');
+  assert.equal(result.token, 'tok-login');
+  assert.deepEqual(calls.login.at(-1), { mssv: 'SV001', password: 'pw' });
+  assert.equal(manager.runs.get(run.runId).token, 'tok-login');
+  manager.stop(run.runId, 'SV001');
+});
+
+await section('ai) testActiveCredentials reports inactive on a wrong password', async () => {
+  const login = async () => { throw Object.assign(new Error('Sai mật khẩu'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
+  const { manager } = makeManager({ gateSequence: [false], login });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 60 * 60_000).toISOString();
+  const { run } = await manager.start({ password: 'wrong', mssv: 'SV001', token: 'tok-old', items: [chinhA], triggerAt });
+  const result = await manager.testActiveCredentials('SV001');
+  assert.equal(result.active, true);
+  assert.equal(result.status, 'inactive');
+  assert.match(result.message, /Sai mật khẩu/);
+  manager.stop(run.runId, 'SV001');
+});
+
+await section('aj) testActiveCredentials does not re-login while the run is registering', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 60 * 60_000).toISOString();
+  const { run } = await manager.start({ password: 'pw', mssv: 'SV001', token: 'tok-old', items: [chinhA], triggerAt });
+  manager.runs.get(run.runId).status = 'running';
+  const result = await manager.testActiveCredentials('SV001');
+  assert.equal(result.status, 'running');
+  assert.equal(result.token, 'tok-old');
+  assert.equal(calls.login.length, 0, 'đang chạy thì không login lại');
+  manager.stop(run.runId, 'SV001');
 });
 
 await section('singleton export exists', async () => {

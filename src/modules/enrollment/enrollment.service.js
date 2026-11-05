@@ -265,7 +265,7 @@ export class EnrollmentService {
     if (!data?.access_token) {
       throw new EnrollmentBduError('Phiên đăng nhập BDU đã hết hạn. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
     }
-    return { token: data.access_token, refreshToken: data.refresh_token || refreshToken };
+    return { token: data.access_token, refreshToken: data.refresh_token || refreshToken, expiresIn: Number(data.expires_in) || null };
   }
 
   // Đăng nhập lại bằng MSSV + mật khẩu (password grant). Mật khẩu chỉ đi qua
@@ -304,7 +304,7 @@ export class EnrollmentService {
       }
       throw new EnrollmentBduError('Phản hồi đăng nhập từ BDU không hợp lệ.', { status: 502, code: 'BDU_BAD_RESPONSE' });
     }
-    return { token: data.access_token, refreshToken: data.refresh_token || '' };
+    return { token: data.access_token, refreshToken: data.refresh_token || '', expiresIn: Number(data.expires_in) || null };
   }
 
   async registerGroup(token, { idToHoc, isChecked, svNganh = 1, idRs = '' } = {}) {

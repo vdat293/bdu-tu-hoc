@@ -5,6 +5,7 @@
  */
 
 import { BduIdentityService } from '../../services/bdu-identity.service.js';
+import crypto from 'node:crypto';
 import { bearerToken } from '../_shared/bearer-token.js';
 import { validatePriorityItems, assignOrder } from './enrollment-priority.js';
 import { priorityStore } from './priority-store.js';
@@ -17,6 +18,16 @@ const httpError = (status, message, code) => Object.assign(new Error(message), {
 
 async function resolveMssv(req) {
   return BduIdentityService.resolveVerifiedMssv(req.headers.authorization || '');
+}
+
+function hasValidInternalSecret(req) {
+  const expected = String(process.env.ENROLLMENT_INTERNAL_SECRET || '');
+  if (!expected) return false;
+  const provided = String(req.headers?.['x-internal-secret'] || '');
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // Best-effort: lưu ưu tiên không được fail vì catalog BDU. Nếu thiếu token hoặc
@@ -199,11 +210,46 @@ export const EnrollmentController = {
         return res.status(400).json({ result: false, message: 'Mật khẩu BDU quá dài.' });
       }
 
+      // Nếu đã có lượt active, trả 409 trước khi login thử — tránh xoay token
+      // của lượt đang chạy bằng một lần đăng nhập không cần thiết.
+      const activeInfo = EnrollmentRunService.getActiveRunInfo(mssv);
+      if (activeInfo) {
+        return res.status(409).json({
+          result: false,
+          message: 'Đang có một lượt đăng ký chạy cho tài khoản này.',
+          data: { runId: activeInfo.runId }
+        });
+      }
+
+      // Xác thực mật khẩu ngay lúc kích hoạt (không đợi T−5). Sai mật khẩu thì
+      // không tạo run; BDU lỗi tạm thời cũng fail-closed để tránh tạo run chắc
+      // chắn hỏng. Token mới được dùng luôn cho run.
+      let verified;
+      try {
+        verified = await enrollmentService.login(mssv, password);
+      } catch (error) {
+        if (error?.status === 401) {
+          return res.status(401).json({
+            result: false,
+            code: 'INVALID_CREDENTIALS',
+            message: error.message || 'Mật khẩu BDU không đúng.'
+          });
+        }
+        return res.status(502).json({
+          result: false,
+          code: error?.code || 'BDU_UNAVAILABLE',
+          message: 'Không xác thực được mật khẩu với BDU. Thử lại sau.'
+        });
+      }
+      const verifiedToken = verified.token;
+      const verifiedRefreshToken = verified.refreshToken
+        || (typeof req.body?.refreshToken === 'string' ? req.body.refreshToken.slice(0, 4096) : '');
+
       // Enrich snapshot with TKB so the post-run conflict pass can work.
       const wantsAutoFix = autoFixScheduleConflict === true;
       if (wantsAutoFix) {
         try {
-          const catalog = await enrollmentService.getCatalog(token, { forceRefresh: false });
+          const catalog = await enrollmentService.getCatalog(verifiedToken, { forceRefresh: false });
           const tkbById = new Map((catalog?.dsNhomTo ?? []).map((g) => [g.idToHoc, g.tkb]));
           items = items.map((item) => ({ ...item, tkb: tkbById.get(item.idToHoc) ?? '' }));
         } catch {
@@ -213,13 +259,14 @@ export const EnrollmentController = {
 
       const { run, reused } = await EnrollmentRunService.start({
         mssv,
-        token,
-        refreshToken: typeof req.body?.refreshToken === 'string' ? req.body.refreshToken.slice(0, 4096) : '',
+        token: verifiedToken,
+        refreshToken: verifiedRefreshToken,
         password,
         items,
         triggerAt: triggerDate.toISOString(),
         autoFixScheduleConflict: wantsAutoFix,
-        svNganh: 1
+        svNganh: 1,
+        tokenExpiresIn: verified.expiresIn
       });
       if (reused) {
         return res.status(409).json({ result: false, message: 'Đang có một lượt đăng ký chạy cho tài khoản này.', data: { runId: run.runId } });
@@ -286,6 +333,73 @@ export const EnrollmentController = {
       return res.json({ result: true, data: run });
     } catch (error) {
       return sendError(res, error, 'Không dừng được lượt đăng ký.');
+    }
+  },
+
+  // API nội bộ cho bot Discord: kiểm tra lượt auto đang giữ mật khẩu trong RAM,
+  // login thử, rồi trả danh sách môn đã đăng ký. Bảo vệ bằng shared secret;
+  // tuyệt đối không trả mật khẩu/token ra response.
+  async internalDkmh(req, res) {
+    try {
+      if (!process.env.ENROLLMENT_INTERNAL_SECRET) {
+        return res.status(503).json({ result: false, message: 'Internal API chưa cấu hình.' });
+      }
+      if (!hasValidInternalSecret(req)) {
+        return res.status(403).json({ result: false, message: 'Forbidden.' });
+      }
+      const mssv = String(req.query?.mssv || '').trim();
+      if (!/^\d{6,}$/.test(mssv)) {
+        return res.status(400).json({ result: false, message: 'MSSV không hợp lệ.' });
+      }
+      res.setHeader('Cache-Control', 'no-store');
+
+      const active = await EnrollmentRunService.testActiveCredentials(mssv);
+      if (!active.active) {
+        return res.json({ result: true, data: { active: false } });
+      }
+      if (active.status === 'inactive') {
+        return res.json({ result: true, data: { active: true, status: 'Inactive', mssv, runStatus: active.runStatus, message: active.message } });
+      }
+      if (active.status === 'unavailable' || active.status === 'no_password') {
+        return res.json({ result: true, data: { active: true, status: 'Unknown', mssv, runStatus: active.runStatus, message: active.message } });
+      }
+
+      let courses = [];
+      let totalCredits = 0;
+      let message;
+      try {
+        const registered = await enrollmentService.getRegistered(active.token);
+        const rows = (registered.dsKqdkmh || []).filter((row) => row?.to_hoc && row.is_da_rut_mon_hoc !== true);
+        courses = rows.map((row) => {
+          const group = row.to_hoc;
+          return {
+            maMon: String(group.ma_mon || ''),
+            tenMon: String(group.ten_mon || ''),
+            soTc: Number(group.so_tc) || 0,
+            nhomTo: String(group.nhom_to || ''),
+            lop: String(group.lop || '')
+          };
+        });
+        totalCredits = courses.reduce((sum, course) => sum + course.soTc, 0);
+      } catch {
+        message = 'Đăng nhập đúng nhưng chưa tải được danh sách môn.';
+      }
+
+      return res.json({
+        result: true,
+        data: {
+          active: true,
+          status: active.status === 'running' ? 'Running' : 'Active',
+          mssv,
+          runStatus: active.runStatus,
+          triggerAt: active.triggerAt,
+          courses,
+          totalCredits,
+          ...(message ? { message } : {})
+        }
+      });
+    } catch (error) {
+      return sendError(res, error, 'Không kiểm tra được đăng ký môn học.');
     }
   },
 

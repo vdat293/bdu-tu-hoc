@@ -28,6 +28,9 @@ const commands = [
     .setName('trang-thai')
     .setDescription('Xem trạng thái nhắc lịch của bạn'),
   new SlashCommandBuilder()
+    .setName('dkmh')
+    .setDescription('Xem môn đã đăng ký và kiểm tra đăng nhập (chỉ khi có lượt auto đang chạy)'),
+  new SlashCommandBuilder()
     .setName('huy')
     .setDescription('Hủy liên kết Discord + tắt nhắc qua Discord')
 ]
@@ -59,6 +62,32 @@ function formatUpcoming(rows) {
       return `${i + 1}. **${r.course_code || ''} — ${r.course_name || ''}**\n   📅 ${date} ${r.start_time}-${r.end_time} · 🏫 ${r.room || 'Chưa xếp phòng'} · 👨‍🏫 ${r.lecturer || ''}`;
     })
     .join('\n');
+}
+
+function formatDkmh(data, mssv) {
+  if (!data?.active) {
+    return 'Hiện tại bạn không có lượt auto đăng ký môn học nào đang chạy.\nVào web `/enrollment` để chọn môn và kích hoạt.';
+  }
+  const status = data.status === 'Active'
+    ? '✅ Active — đăng nhập thử thành công'
+    : data.status === 'Inactive'
+      ? '❌ Inactive — mật khẩu không còn đúng'
+      : data.status === 'Running'
+        ? '⏳ Đang đăng ký — không test lại mật khẩu lúc này'
+        : '⚠️ Chưa xác định';
+  const lines = [`📚 **Đăng ký môn học — MSSV ${mssv}**`, `Trạng thái: ${status}`];
+  if (data.message) lines.push(`ℹ️ ${data.message}`);
+  if (data.courses?.length) {
+    lines.push(`Đã đăng ký: **${data.courses.length} môn · ${data.totalCredits} tín chỉ**`);
+    for (const course of data.courses.slice(0, 20)) {
+      const nhom = course.nhomTo ? `, nhóm ${course.nhomTo}` : '';
+      lines.push(`${course.maMon} — ${course.tenMon || '—'} (${course.soTc} TC${nhom})`);
+    }
+    if (data.courses.length > 20) lines.push(`… và ${data.courses.length - 20} môn khác`);
+  } else if (data.status === 'Active') {
+    lines.push('Chưa có môn nào được đăng ký.');
+  }
+  return lines.join('\n').slice(0, 1900);
 }
 
 async function main() {
@@ -133,6 +162,33 @@ async function main() {
             : '⏸️ Nhận thông báo đang tắt. Vào web bật lại khi cần nhé.',
           ephemeral: true
         });
+        return;
+      }
+
+      if (interaction.commandName === 'dkmh') {
+        const internalUrl = process.env.INTERNAL_API_URL || 'http://127.0.0.1:3000';
+        const secret = process.env.ENROLLMENT_INTERNAL_SECRET || '';
+        if (!secret) {
+          await interaction.reply({ content: 'Chưa cấu hình kiểm tra nội bộ trên server.', ephemeral: true });
+          return;
+        }
+        await interaction.deferReply({ ephemeral: true });
+        try {
+          const url = new URL('/api/internal/enrollment/dkmh', internalUrl);
+          url.searchParams.set('mssv', mssv);
+          const response = await fetch(url, {
+            headers: { 'x-internal-secret': secret },
+            signal: AbortSignal.timeout(20_000)
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !payload?.result) {
+            throw new Error(payload?.message || `HTTP ${response.status}`);
+          }
+          await interaction.editReply({ content: formatDkmh(payload.data, mssv) });
+        } catch (error) {
+          await interaction.editReply({ content: `❌ Không kiểm tra được: ${error.message}` });
+        }
+        return;
       }
     } catch (err) {
       console.error('[discord-bot] interaction error:', err.message);

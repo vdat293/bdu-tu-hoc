@@ -8,13 +8,14 @@ import { enrollmentService } from '../src/modules/enrollment/enrollment.service.
 
 const originalResolve = BduIdentityService.resolveVerifiedMssv;
 const originalStore = { ...priorityStore };
-const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, getLatestForStudent: EnrollmentRunService.getLatestForStudent, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe };
+const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, getLatestForStudent: EnrollmentRunService.getLatestForStudent, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe, testActiveCredentials: EnrollmentRunService.testActiveCredentials };
 const originalBdu = {
   getCatalog: enrollmentService.getCatalog,
   getRegistered: enrollmentService.getRegistered,
   getFilters: enrollmentService.getFilters,
   registerGroup: enrollmentService.registerGroup,
-  getStudentClass: enrollmentService.getStudentClass
+  getStudentClass: enrollmentService.getStudentClass,
+  login: enrollmentService.login
 };
 
 function response() {
@@ -34,10 +35,10 @@ function response() {
   };
 }
 
-const reqWith = ({ authorization = 'Bearer tok', params, body, query } = {}) => {
+const reqWith = ({ authorization = 'Bearer tok', headers, params, body, query } = {}) => {
   let closeHandler = null;
   const request = {
-    headers: authorization ? { authorization } : {},
+    headers: { ...(authorization ? { authorization } : {}), ...(headers || {}) },
     params,
     body,
     query,
@@ -54,6 +55,7 @@ const restore = () => {
   Object.assign(priorityStore, originalStore);
   Object.assign(EnrollmentRunService, originalMgr);
   Object.assign(enrollmentService, originalBdu);
+  delete process.env.ENROLLMENT_INTERNAL_SECRET;
 };
 const section = async (name, fn) => {
   try { await fn(); console.log('  ok -', name); } catch (error) { console.error('  FAIL -', name); throw error; }
@@ -173,20 +175,45 @@ try {
   await section('startRun 409 when an active run exists for the student', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
+    enrollmentService.login = async () => ({ token: 'tok-verified', refreshToken: 'ref-verified', expiresIn: 18000 });
     EnrollmentRunService.start = async () => ({ run: { runId: 'run-1', status: 'running' }, reused: true });
     const res = response();
     await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
     assert.equal(res.statusCode, 409);
   });
 
-  await section('startRun 202 returns runId', async () => {
+  await section('startRun 401 when the password is wrong and does not create a run', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    priorityStore.listPriorities = async () => [{ maMon: 'AAA', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1 }];
+    enrollmentService.login = async () => {
+      throw Object.assign(new Error('Sai mật khẩu'), { status: 401, code: 'INVALID_CREDENTIALS' });
+    };
+    let started = false;
+    EnrollmentRunService.start = async () => { started = true; return { run: {}, reused: false }; };
+    const res = response();
+    await EnrollmentController.startRun(reqWith({ body: { password: 'wrong', triggerAt: new Date(Date.now() + 3600_000).toISOString() } }), res);
+    assert.equal(res.statusCode, 401);
+    assert.equal(res.body.code, 'INVALID_CREDENTIALS');
+    assert.equal(started, false, 'không được tạo run khi mật khẩu sai');
+  });
+
+  await section('startRun verifies the password and passes the fresh token to the run', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     priorityStore.listPriorities = async () => [{ maMon: 'AAA', tenMon: 'Mon A', idToHoc: 'A-MAIN', loai: 'chinh', thuTu: 1, tkb: 'Thứ 2,tiết 1->3,Ph X,GV G,01/03/27 đến 30/04/27' }];
-    EnrollmentRunService.start = async () => ({ run: { runId: 'run-abc', status: 'scheduled' }, reused: false });
+    enrollmentService.login = async () => ({ token: 'tok-verified', refreshToken: 'ref-verified', expiresIn: 18000 });
+    enrollmentService.getCatalog = async () => ({ dsNhomTo: [] });
+    let startArgs = null;
+    EnrollmentRunService.start = async (args) => {
+      startArgs = args;
+      return { run: { runId: 'run-abc', status: 'scheduled' }, reused: false };
+    };
     const res = response();
     await EnrollmentController.startRun(reqWith({ body: { password: 'pw', triggerAt: new Date(Date.now() + 3600_000).toISOString(), autoFixScheduleConflict: true } }), res);
     assert.equal(res.statusCode, 202);
     assert.equal(res.body.data.runId, 'run-abc');
+    assert.equal(startArgs.token, 'tok-verified');
+    assert.equal(startArgs.refreshToken, 'ref-verified');
+    assert.equal(startArgs.tokenExpiresIn, 18000);
   });
 
   await section('getRun 404 when run belongs to another student', async () => {
@@ -320,6 +347,55 @@ try {
     await EnrollmentController.checkSession(reqWith({}), res);
     assert.equal(res.statusCode, 401);
     assert.equal(res.body.code, 'AUTH_EXPIRED');
+  });
+
+  await section('internalDkmh 503 when the internal secret is not configured', async () => {
+    delete process.env.ENROLLMENT_INTERNAL_SECRET;
+    const res = response();
+    await EnrollmentController.internalDkmh(reqWith({ query: { mssv: '24050126' } }), res);
+    assert.equal(res.statusCode, 503);
+  });
+
+  await section('internalDkmh 403 with a wrong secret', async () => {
+    process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
+    const res = response();
+    await EnrollmentController.internalDkmh(reqWith({ headers: { 'x-internal-secret': 'wrong' }, query: { mssv: '24050126' } }), res);
+    assert.equal(res.statusCode, 403);
+  });
+
+  await section('internalDkmh reports no active auto run', async () => {
+    process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
+    EnrollmentRunService.testActiveCredentials = async () => ({ active: false });
+    const res = response();
+    await EnrollmentController.internalDkmh(reqWith({ headers: { 'x-internal-secret': 'secret-123' }, query: { mssv: '24050126' } }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.active, false);
+  });
+
+  await section('internalDkmh returns Active + registered courses when the test login works', async () => {
+    process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
+    EnrollmentRunService.testActiveCredentials = async () => ({ active: true, status: 'active', token: 'tok-test', runStatus: 'scheduled', triggerAt: '2026-11-05T09:00:00.000Z' });
+    enrollmentService.getRegistered = async () => ({
+      dsKqdkmh: [
+        { is_da_rut_mon_hoc: false, to_hoc: { ma_mon: 'INF1522', ten_mon: 'Dự án nghề cơ bản', so_tc: '2', nhom_to: '01', lop: '27TH03' } },
+        { is_da_rut_mon_hoc: true, to_hoc: { ma_mon: 'OLD', ten_mon: 'Đã rút', so_tc: '3', nhom_to: '02', lop: 'X' } }
+      ]
+    });
+    const res = response();
+    await EnrollmentController.internalDkmh(reqWith({ headers: { 'x-internal-secret': 'secret-123' }, query: { mssv: '24050126' } }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, 'Active');
+    assert.equal(res.body.data.courses.length, 1);
+    assert.equal(res.body.data.totalCredits, 2);
+  });
+
+  await section('internalDkmh reports Inactive when the stored password no longer works', async () => {
+    process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
+    EnrollmentRunService.testActiveCredentials = async () => ({ active: true, status: 'inactive', runStatus: 'scheduled', message: 'Sai mật khẩu' });
+    const res = response();
+    await EnrollmentController.internalDkmh(reqWith({ headers: { 'x-internal-secret': 'secret-123' }, query: { mssv: '24050126' } }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, 'Inactive');
   });
 } finally {
   restore();

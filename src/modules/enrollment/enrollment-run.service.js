@@ -22,9 +22,18 @@ const RECOVERABLE_STATUSES = new Set(['scheduled', 'running', 'otp_required']);
 const MAX_LOGS = 300;
 const RETRY_BACKOFF = [200, 500, 1200];
 const GATE_LIMIT_AFTER_MS = 5 * 60 * 1000;
-const TOKEN_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+// Kiểm tra token định kỳ trong lúc chờ cổng. Token BDU sống ~5h, nên mỗi 8h
+// kiểm tra một lần: nếu đã hết hạn/sắp hết hạn thì refresh, refresh lỗi thì
+// đăng nhập lại bằng mật khẩu đang giữ trong RAM.
+const TOKEN_CHECK_INTERVAL_MS = 8 * 60 * 60 * 1000;
+const TOKEN_EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 const LOGIN_LEAD_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 3;
+
+const tokenExpiresAtFrom = (nowMs, expiresIn) => {
+  const seconds = Number(expiresIn);
+  return Number.isFinite(seconds) && seconds > 0 ? nowMs + seconds * 1000 : null;
+};
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const nowIso = () => new Date().toISOString();
@@ -173,7 +182,7 @@ export class EnrollmentRunManager {
     return serializeStoredRun(row);
   }
 
-  async start({ mssv, token, refreshToken = '', password = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
+  async start({ mssv, token, refreshToken = '', password = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1, tokenExpiresIn = null }) {
     this.prune();
     const studentId = String(mssv || '').trim();
     if (!studentId) throw httpError(401, 'Không xác định được sinh viên cho lượt đăng ký.');
@@ -223,6 +232,8 @@ export class EnrollmentRunManager {
       lastIdRs: '',
       refreshCount: 0,
       lastRefreshAt: this.now(),
+      lastTokenCheckAt: this.now(),
+      tokenExpiresAtMs: tokenExpiresAtFrom(this.now(), tokenExpiresIn),
       authExpired: false,
       staleIdRetried: false
     };
@@ -251,6 +262,63 @@ export class EnrollmentRunManager {
     this.updateRun(run, {});
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     return this.serialize(run);
+  }
+
+  /**
+   * Thông tin an toàn về lượt đang chạy (không trả password/token) — dùng cho
+   * API nội bộ của bot Discord.
+   */
+  getActiveRunInfo(mssv) {
+    const id = this.activeRunByMssv.get(String(mssv));
+    const run = id ? this.runs.get(id) : null;
+    if (!run || !ACTIVE_STATUSES.has(run.status)) return null;
+    return {
+      runId: run.id,
+      status: run.status,
+      triggerAt: new Date(run.triggerAtMs).toISOString(),
+      hasPassword: Boolean(run.password)
+    };
+  }
+
+  /**
+   * Test login bằng mật khẩu đang giữ trong RAM cho lượt active. Chỉ dùng cho
+   * API nội bộ có secret; token trả về chỉ để controller đọc danh sách môn,
+   * không được đưa ra ngoài.
+   */
+  async testActiveCredentials(mssv) {
+    const id = this.activeRunByMssv.get(String(mssv));
+    const run = id ? this.runs.get(id) : null;
+    if (!run || !ACTIVE_STATUSES.has(run.status)) return { active: false };
+
+    const base = {
+      active: true,
+      runId: run.id,
+      runStatus: run.status,
+      triggerAt: new Date(run.triggerAtMs).toISOString()
+    };
+
+    // Đang đăng ký: không login lại để tránh đổi token giữa chừng.
+    if (run.status === 'running') {
+      return { ...base, status: 'running', token: run.token };
+    }
+    if (!run.password) return { ...base, status: 'no_password' };
+
+    try {
+      const next = await this.service.login(run.mssv, run.password);
+      run.token = next.token;
+      if (next.refreshToken) run.refreshToken = next.refreshToken;
+      run.tokenExpiresAtMs = tokenExpiresAtFrom(this.now(), next.expiresIn);
+      run.lastRefreshAt = this.now();
+      run.lastTokenCheckAt = this.now();
+      run.loginAttempts = 0;
+      run.refreshCount = 0;
+      return { ...base, status: 'active', token: next.token };
+    } catch (error) {
+      if (error?.status === 401) {
+        return { ...base, status: 'inactive', message: error.message || 'Mật khẩu BDU không đúng.' };
+      }
+      return { ...base, status: 'unavailable', message: error?.message || 'Không đăng nhập thử được.' };
+    }
   }
 
   subscribe(runId, listener) {
@@ -320,7 +388,11 @@ export class EnrollmentRunManager {
       if (!next?.token) return 'transient';
       run.token = next.token;
       if (next.refreshToken) run.refreshToken = next.refreshToken;
+      run.tokenExpiresAtMs = tokenExpiresAtFrom(this.now(), next.expiresIn);
       run.lastRefreshAt = this.now();
+      run.lastTokenCheckAt = this.now();
+      run.loginAttempts = 0;
+      run.refreshCount = 0;
       run.passwordInvalid = false;
       run.loginRetryAtMs = null;
       this.appendLog(run, 'success', 'Đã kiểm tra và đăng nhập lại BDU trước giờ mở.');
@@ -351,7 +423,11 @@ export class EnrollmentRunManager {
         if (next?.token) {
           run.token = next.token;
           if (next.refreshToken) run.refreshToken = next.refreshToken;
+          run.tokenExpiresAtMs = tokenExpiresAtFrom(this.now(), next.expiresIn);
           run.lastRefreshAt = this.now();
+          run.lastTokenCheckAt = this.now();
+          run.refreshCount = 0;
+          run.loginAttempts = 0;
           this.appendLog(run, 'info', 'Đã gia hạn phiên BDU để tiếp tục chờ/đăng ký.');
           return true;
         }
@@ -574,8 +650,8 @@ export class EnrollmentRunManager {
     if (!run || run.status !== 'scheduled') return;
 
     // Before the scheduled time: do NOT touch the gate. Keep the BDU session
-    // warm (hourly refresh) and re-login with the password 5 minutes before
-    // the trigger so the credentials are proven and the token is fresh.
+    // warm (check every 8 hours) and re-login with the password 5 minutes
+    // before the trigger so the credentials are proven and the token is fresh.
     while (!run.stopRequested && this.now() < run.triggerAtMs) {
       const loginDueMs = run.loginRetryAtMs ?? run.loginAtMs;
       if (!run.loginDone && this.now() >= loginDueMs) {
@@ -587,9 +663,18 @@ export class EnrollmentRunManager {
         }
         if (outcome === 'ok') run.loginDone = true;
       }
-      if (run.refreshToken && this.now() - run.lastRefreshAt >= TOKEN_REFRESH_INTERVAL_MS) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.tryRefresh(run);
+      if (this.now() - (run.lastTokenCheckAt ?? 0) >= TOKEN_CHECK_INTERVAL_MS) {
+        run.lastTokenCheckAt = this.now();
+        const expiresAt = run.tokenExpiresAtMs;
+        const needsRefresh = !expiresAt || this.now() >= expiresAt - TOKEN_EXPIRY_MARGIN_MS;
+        if (needsRefresh) {
+          // eslint-disable-next-line no-await-in-loop
+          const refreshed = await this.tryRefresh(run, { allowPassword: true });
+          if (!refreshed && run.passwordInvalid) {
+            await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' });
+            return;
+          }
+        }
       }
       const remainingMs = run.triggerAtMs - this.now();
       // Sleep in short chunks so "Dừng" is honoured within ~5s even when the
