@@ -338,6 +338,8 @@ export class EnrollmentRunManager {
       summaryAcc: { thanh_cong: [], that_bai: [], fallback: [], rut: [] },
       summary: null,
       error: null,
+      // Môn đã gỡ khỏi danh sách ưu tiên — chặn gọi lặp khi finishRun chạy nhiều lần.
+      cleanedMaMons: new Set(),
       stopRequested: false,
       lastIdRs: '',
       refreshCount: 0,
@@ -1032,6 +1034,26 @@ export class EnrollmentRunManager {
     return [...new Set(subjects)];
   }
 
+  /**
+   * Gỡ khỏi danh sách ưu tiên những môn đã đăng ký thành công. Xoá theo cả
+   * nhóm `ma_mon` (chính + dự phòng) nên danh sách không còn môn đã có.
+   * Lỗi ở đây không được làm hỏng run — chỉ ghi cảnh báo.
+   */
+  async cleanupSuccessfulPriorities(run) {
+    const done = [...new Set((run.summaryAcc?.thanh_cong ?? []).map((e) => e.ma_mon).filter(Boolean))];
+    run.cleanedMaMons ??= new Set();
+    const pending = done.filter((maMon) => !run.cleanedMaMons.has(maMon));
+    if (!pending.length || typeof this.store.deletePrioritiesBySubjects !== 'function') return;
+    try {
+      await this.store.deletePrioritiesBySubjects(run.mssv, pending);
+      pending.forEach((maMon) => run.cleanedMaMons.add(maMon));
+      this.appendLog(run, 'info', `Đã gỡ ${pending.length} môn đã đăng ký khỏi danh sách ưu tiên.`);
+      this.emit(run, { type: 'priority_updated', removedMaMons: pending });
+    } catch (error) {
+      this.appendLog(run, 'warning', `Không gỡ được môn đã đăng ký khỏi danh sách ưu tiên: ${clip(error?.message || error)}`);
+    }
+  }
+
   async autoFixConflicts(run) {
     const succeeded = run.results.filter((r) => r.status === 'success');
     if (succeeded.length < 2) return;
@@ -1181,6 +1203,8 @@ export class EnrollmentRunManager {
   }
 
   async finishRun(run, status, { error } = {}) {
+    // Dọn môn đã đăng ký khỏi danh sách ưu tiên trước khi chốt kết quả.
+    await this.cleanupSuccessfulPriorities(run);
     const summary = {
       thanh_cong: [...run.summaryAcc.thanh_cong],
       that_bai: [...run.summaryAcc.that_bai],

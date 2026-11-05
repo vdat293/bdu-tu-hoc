@@ -55,7 +55,7 @@ const section = async (name, fn) => {
 };
 
 const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null, activeRows = null, credentialPassword = null } = {}) => {
-  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [], deleteCredential: [], credentials: new Map() };
+  const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [], deleteCredential: [], deletePriorities: [], credentials: new Map() };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
   const service = {
@@ -106,7 +106,11 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
     getRun: async () => null,
     getLatestRun: async (mssv) => { calls.latestMssv = mssv; return latestRow; },
     listPriorities: async () => [],
-    replacePriorities: async () => []
+    replacePriorities: async () => [],
+    deletePrioritiesBySubjects: async (mssv, maMons) => {
+      calls.deletePriorities.push({ mssv, maMons });
+      return maMons.length;
+    }
   };
   const notify = {
     notifyRunDone: async (payload) => { calls.notify.push({ kind: 'done', ...payload }); return true; },
@@ -954,6 +958,45 @@ await section('w2) seatFullSubjects dedupes and ignores other reasons', async ()
     }
   });
   assert.deepEqual(subjects, ['AAA']);
+});
+
+await section('w3) a successful run removes the whole subject group', async () => {
+  const made = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok',
+    items: [chinhA, backupA2],
+    triggerAt: new Date(clock + 1_000).toISOString()
+  });
+  await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.deepEqual(made.calls.deletePriorities.at(-1)?.maMons, ['AAA']);
+});
+
+await section('w4) cleanup failure does not fail the run', async () => {
+  const made = makeManager({ gateSequence: [true] });
+  made.manager.store.deletePrioritiesBySubjects = async () => { throw new Error('db down'); };
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+});
+
+await section('w5) priority_updated is emitted once with removed subjects', async () => {
+  const made = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const events = [];
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString()
+  });
+  made.manager.subscribe(run.runId, (event) => events.push(event));
+  await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  const updates = events.filter((event) => event.type === 'priority_updated');
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0].removedMaMons, ['AAA']);
 });
 
 console.log('OK');
