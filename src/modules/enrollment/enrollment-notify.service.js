@@ -33,5 +33,9 @@ export const EnrollmentNotifyService = {
 
   notifyRunFailed({ mssv, runId, message }) {
     return enqueue({ mssv, runId, kind: 'failed', message });
+  },
+
+  notifyWatchSuccess({ mssv, runId, maMon, message }) {
+    return enqueue({ mssv, runId, kind: `watch_ok:${maMon}`, message });
   }
 };

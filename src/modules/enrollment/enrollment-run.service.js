@@ -29,6 +29,10 @@ const TOKEN_CHECK_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const TOKEN_EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 const LOGIN_LEAD_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 3;
+const WATCH_INTERVAL_MS = 60_000;
+const WATCH_GATE_PAUSE_MS = 15 * 60_000;
+const WATCH_HEARTBEAT_MS = 5 * 60_000;
+const WATCH_CATALOG_REFRESH_MS = 10 * 60_000;
 // Trạng thái cổng là chung cho cả trường, nên mọi run đang chờ dùng chung một
 // lần dò: thay vì mỗi run gọi BDU 2 lần/giây (mỗi lần tải cả catalog), chỉ một
 // request mỗi GATE_TTL_MS cho toàn bộ process. 500ms giữ nguyên độ trễ phát
@@ -162,13 +166,16 @@ export function serializeStoredRun(row) {
 }
 
 export class EnrollmentRunManager {
-  constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000, gateTtlMs, bduMaxConcurrent, bduMinIntervalMs } = {}) {
+  constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000, gateTtlMs, bduMaxConcurrent, bduMinIntervalMs, watchIntervalMs } = {}) {
     this.service = service ?? new EnrollmentService();
     this.store = store ?? priorityStore;
     this.notify = notify ?? EnrollmentNotifyService;
     this.sleep = sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = now ?? (() => Date.now());
     this.retentionMs = retentionMs;
+    this.watchIntervalMs = Number.isSafeInteger(watchIntervalMs) && watchIntervalMs >= 1000
+      ? watchIntervalMs
+      : intEnv('ENROLLMENT_WATCH_INTERVAL_MS', WATCH_INTERVAL_MS, 1000);
     this.runs = new Map();
     this.activeRunByMssv = new Map();
     this.listeners = new Map();
@@ -1084,6 +1091,143 @@ export class EnrollmentRunManager {
     return [...new Set(subjects)];
   }
 
+  watchSubjects(run) {
+    return this.seatFullSubjects(run).filter((maMon) => !run.watchGaveUp?.has(maMon));
+  }
+
+  async recordWatchSuccess(run, item) {
+    const main = run.snapshot.find((entry) => entry.maMon === item.maMon && entry.loai === 'chinh');
+    const fallbackFrom = item.loai === 'du_phong' ? main?.idToHoc : undefined;
+    this.recordItem(run, item, 'success', undefined, fallbackFrom);
+    if (fallbackFrom) {
+      run.summaryAcc.fallback.push({ ma_mon: item.maMon, tu_id_to_hoc: fallbackFrom, sang_id_to_hoc: item.idToHoc });
+    }
+    run.summaryAcc.that_bai = run.summaryAcc.that_bai.filter((entry) => entry.ma_mon !== item.maMon);
+    const attempts = run.watchAttempts.get(item.maMon) ?? 1;
+    run.summaryAcc.canh_slot.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, so_lan_thu: attempts });
+    await this.cleanupSuccessfulPriorities(run);
+    const message = `Canh được slot ${item.maMon} (${item.nhomTo ?? item.idToHoc}) sau ${attempts} lần thử.`;
+    Promise.resolve().then(() => this.notify?.notifyWatchSuccess?.({ mssv: run.mssv, runId: run.id, maMon: item.maMon, message })).catch(() => {});
+    this.appendLog(run, 'success', message);
+  }
+
+  async watchTick(run) {
+    let pauseMs = 0;
+    for (const maMon of this.watchSubjects(run)) {
+      if (run.stopRequested) break;
+      const items = [...run.snapshot]
+        .filter((item) => item.maMon === maMon)
+        .sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
+      for (const item of items) {
+        if (run.stopRequested) break;
+        const key = String(item.idToHoc ?? `${item.maMon}:${item.thuTu}`);
+        if (run.watchDropped.has(key)) continue;
+
+        let res;
+        let cls;
+        let authRetried = false;
+        while (true) {
+          try {
+            // Exactly one BDU register request per item in a tick; auth may
+            // refresh the session and retry this same item once.
+            // eslint-disable-next-line no-await-in-loop
+            res = await this.bduCall(() => this.service.registerGroup(run.token, {
+              idToHoc: item.idToHoc,
+              isChecked: true,
+              svNganh: run.svNganh,
+              idRs: run.lastIdRs
+            }));
+            if (res?.idRs) run.lastIdRs = res.idRs;
+            cls = classifyRegisterResult(res);
+          } catch (error) {
+            cls = error?.status === 429
+              ? 'rate_limit'
+              : error?.status === 401 || error?.status === 426 || error?.code === 'AUTH_EXPIRED'
+                ? 'auth'
+                : 'transient';
+            res = error;
+          }
+
+          if (cls !== 'auth') break;
+          if (authRetried || !(await this.tryRefresh(run, { allowPassword: true }))) {
+            run.authExpired = true;
+            return { pauseMs, failed: 'Phiên đăng nhập đã hết hạn' };
+          }
+          authRetried = true;
+        }
+
+        run.watchAttempts.set(maMon, (run.watchAttempts.get(maMon) ?? 0) + 1);
+        if (cls === 'thanh_cong' || cls === 'already_registered') {
+          await this.recordWatchSuccess(run, item);
+          break;
+        }
+        if (cls === 'seat_full' || cls === 'transient' || cls === 'rate_limit') continue;
+        if (cls === 'gate_closed') {
+          pauseMs = WATCH_GATE_PAUSE_MS;
+          this.appendLog(run, 'warning', 'Cổng đăng ký đã đóng — tạm dừng canh slot 15 phút.');
+          break;
+        }
+        if (cls === 'rejected' && isStaleIdResponse(res)) {
+          const now = this.now();
+          if (!run.watchCatalogRefreshAtMs || now - run.watchCatalogRefreshAtMs >= WATCH_CATALOG_REFRESH_MS) {
+            run.watchCatalogRefreshAtMs = now;
+            await this.refreshCatalogIds(run);
+          }
+          continue;
+        }
+
+        run.watchDropped.add(key);
+        if (items.every((entry) => run.watchDropped.has(String(entry.idToHoc ?? `${entry.maMon}:${entry.thuTu}`)))) {
+          run.watchGaveUp.add(maMon);
+          this.appendLog(run, 'warning', `Không còn lớp khả dụng cho ${maMon}.`);
+          break;
+        }
+      }
+      if (pauseMs) break;
+    }
+    return { pauseMs };
+  }
+
+  async runWatcher(run) {
+    let nextTickAt = this.now() + this.watchIntervalMs;
+    run.lastWatchLogAtMs = this.now();
+    while (true) {
+      if (run.stopRequested) return { status: 'stopped' };
+      if (this.watchSubjects(run).length === 0) return { status: 'done' };
+      if (this.now() >= run.watchUntilMs) {
+        this.appendLog(run, 'info', 'Đợt đăng ký đã đóng — kết thúc canh slot.');
+        return { status: 'done' };
+      }
+
+      while (!run.stopRequested && this.now() < nextTickAt && this.now() < run.watchUntilMs) {
+        const wakeAt = Math.min(nextTickAt, run.watchUntilMs);
+        const sleepMs = Math.min(wakeAt - this.now(), 5_000);
+        if (sleepMs > 0) await this.sleep(sleepMs);
+        if (this.now() - run.lastWatchLogAtMs >= WATCH_HEARTBEAT_MS) {
+          const remaining = Math.max(0, Math.ceil((nextTickAt - this.now()) / 60_000));
+          this.appendLog(run, 'info', `Đang canh ${this.watchSubjects(run).length} môn · lần thử tiếp theo sau ${remaining} phút.`);
+          run.lastWatchLogAtMs = this.now();
+          await this.persistRun(run);
+        }
+      }
+      if (run.stopRequested) return { status: 'stopped' };
+      if (this.now() >= run.watchUntilMs) continue;
+
+      const expiresAt = run.tokenExpiresAtMs;
+      if (expiresAt && this.now() >= expiresAt - TOKEN_EXPIRY_MARGIN_MS) {
+        const refreshed = await this.tryRefresh(run, { allowPassword: true });
+        if (!refreshed && run.passwordInvalid) {
+          return { status: 'failed', error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' };
+        }
+      }
+
+      const outcome = await this.watchTick(run);
+      if (outcome.failed) return { status: 'failed', error: outcome.failed };
+      await this.persistRun(run);
+      nextTickAt = this.now() + (outcome.pauseMs || this.watchIntervalMs);
+    }
+  }
+
   /**
    * Gỡ khỏi danh sách ưu tiên những môn đã đăng ký thành công. Xoá theo cả
    * nhóm `ma_mon` (chính + dự phòng) nên danh sách không còn môn đã có.
@@ -1245,11 +1389,27 @@ export class EnrollmentRunManager {
     }
 
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
-    if (run.autoFixScheduleConflict) {
+    await this.cleanupSuccessfulPriorities(run);
+    const canWatch = run.watchSlots === true && this.watchSubjects(run).length > 0 && this.now() < run.watchUntilMs;
+    if (!canWatch) {
+      if (run.autoFixScheduleConflict) {
+        await this.autoFixConflicts(run);
+        await this.persistRun(run);
+      }
+      await this.finishRun(run, 'done');
+      return;
+    }
+
+    run.phase = 'watching';
+    this.appendLog(run, 'info', `Bắt đầu canh slot ${this.watchSubjects(run).length} môn tới ${new Date(run.watchUntilMs).toLocaleTimeString('vi-VN')}. Thử lại mỗi 60s.`);
+    this.emit(run, { type: 'snapshot', run: this.serialize(run) });
+    await this.persistRun(run);
+    const outcome = await this.runWatcher(run);
+    if (outcome.status === 'done' && run.autoFixScheduleConflict) {
       await this.autoFixConflicts(run);
       await this.persistRun(run);
     }
-    await this.finishRun(run, 'done');
+    await this.finishRun(run, outcome.status, { error: outcome.error });
   }
 
   async finishRun(run, status, { error } = {}) {
@@ -1288,6 +1448,7 @@ export class EnrollmentRunManager {
         const details = summary.that_bai.slice(0, 5).map((item) => `${item.ma_mon}: ${item.ly_do}`).join('; ');
         const message = `✅ Auto đăng ký hoàn tất (${okCount} thành công${failCount ? `, ${failCount} thất bại` : ''})${details ? ` — ${details}` : ''}.`
           + (summary.rut.length ? ` Đã tự rút ${summary.rut.length} môn trùng lịch.` : '')
+          + (summary.canh_slot.length ? ` Canh slot: ${summary.canh_slot.length} môn được đăng ký.` : '')
           + ` (run ${run.id})`;
         this.appendLog(run, 'success', 'Đã gửi thông báo Discord (nếu tài khoản đã liên kết).');
         Promise.resolve(this.notify.notifyRunDone?.({ mssv: run.mssv, runId: run.id, message })).catch(() => {});

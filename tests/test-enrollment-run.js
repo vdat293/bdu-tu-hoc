@@ -54,7 +54,7 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null, activeRows = null, credentialPassword = null } = {}) => {
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null, login = null, activeRows = null, credentialPassword = null, watchIntervalMs } = {}) => {
   const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0, login: [], deleteCredential: [], deletePriorities: [], credentials: new Map() };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
@@ -114,9 +114,10 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
   };
   const notify = {
     notifyRunDone: async (payload) => { calls.notify.push({ kind: 'done', ...payload }); return true; },
-    notifyRunFailed: async (payload) => { calls.notify.push({ kind: 'failed', ...payload }); return true; }
+    notifyRunFailed: async (payload) => { calls.notify.push({ kind: 'failed', ...payload }); return true; },
+    notifyWatchSuccess: async (payload) => { calls.notify.push({ kind: 'watch-success', ...payload }); return true; }
   };
-  const manager = new EnrollmentRunManager({ service, store, now, sleep, notify });
+  const manager = new EnrollmentRunManager({ service, store, now, sleep, notify, watchIntervalMs });
   return { manager, calls };
 };
 
@@ -1089,6 +1090,111 @@ await section('w8b) resume reads the watch state back from the DB row', async ()
   assert.equal(final.status, 'stopped');
   assert.equal(final.summary.canh_slot.length, 1, 'summary cuối phải giữ canh_slot');
   assert.equal(final.summary.canh_slot[0].ma_mon, 'X');
+});
+
+await section('w9) seat_full is retried every interval until a slot opens', async () => {
+  let attempts = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    register: async () => {
+      attempts += 1;
+      return attempts <= 2 ? failResponse('Lớp đã hết chỗ') : okResponse('RS-OK');
+    }
+  });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, backupA2],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed', 'stopped']);
+  assert.equal(final.status, 'done');
+  assert.ok(final.summary.thanh_cong.some((item) => item.ma_mon === 'AAA'));
+  assert.equal(final.summary.that_bai.length, 0);
+  assert.equal(final.summary.canh_slot.length, 1);
+  assert.equal(made.calls.register.filter((call) => call.isChecked).length >= 3, true);
+  const watchNotice = made.calls.notify.find((call) => call.kind === 'watch-success');
+  assert.equal(watchNotice.maMon, 'AAA');
+  assert.match(watchNotice.message, /Canh được slot AAA/);
+  assert.match(made.calls.notify.find((call) => call.kind === 'done').message, /Canh slot: 1 môn/);
+});
+
+await section('w10) stop during watching stops within the chunk window', async () => {
+  const made = makeManager({ gateSequence: [true], register: async () => failResponse('hết chỗ') });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 60 * 60_000).toISOString()
+  });
+  await waitForStatus(made.manager, run.runId, 'SV001', ['running']);
+  for (let i = 0; i < 100; i += 1) {
+    if (made.manager.getForStudent(run.runId, 'SV001')?.phase === 'watching') break;
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(500);
+  }
+  assert.equal(made.manager.getForStudent(run.runId, 'SV001')?.phase, 'watching');
+  await sleep(6_000);
+  const requestsBeforeStop = made.calls.register.length;
+  made.manager.stop(run.runId, 'SV001');
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['stopped'], 100);
+  assert.equal(final.status, 'stopped');
+  assert.equal(made.calls.register.length, requestsBeforeStop);
+});
+
+await section('w11) gate_closed pauses instead of failing and watching ends at watchUntil', async () => {
+  let calls = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    register: async () => {
+      calls += 1;
+      return calls === 1 ? failResponse('Lớp đã hết chỗ') : failResponse('Ngoài thời gian cho phép đăng ký');
+    }
+  });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 2 * 60_000).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.ok(final.logs.some((entry) => /đóng/i.test(entry.message)));
+});
+
+await section('w12) auth loss while watching fails the run', async () => {
+  let calls = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    register: async () => {
+      calls += 1;
+      if (calls === 1) return failResponse('hết chỗ');
+      throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' });
+    },
+    refresh: async () => { throw new Error('refresh dead'); },
+    login: async () => { throw Object.assign(new Error('bad'), { status: 401 }); }
+  });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'failed');
+});
+
+await section('w13) watching is skipped when no subject ran out of seats', async () => {
+  const made = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  assert.equal(final.phase, 'registering');
 });
 
 console.log('OK');
