@@ -858,10 +858,19 @@ export const BduService = {
           }
         }
 
-        // Determine target semester
+        // Determine target semester. Prefer the term the portal marks as
+        // "current" (`hoc_ky_theo_ngay_hien_tai`) instead of blindly taking the
+        // first row: students can already see the next term in the list, which
+        // made the default view jump to a semester that had not started yet.
         let targetHocKy = hocKy;
-        if (!targetHocKy && semestersList.length > 0) {
-          targetHocKy = semestersList[0]?.hoc_ky || semestersList[0]?.ma_hoc_ky;
+        if (!targetHocKy) {
+          const currentHocKy = Number.parseInt(semRes?.data?.hoc_ky_theo_ngay_hien_tai, 10);
+          const hasCurrent = semestersList.some(
+            (s) => Number(s?.hoc_ky || s?.ma_hoc_ky) === currentHocKy
+          );
+          targetHocKy = (Number.isInteger(currentHocKy) && currentHocKy > 0 && (hasCurrent || semestersList.length === 0))
+            ? currentHocKy
+            : (semestersList[0]?.hoc_ky || semestersList[0]?.ma_hoc_ky);
         }
 
         if (targetHocKy) {

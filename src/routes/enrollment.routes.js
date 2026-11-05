@@ -7,7 +7,7 @@ import { ApiController } from './_shared/http-deps.js';
 
 export function registerEnrollmentRoutes(router) {
   router.get('/enrollment/priority', ApiController.getPriority);
-  router.get('/enrollment/schedule', ApiController.getSchedule);
+  router.get('/enrollment/schedule', ApiController.getEnrollmentSchedule);
   router.put('/enrollment/priority', ApiController.replacePriority);
   router.get('/enrollment/catalog', ApiController.getCatalog);
   router.get('/enrollment/filters', ApiController.getFilters);

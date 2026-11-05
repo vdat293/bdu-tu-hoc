@@ -246,11 +246,11 @@ try {
     assert.ok(res.chunks.some((chunk) => chunk.includes('"type":"snapshot"') || chunk.includes('"type": "snapshot"')));
   });
 
-  await section('getSchedule returns the hardcoded semester window for the student cohort', async () => {
+  await section('getEnrollmentSchedule returns the hardcoded semester window for the student cohort', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => '24050126';
     enrollmentService.getStudentClass = async () => '27TH03';
     const res = response();
-    await EnrollmentController.getSchedule(reqWith({}), res);
+    await EnrollmentController.getEnrollmentSchedule(reqWith({}), res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.data.primary.opensAt, '2026-11-05T09:00');
     assert.equal(res.body.data.primary.closesAt, '2026-11-05T20:00');

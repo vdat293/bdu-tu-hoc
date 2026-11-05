@@ -53,7 +53,10 @@ export const EnrollmentController = {
     }
   },
 
-  async getSchedule(req, res) {
+  // Must NOT be named `getSchedule`: controllers are spread into one
+  // `ApiController` object and a duplicate key silently overrides
+  // AcademicsController.getSchedule, breaking `/api/schedule`.
+  async getEnrollmentSchedule(req, res) {
     try {
       const mssv = await resolveMssv(req);
       const token = bearerToken(req);
