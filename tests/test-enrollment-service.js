@@ -389,6 +389,7 @@ const cases = [
   ['vi phạm học trước → prereq', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Vi phạm học trước:  INF1063' } }), 'prereq'],
   ['trùng thời khóa biểu → schedule_conflict', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Trùng thời khóa biểu' } }), 'schedule_conflict'],
   ['vượt tín chỉ tối đa → over_credit', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Quá tín chỉ tối đa: 22/ 19' } }), 'over_credit'],
+  ['môn đã đăng ký → already_registered', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Môn học đã được đăng ký' } }), 'already_registered'],
   ['unknown → rejected', classify({ code: 200, data: { is_thanh_cong: false, thong_bao_loi: 'Lỗi khó hiểu' } }), 'rejected'],
   ['code != 200 → rejected', classify({ code: 999, message: 'x' }), 'rejected'],
   ['is_thanh_cong=true → thanh_cong', classify({ code: 200, data: { is_thanh_cong: true } }), 'thanh_cong']

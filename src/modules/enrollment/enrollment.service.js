@@ -352,6 +352,9 @@ export function classifyRegisterResult(res = {}) {
     .toLowerCase();
 
   if (/het\s*(cho|chi\s*tieu)|da\s*day|khong\s*con\s*cho/.test(message)) return 'seat_full';
+  // BDU có thể trả "Môn học đã được đăng ký" khi resume/retry một môn đã thành
+  // công nhưng chưa kịp ghi kết quả trước khi restart.
+  if (/mon\s*hoc\s*đa\s*(đuoc\s*)?đang\s*ky|đa\s*dang\s*ky/.test(message)) return 'already_registered';
   // BDU chặn khi tổng tín chỉ vượt trần, vd "Quá tín chỉ tối đa: 22/ 19".
   // "đ" không bị NFD tách nên chỉ khớp tới "tối" để không phụ thuộc chữ "đa".
   if (/qua\s*tin\s*chi\s*toi|vuot\s*qua\s*so\s*tin\s*chi/.test(message)) return 'over_credit';

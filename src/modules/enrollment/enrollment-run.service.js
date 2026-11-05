@@ -835,6 +835,11 @@ export class EnrollmentRunManager {
       return null;
     }
 
+    if (outcome.cls === 'already_registered') {
+      this.recordItem(run, item, 'success');
+      return null;
+    }
+
     if (outcome.cls === 'seat_full') {
       const fallbacks = pickFallbacks(allItems, item.maMon);
       for (const fallback of fallbacks) {
