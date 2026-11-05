@@ -6,7 +6,7 @@ import { ViewportModal } from '../../components/ViewportModal.jsx';
  * Controlled component: không tự giữ mật khẩu, không ghi storage. Page sở hữu
  * state và xoá nó ngay sau khi gửi request.
  */
-export default function CredentialsModal({ open, mssv, password, error, busy, onPasswordChange, onClose, onSubmit, dialogRef }) {
+export default function CredentialsModal({ open, mssv, password, error, busy, onPasswordChange, onClose, onSubmit, dialogRef, passwordRef }) {
   if (!open) return null;
   return (
     <ViewportModal
@@ -28,10 +28,10 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
       <label className="enroll-credential-field">
         <span>Mật khẩu BDU</span>
         <input
+          ref={passwordRef}
           type="password"
           value={password}
           autoComplete="off"
-          autoFocus
           onChange={(event) => onPasswordChange(event.target.value)}
         />
       </label>

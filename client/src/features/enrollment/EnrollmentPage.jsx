@@ -145,6 +145,7 @@ export default function EnrollmentPage() {
 
   const withdrawDialogRef = useRef(null);
   const credentialDialogRef = useRef(null);
+  const credentialPasswordRef = useRef(null);
   const logRef = useRef(null);
 
   const [catalog, setCatalog] = useState(null);
@@ -610,7 +611,7 @@ export default function EnrollmentPage() {
   }, [auth.token, withdrawTarget, notify, loadRegistered]);
 
   useViewportDialog(Boolean(withdrawTarget), () => setWithdrawTarget(null), withdrawDialogRef);
-  useViewportDialog(credentialOpen, closeCredentials, credentialDialogRef);
+  useViewportDialog(credentialOpen, closeCredentials, credentialDialogRef, credentialPasswordRef);
 
   const countdown = useMemo(() => {
     if (!run?.triggerAt) return null;
@@ -1133,6 +1134,7 @@ export default function EnrollmentPage() {
         onClose={closeCredentials}
         onSubmit={handleConfirmStart}
         dialogRef={credentialDialogRef}
+        passwordRef={credentialPasswordRef}
       />
     </section>
   );
