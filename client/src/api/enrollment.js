@@ -21,6 +21,11 @@ export function getCatalog(token, loaiLoc = 2, { signal } = {}) {
     .then((data) => unwrap(data, data));
 }
 
+export function getFilters(token, { signal } = {}) {
+  return request('/api/enrollment/filters', { token, signal, defaultMessage: 'Không tải được bộ lọc môn học.' })
+    .then((data) => unwrap(data, data)?.filters ?? []);
+}
+
 export function getRegistered(token, { signal } = {}) {
   return request('/api/enrollment/registered', { token, signal, defaultMessage: 'Không tải được danh sách đã đăng ký.' })
     .then((data) => unwrap(data, data));

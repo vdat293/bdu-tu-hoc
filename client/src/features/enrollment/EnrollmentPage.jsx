@@ -6,6 +6,7 @@ import {
   getSchedule,
   savePriority,
   getRegistered,
+  getFilters,
   withdraw,
   startRun,
   getRunStatus,
@@ -16,15 +17,21 @@ import {
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
 import CredentialsModal from './CredentialsModal.jsx';
+import ScheduleCard from './ScheduleCard.jsx';
+import { filterCatalog } from './catalog-filter.js';
+import { buildScheduleCells } from './schedule-cells.js';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
-import { DAY_OPTIONS, SESSION_OPTIONS, parseTkb, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
+import { DAY_OPTIONS, SESSION_OPTIONS, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
-const FILTER_OPTIONS = [
+const FALLBACK_FILTERS = [
+  { value: 10, label: 'Lọc theo môn học', isDefault: true },
   { value: 0, label: 'Môn mở theo lớp sinh viên' },
   { value: 2, label: 'Môn trong CTĐT kế hoạch' },
   { value: 6, label: 'Môn chưa học trong CTĐT kế hoạch' },
-  { value: 1, label: 'Môn cần học lại (đã rớt)' }
+  { value: 1, label: 'Môn cần học lại (đã rớt)' },
+  { value: 3, label: 'Lọc theo khoa quản lý môn học' },
+  { value: 4, label: 'Lọc theo lớp' }
 ];
 
 const ACTIVE_STATUSES = ['scheduled', 'running'];
@@ -65,16 +72,6 @@ const normalizeItems = (items) => (items ?? []).map((item) => ({
   thuTu: Number(item.thuTu ?? item.thu_tu) || 0
 }));
 
-const filterCatalog = (rows, loaiLoc, studentClass) => {
-  if (loaiLoc === 0) {
-    if (!studentClass) return [];
-    return rows.filter((row) => row.lop === studentClass || (row.dsLop ?? []).includes(studentClass));
-  }
-  if (loaiLoc === 1) return rows.filter((row) => row.isRot);
-  if (loaiLoc === 2) return rows.filter((row) => row.isCtdt);
-  if (loaiLoc === 6) return rows.filter((row) => row.isChctdt);
-  return rows;
-};
 
 const capacityTone = (row) => {
   if (!row.slCp) return 'muted';
@@ -91,21 +88,6 @@ const statusLabel = {
   failed: 'Thất bại',
   stopped: 'Đã dừng'
 };
-
-const WEEK_DAYS = [
-  { value: 2, label: 'T2' },
-  { value: 3, label: 'T3' },
-  { value: 4, label: 'T4' },
-  { value: 5, label: 'T5' },
-  { value: 6, label: 'T6' },
-  { value: 7, label: 'T7' },
-  { value: 8, label: 'CN' }
-];
-const WEEK_SESSIONS = [
-  { value: 'morning', label: 'Sáng' },
-  { value: 'afternoon', label: 'Chiều' },
-  { value: 'evening', label: 'Tối' }
-];
 
 /* ---------- icons (inline SVG, 18px) ---------- */
 const IconSearch = () => (
@@ -152,6 +134,10 @@ export default function EnrollmentPage() {
   const [catalogError, setCatalogError] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loaiLoc, setLoaiLoc] = useState(2);
+  const [filters, setFilters] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedKhoa, setSelectedKhoa] = useState('');
+  const [selectedLop, setSelectedLop] = useState('');
   const [search, setSearch] = useState('');
   const [thu, setThu] = useState(0);
   const [buoi, setBuoi] = useState('all');
@@ -238,12 +224,39 @@ export default function EnrollmentPage() {
     }
   }, [auth.token]);
 
+  const loadFilters = useCallback(async () => {
+    if (!auth.token) return;
+    try {
+      const list = await getFilters(auth.token);
+      if (Array.isArray(list) && list.length) setFilters(list);
+    } catch {
+      /* giữ bộ lọc fallback khi BDU lỗi */
+    }
+  }, [auth.token]);
+
   useEffect(() => {
     loadCatalog();
     loadPriority();
     loadRegistered();
     loadSchedule();
-  }, [loadCatalog, loadPriority, loadRegistered, loadSchedule]);
+    loadFilters();
+  }, [loadCatalog, loadPriority, loadRegistered, loadSchedule, loadFilters]);
+
+  // BDU trả bộ lọc theo tài khoản; giữ "CTĐT kế hoạch" làm mặc định nếu có.
+  useEffect(() => {
+    if (!filters.length) return;
+    setLoaiLoc((current) => (
+      filters.some((filter) => filter.value === current)
+        ? current
+        : (filters.find((filter) => filter.isDefault)?.value ?? filters[0].value)
+    ));
+  }, [filters]);
+
+  useEffect(() => {
+    setSelectedSubject('');
+    setSelectedKhoa('');
+    setSelectedLop('');
+  }, [loaiLoc]);
 
   useEffect(() => {
     if (!auth.token || !mssv) return undefined;
@@ -462,26 +475,46 @@ export default function EnrollmentPage() {
   );
   const minCredits = Number(registered?.soTinChiMin) || null;
 
-  // Mini weekly schedule built from the selected groups (joined with the
-  // catalog for their TKB). Duplicate id_to_hoc across "tổ" variants is a BDU
-  // data quirk; matching id + nhóm picks the first variant.
-  const scheduleCells = useMemo(() => {
-    const cells = new Map();
+  // Lịch tuần dự kiến: từ danh sách ưu tiên đang chọn, ghép TKB từ catalog.
+  // Duplicate id_to_hoc across "tổ" variants is a BDU data quirk; matching id +
+  // nhóm picks the first variant.
+  const plannedCells = useMemo(() => {
     const groups = catalog?.dsNhomTo ?? [];
-    for (const item of selected) {
+    const entries = selected.map((item) => {
       const group = groups.find((g) => g.idToHoc === item.idToHoc && (!item.nhomTo || g.nhomTo === item.nhomTo));
-      for (const segment of parseTkb(group?.tkb ?? '')) {
-        const key = `${segment.thu}:${sessionOf(segment)}`;
-        if (!cells.has(key)) cells.set(key, new Map());
-        cells.get(key).set(item.maMon, { maMon: item.maMon, loai: item.loai });
-      }
-    }
-    return cells;
+      return { maMon: item.maMon, tkb: group?.tkb ?? '', loai: item.loai };
+    });
+    return buildScheduleCells(entries);
   }, [selected, catalog]);
 
+  const filterOptions = filters.length ? filters : FALLBACK_FILTERS;
+  const subjectOptions = useMemo(() => {
+    const map = new Map();
+    for (const row of catalog?.dsNhomTo ?? []) {
+      if (row.maMon && !map.has(row.maMon)) map.set(row.maMon, row.tenMon || '');
+    }
+    return [...map.entries()]
+      .map(([value, name]) => ({ value, label: name ? `${value} — ${name}` : value }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [catalog]);
+  const khoaOptions = useMemo(
+    () => [...new Set((catalog?.dsNhomTo ?? []).flatMap((row) => row.dsKhoa ?? []))].sort((a, b) => a.localeCompare(b)),
+    [catalog]
+  );
+  const lopOptions = useMemo(
+    () => [...new Set((catalog?.dsNhomTo ?? []).flatMap((row) => row.dsLop ?? []))].sort((a, b) => a.localeCompare(b)),
+    [catalog]
+  );
+
   const baseRows = useMemo(
-    () => filterCatalog(catalog?.dsNhomTo ?? [], loaiLoc, schedule?.studentClass ?? ''),
-    [catalog, loaiLoc, schedule?.studentClass]
+    () => filterCatalog(catalog?.dsNhomTo ?? [], {
+      loaiLoc,
+      studentClass: schedule?.studentClass ?? '',
+      subject: selectedSubject,
+      khoa: selectedKhoa,
+      lop: selectedLop
+    }),
+    [catalog, loaiLoc, schedule?.studentClass, selectedSubject, selectedKhoa, selectedLop]
   );
   const visibleCatalog = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -651,10 +684,16 @@ export default function EnrollmentPage() {
         soTc: toHoc?.so_tc ?? '',
         ngayDangKy: entry?.ngay_dang_ky ?? '',
         trangThai: entry?.trang_thai ?? entry?.trang_thai_duyet ?? '',
-        idToHoc: toHoc?.id_to_hoc ?? entry?.id_to_hoc ?? ''
+        idToHoc: toHoc?.id_to_hoc ?? entry?.id_to_hoc ?? '',
+        tkb: toHoc?.tkb ?? ''
       };
     });
   }, [registered]);
+
+  const registeredCells = useMemo(
+    () => buildScheduleCells(registeredRows.map((row) => ({ maMon: row.maMon, tkb: row.tkb }))),
+    [registeredRows]
+  );
 
   const registeredCredits = useMemo(
     () => registeredRows.reduce((sum, row) => sum + (Number(row.soTc) || 0), 0),
@@ -719,15 +758,44 @@ export default function EnrollmentPage() {
               />
             </label>
             <label className="enroll-select">
-              <span>Chương trình</span>
+              <span>Bộ lọc</span>
               <select value={loaiLoc} onChange={(event) => setLoaiLoc(Number(event.target.value))}>
-                {FILTER_OPTIONS.map((option) => (
+                {filterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.value === 0 && schedule?.studentClass ? `${option.label} (${schedule.studentClass})` : option.label}
+                    {option.label}
                   </option>
                 ))}
               </select>
             </label>
+            {loaiLoc === 10 ? (
+              <label className="enroll-select">
+                <span>Môn học</span>
+                <select value={selectedSubject} onChange={(event) => setSelectedSubject(event.target.value)}>
+                  <option value="">— Chọn môn —</option>
+                  {subjectOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {loaiLoc === 3 ? (
+              <label className="enroll-select">
+                <span>Khoa</span>
+                <select value={selectedKhoa} onChange={(event) => setSelectedKhoa(event.target.value)}>
+                  <option value="">— Chọn khoa —</option>
+                  {khoaOptions.map((khoa) => <option key={khoa} value={khoa}>{khoa}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {loaiLoc === 4 ? (
+              <label className="enroll-select">
+                <span>Lớp</span>
+                <select value={selectedLop} onChange={(event) => setSelectedLop(event.target.value)}>
+                  <option value="">— Chọn lớp —</option>
+                  {lopOptions.map((lop) => <option key={lop} value={lop}>{lop}</option>)}
+                </select>
+              </label>
+            ) : null}
             <div className="enroll-chip-group" role="group" aria-label="Lọc theo thứ">
               {DAY_OPTIONS.map((option) => (
                 <button
@@ -1012,52 +1080,27 @@ export default function EnrollmentPage() {
               <p className="enroll-hint">Lịch do nhà trường quy định theo khóa và cập nhật mỗi học kỳ; bạn chỉ chọn đợt, không tự đặt ngày/giờ. Đúng giờ hẹn tool mới bắt đầu canh cổng và bắn lệnh; trước đó chỉ giữ phiên BDU tươi. Nếu phiên hết hạn hoàn toàn, bạn cần đăng nhập lại (liên kết Discord để nhận cảnh báo).</p>
             </div>
 
-            <div className="enroll-card">
-              <div className="enroll-card-head">
-                <div>
-                  <h2>Lịch tuần</h2>
-                  <p className="enroll-sub">Sáng · Chiều · Tối theo các môn đã chọn</p>
-                </div>
-              </div>
-              <div className="enroll-mini-wrap">
-                <table className="enroll-mini">
-                  <thead>
-                    <tr>
-                      <th className="enroll-mini-corner"><span className="sr-only">Buổi</span></th>
-                      {WEEK_DAYS.map((day) => <th key={day.value}>{day.label}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {WEEK_SESSIONS.map((session) => (
-                      <tr key={session.value}>
-                        <th scope="row">{session.label}</th>
-                        {WEEK_DAYS.map((day) => {
-                          const entries = [...(scheduleCells.get(`${day.value}:${session.value}`)?.values() ?? [])];
-                          const conflict = entries.length > 1;
-                          return (
-                            <td
-                              key={day.value}
-                              className={`enroll-mini-cell${conflict ? ' is-conflict' : ''}`}
-                              title={entries.length ? entries.map((entry) => entry.maMon).join(', ') : ''}
-                            >
-                              {entries.length
-                                ? entries.slice(0, 2).map((entry) => (
-                                  <span key={entry.maMon} className={`enroll-mini-chip${entry.loai === 'du_phong' ? ' is-duphong' : ''}`}>{entry.maMon}</span>
-                                ))
-                                : <span className="enroll-mini-empty">·</span>}
-                              {entries.length > 2 ? <span className="enroll-mini-more">+{entries.length - 2}</span> : null}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="enroll-hint">{selected.length ? 'Ô đỏ = trùng lịch giữa các môn đã chọn.' : 'Chọn môn để xem lịch tuần.'}</p>
-            </div>
-
           </div>
+        </div>
+
+        {/* ---------- weekly schedules ---------- */}
+        <div className="enroll-schedules">
+          <ScheduleCard
+            title="Lịch tuần đã đăng ký"
+            subtitle={registeredRows.length ? `${registeredRows.length} môn đã đăng ký thành công` : 'Chưa có môn nào'}
+            cells={registeredCells}
+            hasEntries={registeredRows.length > 0}
+            emptyHint="Chưa đăng ký môn nào để dựng lịch tuần."
+            conflictHint="Ô đỏ = trùng lịch giữa các môn đã đăng ký."
+          />
+          <ScheduleCard
+            title="Lịch tuần dự kiến"
+            subtitle={selected.length ? `${grouped.length} môn trong danh sách ưu tiên` : 'Chưa chọn môn nào'}
+            cells={plannedCells}
+            hasEntries={selected.length > 0}
+            emptyHint="Chọn môn ở Danh sách ưu tiên để xem lịch dự kiến."
+            conflictHint="Ô đỏ = trùng lịch giữa các môn dự kiến."
+          />
         </div>
 
         {/* ---------- registered ---------- */}

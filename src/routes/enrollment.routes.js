@@ -10,6 +10,7 @@ export function registerEnrollmentRoutes(router) {
   router.get('/enrollment/schedule', ApiController.getSchedule);
   router.put('/enrollment/priority', ApiController.replacePriority);
   router.get('/enrollment/catalog', ApiController.getCatalog);
+  router.get('/enrollment/filters', ApiController.getFilters);
   router.get('/enrollment/registered', ApiController.getRegistered);
   router.post('/enrollment/withdraw', ApiController.withdraw);
   router.post('/enrollment/runs', ApiController.startRun);

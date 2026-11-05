@@ -150,7 +150,8 @@ export class EnrollmentService {
       isCtdt: g?.is_ctdt === true,
       isChctdt: g?.is_chctdt === true,
       isRot: g?.is_rot === true,
-      dsLop: (Array.isArray(g?.ds_lop) ? g.ds_lop : []).map((lop) => pickString(lop)).filter(Boolean)
+      dsLop: (Array.isArray(g?.ds_lop) ? g.ds_lop : []).map((lop) => pickString(lop)).filter(Boolean),
+      dsKhoa: (Array.isArray(g?.ds_khoa) ? g.ds_khoa : []).map((khoa) => pickString(khoa)).filter(Boolean)
     }));
 
     const value = {
@@ -171,6 +172,22 @@ export class EnrollmentService {
   async getGateStatus(token) {
     const catalog = await this.getCatalog(token, { forceRefresh: true });
     return catalog.trongThoiGianDangKy === true;
+  }
+
+  // Bộ lọc môn học do BDU trả theo từng tài khoản/kỳ (7 mục, một mục mặc định).
+  async getFilters(token) {
+    const { httpStatus, data } = await this.#post(token, 'dkmh/w-locdsdieukienloc', {});
+    if (httpStatus === 401 || httpStatus === 426 || [400, 401, 402].includes(data?.code)) {
+      throw new EnrollmentBduError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', { status: 401, code: 'AUTH_EXPIRED' });
+    }
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    return list
+      .map((filter) => ({
+        value: toInt(filter?.gia_tri, NaN),
+        label: pickString(filter?.mieu_ta),
+        isDefault: filter?.is_mac_dinh === true
+      }))
+      .filter((filter) => Number.isFinite(filter.value) && filter.label);
   }
 
   /**

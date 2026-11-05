@@ -32,7 +32,8 @@ const catalogRaw = {
         is_ctdt: true,
         is_chctdt: false,
         is_rot: true,
-        ds_lop: ['27KT01', '27TH03']
+        ds_lop: ['27KT01', '27TH03'],
+        ds_khoa: ['K.CNTT', 'K.KT']
       }
     ]
   }
@@ -97,6 +98,23 @@ await section('getCatalog posts the official envelope and normalizes ds_mon_hoc/
   assert.equal(g.isChctdt, false);
   assert.equal(g.isRot, true);
   assert.deepEqual(g.dsLop, ['27KT01', '27TH03']);
+  assert.deepEqual(g.dsKhoa, ['K.CNTT', 'K.KT']);
+});
+
+await section('getFilters posts the empty envelope and normalizes options', async () => {
+  const raw = [
+    { gia_tri: 10, mieu_ta: 'Lọc theo môn học', is_mac_dinh: true },
+    { gia_tri: 2, mieu_ta: 'Môn trong CTĐT kế hoạch', is_mac_dinh: false }
+  ];
+  const { calls, fetchImpl } = createFetchMock({ [`POST ${BASE}/dkmh/w-locdsdieukienloc`]: raw });
+  const filters = await new EnrollmentService({ fetchImpl }).getFilters(TOKEN);
+  assert.deepEqual(filters, [
+    { value: 10, label: 'Lọc theo môn học', isDefault: true },
+    { value: 2, label: 'Môn trong CTĐT kế hoạch', isDefault: false }
+  ]);
+  assert.equal(calls[0].url, `${BASE}/dkmh/w-locdsdieukienloc`);
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer test-token');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {});
 });
 
 await section('getStudentClass reads lop from the student profile', async () => {

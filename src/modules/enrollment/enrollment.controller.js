@@ -63,8 +63,18 @@ export const EnrollmentController = {
     }
   },
 
-  async getCatalog(req, res) {
+  async getFilters(req, res) {
     try {
+      const token = bearerToken(req);
+      if (!token) return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token).' });
+      const filters = await enrollmentService.getFilters(token);
+      return res.json({ result: true, data: { filters } });
+    } catch (error) {
+      return sendError(res, error, 'Không tải được bộ lọc môn học.');
+    }
+  },
+
+  async getCatalog(req, res) {    try {
       const token = bearerToken(req);
       if (!token) return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token).' });
       const loaiLoc = Number(req.query?.loai_loc) || 2;

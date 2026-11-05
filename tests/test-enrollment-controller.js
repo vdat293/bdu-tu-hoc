@@ -12,6 +12,7 @@ const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunServ
 const originalBdu = {
   getCatalog: enrollmentService.getCatalog,
   getRegistered: enrollmentService.getRegistered,
+  getFilters: enrollmentService.getFilters,
   registerGroup: enrollmentService.registerGroup,
   getStudentClass: enrollmentService.getStudentClass
 };
@@ -233,6 +234,20 @@ try {
     assert.equal(res.body.data.primary.closesAt, '2026-11-05T20:00');
     assert.equal(res.body.data.cohortYear, 2024);
     assert.equal(res.body.data.studentClass, '27TH03');
+  });
+
+  await section('getFilters returns the BDU filter list', async () => {
+    enrollmentService.getFilters = async () => [{ value: 10, label: 'Lọc theo môn học', isDefault: true }];
+    const res = response();
+    await EnrollmentController.getFilters(reqWith({}), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.filters[0].value, 10);
+  });
+
+  await section('getFilters 401 without a bearer token', async () => {
+    const res = response();
+    await EnrollmentController.getFilters(reqWith({ authorization: '' }), res);
+    assert.equal(res.statusCode, 401);
   });
 
   await section('getCatalog sets private cache window and returns catalog', async () => {
