@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { EnrollmentService, EnrollmentBduError, classifyRegisterResult } from '../src/modules/enrollment/enrollment.service.js';
 
 const BASE = 'https://sv.bdu.edu.vn/public/api';
@@ -325,6 +326,12 @@ await section('login maps a network failure to 502 BDU_UNREACHABLE', async () =>
     assert.equal(error.code, 'BDU_UNREACHABLE');
     return true;
   });
+});
+
+await section('the OTP seam is gone from the service', async () => {
+  assert.equal(typeof EnrollmentService.prototype.verifyOtp, 'undefined');
+  const source = readFileSync(new URL('../src/modules/enrollment/enrollment.service.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /OtpUnavailableError|ENROLLMENT_OTP_VERIFY_URL/);
 });
 
 const classify = (body, status = 200) => classifyRegisterResult({

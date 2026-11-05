@@ -35,15 +35,6 @@ export class EnrollmentBduError extends Error {
   }
 }
 
-export class OtpUnavailableError extends Error {
-  constructor(message = 'Chức năng OTP chưa được kích hoạt vì cổng xác thực chưa mở để khảo sát. Bạn vui lòng vào sv.bdu.edu.vn xác thực thủ công rồi thử lại.') {
-    super(message);
-    this.name = 'OtpUnavailableError';
-    this.status = 501;
-    this.code = 'OTP_NOT_CONFIGURED';
-  }
-}
-
 const toInt = (value, fallback = 0) => {
   const num = Number(value);
   return Number.isFinite(num) ? Math.trunc(num) : fallback;
@@ -311,25 +302,6 @@ export class EnrollmentService {
       thongBaoTienQuyet: pickString(portal.thong_bao_tien_quyet),
       rawMessage: pickString(data?.message, portal.thong_bao_loi, portal.thong_bao_tien_quyet)
     };
-  }
-
-  // OTP xác thực dkmh: cổng chưa mở để khảo sát → mặc định 501.
-  // Đặt ENROLLMENT_OTP_VERIFY_URL để bật khi đã xác nhận hành vi thật.
-  async verifyOtp(token, code) {
-    const url = process.env.ENROLLMENT_OTP_VERIFY_URL;
-    if (!url) throw new OtpUnavailableError();
-    let response;
-    try {
-      response = await this.fetchImpl(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'idpc': '0' },
-        body: JSON.stringify({ code: String(code) })
-      });
-    } catch {
-      throw new EnrollmentBduError('Không xác thực được OTP với máy chủ BDU.', { status: 502, code: 'OTP_UNREACHABLE' });
-    }
-    if (response.status >= 200 && response.status < 300) return { ok: true };
-    return { ok: false, status: response.status };
   }
 }
 
