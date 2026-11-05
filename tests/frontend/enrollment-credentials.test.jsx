@@ -66,10 +66,16 @@ describe('CredentialsModal', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).password).toBe('secret');
   });
 
-  it('styles the modal through its portal id (outside #tab-enrollment)', () => {
+  it('marks the portaled dialog with the enroll-modal class', () => {
+    renderModal();
+    expect(document.querySelector('.modal-dialog')).toHaveClass('enroll-modal');
+  });
+
+  it('styles the modal through its portaled dialog class (outside #tab-enrollment)', () => {
     const css = readFileSync(path.resolve(process.cwd(), 'client/src/styles/app.css'), 'utf8');
-    expect(css).toContain('#enroll-credential-modal .enroll-credential-field');
-    expect(css).toContain('#enroll-credential-modal .enroll-primary');
+    expect(css).toContain('.modal-dialog.enroll-modal .enroll-credential-field');
+    expect(css).toContain('.modal-dialog.enroll-modal .enroll-primary');
+    expect(css).toContain('.modal-dialog.enroll-modal .enroll-danger-btn');
     expect(css).not.toContain('.enroll-otp-box');
   });
 });

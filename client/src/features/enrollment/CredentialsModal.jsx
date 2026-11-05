@@ -15,6 +15,7 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
       labelledBy="enroll-credential-title"
       onClose={onClose}
       dialogRef={dialogRef}
+      className="enroll-modal"
     >
       <div id="enroll-credential-title" className="enroll-modal-title">Xác thực tài khoản BDU</div>
       <p className="enroll-modal-text">
@@ -30,6 +31,7 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
           type="password"
           value={password}
           autoComplete="off"
+          autoFocus
           onChange={(event) => onPasswordChange(event.target.value)}
         />
       </label>

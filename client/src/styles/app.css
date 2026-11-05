@@ -5648,41 +5648,124 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 #tab-enrollment .enroll-summary-row.is-warn { color: var(--color-amber); }
 #tab-enrollment .enroll-error { margin: 8px 0; color: var(--color-rose); font-size: 0.82rem; }
 
-/* modals */
-#tab-enrollment .enroll-modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
-#tab-enrollment .enroll-modal-text { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 14px; }
-#tab-enrollment .enroll-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-/* Credential modal is portaled to <body>, outside #tab-enrollment, so these
-   rules must be scoped to the modal itself or they never apply. */
-#enroll-credential-modal .enroll-modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
-#enroll-credential-modal .enroll-modal-text { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 14px; }
-#enroll-credential-modal .enroll-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-#enroll-credential-modal .enroll-error { margin: 8px 0; color: var(--color-rose); font-size: 0.82rem; }
-#enroll-credential-modal .enroll-credential-field { display: grid; gap: 4px; margin-top: 10px; font-size: 0.82rem; }
-#enroll-credential-modal .enroll-credential-field input {
+/* modals — ViewportModal portals to <body>, outside #tab-enrollment, so the
+   dialog and its contents must be styled through a class on the dialog. */
+.modal-dialog.enroll-modal {
+  display: grid;
+  width: min(480px, 100%);
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+.modal-dialog.enroll-modal .enroll-modal-title {
+  margin: 0 0 6px;
+  font-size: 1.12rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+}
+.modal-dialog.enroll-modal .enroll-modal-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+.modal-dialog.enroll-modal .enroll-error {
+  margin: 10px 0 0;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--enroll-border);
+  border: 1px solid color-mix(in srgb, var(--color-rose) 30%, transparent);
+  background: color-mix(in srgb, var(--color-rose) 8%, transparent);
+  color: var(--color-rose);
+  font-size: 0.82rem;
+}
+.modal-dialog.enroll-modal .enroll-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+.modal-dialog.enroll-modal .enroll-credential-field { display: grid; gap: 6px; margin-top: 16px; }
+.modal-dialog.enroll-modal .enroll-credential-field > span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-main);
+}
+.modal-dialog.enroll-modal .enroll-credential-field input {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--text-main) 4%, transparent);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.9rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+.modal-dialog.enroll-modal .enroll-credential-field input:hover:not([readonly]) { border-color: color-mix(in srgb, var(--text-main) 22%, transparent); }
+.modal-dialog.enroll-modal .enroll-credential-field input:focus {
+  outline: none;
+  border-color: var(--bdu-light);
   background: transparent;
-  color: inherit;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 16%, transparent);
 }
-#enroll-credential-modal .enroll-credential-field input:focus { outline: none; border-color: var(--bdu-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 22%, transparent); }
-#enroll-credential-modal .enroll-credential-field input[readonly] { opacity: 0.7; }
-#enroll-credential-modal .enroll-primary,
-#enroll-credential-modal .enroll-ghost { font: inherit; cursor: pointer; border-radius: 10px; }
-#enroll-credential-modal .enroll-primary {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 18px; border: 1px solid transparent; background: var(--bdu-gradient); color: #fff;
-  font-weight: 700; min-height: 44px;
+.modal-dialog.enroll-modal .enroll-credential-field input[readonly] {
+  opacity: 0.72;
+  cursor: default;
+  font-variant-numeric: tabular-nums;
 }
-#enroll-credential-modal .enroll-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-#enroll-credential-modal .enroll-ghost {
-  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; min-height: 40px;
-  border: 1px solid var(--enroll-border); background: transparent; color: var(--text-main);
-  font-weight: 600; font-size: 0.85rem;
+.modal-dialog.enroll-modal .enroll-primary,
+.modal-dialog.enroll-modal .enroll-ghost,
+.modal-dialog.enroll-modal .enroll-danger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease, opacity 140ms ease;
 }
-#enroll-credential-modal .enroll-ghost:hover:not(:disabled) { background: var(--bg-card-hover); }
-#enroll-credential-modal .enroll-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-dialog.enroll-modal .enroll-primary {
+  padding: 0 20px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  background: var(--bdu-gradient);
+  color: #fff;
+}
+.modal-dialog.enroll-modal .enroll-primary:hover:not(:disabled) { transform: translateY(-1px); }
+.modal-dialog.enroll-modal .enroll-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.modal-dialog.enroll-modal .enroll-ghost {
+  padding: 0 16px;
+  min-height: 44px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-main);
+}
+.modal-dialog.enroll-modal .enroll-ghost:hover:not(:disabled) { background: var(--bg-card-hover); }
+.modal-dialog.enroll-modal .enroll-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-dialog.enroll-modal .enroll-danger-btn {
+  padding: 0 20px;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--color-rose) 40%, transparent);
+  background: color-mix(in srgb, var(--color-rose) 12%, transparent);
+  color: var(--color-rose);
+}
+.modal-dialog.enroll-modal .enroll-danger-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-rose) 20%, transparent); }
+.modal-dialog.enroll-modal .enroll-danger-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+@media (max-width: 520px) {
+  .modal-dialog.enroll-modal { padding: 18px; border-radius: 16px; }
+  .modal-dialog.enroll-modal .enroll-modal-actions { flex-direction: column-reverse; }
+  .modal-dialog.enroll-modal .enroll-modal-actions button { width: 100%; }
+}
 
 /* side column + mini schedule */
 #tab-enrollment .enroll-side { display: grid; gap: 20px; align-content: start; min-width: 0; }

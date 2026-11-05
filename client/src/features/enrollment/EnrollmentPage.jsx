@@ -1113,7 +1113,7 @@ export default function EnrollmentPage() {
       </div>
 
       {withdrawTarget ? (
-        <ViewportModal id="enroll-withdraw-modal" title="Xác nhận rút môn" labelledBy="enroll-withdraw-title" onClose={() => setWithdrawTarget(null)} dialogRef={withdrawDialogRef}>
+        <ViewportModal id="enroll-withdraw-modal" title="Xác nhận rút môn" labelledBy="enroll-withdraw-title" onClose={() => setWithdrawTarget(null)} dialogRef={withdrawDialogRef} className="enroll-modal">
           <div id="enroll-withdraw-title" className="enroll-modal-title">Xác nhận rút môn</div>
           <p className="enroll-modal-text">Bạn có chắc muốn rút <strong>{withdrawTarget.label}</strong>?</p>
           <div className="enroll-modal-actions">
