@@ -103,6 +103,9 @@ const asIso = (value) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+// Epoch-ms → ISO. Dùng cho `watchUntilMs` (null khi không bật canh slot).
+const msToIso = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+
 // Dựng payload giống `serialize()` từ row trong DB, để UI khôi phục được lượt
 // chạy đã xong kể cả khi nó không còn trong RAM (F5, mở tab khác, restart).
 const summaryToLogs = (summary) => {
@@ -124,6 +127,9 @@ export function serializeStoredRun(row) {
   if (!row) return null;
   const summary = row.summary && typeof row.summary === 'object' ? row.summary : null;
   const storedLogs = Array.isArray(row.logs) ? row.logs : [];
+  // `phase`/`watchSlots`/`watchUntilMs` nằm trong cột state JSON (không có
+  // migration mới). Lượt cũ không có state → coi như đang ở pha đăng ký.
+  const state = row.state && typeof row.state === 'object' ? row.state : {};
   return {
     runId: row.id,
     status: row.status,
@@ -142,9 +148,13 @@ export function serializeStoredRun(row) {
         thanh_cong: [...(summary.thanh_cong ?? [])],
         that_bai: [...(summary.that_bai ?? [])],
         fallback: [...(summary.fallback ?? [])],
-        rut: [...(summary.rut ?? [])]
+        rut: [...(summary.rut ?? [])],
+        canh_slot: [...(summary.canh_slot ?? [])]
       }
       : null,
+    phase: state.phase ?? 'registering',
+    watchSlots: state.watchSlots === true,
+    watchUntil: msToIso(state.watchUntilMs),
     error: row.error ?? (summary?.reason === 'server_restart'
       ? 'Server đã khởi động lại khi lượt chạy đang diễn ra. Lượt này không thể tiếp tục — hãy chạy lại.'
       : null)
@@ -233,7 +243,12 @@ export class EnrollmentRunManager {
       snapshotCount: run.snapshot.length,
       logs: run.logs.map((entry) => ({ ...entry })),
       results: run.results.map((entry) => ({ ...entry })),
-      summary: run.summary ? { ...run.summary, thanh_cong: [...run.summary.thanh_cong], that_bai: [...run.summary.that_bai], fallback: [...run.summary.fallback], rut: [...run.summary.rut] } : null,
+      summary: run.summary ? { ...run.summary, thanh_cong: [...run.summary.thanh_cong], that_bai: [...run.summary.that_bai], fallback: [...run.summary.fallback], rut: [...run.summary.rut], canh_slot: [...(run.summary.canh_slot ?? [])] } : null,
+      // Pha hiện tại của lượt chạy: 'registering' (đang đăng ký) hoặc 'watching'
+      // (đang canh slot). UI dùng để đổi nhãn trạng thái.
+      phase: run.phase ?? 'registering',
+      watchSlots: run.watchSlots === true,
+      watchUntil: msToIso(run.watchUntilMs),
       error: run.error || null
     };
   }
@@ -292,7 +307,7 @@ export class EnrollmentRunManager {
     return serializeStoredRun(row);
   }
 
-  async start({ mssv, token, refreshToken = '', password = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1, tokenExpiresIn = null }) {
+  async start({ mssv, token, refreshToken = '', password = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1, tokenExpiresIn = null, watchSlots = false, watchUntil = null }) {
     this.prune();
     const studentId = String(mssv || '').trim();
     if (!studentId) throw httpError(401, 'Không xác định được sinh viên cho lượt đăng ký.');
@@ -301,6 +316,12 @@ export class EnrollmentRunManager {
     if (!secret) throw httpError(400, 'Thiếu mật khẩu BDU để đăng nhập lại trước giờ mở.');
     const triggerAtMs = triggerAt instanceof Date ? triggerAt.getTime() : new Date(triggerAt).getTime();
     if (!Number.isFinite(triggerAtMs)) throw httpError(400, 'triggerAt không hợp lệ.');
+    // Bật canh slot thì bắt buộc có mốc đóng đợt — không có mốc thì vòng canh
+    // không bao giờ kết thúc được.
+    const watchUntilMs = watchUntil ? new Date(watchUntil).getTime() : null;
+    if (watchSlots === true && !Number.isFinite(watchUntilMs)) {
+      throw httpError(400, 'Thiếu thời điểm đóng đợt cho canh slot.');
+    }
     // Copy each item so re-mapping ids on the snapshot never mutates the
     // caller's array (the controller may still hold it).
     const snapshot = Array.isArray(items) ? items.map((item) => ({ ...item })).sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0)) : [];
@@ -335,11 +356,22 @@ export class EnrollmentRunManager {
       finishedAt: null,
       logs: [],
       results: [],
-      summaryAcc: { thanh_cong: [], that_bai: [], fallback: [], rut: [] },
+      summaryAcc: { thanh_cong: [], that_bai: [], fallback: [], rut: [], canh_slot: [] },
       summary: null,
       error: null,
+      // Pha hiện tại: 'registering' khi đang đăng ký, 'watching' khi đang canh
+      // slot. Nằm trong state JSON để còn đọc được sau khi server restart.
+      phase: 'registering',
+      watchSlots: watchSlots === true,
+      watchUntilMs: Number.isFinite(watchUntilMs) ? watchUntilMs : null,
       // Môn đã gỡ khỏi danh sách ưu tiên — chặn gọi lặp khi finishRun chạy nhiều lần.
       cleanedMaMons: new Set(),
+      // Bộ nhớ tạm của vòng canh slot (chỉ trong RAM, không ghi DB).
+      watchDropped: new Set(),
+      watchGaveUp: new Set(),
+      watchAttempts: new Map(),
+      watchCatalogRefreshAtMs: 0,
+      lastWatchLogAtMs: 0,
       stopRequested: false,
       lastIdRs: '',
       refreshCount: 0,
@@ -397,7 +429,9 @@ export class EnrollmentRunManager {
       thanh_cong: [...(run.summaryAcc?.thanh_cong ?? [])],
       that_bai: [...(run.summaryAcc?.that_bai ?? [])],
       fallback: [...(run.summaryAcc?.fallback ?? [])],
-      rut: [...(run.summaryAcc?.rut ?? [])]
+      rut: [...(run.summaryAcc?.rut ?? [])],
+      // Thống kê canh slot: mỗi môn đã canh được ghi { ma_mon, id_to_hoc, so_lan_thu }.
+      canh_slot: [...(run.summaryAcc?.canh_slot ?? [])]
     };
   }
 
@@ -413,6 +447,9 @@ export class EnrollmentRunManager {
       staleIdRetried: run.staleIdRetried === true,
       svNganh: Number(run.svNganh) || 1,
       autoFixScheduleConflict: run.autoFixScheduleConflict === true,
+      phase: run.phase ?? 'registering',
+      watchSlots: run.watchSlots === true,
+      watchUntilMs: Number.isFinite(run.watchUntilMs) ? run.watchUntilMs : null,
       summaryAcc: this.summaryOf(run)
     };
   }
@@ -498,7 +535,8 @@ export class EnrollmentRunManager {
       thanh_cong: Array.isArray(state.summaryAcc?.thanh_cong) ? state.summaryAcc.thanh_cong : [],
       that_bai: Array.isArray(state.summaryAcc?.that_bai) ? state.summaryAcc.that_bai : [],
       fallback: Array.isArray(state.summaryAcc?.fallback) ? state.summaryAcc.fallback : [],
-      rut: Array.isArray(state.summaryAcc?.rut) ? state.summaryAcc.rut : []
+      rut: Array.isArray(state.summaryAcc?.rut) ? state.summaryAcc.rut : [],
+      canh_slot: Array.isArray(state.summaryAcc?.canh_slot) ? state.summaryAcc.canh_slot : []
     };
     if (!summaryAcc.thanh_cong.length && !summaryAcc.that_bai.length && results.length) {
       Object.assign(summaryAcc, this.summaryAccFromResults(results));
@@ -536,6 +574,16 @@ export class EnrollmentRunManager {
       tokenExpiresAtMs: null,
       authExpired: false,
       staleIdRetried: false,
+      // Pha + cấu hình canh slot đọc lại từ state (không có migration mới).
+      phase: state.phase ?? 'registering',
+      watchSlots: state.watchSlots === true,
+      watchUntilMs: Number.isFinite(state.watchUntilMs) ? state.watchUntilMs : null,
+      cleanedMaMons: new Set(),
+      watchDropped: new Set(),
+      watchGaveUp: new Set(),
+      watchAttempts: new Map(),
+      watchCatalogRefreshAtMs: 0,
+      lastWatchLogAtMs: 0,
       restartCount: Number(row.restart_count || 0) + 1
     };
 
@@ -1209,7 +1257,8 @@ export class EnrollmentRunManager {
       thanh_cong: [...run.summaryAcc.thanh_cong],
       that_bai: [...run.summaryAcc.that_bai],
       fallback: [...run.summaryAcc.fallback],
-      rut: [...run.summaryAcc.rut]
+      rut: [...run.summaryAcc.rut],
+      canh_slot: [...(run.summaryAcc.canh_slot ?? [])]
     };
     const finalError = status === 'failed' && run.passwordInvalid
       ? 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.'

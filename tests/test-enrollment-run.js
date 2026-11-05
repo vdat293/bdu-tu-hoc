@@ -1,5 +1,5 @@
 ﻿import assert from 'node:assert/strict';
-import { EnrollmentRunManager, EnrollmentRunService, createBduLimiter } from '../src/modules/enrollment/enrollment-run.service.js';
+import { EnrollmentRunManager, EnrollmentRunService, createBduLimiter, serializeStoredRun } from '../src/modules/enrollment/enrollment-run.service.js';
 
 let clock = 1_000_000;
 const now = () => clock;
@@ -997,6 +997,48 @@ await section('w5) priority_updated is emitted once with removed subjects', asyn
   const updates = events.filter((event) => event.type === 'priority_updated');
   assert.equal(updates.length, 1);
   assert.deepEqual(updates[0].removedMaMons, ['AAA']);
+});
+
+await section('w6) start stores watch settings and serializes them', async () => {
+  const { manager } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const watchUntil = new Date(clock + 10 * 60_000).toISOString();
+  const { run } = await manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil
+  });
+  const serialized = manager.getForStudent(run.runId, 'SV001');
+  assert.equal(serialized.watchSlots, true);
+  assert.equal(serialized.phase, 'registering');
+  assert.equal(serialized.watchUntil, watchUntil);
+  manager.stop(run.runId, 'SV001');
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped']);
+  assert.equal(final.status, 'stopped');
+});
+
+await section('w7) watchSlots without watchUntil is rejected', async () => {
+  const { manager } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  await assert.rejects(
+    () => manager.start({
+      password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA],
+      triggerAt: new Date(clock + 1_000).toISOString(), watchSlots: true
+    }),
+    (error) => error.status === 400
+  );
+});
+
+await section('w8) serializeStoredRun reads watching state', async () => {
+  const stored = serializeStoredRun({
+    id: 'run-stored', status: 'running', trigger_at: new Date(clock).toISOString(),
+    snapshot: [chinhA], summary: { thanh_cong: [], that_bai: [], fallback: [], rut: [], canh_slot: [] },
+    logs: [], results: [], error: null,
+    state: { phase: 'watching', watchSlots: true, watchUntilMs: clock + 60_000 }
+  });
+  assert.equal(stored.phase, 'watching');
+  assert.equal(stored.watchSlots, true);
+  assert.ok(stored.watchUntil);
 });
 
 console.log('OK');
