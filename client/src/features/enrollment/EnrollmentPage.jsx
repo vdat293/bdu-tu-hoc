@@ -12,10 +12,10 @@ import {
   getLatestRun,
   checkSession,
   stopRun,
-  submitOtp,
   subscribeRun
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
+import CredentialsModal from './CredentialsModal.jsx';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
 import { DAY_OPTIONS, SESSION_OPTIONS, parseTkb, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
@@ -27,7 +27,7 @@ const FILTER_OPTIONS = [
   { value: 1, label: 'Môn cần học lại (đã rớt)' }
 ];
 
-const ACTIVE_STATUSES = ['scheduled', 'running', 'otp_required'];
+const ACTIVE_STATUSES = ['scheduled', 'running'];
 const TOKEN_SOON_MS = 30 * 60 * 1000;
 
 // Lịch đăng ký là giờ Việt Nam (UTC+7) và không kèm timezone trong chuỗi
@@ -87,7 +87,6 @@ const capacityTone = (row) => {
 const statusLabel = {
   scheduled: 'Chờ mở cổng',
   running: 'Đang đăng ký',
-  otp_required: 'Chờ OTP',
   done: 'Hoàn tất',
   failed: 'Thất bại',
   stopped: 'Đã dừng'
@@ -140,58 +139,12 @@ const IconCheck = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5" /></svg>
 );
 
-function OtpBoxes({ value, onChange, disabled }) {
-  const inputsRef = useRef([]);
-  const digits = value.padEnd(6, ' ').slice(0, 6).split('');
-
-  const setDigit = (index, raw) => {
-    const digit = String(raw).replace(/\D/g, '').slice(-1);
-    const next = [...digits];
-    next[index] = digit || ' ';
-    onChange(next.join('').replace(/\s/g, ' ').trimEnd());
-    if (digit && index < 5) inputsRef.current[index + 1]?.focus();
-  };
-
-  const handlePaste = (event) => {
-    event.preventDefault();
-    const text = String(event.clipboardData?.getData('text') ?? '').replace(/\D/g, '').slice(0, 6);
-    if (!text) return;
-    onChange(text);
-    inputsRef.current[Math.min(text.length, 5)]?.focus();
-  };
-
-  return (
-    <div className="enroll-otp-boxes" onPaste={handlePaste}>
-      {digits.map((digit, index) => (
-        <input
-          key={index}
-          ref={(element) => { inputsRef.current[index] = element; }}
-          className="enroll-otp-box"
-          inputMode="numeric"
-          autoComplete={index === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
-          aria-label={`Chữ số OTP ${index + 1}`}
-          disabled={disabled}
-          value={digit.trim()}
-          onChange={(event) => setDigit(index, event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Backspace' && !digits[index].trim() && index > 0) {
-              inputsRef.current[index - 1]?.focus();
-            }
-          }}
-          onFocus={(event) => event.target.select()}
-        />
-      ))}
-    </div>
-  );
-}
-
 export default function EnrollmentPage() {
   const auth = useAuth();
   const { notify } = useToasts();
 
   const withdrawDialogRef = useRef(null);
-  const otpDialogRef = useRef(null);
+  const credentialDialogRef = useRef(null);
   const logRef = useRef(null);
 
   const [catalog, setCatalog] = useState(null);
@@ -213,10 +166,9 @@ export default function EnrollmentPage() {
   const [starting, setStarting] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
 
-  const [otpOpen, setOtpOpen] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [otpSending, setOtpSending] = useState(false);
+  const [credentialOpen, setCredentialOpen] = useState(false);
+  const [credentialPassword, setCredentialPassword] = useState('');
+  const [credentialError, setCredentialError] = useState('');
   const [restoreNotice, setRestoreNotice] = useState('');
   const [sessionCheck, setSessionCheck] = useState(null);
   const [sessionChecking, setSessionChecking] = useState(false);
@@ -230,7 +182,6 @@ export default function EnrollmentPage() {
 
   const unsubscribeRef = useRef(null);
   const runIdRef = useRef(null);
-  const otpAutoRef = useRef('');
 
   const activeRun = run && ACTIVE_STATUSES.includes(run.status);
   const mssv = auth.user?.mssv ?? '';
@@ -350,17 +301,6 @@ export default function EnrollmentPage() {
     return () => window.clearInterval(timer);
   }, [activeRun]);
 
-  // Nếu reload đúng lúc server đang chờ OTP, mở lại hộp thoại một lần cho lượt đó.
-  useEffect(() => {
-    if (run?.status !== 'otp_required' || !run?.runId) return;
-    const marker = `${run.runId}:otp`;
-    if (otpAutoRef.current === marker) return;
-    otpAutoRef.current = marker;
-    setOtpOpen(true);
-    setOtpCode('');
-    setOtpError('');
-  }, [run?.status, run?.runId]);
-
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [run?.logs?.length]);
@@ -379,12 +319,6 @@ export default function EnrollmentPage() {
         if (payload.type === 'snapshot' && payload.run) { setRun(payload.run); return; }
         if (payload.type === 'log') {
           setRun((current) => current ? { ...current, logs: [...(current.logs ?? []), payload] } : current);
-          return;
-        }
-        if (payload.type === 'otp_required') {
-          setOtpOpen(true);
-          setOtpCode('');
-          setOtpError('');
           return;
         }
         if (payload.type === 'done') {
@@ -444,7 +378,6 @@ export default function EnrollmentPage() {
     clearRunId(mssv);
     setRun(null);
     setRestoreNotice('');
-    setOtpOpen(false);
   }, [mssv, run?.runId]);
 
   const handleCheckSession = useCallback(async () => {
@@ -595,20 +528,42 @@ export default function EnrollmentPage() {
   const selectedRoundInfo = scheduleRounds.find((round) => round.id === selectedRound) ?? null;
   const canActivate = selected.length > 0 && !dirty && !activeRun && !starting && Boolean(selectedRoundInfo) && !selectedRoundInfo.closed;
 
-  const handleStart = useCallback(async () => {
+  const handleStart = useCallback(() => {
+    if (!canActivate) return;
+    setCredentialPassword('');
+    setCredentialError('');
+    setCredentialOpen(true);
+  }, [canActivate]);
+
+  const closeCredentials = useCallback(() => {
+    setCredentialPassword('');
+    setCredentialError('');
+    setCredentialOpen(false);
+  }, []);
+
+  const handleConfirmStart = useCallback(async () => {
     if (!auth.token || !canActivate) return;
+    const password = credentialPassword.trim();
+    if (!password) {
+      setCredentialError('Vui lòng nhập mật khẩu BDU.');
+      return;
+    }
     setStarting(true);
+    setCredentialError('');
     try {
       const result = await startRun(auth.token, {
         roundId: selectedRound,
         autoFixScheduleConflict,
-        refreshToken: auth.refreshToken
+        refreshToken: auth.refreshToken,
+        password
       });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
       saveRunId(mssv, runId);
       saveHiddenRunId(mssv, '');
       setRestoreNotice('');
+      setCredentialPassword('');
+      setCredentialOpen(false);
       setRun({
         runId,
         status: 'scheduled',
@@ -621,11 +576,11 @@ export default function EnrollmentPage() {
       setNowTick(Date.now());
       notify('Đã kích hoạt lượt đăng ký.', 'success');
     } catch (error) {
-      notify(error.message || 'Không khởi chạy được.', 'error');
+      setCredentialError(error.message || 'Không khởi chạy được.');
     } finally {
       setStarting(false);
     }
-  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, mssv, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, credentialPassword, mssv, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -638,33 +593,6 @@ export default function EnrollmentPage() {
       notify(error.message || 'Không dừng được lượt chạy.', 'error');
     }
   }, [auth.token, run?.runId, mssv, notify]);
-
-  const handleSubmitOtp = useCallback(async () => {
-    if (!auth.token || !run?.runId) return;
-    const digits = otpCode.replace(/\D/g, '');
-    if (digits.length !== 6) {
-      setOtpError('Mã OTP phải gồm đúng 6 chữ số.');
-      return;
-    }
-    setOtpSending(true);
-    setOtpError('');
-    try {
-      const result = await submitOtp(auth.token, run.runId, digits);
-      if (result?.ok) {
-        setOtpOpen(false);
-        setOtpError('');
-        notify('OTP hợp lệ — tiếp tục đăng ký.', 'success');
-      } else {
-        setOtpError(`OTP không hợp lệ. Còn ${result?.attemptsLeft ?? 0} lần thử.`);
-      }
-    } catch (error) {
-      setOtpError(error.status === 501
-        ? 'Cổng xác thực chưa mở để kích hoạt OTP — bạn vui lòng vào sv.bdu.edu.vn xác thực thủ công rồi bấm "Làm mới trạng thái".'
-        : (error.message || 'Không gửi được OTP.'));
-    } finally {
-      setOtpSending(false);
-    }
-  }, [auth.token, run?.runId, otpCode, notify]);
 
   const handleWithdraw = useCallback(async () => {
     if (!auth.token || !withdrawTarget) return;
@@ -682,7 +610,7 @@ export default function EnrollmentPage() {
   }, [auth.token, withdrawTarget, notify, loadRegistered]);
 
   useViewportDialog(Boolean(withdrawTarget), () => setWithdrawTarget(null), withdrawDialogRef);
-  useViewportDialog(otpOpen, () => setOtpOpen(false), otpDialogRef);
+  useViewportDialog(credentialOpen, closeCredentials, credentialDialogRef);
 
   const countdown = useMemo(() => {
     if (!run?.triggerAt) return null;
@@ -1195,20 +1123,17 @@ export default function EnrollmentPage() {
         </ViewportModal>
       ) : null}
 
-      {otpOpen ? (
-        <ViewportModal id="enroll-otp-modal" title="Xác thực OTP" labelledBy="enroll-otp-title" onClose={() => setOtpOpen(false)} dialogRef={otpDialogRef}>
-          <div id="enroll-otp-title" className="enroll-modal-title">Nhập mã OTP</div>
-          <p className="enroll-modal-text">Server yêu cầu xác thực trước khi đăng ký. Nhập mã 6 chữ số đã gửi tới email/SMS của bạn.</p>
-          <OtpBoxes value={otpCode} onChange={setOtpCode} disabled={otpSending} />
-          {otpError ? <p className="enroll-error">{otpError}</p> : null}
-          <div className="enroll-modal-actions">
-            <button type="button" className="enroll-ghost" onClick={() => setOtpOpen(false)}>Để sau</button>
-            <button type="button" className="enroll-primary" onClick={handleSubmitOtp} disabled={otpSending || otpCode.replace(/\D/g, '').length !== 6}>
-              {otpSending ? 'Đang gửi…' : 'Xác nhận'}
-            </button>
-          </div>
-        </ViewportModal>
-      ) : null}
+      <CredentialsModal
+        open={credentialOpen}
+        mssv={mssv}
+        password={credentialPassword}
+        error={credentialError}
+        busy={starting}
+        onPasswordChange={setCredentialPassword}
+        onClose={closeCredentials}
+        onSubmit={handleConfirmStart}
+        dialogRef={credentialDialogRef}
+      />
     </section>
   );
 }

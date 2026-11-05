@@ -312,6 +312,78 @@ body.theme-light .sidebar .nav-item.active {
   gap: 12px;
 }
 
+/* Confession dựng skeleton đúng bố cục thật trong lần tải đầu, tránh khung
+   hình nửa vời (hero trống, sidebar thiếu danh hiệu, feed lẻ tẻ). */
+.confession-skeleton-hero {
+  display: grid;
+  place-items: center;
+  min-height: 340px;
+  padding: 32px 24px;
+}
+
+.confession-skeleton-hero-content {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: min(520px, 84%);
+}
+
+.confession-skeleton-avatar {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+}
+
+.confession-skeleton-avatar.small {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+}
+
+.confession-skeleton-composer,
+.confession-skeleton-widget {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.confession-skeleton-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.confession-skeleton-pill,
+.confession-skeleton-filter-pill {
+  width: 150px;
+  height: 34px;
+  border-radius: 999px;
+}
+
+.confession-skeleton-filter-pill {
+  width: 132px;
+  height: 32px;
+}
+
+.confession-skeleton-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+}
+
+.confession-skeleton-button {
+  width: 100%;
+  height: 40px;
+}
+
+.confession-skeleton-widget-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 @keyframes route-skeleton-shimmer {
   to {
     background-position: -200% 0;
@@ -5653,21 +5725,16 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 #tab-enrollment .enroll-modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
 #tab-enrollment .enroll-modal-text { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 14px; }
 #tab-enrollment .enroll-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-#tab-enrollment .enroll-otp-boxes { display: flex; gap: 8px; justify-content: center; margin: 6px 0 4px; }
-#tab-enrollment .enroll-otp-box {
-  width: 46px;
-  height: 54px;
-  text-align: center;
-  font-size: 1.35rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  border-radius: 12px;
+#tab-enrollment .enroll-credential-field { display: grid; gap: 4px; margin-top: 10px; font-size: 0.82rem; }
+#tab-enrollment .enroll-credential-field input {
+  padding: 8px 10px;
+  border-radius: 8px;
   border: 1px solid var(--enroll-border);
-  background: var(--bg-card);
-  color: var(--text-main);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  background: transparent;
+  color: inherit;
 }
-#tab-enrollment .enroll-otp-box:focus { outline: none; border-color: var(--bdu-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 22%, transparent); }
+#tab-enrollment .enroll-credential-field input:focus { outline: none; border-color: var(--bdu-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 22%, transparent); }
+#tab-enrollment .enroll-credential-field input[readonly] { opacity: 0.7; }
 
 /* side column + mini schedule */
 #tab-enrollment .enroll-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
@@ -5737,7 +5804,6 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
   #tab-enrollment .enroll-subjects { max-height: none; overflow: visible; }
   #tab-enrollment .enroll-priority-meta { flex: 1; }
   #tab-enrollment .enroll-row-actions { width: 100%; justify-content: flex-end; }
-  #tab-enrollment .enroll-otp-box { width: 42px; height: 50px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #tab-enrollment *,
