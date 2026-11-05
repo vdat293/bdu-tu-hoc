@@ -41,11 +41,11 @@ export function withdraw(token, idToHoc, { signal } = {}) {
   return request('/api/enrollment/withdraw', { token, method: 'POST', body: { id_to_hoc: idToHoc }, signal, defaultMessage: 'Không rút được môn học.' });
 }
 
-export function startRun(token, { roundId, triggerAt, autoFixScheduleConflict, refreshToken, password } = {}, { signal } = {}) {
+export function startRun(token, { roundId, triggerAt, autoFixScheduleConflict, refreshToken, password, watchSlots } = {}, { signal } = {}) {
   return request('/api/enrollment/runs', {
     token,
     method: 'POST',
-    body: { roundId, triggerAt, autoFixScheduleConflict: !!autoFixScheduleConflict, refreshToken: refreshToken || '', password: password || '' },
+    body: { roundId, triggerAt, autoFixScheduleConflict: !!autoFixScheduleConflict, refreshToken: refreshToken || '', password: password || '', watchSlots: !!watchSlots },
     signal,
     defaultMessage: 'Không khởi chạy được lượt đăng ký.'
   }).then((data) => unwrap(data, data));

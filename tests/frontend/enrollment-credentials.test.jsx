@@ -61,9 +61,10 @@ describe('CredentialsModal', () => {
       json: async () => ({ result: true, data: { runId: 'r1' } })
     }));
     vi.stubGlobal('fetch', fetchMock);
-    const result = await startRun('tok', { roundId: 'dot1', password: 'secret' });
+    const result = await startRun('tok', { roundId: 'dot1', password: 'secret', watchSlots: true });
     expect(result.runId).toBe('r1');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).password).toBe('secret');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).watchSlots).toBe(true);
   });
 
   it('marks the portaled dialog with the enroll-modal class', () => {
