@@ -356,15 +356,18 @@ export const EnrollmentController = {
       }
       res.setHeader('Cache-Control', 'no-store');
 
+      // Danh sách auto (ưu tiên) đã lưu — hiện cùng danh sách đã đăng ký thật.
+      const autoItems = await priorityStore.listPriorities(mssv).catch(() => []);
+
       const active = await EnrollmentRunService.testActiveCredentials(mssv);
       if (!active.active) {
-        return res.json({ result: true, data: { active: false } });
+        return res.json({ result: true, data: { active: false, mssv, autoItems } });
       }
       if (active.status === 'inactive') {
-        return res.json({ result: true, data: { active: true, status: 'Inactive', mssv, runStatus: active.runStatus, message: active.message } });
+        return res.json({ result: true, data: { active: true, status: 'Inactive', mssv, runStatus: active.runStatus, autoItems, message: active.message } });
       }
       if (active.status === 'unavailable' || active.status === 'no_password') {
-        return res.json({ result: true, data: { active: true, status: 'Unknown', mssv, runStatus: active.runStatus, message: active.message } });
+        return res.json({ result: true, data: { active: true, status: 'Unknown', mssv, runStatus: active.runStatus, autoItems, message: active.message } });
       }
 
       let courses = [];
@@ -398,6 +401,7 @@ export const EnrollmentController = {
           triggerAt: active.triggerAt,
           courses,
           totalCredits,
+          autoItems,
           ...(message ? { message } : {})
         }
       });

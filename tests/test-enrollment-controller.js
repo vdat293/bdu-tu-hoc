@@ -366,15 +366,18 @@ try {
   await section('internalDkmh reports no active auto run', async () => {
     process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
     EnrollmentRunService.testActiveCredentials = async () => ({ active: false });
+    priorityStore.listPriorities = async () => [{ maMon: 'AAA', tenMon: 'Môn A', soTc: 3, nhomTo: '01', loai: 'chinh', thuTu: 1 }];
     const res = response();
     await EnrollmentController.internalDkmh(reqWith({ headers: { 'x-internal-secret': 'secret-123' }, query: { mssv: '24050126' } }), res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.data.active, false);
+    assert.equal(res.body.data.autoItems.length, 1);
   });
 
   await section('internalDkmh returns Active + registered courses when the test login works', async () => {
     process.env.ENROLLMENT_INTERNAL_SECRET = 'secret-123';
     EnrollmentRunService.testActiveCredentials = async () => ({ active: true, status: 'active', token: 'tok-test', runStatus: 'scheduled', triggerAt: '2026-11-05T09:00:00.000Z' });
+    priorityStore.listPriorities = async () => [{ maMon: 'AAA', tenMon: 'Môn A', soTc: 3, nhomTo: '01', loai: 'chinh', thuTu: 1 }];
     enrollmentService.getRegistered = async () => ({
       dsKqdkmh: [
         { is_da_rut_mon_hoc: false, to_hoc: { ma_mon: 'INF1522', ten_mon: 'Dự án nghề cơ bản', so_tc: '2', nhom_to: '01', lop: '27TH03' } },
@@ -387,6 +390,7 @@ try {
     assert.equal(res.body.data.status, 'Active');
     assert.equal(res.body.data.courses.length, 1);
     assert.equal(res.body.data.totalCredits, 2);
+    assert.equal(res.body.data.autoItems.length, 1);
   });
 
   await section('internalDkmh reports Inactive when the stored password no longer works', async () => {

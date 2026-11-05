@@ -64,9 +64,26 @@ function formatUpcoming(rows) {
     .join('\n');
 }
 
+function formatAutoItems(items) {
+  if (!items?.length) return ['Danh sách auto: chưa lưu môn nào.'];
+  const lines = [`Danh sách auto (${items.length} mục):`];
+  for (const [index, item] of items.slice(0, 20).entries()) {
+    const nhom = item.nhomTo ? `, nhóm ${item.nhomTo}` : '';
+    const loai = item.loai === 'du_phong' ? 'dự phòng' : 'chính';
+    lines.push(`${item.thuTu ?? index + 1}. ${item.maMon} — ${item.tenMon || '—'} (${item.soTc ?? '?'} TC${nhom}) [${loai}]`);
+  }
+  if (items.length > 20) lines.push(`… và ${items.length - 20} mục khác`);
+  return lines;
+}
+
 function formatDkmh(data, mssv) {
   if (!data?.active) {
-    return 'Hiện tại bạn không có lượt auto đăng ký môn học nào đang chạy.\nVào web `/enrollment` để chọn môn và kích hoạt.';
+    return [
+      'Hiện tại bạn không có lượt auto đăng ký môn học nào đang chạy.',
+      'Vào web `/enrollment` để chọn môn và kích hoạt.',
+      '',
+      ...formatAutoItems(data?.autoItems)
+    ].join('\n').slice(0, 1900);
   }
   const status = data.status === 'Active'
     ? '✅ Active — đăng nhập thử thành công'
@@ -87,6 +104,7 @@ function formatDkmh(data, mssv) {
   } else if (data.status === 'Active') {
     lines.push('Chưa có môn nào được đăng ký.');
   }
+  lines.push('', ...formatAutoItems(data.autoItems));
   return lines.join('\n').slice(0, 1900);
 }
 
