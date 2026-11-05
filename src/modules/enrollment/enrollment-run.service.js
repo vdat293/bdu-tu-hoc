@@ -41,9 +41,25 @@ const asIso = (value) => {
 
 // Dựng payload giống `serialize()` từ row trong DB, để UI khôi phục được lượt
 // chạy đã xong kể cả khi nó không còn trong RAM (F5, mở tab khác, restart).
+const summaryToLogs = (summary) => {
+  if (!summary) return [];
+  const entries = [];
+  for (const item of summary.thanh_cong ?? []) {
+    entries.push({ type: 'success', message: `✔ ${item.ma_mon}` });
+  }
+  for (const item of summary.that_bai ?? []) {
+    entries.push({ type: 'error', message: `✖ ${item.ma_mon}: ${item.ly_do ?? 'thất bại'}` });
+  }
+  for (const item of summary.rut ?? []) {
+    entries.push({ type: 'warning', message: `↩ ${item.ma_mon}: ${item.ly_do ?? 'đã rút'}` });
+  }
+  return entries;
+};
+
 export function serializeStoredRun(row) {
   if (!row) return null;
   const summary = row.summary && typeof row.summary === 'object' ? row.summary : null;
+  const storedLogs = Array.isArray(row.logs) ? row.logs : [];
   return {
     runId: row.id,
     status: row.status,
@@ -52,7 +68,9 @@ export function serializeStoredRun(row) {
     updatedAt: asIso(row.finished_at) ?? asIso(row.started_at) ?? asIso(row.created_at),
     finishedAt: asIso(row.finished_at),
     snapshotCount: Array.isArray(row.snapshot) ? row.snapshot.length : 0,
-    logs: Array.isArray(row.logs) ? row.logs : [],
+    // Lượt cũ (trước migration 071) không có logs — dựng lại từ summary để
+    // người dùng vẫn đọc được kết quả thay vì thấy "Chưa có log".
+    logs: storedLogs.length ? storedLogs : summaryToLogs(summary),
     results: [],
     summary: summary
       ? {

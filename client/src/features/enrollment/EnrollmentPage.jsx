@@ -1066,7 +1066,7 @@ export default function EnrollmentPage() {
                 <div className="enroll-terminal">
                   <div className="enroll-terminal-bar" aria-hidden="true"><span /><span /><span /></div>
                   <pre ref={logRef} className="enroll-terminal-body" aria-live="polite">
-                    {(run.logs ?? []).map((entry, index) => `[${entry.timestamp ?? ''}] ${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
+                    {(run.logs ?? []).map((entry, index) => `${entry.timestamp ? `[${entry.timestamp}] ` : ''}${entry.message ?? ''}`).join('\n') || 'Chưa có log…'}
                   </pre>
                 </div>
               ) : null}

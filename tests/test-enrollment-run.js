@@ -570,6 +570,32 @@ await section('ac) a DB-only active run is reported as failed after a server res
   assert.equal(write.fields.status, 'failed');
 });
 
+await section('ad) legacy rows without logs rebuild them from the summary', async () => {
+  const latestRow = {
+    id: 'stored-3',
+    mssv: 'SV001',
+    status: 'done',
+    trigger_at: null,
+    started_at: null,
+    finished_at: '2026-11-05T02:00:09.000Z',
+    created_at: '2026-11-04T10:00:00.000Z',
+    snapshot: [],
+    summary: {
+      thanh_cong: [{ ma_mon: 'AAA' }],
+      that_bai: [{ ma_mon: 'BBB', ly_do: 'thiếu tiên quyết' }],
+      fallback: [],
+      rut: []
+    },
+    logs: [],
+    error: null
+  };
+  const { manager } = makeManager({ latestRow });
+  const latest = await manager.getLatestForStudent('SV001');
+  assert.equal(latest.logs.length, 2);
+  assert.match(latest.logs[0].message, /✔ AAA/);
+  assert.match(latest.logs[1].message, /✖ BBB.*tiên quyết/);
+});
+
 await section('singleton export exists', async () => {
   assert.ok(EnrollmentRunService, 'EnrollmentRunService singleton phải tồn tại');
 });
