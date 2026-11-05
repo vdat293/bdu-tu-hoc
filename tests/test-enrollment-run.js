@@ -68,7 +68,6 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
       calls.register.push({ token, ...args });
       return registerImpl(args, calls.register.length);
     },
-    verifyOtp: async (token, code) => ({ ok: code === '123456' }),
     login: async (mssv, password) => {
       calls.login.push({ mssv, password });
       if (login) return login(mssv, password, calls.login.length);
@@ -113,8 +112,8 @@ await section('a1) start rejects a missing password', async () => {
   );
 });
 
-await section('a2) serialize never exposes the password', async () => {
-  const { manager } = makeManager({ gateSequence: [false] });
+await section('a2) serialize/DB writes never expose the password', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const { run } = await manager.start({
     password: 'super-secret',
@@ -126,6 +125,9 @@ await section('a2) serialize never exposes the password', async () => {
   const serialized = manager.getForStudent(run.runId, 'SV001');
   assert.ok(!JSON.stringify(serialized).includes('super-secret'));
   manager.stop(run.runId, 'SV001');
+  await waitForStatus(manager, run.runId, 'SV001', ['stopped']);
+  assert.ok(!JSON.stringify(calls.insertRun).includes('super-secret'), 'insertRun không được chứa mật khẩu');
+  assert.ok(!JSON.stringify(calls.updateRun).includes('super-secret'), 'updateRun không được chứa mật khẩu');
 });
 
 const startWithPassword = async (overrides = {}) => {
@@ -158,16 +160,51 @@ await section('a4) a wrong password fails the run before the gate opens', async 
 });
 
 await section('a5) a transient login failure at T-5 is retried at the trigger time', async () => {
-  let attempts = 0;
+  const loginTimes = [];
   const login = async () => {
-    attempts += 1;
-    if (attempts === 1) throw Object.assign(new Error('offline'), { status: 502 });
+    loginTimes.push(clock);
+    if (loginTimes.length === 1) throw Object.assign(new Error('offline'), { status: 502 });
     return { token: 'tok-late', refreshToken: '' };
   };
-  const { final, calls } = await startWithPassword({ login });
+  const { final, calls, run } = await startWithPassword({ login });
+  const triggerMs = new Date(run.triggerAt).getTime();
   assert.equal(final.status, 'done');
   assert.equal(calls.login.length, 2);
   assert.equal(calls.register[0].token, 'tok-late');
+  assert.ok(loginTimes[1] >= triggerMs, 'lần thử lại phải rơi đúng triggerAt, không phải T-5+5s');
+});
+
+await section('a8) a 12-hour wait still logs in at T-5 (success does not burn the budget)', async () => {
+  const loginTimes = [];
+  const login = async () => {
+    loginTimes.push(clock);
+    return { token: 'tok-' + loginTimes.length, refreshToken: '' };
+  };
+  const made = makeManager({ gateSequence: [true], login, refresh: async () => { throw new Error('refresh dead'); } });
+  clock = 1_000_000;
+  const triggerMs = clock + 12 * 60 * 60_000;
+  const { run } = await made.manager.start({
+    password: 'pw',
+    mssv: 'SV001',
+    token: 'tok-old',
+    refreshToken: 'ref',
+    items: [chinhA],
+    triggerAt: new Date(triggerMs).toISOString()
+  });
+  let final = null;
+  for (let i = 0; i < 20_000; i += 1) {
+    const status = made.manager.getForStudent(run.runId, 'SV001');
+    if (status && ['done', 'failed'].includes(status.status)) { final = status; break; }
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(5_000);
+  }
+  assert.ok(final, 'run phải kết thúc sau 12 giờ chờ');
+  assert.equal(final.status, 'done');
+  assert.ok(
+    loginTimes.some((time) => time >= triggerMs - 5 * 60_000 && time <= triggerMs),
+    'phải có lần login trong cửa sổ T-5 dù lịch chờ dài'
+  );
+  assert.equal(made.calls.register[0].token, 'tok-' + loginTimes.length);
 });
 
 await section('a6) starting late logs in immediately before polling the gate', async () => {

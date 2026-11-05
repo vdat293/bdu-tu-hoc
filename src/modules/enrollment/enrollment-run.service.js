@@ -204,6 +204,7 @@ export class EnrollmentRunManager {
       loginAtMs: triggerAtMs - LOGIN_LEAD_MS,
       loginAttempts: 0,
       loginDone: false,
+      loginRetryAtMs: null,
       passwordInvalid: false,
       snapshot,
       autoFixScheduleConflict: autoFixScheduleConflict === true,
@@ -314,7 +315,6 @@ export class EnrollmentRunManager {
   async loginWithPassword(run) {
     if (!run.password) return 'fatal';
     if ((run.loginAttempts ?? 0) >= MAX_LOGIN_ATTEMPTS) return 'transient';
-    run.loginAttempts = (run.loginAttempts ?? 0) + 1;
     try {
       const next = await this.service.login(run.mssv, run.password);
       if (!next?.token) return 'transient';
@@ -322,23 +322,28 @@ export class EnrollmentRunManager {
       if (next.refreshToken) run.refreshToken = next.refreshToken;
       run.lastRefreshAt = this.now();
       run.passwordInvalid = false;
+      run.loginRetryAtMs = null;
       this.appendLog(run, 'success', 'Đã kiểm tra và đăng nhập lại BDU trước giờ mở.');
       return 'ok';
     } catch (error) {
+      // Chỉ lỗi mới tiêu ngân sách; login thành công không chặn lần login T−5.
+      run.loginAttempts = (run.loginAttempts ?? 0) + 1;
       if (error?.status === 401) {
         run.passwordInvalid = true;
         this.appendLog(run, 'error', 'Mật khẩu BDU không đúng.');
         return 'fatal';
       }
+      run.loginRetryAtMs = run.triggerAtMs;
       this.appendLog(run, 'warning', 'Không đăng nhập lại được BDU (lỗi tạm thời) — sẽ thử lại đúng giờ mở.');
       return 'transient';
     }
   }
 
   // A run can outlive the 5-hour access token (e.g. scheduled today for
-  // tomorrow). Try the RAM-only refresh token first; if that is dead, fall
-  // back to a full password login (also RAM-only).
-  async tryRefresh(run) {
+  // tomorrow). Try the RAM-only refresh token first. Password login is only a
+  // fallback on a real auth failure (`allowPassword`), never for the periodic
+  // hourly refresh — otherwise a long wait would burn the login budget.
+  async tryRefresh(run, { allowPassword = false } = {}) {
     if (run.refreshToken && (run.refreshCount ?? 0) < 3) {
       run.refreshCount = (run.refreshCount ?? 0) + 1;
       try {
@@ -351,10 +356,10 @@ export class EnrollmentRunManager {
           return true;
         }
       } catch {
-        /* fall through to a password login */
+        /* fall through to a password login when allowed */
       }
     }
-    if (!run.password) return false;
+    if (!allowPassword || !run.password) return false;
     return (await this.loginWithPassword(run)) === 'ok';
   }
 
@@ -415,7 +420,7 @@ export class EnrollmentRunManager {
         });
       } catch (error) {
         const isAuth = error?.status === 401 || error?.code === 'AUTH_EXPIRED';
-        if (isAuth && await this.tryRefresh(run)) {
+        if (isAuth && await this.tryRefresh(run, { allowPassword: true })) {
           continue;
         }
         if (isAuth) {
@@ -431,7 +436,7 @@ export class EnrollmentRunManager {
       if (res?.idRs) run.lastIdRs = res.idRs;
       const cls = classifyRegisterResult(res);
       if (cls === 'auth') {
-        if (await this.tryRefresh(run)) continue;
+        if (await this.tryRefresh(run, { allowPassword: true })) continue;
         run.authExpired = true;
         return { cls, res };
       }
@@ -567,7 +572,8 @@ export class EnrollmentRunManager {
     // warm (hourly refresh) and re-login with the password 5 minutes before
     // the trigger so the credentials are proven and the token is fresh.
     while (!run.stopRequested && this.now() < run.triggerAtMs) {
-      if (!run.loginDone && this.now() >= run.loginAtMs) {
+      const loginDueMs = run.loginRetryAtMs ?? run.loginAtMs;
+      if (!run.loginDone && this.now() >= loginDueMs) {
         // eslint-disable-next-line no-await-in-loop
         const outcome = await this.loginWithPassword(run);
         if (outcome === 'fatal') {
@@ -587,8 +593,8 @@ export class EnrollmentRunManager {
     }
 
     // Bắt đầu muộn hơn mốc T−5 (hoặc lần login ở T−5 lỗi tạm thời): thử lại
-    // ngay trước khi poll cổng.
-    if (!run.loginDone && !run.stopRequested) {
+    // đúng một lần ngay trước khi poll cổng.
+    if (!run.loginDone && !run.stopRequested && this.now() >= (run.loginRetryAtMs ?? run.loginAtMs)) {
       const outcome = await this.loginWithPassword(run);
       if (outcome === 'fatal') {
         await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' });
@@ -612,7 +618,7 @@ export class EnrollmentRunManager {
         // eslint-disable-next-line no-await-in-loop
         gateOpen = await this.service.getGateStatus(run.token);
       } catch (error) {
-        if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run)) {
+        if ((error?.status === 401 || error?.code === 'AUTH_EXPIRED') && await this.tryRefresh(run, { allowPassword: true })) {
           continue;
         }
         if (error?.status === 401 || error?.code === 'AUTH_EXPIRED') run.authExpired = true;

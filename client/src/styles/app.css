@@ -312,78 +312,6 @@ body.theme-light .sidebar .nav-item.active {
   gap: 12px;
 }
 
-/* Confession dựng skeleton đúng bố cục thật trong lần tải đầu, tránh khung
-   hình nửa vời (hero trống, sidebar thiếu danh hiệu, feed lẻ tẻ). */
-.confession-skeleton-hero {
-  display: grid;
-  place-items: center;
-  min-height: 340px;
-  padding: 32px 24px;
-}
-
-.confession-skeleton-hero-content {
-  display: grid;
-  justify-items: center;
-  gap: 16px;
-  width: min(520px, 84%);
-}
-
-.confession-skeleton-avatar {
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
-}
-
-.confession-skeleton-avatar.small {
-  width: 56px;
-  height: 56px;
-  flex: 0 0 auto;
-}
-
-.confession-skeleton-composer,
-.confession-skeleton-widget {
-  display: grid;
-  gap: 16px;
-  padding: 20px;
-}
-
-.confession-skeleton-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.confession-skeleton-pill,
-.confession-skeleton-filter-pill {
-  width: 150px;
-  height: 34px;
-  border-radius: 999px;
-}
-
-.confession-skeleton-filter-pill {
-  width: 132px;
-  height: 32px;
-}
-
-.confession-skeleton-filter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
-}
-
-.confession-skeleton-button {
-  width: 100%;
-  height: 40px;
-}
-
-.confession-skeleton-widget-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
 @keyframes route-skeleton-shimmer {
   to {
     background-position: -200% 0;
@@ -5654,7 +5582,6 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 }
 #tab-enrollment .enroll-status.is-scheduled { color: var(--color-amber); border-color: color-mix(in srgb, var(--color-amber) 45%, transparent); }
 #tab-enrollment .enroll-status.is-running { color: var(--bdu-light); border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); }
-#tab-enrollment .enroll-status.is-otp_required { color: var(--color-purple); border-color: color-mix(in srgb, var(--color-purple) 45%, transparent); }
 #tab-enrollment .enroll-status.is-done { color: var(--color-emerald); border-color: color-mix(in srgb, var(--color-emerald) 45%, transparent); }
 #tab-enrollment .enroll-status.is-failed { color: var(--color-rose); border-color: color-mix(in srgb, var(--color-rose) 45%, transparent); }
 #tab-enrollment .enroll-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.82rem; }
@@ -5725,16 +5652,37 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 #tab-enrollment .enroll-modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
 #tab-enrollment .enroll-modal-text { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 14px; }
 #tab-enrollment .enroll-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-#tab-enrollment .enroll-credential-field { display: grid; gap: 4px; margin-top: 10px; font-size: 0.82rem; }
-#tab-enrollment .enroll-credential-field input {
+/* Credential modal is portaled to <body>, outside #tab-enrollment, so these
+   rules must be scoped to the modal itself or they never apply. */
+#enroll-credential-modal .enroll-modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
+#enroll-credential-modal .enroll-modal-text { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 14px; }
+#enroll-credential-modal .enroll-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+#enroll-credential-modal .enroll-error { margin: 8px 0; color: var(--color-rose); font-size: 0.82rem; }
+#enroll-credential-modal .enroll-credential-field { display: grid; gap: 4px; margin-top: 10px; font-size: 0.82rem; }
+#enroll-credential-modal .enroll-credential-field input {
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--enroll-border);
   background: transparent;
   color: inherit;
 }
-#tab-enrollment .enroll-credential-field input:focus { outline: none; border-color: var(--bdu-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 22%, transparent); }
-#tab-enrollment .enroll-credential-field input[readonly] { opacity: 0.7; }
+#enroll-credential-modal .enroll-credential-field input:focus { outline: none; border-color: var(--bdu-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bdu-light) 22%, transparent); }
+#enroll-credential-modal .enroll-credential-field input[readonly] { opacity: 0.7; }
+#enroll-credential-modal .enroll-primary,
+#enroll-credential-modal .enroll-ghost { font: inherit; cursor: pointer; border-radius: 10px; }
+#enroll-credential-modal .enroll-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 18px; border: 1px solid transparent; background: var(--bdu-gradient); color: #fff;
+  font-weight: 700; min-height: 44px;
+}
+#enroll-credential-modal .enroll-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+#enroll-credential-modal .enroll-ghost {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; min-height: 40px;
+  border: 1px solid var(--enroll-border); background: transparent; color: var(--text-main);
+  font-weight: 600; font-size: 0.85rem;
+}
+#enroll-credential-modal .enroll-ghost:hover:not(:disabled) { background: var(--bg-card-hover); }
+#enroll-credential-modal .enroll-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* side column + mini schedule */
 #tab-enrollment .enroll-side { display: grid; gap: 20px; align-content: start; min-width: 0; }

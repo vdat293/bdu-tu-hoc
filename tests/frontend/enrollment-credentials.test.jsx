@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import CredentialsModal from '../../client/src/features/enrollment/CredentialsModal.jsx';
 import { startRun } from '../../client/src/api/enrollment.js';
@@ -62,5 +64,12 @@ describe('CredentialsModal', () => {
     const result = await startRun('tok', { roundId: 'dot1', password: 'secret' });
     expect(result.runId).toBe('r1');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).password).toBe('secret');
+  });
+
+  it('styles the modal through its portal id (outside #tab-enrollment)', () => {
+    const css = readFileSync(path.resolve(process.cwd(), 'client/src/styles/app.css'), 'utf8');
+    expect(css).toContain('#enroll-credential-modal .enroll-credential-field');
+    expect(css).toContain('#enroll-credential-modal .enroll-primary');
+    expect(css).not.toContain('.enroll-otp-box');
   });
 });

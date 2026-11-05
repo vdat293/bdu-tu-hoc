@@ -328,6 +328,17 @@ await section('login maps a network failure to 502 BDU_UNREACHABLE', async () =>
   });
 });
 
+await section('login treats a 5xx JSON response as transient, not a wrong password', async () => {
+  const { fetchImpl } = createFetchMock({
+    [`POST ${BASE}/auth/login`]: { body: { message: 'Service Unavailable' }, status: 503 }
+  });
+  await assert.rejects(() => new EnrollmentService({ fetchImpl }).login('24050126', 'secret'), (error) => {
+    assert.equal(error.status, 502);
+    assert.equal(error.code, 'BDU_UNAVAILABLE');
+    return true;
+  });
+});
+
 await section('the OTP seam is gone from the service', async () => {
   assert.equal(typeof EnrollmentService.prototype.verifyOtp, 'undefined');
   const source = readFileSync(new URL('../src/modules/enrollment/enrollment.service.js', import.meta.url), 'utf8');

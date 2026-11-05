@@ -8,7 +8,7 @@ import { enrollmentService } from '../src/modules/enrollment/enrollment.service.
 
 const originalResolve = BduIdentityService.resolveVerifiedMssv;
 const originalStore = { ...priorityStore };
-const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, getLatestForStudent: EnrollmentRunService.getLatestForStudent, submitOtp: EnrollmentRunService.submitOtp, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe };
+const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, getLatestForStudent: EnrollmentRunService.getLatestForStudent, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe };
 const originalBdu = {
   getCatalog: enrollmentService.getCatalog,
   getRegistered: enrollmentService.getRegistered,

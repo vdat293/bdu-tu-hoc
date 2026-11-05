@@ -272,10 +272,17 @@ export class EnrollmentService {
       throw new EnrollmentBduError('Phản hồi đăng nhập từ BDU không hợp lệ.', { status: 502, code: 'BDU_BAD_RESPONSE' });
     }
     if (!data?.access_token) {
-      throw new EnrollmentBduError(
-        pickString(data?.message, data?.error_description, 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.'),
-        { status: 401, code: 'INVALID_CREDENTIALS' }
-      );
+      const httpStatus = Number(response.status) || 0;
+      if (httpStatus >= 500 || httpStatus === 429) {
+        throw new EnrollmentBduError('Máy chủ BDU tạm thời không đăng nhập được.', { status: 502, code: 'BDU_UNAVAILABLE' });
+      }
+      if ([400, 401, 403].includes(httpStatus)) {
+        throw new EnrollmentBduError(
+          pickString(data?.message, data?.error_description, 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.'),
+          { status: 401, code: 'INVALID_CREDENTIALS' }
+        );
+      }
+      throw new EnrollmentBduError('Phản hồi đăng nhập từ BDU không hợp lệ.', { status: 502, code: 'BDU_BAD_RESPONSE' });
     }
     return { token: data.access_token, refreshToken: data.refresh_token || '' };
   }
