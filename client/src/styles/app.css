@@ -5406,6 +5406,7 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 #tab-enrollment .enroll-table tbody tr { cursor: pointer; transition: background-color 140ms ease; }
 #tab-enrollment .enroll-table tbody tr:hover { background: color-mix(in srgb, var(--bdu-light) 7%, transparent); }
 #tab-enrollment .enroll-table tbody tr.is-selected { background: color-mix(in srgb, var(--bdu-light) 13%, transparent); }
+#tab-enrollment .enroll-table tr.is-registered { opacity: 0.72; }
 #tab-enrollment .enroll-table tbody tr.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--bdu-light); }
 #tab-enrollment .enroll-table tbody tr:last-child td { border-bottom: 0; }
 #tab-enrollment .enroll-col-check { width: 44px; }
@@ -5442,6 +5443,7 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
   vertical-align: middle;
 }
 #tab-enrollment .enroll-tag.is-warn { color: var(--color-amber); background: color-mix(in srgb, var(--color-amber) 14%, transparent); }
+#tab-enrollment .enroll-tag.is-ok { color: var(--color-emerald); background: color-mix(in srgb, var(--color-emerald) 14%, transparent); }
 #tab-enrollment .enroll-muted { color: var(--text-muted); }
 #tab-enrollment .enroll-cap { display: grid; gap: 4px; min-width: 74px; }
 #tab-enrollment .enroll-cap > span:first-child { font-variant-numeric: tabular-nums; font-size: 0.78rem; }
@@ -5584,6 +5586,7 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 }
 #tab-enrollment .enroll-status.is-scheduled { color: var(--color-amber); border-color: color-mix(in srgb, var(--color-amber) 45%, transparent); }
 #tab-enrollment .enroll-status.is-running { color: var(--bdu-light); border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); }
+#tab-enrollment .enroll-status.is-watching { color: var(--bdu-light); border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); }
 #tab-enrollment .enroll-status.is-done { color: var(--color-emerald); border-color: color-mix(in srgb, var(--color-emerald) 45%, transparent); }
 #tab-enrollment .enroll-status.is-failed { color: var(--color-rose); border-color: color-mix(in srgb, var(--color-rose) 45%, transparent); }
 #tab-enrollment .enroll-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.82rem; }

@@ -21,6 +21,7 @@ import CredentialsModal from './CredentialsModal.jsx';
 import ScheduleCard from './ScheduleCard.jsx';
 import ReminderSettings from '../../components/notifications/ReminderSettings.jsx';
 import { filterCatalog } from './catalog-filter.js';
+import { checkboxState } from './catalog-selection.js';
 import { buildScheduleCells } from './schedule-cells.js';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
 import { DAY_OPTIONS, SESSION_OPTIONS, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
@@ -157,6 +158,7 @@ export default function EnrollmentPage() {
 
   const [selectedRound, setSelectedRound] = useState('dot1');
   const [autoFixScheduleConflict, setAutoFixScheduleConflict] = useState(false);
+  const [watchSlots, setWatchSlots] = useState(false);
   const [run, setRun] = useState(null);
   const [starting, setStarting] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -178,9 +180,15 @@ export default function EnrollmentPage() {
 
   const unsubscribeRef = useRef(null);
   const runIdRef = useRef(null);
+  const dirtyRef = useRef(false);
 
   const activeRun = run && ACTIVE_STATUSES.includes(run.status);
+  const watching = run?.phase === 'watching' && ACTIVE_STATUSES.includes(run?.status);
   const mssv = auth.user?.mssv ?? '';
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   const loadCatalog = useCallback(async () => {
     if (!auth.token) return;
@@ -344,10 +352,20 @@ export default function EnrollmentPage() {
           setRun((current) => current ? { ...current, logs: [...(current.logs ?? []), payload] } : current);
           return;
         }
+        if (payload.type === 'priority_updated') {
+          const removed = Array.isArray(payload.removedMaMons) ? payload.removedMaMons : [];
+          if (removed.length) {
+            setSelected((current) => current.filter((item) => !removed.includes(item.maMon)));
+            notify(`Đã gỡ ${removed.length} môn đã đăng ký khỏi danh sách ưu tiên.`, 'info');
+          }
+          loadRegistered();
+          return;
+        }
         if (payload.type === 'done') {
           setRun((current) => ({ ...(payload.run ?? current), status: payload.run?.status ?? current?.status ?? 'done' }));
           setRestoreNotice('');
           loadRegistered();
+          if (!dirtyRef.current) loadPriority();
           notify(payload.run?.status === 'done' ? 'Lượt đăng ký đã hoàn tất.' : 'Lượt đăng ký kết thúc với lỗi.', payload.run?.status === 'done' ? 'success' : 'warning');
         }
       },
@@ -605,6 +623,7 @@ export default function EnrollmentPage() {
       const result = await startRun(auth.token, {
         roundId: selectedRound,
         autoFixScheduleConflict,
+        watchSlots,
         refreshToken: auth.refreshToken,
         password
       });
@@ -618,7 +637,10 @@ export default function EnrollmentPage() {
       setRun({
         runId,
         status: 'scheduled',
+        phase: 'registering',
+        watchSlots,
         triggerAt: selectedRoundInfo ? `${selectedRoundInfo.opensAt}:00+07:00` : null,
+        watchUntil: selectedRoundInfo ? `${selectedRoundInfo.closesAt}:00+07:00` : null,
         logs: [],
         results: [],
         summary: null,
@@ -631,7 +653,7 @@ export default function EnrollmentPage() {
     } finally {
       setStarting(false);
     }
-  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, credentialPassword, mssv, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, watchSlots, credentialPassword, mssv, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -675,6 +697,12 @@ export default function EnrollmentPage() {
     return { text: `${hours > 0 ? `${hours}h ` : ''}${minutes}p ${String(seconds).padStart(2, '0')}s`, tone: 'wait' };
   }, [run?.triggerAt, nowTick]);
 
+  const watchCountdown = useMemo(() => (
+    watching
+      ? `Đang canh slot · thử lại mỗi 60s · tới ${new Date(run.watchUntil).toLocaleString('vi-VN')}`
+      : null
+  ), [watching, run?.watchUntil]);
+
   const sessionBadge = useMemo(() => {
     if (!auth.expiresAt) return { tone: 'unknown', text: 'Phiên BDU: chưa rõ hạn' };
     const diff = auth.expiresAt - nowTick;
@@ -706,6 +734,11 @@ export default function EnrollmentPage() {
       };
     });
   }, [registered]);
+
+  const registeredIds = useMemo(
+    () => new Set(registeredRows.map((row) => row.idToHoc).filter(Boolean)),
+    [registeredRows]
+  );
 
   const registeredCells = useMemo(
     () => buildScheduleCells(registeredRows.map((row) => ({ maMon: row.maMon, tkb: row.tkb }))),
@@ -871,7 +904,7 @@ export default function EnrollmentPage() {
                 </thead>
                 <tbody>
                   {visibleCatalog.map((row) => {
-                    const checked = selectedIds.has(row.idToHoc);
+                    const box = checkboxState({ idToHoc: row.idToHoc, selectedIds, registeredIds });
                     const badges = tkbBadges(row.tkb);
                     const tone = capacityTone(row);
                     const ratio = row.slCp ? Math.max(0, Math.min(1, row.slCl / row.slCp)) : 0;
@@ -882,15 +915,16 @@ export default function EnrollmentPage() {
                     return (
                       <tr
                         key={rowKey}
-                        className={`${checked ? 'is-selected' : ''} ${row.enable ? '' : 'is-closed'}`}
-                        onClick={() => toggleGroup(row)}
+                        className={`${box.checked ? 'is-selected' : ''} ${box.registered ? 'is-registered' : ''} ${row.enable ? '' : 'is-closed'}`}
+                        onClick={() => { if (!box.registered) toggleGroup(row); }}
                         title={row.enable ? '' : (row.gcEnable || 'Ngoài thời gian cho phép đăng ký')}
                       >
                         <td className="enroll-col-check" onClick={(event) => event.stopPropagation()}>
                           <input
                             type="checkbox"
                             className="enroll-check"
-                            checked={checked}
+                            checked={box.checked}
+                            disabled={box.registered}
                             aria-label={`Chọn ${row.maMon} nhóm ${row.nhomTo}`}
                             onChange={() => toggleGroup(row)}
                           />
@@ -899,6 +933,7 @@ export default function EnrollmentPage() {
                         <td>
                           <span className="enroll-name">{row.tenMon || '—'}</span>
                           {row.isCtdt ? <span className="enroll-tag">CTĐT</span> : null}
+                          {box.registered ? <span className="enroll-tag is-ok">Đã ĐK</span> : null}
                           {!row.enable ? <span className="enroll-tag is-warn">Ngoài giờ</span> : null}
                         </td>
                         <td>{row.nhomTo}{row.to ? `-${row.to}` : ''}</td>
@@ -987,7 +1022,7 @@ export default function EnrollmentPage() {
                     {schedule ? `${schedule.semesterLabel} · Khóa ${schedule.cohortYear ?? '—'}` : 'Đang tải lịch…'}
                   </p>
                 </div>
-                {run ? <span className={`enroll-status is-${run.status}`}>{statusLabel[run.status] ?? run.status}</span> : null}
+                {run ? <span className={`enroll-status is-${watching ? 'watching' : run.status}`}>{watching ? 'Đang canh slot' : (statusLabel[run.status] ?? run.status)}</span> : null}
               </div>
 
               {scheduleRounds.length ? (
@@ -1059,6 +1094,20 @@ export default function EnrollmentPage() {
                 </span>
               </label>
 
+              <label className="enroll-switch">
+                <input
+                  type="checkbox"
+                  checked={activeRun ? run?.watchSlots === true : watchSlots}
+                  onChange={(event) => setWatchSlots(event.target.checked)}
+                  disabled={activeRun}
+                />
+                <span className="enroll-switch-track" aria-hidden="true" />
+                <span>
+                  Canh slot lớp hết chỗ
+                  <small>Cứ 1 phút thử lại lớp báo hết chỗ (gồm dự phòng) tới khi đăng ký được hoặc đợt đóng. Mặc định tắt.</small>
+                </span>
+              </label>
+
               <div className="enroll-run-actions">
                 <button type="button" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
                   <IconBolt /> {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
@@ -1083,7 +1132,11 @@ export default function EnrollmentPage() {
                 .
               </p>
 
-              {countdown ? (
+              {watching ? (
+                <div className="enroll-countdown">
+                  <IconClock /> <span>{watchCountdown}</span>
+                </div>
+              ) : countdown ? (
                 <div className={`enroll-countdown is-${countdown.tone}`}>
                   <IconClock /> <span>{countdown.text}</span>
                 </div>
