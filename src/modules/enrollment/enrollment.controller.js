@@ -159,12 +159,18 @@ export const EnrollmentController = {
       const token = bearerToken(req);
       if (!token) return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token).' });
 
-      const { triggerAt, roundId, autoFixScheduleConflict } = req.body ?? {};
+      const { triggerAt, roundId, autoFixScheduleConflict, watchSlots } = req.body ?? {};
+
+      // Canh slot = theo dõi lớp còn chỗ cho tới khi đợt đóng; chỉ chạy được
+      // với đợt có trong lịch nhà trường (cần `closesAt` để biết khi nào hết
+      // hạn theo dõi). Mặc định tắt.
+      const wantsWatch = watchSlots === true;
 
       // Đợt đăng ký do nhà trường set cứng: client chỉ gửi `roundId`, server tự
       // suy ra giờ mở cổng từ lịch của đúng khóa sinh viên — không tin giờ do
       // client tự đặt. `triggerAt` chỉ còn là đường tương thích cho API cũ.
       let triggerDate;
+      let closesAt = null;
       if (roundId !== undefined && roundId !== null && roundId !== '') {
         const schedule = resolveSchedule(mssv);
         const slot = roundId === 'dot1'
@@ -179,11 +185,17 @@ export const EnrollmentController = {
         if (Number.isNaN(triggerDate.getTime())) {
           return res.status(500).json({ result: false, message: 'Lịch đăng ký đang cấu hình sai giờ mở cổng.' });
         }
-        const closesAt = new Date(`${slot.closesAt}:00+07:00`);
+        closesAt = new Date(`${slot.closesAt}:00+07:00`);
+        if (wantsWatch && Number.isNaN(closesAt.getTime())) {
+          return res.status(400).json({ result: false, message: 'Lịch đăng ký đang cấu hình sai giờ đóng cổng nên không canh slot được.' });
+        }
         if (Date.now() > closesAt.getTime() + 5 * 60 * 1000) {
           return res.status(400).json({ result: false, message: 'Đợt đăng ký này đã đóng.' });
         }
       } else {
+        if (wantsWatch) {
+          return res.status(400).json({ result: false, message: 'Canh slot chỉ hỗ trợ khi chọn đợt theo lịch nhà trường.' });
+        }
         triggerDate = new Date(triggerAt);
         if (!triggerAt || Number.isNaN(triggerDate.getTime())) {
           return res.status(400).json({ result: false, message: 'Thiếu đợt đăng ký (roundId) hoặc triggerAt không hợp lệ.' });
@@ -267,6 +279,8 @@ export const EnrollmentController = {
         password,
         items,
         triggerAt: triggerDate.toISOString(),
+        watchSlots: wantsWatch,
+        watchUntil: wantsWatch && closesAt ? closesAt.toISOString() : null,
         autoFixScheduleConflict: wantsAutoFix,
         svNganh: 1,
         tokenExpiresIn: verified.expiresIn

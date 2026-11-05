@@ -216,6 +216,38 @@ try {
     assert.equal(startArgs.tokenExpiresIn, 18000);
   });
 
+  await section('startRun passes watchSlots and closesAt to the run', async () => {
+    const realNow = Date.now;
+    Date.now = () => new Date('2026-11-05T10:00:00+07:00').getTime();
+    try {
+      BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+      priorityStore.listPriorities = async () => [chinhA];
+      enrollmentService.login = async () => ({ token: 'tok-verified', refreshToken: '', expiresIn: 18000 });
+      let startArgs = null;
+      EnrollmentRunService.start = async (args) => {
+        startArgs = args;
+        return { run: { runId: 'run-watch', status: 'scheduled' }, reused: false };
+      };
+      const res = response();
+      await EnrollmentController.startRun(reqWith({ body: { password: 'pw', roundId: 'dot1', watchSlots: true } }), res);
+      assert.equal(res.statusCode, 202);
+      assert.equal(startArgs.watchSlots, true);
+      assert.equal(startArgs.watchUntil, '2026-11-10T13:00:00.000Z');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  await section('startRun 400 when watchSlots is used without roundId', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    const res = response();
+    await EnrollmentController.startRun(reqWith({
+      body: { password: 'pw', watchSlots: true, triggerAt: new Date(Date.now() + 3600_000).toISOString() }
+    }), res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /Canh slot/);
+  });
+
   await section('getRun 404 when run belongs to another student', async () => {
     BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
     EnrollmentRunService.getForStudent = () => null;
