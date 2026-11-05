@@ -455,6 +455,8 @@ export class EnrollmentRunManager {
   }
 
   summaryAccFromResults(results = []) {
+    // KHÔNG thêm `canh_slot` vào đây: resumeRun() hợp nhất bằng Object.assign,
+    // thêm key rỗng sẽ xoá mất các môn đã canh slot của lượt chạy bị khôi phục.
     const acc = { thanh_cong: [], that_bai: [], fallback: [], rut: [] };
     for (const item of Array.isArray(results) ? results : []) {
       if (item?.status === 'success') {

@@ -1000,7 +1000,7 @@ await section('w5) priority_updated is emitted once with removed subjects', asyn
 });
 
 await section('w6) start stores watch settings and serializes them', async () => {
-  const { manager } = makeManager({ gateSequence: [false] });
+  const { manager, calls } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
   const watchUntil = new Date(clock + 10 * 60_000).toISOString();
   const { run } = await manager.start({
@@ -1012,6 +1012,14 @@ await section('w6) start stores watch settings and serializes them', async () =>
   assert.equal(serialized.watchSlots, true);
   assert.equal(serialized.phase, 'registering');
   assert.equal(serialized.watchUntil, watchUntil);
+  // State ghi xuống DB phải mang theo pha + cấu hình canh slot, nếu không thì
+  // sau restart không biết lượt đó đang ở pha nào.
+  const persisted = calls.updateRun[0]?.fields?.state;
+  assert.equal(persisted.phase, 'registering');
+  assert.equal(persisted.watchSlots, true);
+  assert.equal(persisted.watchUntilMs, new Date(watchUntil).getTime());
+  assert.ok(Array.isArray(persisted.summaryAcc.canh_slot), 'state phải có mảng canh_slot');
+  assert.equal(persisted.summaryAcc.canh_slot.length, 0);
   manager.stop(run.runId, 'SV001');
   const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped']);
   assert.equal(final.status, 'stopped');
@@ -1030,6 +1038,7 @@ await section('w7) watchSlots without watchUntil is rejected', async () => {
 });
 
 await section('w8) serializeStoredRun reads watching state', async () => {
+  clock = 1_000_000;
   const stored = serializeStoredRun({
     id: 'run-stored', status: 'running', trigger_at: new Date(clock).toISOString(),
     snapshot: [chinhA], summary: { thanh_cong: [], that_bai: [], fallback: [], rut: [], canh_slot: [] },
@@ -1039,6 +1048,47 @@ await section('w8) serializeStoredRun reads watching state', async () => {
   assert.equal(stored.phase, 'watching');
   assert.equal(stored.watchSlots, true);
   assert.ok(stored.watchUntil);
+});
+
+await section('w8b) resume reads the watch state back from the DB row', async () => {
+  clock = 1_000_000;
+  const untilMs = clock + 60_000;
+  const row = resumeRow({
+    status: 'scheduled',
+    // Giờ mở ở tương lai để execute() chưa đăng ký gì trong lúc test.
+    trigger_at: new Date(clock + 60 * 60_000).toISOString(),
+    state: {
+      phase: 'registering',
+      watchSlots: true,
+      watchUntilMs: untilMs,
+      summaryAcc: {
+        thanh_cong: [],
+        that_bai: [],
+        fallback: [],
+        rut: [],
+        canh_slot: [{ ma_mon: 'X', id_to_hoc: 'Y', so_lan_thu: 2 }]
+      }
+    }
+  });
+  const { manager, calls } = makeManager({ gateSequence: [true], activeRows: [row] });
+  calls.credentials.set(row.id, 'pw');
+  const resumed = await manager.resumeRun(row);
+  assert.equal(resumed.watchSlots, true, 'watchSlots phải đọc lại được từ state');
+  assert.equal(resumed.phase, 'registering');
+  assert.equal(resumed.watchUntil, new Date(untilMs).toISOString());
+  const persisted = calls.updateRun.at(-1)?.fields?.state;
+  assert.equal(persisted.phase, 'registering');
+  assert.equal(persisted.watchSlots, true);
+  assert.equal(persisted.watchUntilMs, untilMs);
+  assert.equal(persisted.summaryAcc.canh_slot.length, 1, 'canh_slot phải sống sót qua lần resume');
+  assert.equal(persisted.summaryAcc.canh_slot[0].ma_mon, 'X');
+  assert.equal(persisted.summaryAcc.canh_slot[0].so_lan_thu, 2);
+  manager.stop(row.id, 'SV001');
+  // canh_slot phải lên tới summary cuối cùng của lượt chạy.
+  const final = await waitForStatus(manager, row.id, 'SV001', ['stopped']);
+  assert.equal(final.status, 'stopped');
+  assert.equal(final.summary.canh_slot.length, 1, 'summary cuối phải giữ canh_slot');
+  assert.equal(final.summary.canh_slot[0].ma_mon, 'X');
 });
 
 console.log('OK');
