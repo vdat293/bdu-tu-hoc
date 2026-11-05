@@ -54,7 +54,7 @@ const section = async (name, fn) => {
   }
 };
 
-const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null } = {}) => {
+const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, refresh = null, catalog = null, latestRow = null } = {}) => {
   const calls = { register: [], insertRun: [], updateRun: [], refresh: [], notify: [], gate: 0, catalog: 0 };
   const registerImpl = register || (async () => okResponse('RS-' + calls.register.length));
   let gateIndex = 0;
@@ -85,6 +85,7 @@ const makeManager = ({ gateSequence = [true], register = null, gateImpl = null, 
     insertRun: async (row) => { calls.insertRun.push(row); },
     updateRun: async (id, fields) => { calls.updateRun.push({ id, fields }); },
     getRun: async () => null,
+    getLatestRun: async (mssv) => { calls.latestMssv = mssv; return latestRow; },
     listPriorities: async () => [],
     replacePriorities: async () => []
   };
@@ -484,6 +485,89 @@ await section('x) ambiguous nhóm tổ duplicates are left untouched instead of 
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
   assert.equal(calls.register[0].idToHoc, 'A-MAIN', 'không đủ căn cứ thì giữ nguyên id đã lưu');
+});
+
+await section('y) finishRun persists the log tail and error to the DB row', async () => {
+  const { manager, calls } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA, chinhB], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  assert.equal(final.status, 'done');
+  const stored = calls.updateRun.filter((call) => call.fields.status === 'done').at(-1);
+  assert.ok(stored, 'phải ghi trạng thái cuối xuống DB');
+  assert.ok(Array.isArray(stored.fields.logs), 'logs phải được lưu');
+  assert.ok(stored.fields.logs.some((log) => /✔ AAA/.test(log.message)), 'log phải có kết quả từng môn');
+  assert.equal(stored.fields.error, null);
+});
+
+await section('z) recordItem logs each subject exactly once (no duplicate log lines)', async () => {
+  const { manager } = makeManager({ gateSequence: [true] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 1_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const lines = final.logs.filter((log) => /✔ AAA/.test(log.message));
+  assert.equal(lines.length, 1, 'mỗi môn chỉ một dòng kết quả');
+});
+
+await section('aa) getLatestForStudent prefers the live in-memory run', async () => {
+  const { manager } = makeManager({ gateSequence: [false] });
+  clock = 1_000_000;
+  const triggerAt = new Date(clock + 60_000).toISOString();
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', items: [chinhA], triggerAt });
+  manager.store.getLatestRun = async () => ({ id: run.runId, mssv: 'SV001', status: 'scheduled' });
+  const latest = await manager.getLatestForStudent('SV001');
+  assert.equal(latest.runId, run.runId);
+  assert.equal(latest.status, 'scheduled');
+  manager.stop(run.runId, 'SV001');
+});
+
+await section('ab) getLatestForStudent hydrates a finished DB-only run', async () => {
+  const latestRow = {
+    id: 'stored-1',
+    mssv: 'SV001',
+    status: 'done',
+    trigger_at: '2026-11-05T02:00:00.000Z',
+    started_at: '2026-11-05T02:00:01.000Z',
+    finished_at: '2026-11-05T02:00:09.000Z',
+    created_at: '2026-11-04T10:00:00.000Z',
+    snapshot: [{ maMon: 'AAA' }],
+    summary: { thanh_cong: [{ ma_mon: 'AAA' }], that_bai: [], fallback: [], rut: [] },
+    logs: [{ type: 'success', message: '✔ AAA', timestamp: '09:00:02' }],
+    error: null
+  };
+  const { manager } = makeManager({ latestRow });
+  const latest = await manager.getLatestForStudent('SV001');
+  assert.equal(latest.runId, 'stored-1');
+  assert.equal(latest.status, 'done');
+  assert.equal(latest.snapshotCount, 1);
+  assert.equal(latest.logs.length, 1);
+  assert.equal(latest.summary.thanh_cong[0].ma_mon, 'AAA');
+});
+
+await section('ac) a DB-only active run is reported as failed after a server restart', async () => {
+  const latestRow = {
+    id: 'stored-2',
+    mssv: 'SV001',
+    status: 'running',
+    trigger_at: '2026-11-05T02:00:00.000Z',
+    started_at: '2026-11-05T02:00:01.000Z',
+    finished_at: null,
+    created_at: '2026-11-04T10:00:00.000Z',
+    snapshot: [],
+    summary: null,
+    logs: [],
+    error: null
+  };
+  const { manager, calls } = makeManager({ latestRow });
+  const latest = await manager.getLatestForStudent('SV001');
+  assert.equal(latest.status, 'failed');
+  assert.match(latest.error, /khởi động lại/i);
+  assert.equal(latest.summary.reason, 'server_restart');
+  const write = calls.updateRun.at(-1);
+  assert.equal(write.id, 'stored-2');
+  assert.equal(write.fields.status, 'failed');
 });
 
 await section('singleton export exists', async () => {

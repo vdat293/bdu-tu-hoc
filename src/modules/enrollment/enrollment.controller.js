@@ -201,6 +201,43 @@ export const EnrollmentController = {
     }
   },
 
+  // Khôi phục lượt gần nhất từ DB: dùng khi client mất runId (F5, tab khác)
+  // hoặc run không còn trong RAM sau khi server restart.
+  async getLatestRun(req, res) {
+    try {
+      const mssv = await resolveMssv(req);
+      const run = await EnrollmentRunService.getLatestForStudent(mssv);
+      if (!run) return res.status(404).json({ result: false, message: 'Chưa có lượt đăng ký nào.' });
+      return res.json({ result: true, data: run });
+    } catch (error) {
+      return sendError(res, error, 'Không đọc được lượt đăng ký gần nhất.');
+    }
+  },
+
+  // Xác nhận token còn dùng được với BDU (không chỉ dựa vào expires_in ở
+  // client) và trả luôn trạng thái cổng đăng ký.
+  async checkSession(req, res) {
+    try {
+      const token = bearerToken(req);
+      if (!token) return res.status(401).json({ result: false, message: 'Thiếu mã xác thực (Token).' });
+      const catalog = await enrollmentService.getCatalog(token, { forceRefresh: true });
+      return res.json({
+        result: true,
+        data: {
+          alive: true,
+          gateOpen: catalog?.trongThoiGianDangKy === true,
+          hocKy: catalog?.hocKyDangKy || '',
+          checkedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      if (error?.status === 401 || error?.code === 'AUTH_EXPIRED') {
+        return res.status(401).json({ result: false, code: 'AUTH_EXPIRED', message: 'Phiên đăng nhập BDU đã hết hạn. Vui lòng đăng nhập lại.' });
+      }
+      return sendError(res, error, 'Không kiểm tra được phiên BDU.');
+    }
+  },
+
   async stopRun(req, res) {
     try {
       const mssv = await resolveMssv(req);

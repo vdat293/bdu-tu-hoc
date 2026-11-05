@@ -30,4 +30,11 @@ assert.match(outboxSql, /notification_outbox/i, 'Migration 070 phải nhắm not
 assert.match(outboxSql, /enrollment_alert/i, 'Migration 070 phải thêm enrollment_alert');
 assert.doesNotMatch(outboxSql, /DROP\s+TABLE/i, 'Migration 070 không được chứa DROP TABLE');
 
+// Migration 071 lưu log/error của lượt chạy để khôi phục sau F5/restart.
+const logsSql = readFileSync(path.join(root, 'migrations', '071_enrollment_run_logs.sql'), 'utf8');
+assert.match(logsSql, /ALTER TABLE enrollment_runs/i, 'Migration 071 phải nhắm enrollment_runs');
+assert.match(logsSql, /ADD COLUMN IF NOT EXISTS logs\s+JSONB/i, 'Thiếu cột logs JSONB (idempotent)');
+assert.match(logsSql, /ADD COLUMN IF NOT EXISTS error\s+TEXT/i, 'Thiếu cột error TEXT (idempotent)');
+assert.doesNotMatch(logsSql, /DROP\s+TABLE/i, 'Migration 071 không được chứa DROP TABLE');
+
 console.log('Migration 069: priorities + runs schema hợp lệ (idempotent, không DROP).');

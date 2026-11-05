@@ -92,14 +92,26 @@ export const priorityStore = {
     if (fields.finished_at !== undefined) push('finished_at', fields.finished_at);
     else if (fields.finishedAt !== undefined) push('finished_at', fields.finishedAt);
     if (fields.trigger_at !== undefined) push('trigger_at', fields.trigger_at);
+    if (fields.logs !== undefined) push('logs', JSON.stringify(fields.logs ?? []));
+    if (fields.error !== undefined) push('error', fields.error);
     if (sets.length === 0) return;
     await query(`UPDATE enrollment_runs SET ${sets.join(', ')} WHERE id = $1`, params);
   },
 
   async getRun(id, mssv) {
     const result = await query(
-      'SELECT id, mssv, status, trigger_at, snapshot, summary, started_at, finished_at, created_at FROM enrollment_runs WHERE id = $1 AND mssv = $2 LIMIT 1',
+      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, started_at, finished_at, created_at FROM enrollment_runs WHERE id = $1 AND mssv = $2 LIMIT 1',
       [id, String(mssv)]
+    );
+    return result.rows[0] ?? null;
+  },
+
+  // Lượt gần nhất của sinh viên — dùng để khôi phục UI sau F5/mở tab khác khi
+  // run không còn trong RAM.
+  async getLatestRun(mssv) {
+    const result = await query(
+      'SELECT id, mssv, status, trigger_at, snapshot, summary, logs, error, started_at, finished_at, created_at FROM enrollment_runs WHERE mssv = $1 ORDER BY created_at DESC LIMIT 1',
+      [String(mssv)]
     );
     return result.rows[0] ?? null;
   },

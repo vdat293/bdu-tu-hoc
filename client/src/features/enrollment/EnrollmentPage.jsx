@@ -9,11 +9,14 @@ import {
   withdraw,
   startRun,
   getRunStatus,
+  getLatestRun,
+  checkSession,
   stopRun,
   submitOtp,
   subscribeRun
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
+import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
 import { DAY_OPTIONS, SESSION_OPTIONS, parseTkb, sessionOf, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
@@ -24,8 +27,8 @@ const FILTER_OPTIONS = [
   { value: 1, label: 'Môn cần học lại (đã rớt)' }
 ];
 
-const RUN_STORAGE_KEY = 'bdu_enrollment_run_id';
 const ACTIVE_STATUSES = ['scheduled', 'running', 'otp_required'];
+const TOKEN_SOON_MS = 30 * 60 * 1000;
 
 // Lịch đăng ký là giờ Việt Nam (UTC+7) và không kèm timezone trong chuỗi
 // "YYYY-MM-DDTHH:mm" — luôn parse tường minh để server ở múi giờ khác vẫn đúng.
@@ -44,6 +47,11 @@ const formatDateTimeVN = (value) => {
   if (Number.isNaN(date.getTime())) return String(value);
   const time = value.slice(11, 16);
   return `${formatDateVN(value)} ${time}`;
+};
+
+const formatClockVN = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('vi-VN');
 };
 
 const normalizeItems = (items) => (items ?? []).map((item) => ({
@@ -209,6 +217,9 @@ export default function EnrollmentPage() {
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpSending, setOtpSending] = useState(false);
+  const [restoreNotice, setRestoreNotice] = useState('');
+  const [sessionCheck, setSessionCheck] = useState(null);
+  const [sessionChecking, setSessionChecking] = useState(false);
 
   const [registered, setRegistered] = useState(null);
   const [registeredError, setRegisteredError] = useState('');
@@ -219,8 +230,10 @@ export default function EnrollmentPage() {
 
   const unsubscribeRef = useRef(null);
   const runIdRef = useRef(null);
+  const otpAutoRef = useRef('');
 
   const activeRun = run && ACTIVE_STATUSES.includes(run.status);
+  const mssv = auth.user?.mssv ?? '';
 
   const loadCatalog = useCallback(async () => {
     if (!auth.token) return;
@@ -281,23 +294,72 @@ export default function EnrollmentPage() {
   }, [loadCatalog, loadPriority, loadRegistered, loadSchedule]);
 
   useEffect(() => {
-    if (!auth.token) return;
-    const storedId = window.sessionStorage.getItem(RUN_STORAGE_KEY);
-    if (!storedId) return;
-    getRunStatus(auth.token, storedId)
-      .then((status) => {
-        if (!status) { window.sessionStorage.removeItem(RUN_STORAGE_KEY); return; }
-        setRun(status);
-        if (!ACTIVE_STATUSES.includes(status.status)) window.sessionStorage.removeItem(RUN_STORAGE_KEY);
-      })
-      .catch(() => window.sessionStorage.removeItem(RUN_STORAGE_KEY));
-  }, [auth.token]);
+    if (!auth.token || !mssv) return undefined;
+    let active = true;
+    const storedId = readRunId(mssv);
+
+    const restore = async () => {
+      if (storedId) {
+        try {
+          const status = await getRunStatus(auth.token, storedId);
+          if (!active) return;
+          if (status) {
+            setRun(status);
+            saveRunId(mssv, status.runId ?? storedId);
+            setRestoreNotice('');
+            return;
+          }
+        } catch (error) {
+          if (!active) return;
+          // 404: server không còn lượt này → thử lượt gần nhất trong DB.
+          // Lỗi mạng/5xx: giữ nguyên key, đừng ném mất "tay nắm" để dừng run.
+          if (error?.status !== 404) {
+            setRestoreNotice('Không kết nối được để khôi phục lượt chạy — vẫn giữ lượt này, bấm "Làm mới" để thử lại.');
+            return;
+          }
+        }
+      }
+      try {
+        const latest = await getLatestRun(auth.token);
+        if (!active) return;
+        if (latest?.runId && latest.runId !== readHiddenRunId(mssv)) {
+          setRun(latest);
+          saveRunId(mssv, latest.runId);
+          setRestoreNotice('');
+        } else {
+          if (storedId) clearRunId(mssv);
+          setRestoreNotice('');
+        }
+      } catch (error) {
+        if (!active) return;
+        if (error?.status === 404) {
+          if (storedId) clearRunId(mssv);
+          return;
+        }
+        setRestoreNotice('Không kết nối được để khôi phục lượt chạy — bấm "Làm mới" để thử lại.');
+      }
+    };
+
+    restore();
+    return () => { active = false; };
+  }, [auth.token, mssv]);
 
   useEffect(() => {
-    if (!activeRun) return undefined;
-    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
+    const interval = activeRun ? 1000 : 30_000;
+    const timer = window.setInterval(() => setNowTick(Date.now()), interval);
     return () => window.clearInterval(timer);
   }, [activeRun]);
+
+  // Nếu reload đúng lúc server đang chờ OTP, mở lại hộp thoại một lần cho lượt đó.
+  useEffect(() => {
+    if (run?.status !== 'otp_required' || !run?.runId) return;
+    const marker = `${run.runId}:otp`;
+    if (otpAutoRef.current === marker) return;
+    otpAutoRef.current = marker;
+    setOtpOpen(true);
+    setOtpCode('');
+    setOtpError('');
+  }, [run?.status, run?.runId]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -319,17 +381,6 @@ export default function EnrollmentPage() {
           setRun((current) => current ? { ...current, logs: [...(current.logs ?? []), payload] } : current);
           return;
         }
-        if (payload.type === 'item_done') {
-          const line = {
-            type: payload.status === 'success' ? 'success' : 'error',
-            message: payload.status === 'success'
-              ? `✔ ${payload.maMon}${payload.fallbackFrom ? ` (dự phòng, thay cho ${payload.fallbackFrom})` : ''}`
-              : `✖ ${payload.maMon}: ${payload.reason ?? 'thất bại'}`,
-            timestamp: new Date().toLocaleTimeString('vi-VN')
-          };
-          setRun((current) => current ? { ...current, logs: [...(current.logs ?? []), line] } : current);
-          return;
-        }
         if (payload.type === 'otp_required') {
           setOtpOpen(true);
           setOtpCode('');
@@ -338,7 +389,7 @@ export default function EnrollmentPage() {
         }
         if (payload.type === 'done') {
           setRun((current) => ({ ...(payload.run ?? current), status: payload.run?.status ?? current?.status ?? 'done' }));
-          window.sessionStorage.removeItem(RUN_STORAGE_KEY);
+          setRestoreNotice('');
           loadRegistered();
           notify(payload.run?.status === 'done' ? 'Lượt đăng ký đã hoàn tất.' : 'Lượt đăng ký kết thúc với lỗi.', payload.run?.status === 'done' ? 'success' : 'warning');
         }
@@ -356,14 +407,65 @@ export default function EnrollmentPage() {
   }, [run?.runId, activeRun]);
 
   const refreshRunStatus = useCallback(async () => {
-    if (!auth.token || !run?.runId) return;
+    if (!auth.token) return;
     try {
-      const status = await getRunStatus(auth.token, run.runId);
-      if (status) setRun(status);
+      if (run?.runId) {
+        try {
+          const status = await getRunStatus(auth.token, run.runId);
+          if (status) {
+            setRun(status);
+            saveRunId(mssv, status.runId ?? run.runId);
+            setRestoreNotice('');
+          }
+          return;
+        } catch (error) {
+          // Run đã bị dọn khỏi RAM nhưng vẫn còn trong DB → đọc bản gần nhất
+          // thay vì xoá kết quả người dùng đang xem.
+          if (error?.status !== 404) throw error;
+        }
+      }
+      const latest = await getLatestRun(auth.token);
+      if (latest?.runId) {
+        setRun(latest);
+        saveRunId(mssv, latest.runId);
+        setRestoreNotice('');
+        return;
+      }
+      clearRunId(mssv);
+      setRun(null);
+      notify(run?.runId ? 'Lượt đăng ký này không còn trên server.' : 'Chưa có lượt đăng ký nào để hiển thị.', run?.runId ? 'warning' : 'info');
     } catch (error) {
       notify(error.message || 'Không đọc được trạng thái lượt chạy.', 'error');
     }
-  }, [auth.token, run?.runId, notify]);
+  }, [auth.token, run?.runId, mssv, notify]);
+
+  const handleHideResult = useCallback(() => {
+    if (run?.runId) saveHiddenRunId(mssv, run.runId);
+    clearRunId(mssv);
+    setRun(null);
+    setRestoreNotice('');
+    setOtpOpen(false);
+  }, [mssv, run?.runId]);
+
+  const handleCheckSession = useCallback(async () => {
+    if (!auth.token) return;
+    setSessionChecking(true);
+    try {
+      const result = await checkSession(auth.token);
+      setSessionCheck({ ...result, checkedAt: result?.checkedAt || new Date().toISOString() });
+      notify(
+        result?.gateOpen
+          ? `Phiên BDU còn sống · cổng đang mở${result?.hocKy ? ` (${result.hocKy})` : ''}.`
+          : 'Phiên BDU còn sống · cổng đang đóng.',
+        'success'
+      );
+    } catch (error) {
+      if (error?.status === 401) notify('Phiên BDU đã hết hạn — vui lòng đăng nhập lại.', 'warning');
+      else notify(error.message || 'Không kiểm tra được phiên BDU.', 'error');
+    } finally {
+      setSessionChecking(false);
+    }
+  }, [auth.token, notify]);
 
   const toggleGroup = useCallback((row) => {
     setSelected((current) => {
@@ -504,7 +606,9 @@ export default function EnrollmentPage() {
       });
       const runId = result?.runId;
       if (!runId) throw new Error('Server không trả về runId.');
-      window.sessionStorage.setItem(RUN_STORAGE_KEY, runId);
+      saveRunId(mssv, runId);
+      saveHiddenRunId(mssv, '');
+      setRestoreNotice('');
       setRun({
         runId,
         status: 'scheduled',
@@ -521,18 +625,19 @@ export default function EnrollmentPage() {
     } finally {
       setStarting(false);
     }
-  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, mssv, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
     try {
       const status = await stopRun(auth.token, run.runId);
       if (status) setRun(status);
+      saveRunId(mssv, run.runId);
       notify('Đã gửi yêu cầu dừng.', 'info');
     } catch (error) {
       notify(error.message || 'Không dừng được lượt chạy.', 'error');
     }
-  }, [auth.token, run?.runId, notify]);
+  }, [auth.token, run?.runId, mssv, notify]);
 
   const handleSubmitOtp = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -590,6 +695,19 @@ export default function EnrollmentPage() {
     const seconds = totalSeconds % 60;
     return { text: `${hours > 0 ? `${hours}h ` : ''}${minutes}p ${String(seconds).padStart(2, '0')}s`, tone: 'wait' };
   }, [run?.triggerAt, nowTick]);
+
+  const sessionBadge = useMemo(() => {
+    if (!auth.expiresAt) return { tone: 'unknown', text: 'Phiên BDU: chưa rõ hạn' };
+    const diff = auth.expiresAt - nowTick;
+    if (diff <= 0) return { tone: 'expired', text: 'Phiên BDU đã hết hạn — đăng nhập lại' };
+    const totalMinutes = Math.floor(diff / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return {
+      tone: diff < TOKEN_SOON_MS ? 'soon' : 'ok',
+      text: `Phiên BDU: còn ${hours > 0 ? `${hours}h ` : ''}${minutes}p`
+    };
+  }, [auth.expiresAt, nowTick]);
 
   const gateOpen = catalog?.trongThoiGianDangKy === true;
   const registeredRows = useMemo(() => {
@@ -896,6 +1014,23 @@ export default function EnrollmentPage() {
                 </span>
               </div>
 
+              <div className={`enroll-session is-${sessionBadge.tone}`}>
+                <span className="enroll-session-state">
+                  <IconClock /> {sessionBadge.text}
+                  {sessionCheck?.checkedAt ? (
+                    <small>
+                      Đã kiểm tra {formatClockVN(sessionCheck.checkedAt)} · {sessionCheck.gateOpen ? 'cổng mở' : 'cổng đóng'}
+                      {sessionCheck.hocKy ? ` · ${sessionCheck.hocKy}` : ''}
+                    </small>
+                  ) : null}
+                </span>
+                <button type="button" className="enroll-text-btn" onClick={handleCheckSession} disabled={sessionChecking}>
+                  {sessionChecking ? 'Đang kiểm tra…' : 'Kiểm tra phiên'}
+                </button>
+              </div>
+
+              {restoreNotice ? <p className="enroll-warning" role="status">{restoreNotice}</p> : null}
+
               <label className="enroll-switch">
                 <input type="checkbox" checked={autoFixScheduleConflict} onChange={(event) => setAutoFixScheduleConflict(event.target.checked)} disabled={activeRun} />
                 <span className="enroll-switch-track" aria-hidden="true" />
@@ -912,10 +1047,13 @@ export default function EnrollmentPage() {
                 {activeRun ? (
                   <button type="button" className="enroll-ghost" onClick={handleStop}><IconStop /> Dừng</button>
                 ) : (
-                  <button type="button" className="enroll-ghost" onClick={refreshRunStatus} disabled={!run?.runId}>
+                  <button type="button" className="enroll-ghost" onClick={refreshRunStatus}>
                     <IconRefresh /> Làm mới
                   </button>
                 )}
+                {run && !activeRun ? (
+                  <button type="button" className="enroll-ghost" onClick={handleHideResult}>Ẩn kết quả</button>
+                ) : null}
               </div>
 
               {countdown ? (

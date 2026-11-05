@@ -45,6 +45,16 @@ export function getRunStatus(token, runId, { signal } = {}) {
     .then((data) => unwrap(data, data));
 }
 
+export function getLatestRun(token, { signal } = {}) {
+  return request('/api/enrollment/runs/latest', { token, signal, defaultMessage: 'Không đọc được lượt đăng ký gần nhất.' })
+    .then((data) => unwrap(data, data));
+}
+
+export function checkSession(token, { signal } = {}) {
+  return request('/api/enrollment/session', { token, signal, defaultMessage: 'Không kiểm tra được phiên BDU.' })
+    .then((data) => unwrap(data, data));
+}
+
 export function stopRun(token, runId, { signal } = {}) {
   return request(`/api/enrollment/runs/${encodeURIComponent(runId)}/stop`, { token, method: 'POST', signal, defaultMessage: 'Không dừng được lượt đăng ký.' })
     .then((data) => unwrap(data, data));

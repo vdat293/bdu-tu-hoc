@@ -5546,6 +5546,32 @@ body.theme-dark .dgrl-sync-clear { color: #fca5a5; }
 }
 #tab-enrollment .enroll-gate-time.is-ready { color: var(--bdu-light); border-color: color-mix(in srgb, var(--bdu-light) 45%, transparent); }
 #tab-enrollment .enroll-gate-time strong { font-variant-numeric: tabular-nums; }
+#tab-enrollment .enroll-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--enroll-border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+#tab-enrollment .enroll-session-state { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#tab-enrollment .enroll-session-state small { color: var(--text-muted); font-size: 0.72rem; }
+#tab-enrollment .enroll-session.is-ok { color: var(--color-emerald); border-color: color-mix(in srgb, var(--color-emerald) 35%, transparent); }
+#tab-enrollment .enroll-session.is-soon { color: var(--color-amber); border-color: color-mix(in srgb, var(--color-amber) 45%, transparent); }
+#tab-enrollment .enroll-session.is-expired { color: var(--color-rose); border-color: color-mix(in srgb, var(--color-rose) 45%, transparent); }
+#tab-enrollment .enroll-warning {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--color-amber);
+  border: 1px dashed color-mix(in srgb, var(--color-amber) 45%, transparent);
+}
 #tab-enrollment .enroll-status {
   padding: 4px 10px;
   border-radius: 999px;

@@ -7,7 +7,7 @@ import { enrollmentService } from '../src/modules/enrollment/enrollment.service.
 
 const originalResolve = BduIdentityService.resolveVerifiedMssv;
 const originalStore = { ...priorityStore };
-const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, submitOtp: EnrollmentRunService.submitOtp, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe };
+const originalMgr = { start: EnrollmentRunService.start, stop: EnrollmentRunService.stop, getForStudent: EnrollmentRunService.getForStudent, getLatestForStudent: EnrollmentRunService.getLatestForStudent, submitOtp: EnrollmentRunService.submitOtp, hasRun: EnrollmentRunService.hasRun, subscribe: EnrollmentRunService.subscribe };
 const originalBdu = {
   getCatalog: enrollmentService.getCatalog,
   getRegistered: enrollmentService.getRegistered,
@@ -249,6 +249,47 @@ try {
     await EnrollmentController.getCatalog(reqWith({ query: { loai_loc: '2' } }), res);
     assert.equal(res.headers['Cache-Control'], 'private, max-age=30');
     assert.equal(res.body.data.hocKyDangKy, 'HK2');
+  });
+
+  await section('getLatestRun returns the stored run for the student', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    let asked = null;
+    EnrollmentRunService.getLatestForStudent = async (mssv) => {
+      asked = mssv;
+      return { runId: 'run-latest', status: 'done', logs: [], summary: null };
+    };
+    const res = response();
+    await EnrollmentController.getLatestRun(reqWith({}), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(asked, 'SV001', 'phải đọc theo mssv resolve từ token, không tin client');
+    assert.equal(res.body.data.runId, 'run-latest');
+  });
+
+  await section('getLatestRun 404 when the student has no run yet', async () => {
+    BduIdentityService.resolveVerifiedMssv = async () => 'SV001';
+    EnrollmentRunService.getLatestForStudent = async () => null;
+    const res = response();
+    await EnrollmentController.getLatestRun(reqWith({}), res);
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.body.result, false);
+  });
+
+  await section('checkSession reports a live token and the gate state', async () => {
+    enrollmentService.getCatalog = async () => ({ trongThoiGianDangKy: true, hocKyDangKy: 'HK2 2026-2027' });
+    const res = response();
+    await EnrollmentController.checkSession(reqWith({}), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.alive, true);
+    assert.equal(res.body.data.gateOpen, true);
+    assert.equal(res.body.data.hocKy, 'HK2 2026-2027');
+  });
+
+  await section('checkSession 401 when BDU rejects the token', async () => {
+    enrollmentService.getCatalog = async () => { throw Object.assign(new Error('Phiên đăng nhập đã hết hạn.'), { status: 401, code: 'AUTH_EXPIRED' }); };
+    const res = response();
+    await EnrollmentController.checkSession(reqWith({}), res);
+    assert.equal(res.statusCode, 401);
+    assert.equal(res.body.code, 'AUTH_EXPIRED');
   });
 } finally {
   restore();

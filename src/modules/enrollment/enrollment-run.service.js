@@ -33,6 +33,42 @@ const clip = (value, max = 160) => String(value ?? '').slice(0, max);
 // answers those with `is_thanh_cong: false, thong_bao_loi: "Warning"`.
 const isStaleIdResponse = (res) => /^warning$/i.test(String(res?.thongBaoLoi || res?.rawMessage || '').trim());
 
+const asIso = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+// Dựng payload giống `serialize()` từ row trong DB, để UI khôi phục được lượt
+// chạy đã xong kể cả khi nó không còn trong RAM (F5, mở tab khác, restart).
+export function serializeStoredRun(row) {
+  if (!row) return null;
+  const summary = row.summary && typeof row.summary === 'object' ? row.summary : null;
+  return {
+    runId: row.id,
+    status: row.status,
+    triggerAt: asIso(row.trigger_at),
+    startedAt: asIso(row.started_at),
+    updatedAt: asIso(row.finished_at) ?? asIso(row.started_at) ?? asIso(row.created_at),
+    finishedAt: asIso(row.finished_at),
+    snapshotCount: Array.isArray(row.snapshot) ? row.snapshot.length : 0,
+    logs: Array.isArray(row.logs) ? row.logs : [],
+    results: [],
+    summary: summary
+      ? {
+        ...summary,
+        thanh_cong: [...(summary.thanh_cong ?? [])],
+        that_bai: [...(summary.that_bai ?? [])],
+        fallback: [...(summary.fallback ?? [])],
+        rut: [...(summary.rut ?? [])]
+      }
+      : null,
+    error: row.error ?? (summary?.reason === 'server_restart'
+      ? 'Server đã khởi động lại khi lượt chạy đang diễn ra. Lượt này không thể tiếp tục — hãy chạy lại.'
+      : null)
+  };
+}
+
 export class EnrollmentRunManager {
   constructor({ service, store, sleep, now, notify, retentionMs = 30 * 60 * 1000 } = {}) {
     this.service = service ?? new EnrollmentService();
@@ -92,6 +128,29 @@ export class EnrollmentRunManager {
   hasRun(runId) {
     this.prune();
     return this.runs.has(String(runId));
+  }
+
+  /**
+   * Khôi phục lượt gần nhất của sinh viên từ DB. Run đang ở trạng thái active
+   * nhưng không còn trong RAM nghĩa là process đã restart — token chỉ sống
+   * trong RAM nên lượt đó không thể tiếp tục; đánh dấu failed thay vì hiển thị
+   * một trạng thái "đang chạy" giả.
+   */
+  async getLatestForStudent(mssv) {
+    if (typeof this.store.getLatestRun !== 'function') return null;
+    const row = await this.store.getLatestRun(String(mssv));
+    if (!row) return null;
+    const live = this.runs.get(String(row.id));
+    if (live) return this.serialize(live);
+    if (ACTIVE_STATUSES.has(row.status)) {
+      const summary = { ...(row.summary && typeof row.summary === 'object' ? row.summary : {}), reason: 'server_restart' };
+      const finishedAt = nowIso();
+      try {
+        await this.store.updateRun(row.id, { status: 'failed', summary, finished_at: finishedAt, logs: row.logs ?? [] });
+      } catch { /* hiển thị trạng thái suy ra vẫn đúng dù ghi DB lỗi */ }
+      return serializeStoredRun({ ...row, status: 'failed', summary, finished_at: finishedAt });
+    }
+    return serializeStoredRun(row);
   }
 
   async start({ mssv, token, refreshToken = '', items, triggerAt, autoFixScheduleConflict = false, svNganh = 1 }) {
@@ -238,6 +297,15 @@ export class EnrollmentRunManager {
     } else {
       run.summaryAcc.that_bai.push({ ma_mon: item.maMon, id_to_hoc: item.idToHoc, ly_do: clip(reason || 'thất bại') });
     }
+    // Ghi log ngay tại đây để log trong DB có đủ kết quả từng môn — UI không
+    // phải tự sinh lại dòng log từ sự kiện item_done nữa.
+    this.appendLog(
+      run,
+      status === 'success' ? 'success' : 'error',
+      status === 'success'
+        ? `✔ ${item.maMon}${fallbackFrom ? ` (dự phòng, thay cho ${fallbackFrom})` : ''}`
+        : `✖ ${item.maMon}: ${reason || 'thất bại'}`
+    );
     this.emit(run, { type: 'item_done', ...entry });
   }
 
@@ -380,7 +448,6 @@ export class EnrollmentRunManager {
     }
 
     if (outcome.cls === 'thanh_cong') {
-      this.appendLog(run, 'success', `Đăng ký ${item.maMon} (${item.idToHoc}) thành công.`);
       this.recordItem(run, item, 'success');
       return null;
     }
@@ -392,7 +459,6 @@ export class EnrollmentRunManager {
         // eslint-disable-next-line no-await-in-loop
         const fb = await this.attemptRegister(run, fallback, true);
         if (fb.cls === 'thanh_cong') {
-          this.appendLog(run, 'success', `Đăng ký dự phòng ${fallback.maMon} (${fallback.idToHoc}) thành công.`);
           this.recordItem(run, fallback, 'success', undefined, item.idToHoc);
           run.summaryAcc.fallback.push({ ma_mon: fallback.maMon, tu_id_to_hoc: item.idToHoc, sang_id_to_hoc: fallback.idToHoc });
           return null;
@@ -413,17 +479,14 @@ export class EnrollmentRunManager {
 
     if (outcome.cls === 'prereq') {
       const detail = outcome.res?.rawMessage || outcome.res?.thongBaoTienQuyet || 'thiếu tiên quyết';
-      this.appendLog(run, 'error', `${item.maMon}: ${detail} — bỏ qua môn này.`);
       this.recordItem(run, item, 'failed', detail);
       return null;
     }
     if (outcome.cls === 'schedule_conflict') {
-      this.appendLog(run, 'error', `${item.maMon}: trùng thời khóa biểu — không tự đăng ký lớp khác.`);
       this.recordItem(run, item, 'failed', 'trùng lịch');
       return null;
     }
     if (outcome.cls === 'gate_closed') {
-      this.appendLog(run, 'error', 'Máy chủ từ chối: ngoài thời gian cho phép đăng ký.');
       this.recordItem(run, item, 'failed', 'ngoài thời gian');
       return 'Ngoài thời gian cho phép đăng ký';
     }
@@ -566,7 +629,9 @@ export class EnrollmentRunManager {
         status,
         summary,
         started_at: run.startedAt,
-        finished_at: finishedAt
+        finished_at: finishedAt,
+        logs: run.logs,
+        error: finalError
       });
     } catch (storeError) {
       this.appendLog(run, 'warning', `Không ghi được kết quả vào DB: ${clip(storeError?.message || storeError)}`);
