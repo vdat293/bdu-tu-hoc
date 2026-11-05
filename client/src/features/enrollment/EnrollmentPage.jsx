@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import {
   getCatalog,
@@ -18,6 +19,7 @@ import {
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
 import CredentialsModal from './CredentialsModal.jsx';
 import ScheduleCard from './ScheduleCard.jsx';
+import ReminderSettings from '../../components/notifications/ReminderSettings.jsx';
 import { filterCatalog } from './catalog-filter.js';
 import { buildScheduleCells } from './schedule-cells.js';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
@@ -162,6 +164,7 @@ export default function EnrollmentPage() {
   const [credentialOpen, setCredentialOpen] = useState(false);
   const [credentialPassword, setCredentialPassword] = useState('');
   const [credentialError, setCredentialError] = useState('');
+  const [reminderOpen, setReminderOpen] = useState(false);
   const [restoreNotice, setRestoreNotice] = useState('');
   const [sessionCheck, setSessionCheck] = useState(null);
   const [sessionChecking, setSessionChecking] = useState(false);
@@ -1072,6 +1075,14 @@ export default function EnrollmentPage() {
                 ) : null}
               </div>
 
+              <p className="enroll-hint enroll-notify-hint">
+                🔔 <strong>Nhận thông báo ngay</strong> khi lượt đăng ký xong hoặc gặp lỗi —{' '}
+                <button type="button" className="enroll-text-btn" onClick={() => setReminderOpen(true)}>
+                  bật thông báo Discord
+                </button>
+                .
+              </p>
+
               {countdown ? (
                 <div className={`enroll-countdown is-${countdown.tone}`}>
                   <IconClock /> <span>{countdown.text}</span>
@@ -1200,6 +1211,11 @@ export default function EnrollmentPage() {
         dialogRef={credentialDialogRef}
         passwordRef={credentialPasswordRef}
       />
+
+      {reminderOpen ? createPortal(
+        <ReminderSettings onClose={() => setReminderOpen(false)} />,
+        document.body
+      ) : null}
     </section>
   );
 }
