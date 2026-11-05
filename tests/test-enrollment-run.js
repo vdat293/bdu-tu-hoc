@@ -17,6 +17,7 @@ const waitForStatus = async (manager, runId, mssv, statuses, maxIterations = 300
 const chinhA = { maMon: 'AAA', tenMon: 'Mon A', idToHoc: 'A-MAIN', nhomTo: '01', lop: '27KT01', loai: 'chinh', thuTu: 1, tkb: 'Thứ 2,tiết 1->3,Ph X,GV G,01/03/27 đến 30/04/27' };
 const chinhB = { maMon: 'BBB', tenMon: 'Mon B', idToHoc: 'B-MAIN', nhomTo: '02', lop: '27KT02', loai: 'chinh', thuTu: 2, tkb: 'Thứ 3,tiết 4->6,Ph Y,GV G,01/03/27 đến 30/04/27' };
 const conflictB = { ...chinhB, thuTu: 2, tkb: 'Thứ 2,tiết 1->3,Ph Y,GV G,01/03/27 đến 30/04/27' };
+const conflictC = { ...chinhA, maMon: 'CCC', tenMon: 'Mon C', idToHoc: 'C-MAIN', nhomTo: '03', lop: '27KT03', thuTu: 3, tkb: conflictB.tkb };
 const backupA2 = { maMon: 'AAA', tenMon: 'Mon A', idToHoc: 'A-BACKUP-2', nhomTo: '02', lop: '27KT01', loai: 'du_phong', thuTu: 3, tkb: 'Thứ 4,tiết 1->3,Ph Z,GV G,01/03/27 đến 30/04/27' };
 const backupA3 = { maMon: 'AAA', tenMon: 'Mon A', idToHoc: 'A-BACKUP-3', nhomTo: '03', lop: '27KT01', loai: 'du_phong', thuTu: 4, tkb: 'Thứ 5,tiết 1->3,Ph W,GV G,01/03/27 đến 30/04/27' };
 
@@ -1299,6 +1300,211 @@ await section('w16) a watching run killed by a restart carries the restart messa
   assert.equal(latest.error, expected);
   assert.equal(latest.summary.reason, 'server_restart');
   assert.ok(made2.calls.deleteCredential.includes(row2.id), 'phải xoá credential sau restart');
+});
+
+await section('w17) resumed registering runs enter watching and drop the persisted credential', async () => {
+  clock = 1_000_000;
+  const watchUntilMs = clock + 60 * 60_000;
+  const row = resumeRow({
+    id: 'run-resume-watch',
+    status: 'running',
+    trigger_at: new Date(clock - 60_000).toISOString(),
+    started_at: new Date(clock - 30_000).toISOString(),
+    snapshot: [chinhA],
+    results: [{ maMon: 'AAA', idToHoc: 'A-MAIN', status: 'failed', reason: 'hết chỗ', code: 'seat_full' }],
+    state: {
+      phase: 'registering',
+      watchSlots: true,
+      watchUntilMs,
+      summaryAcc: {
+        thanh_cong: [],
+        that_bai: [{ ma_mon: 'AAA', id_to_hoc: 'A-MAIN', ly_do: 'hết chỗ', code: 'seat_full' }],
+        fallback: [],
+        rut: [],
+        canh_slot: []
+      }
+    }
+  });
+  const made = makeManager({ gateSequence: [true], activeRows: [row], register: async () => failResponse('hết chỗ') });
+  made.calls.credentials.set(row.id, 'pw');
+  await made.manager.resumeActiveRuns();
+
+  let live;
+  for (let i = 0; i < 100; i += 1) {
+    live = made.manager.getForStudent(row.id, 'SV001');
+    if (live?.phase === 'watching' || live?.status !== 'running') break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(live?.status, 'running');
+  assert.equal(live?.phase, 'watching', 'resume pha registering phải đi tiếp vào watcher');
+  assert.ok(made.calls.deleteCredential.includes(row.id), 'vào watching phải xoá credential đã persist');
+  assert.equal(made.calls.credentials.has(row.id), false);
+  assert.equal(made.manager.runs.get(row.id).password, 'pw', 'password trong RAM vẫn cần cho refresh/login');
+
+  made.manager.stop(row.id, 'SV001');
+  const final = await waitForStatus(made.manager, row.id, 'SV001', ['stopped']);
+  assert.equal(final.status, 'stopped');
+});
+
+await section('w18) a watcher tick stops requesting classes at watchUntil', async () => {
+  clock = 1_000_000;
+  const watchUntilMs = clock + 5 * 60_000;
+  let aCalls = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    register: async (args) => {
+      if (args.idToHoc === 'A-MAIN') {
+        aCalls += 1;
+        if (aCalls === 2) clock = watchUntilMs;
+      }
+      return failResponse('hết chỗ');
+    }
+  });
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, chinhB],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(watchUntilMs).toISOString()
+  });
+  let final;
+  for (let i = 0; i < 3_000; i += 1) {
+    final = made.manager.getForStudent(run.runId, 'SV001');
+    if (['done', 'failed', 'stopped'].includes(final?.status)) break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(final?.status, 'done');
+  assert.deepEqual(
+    made.calls.register.map((call) => call.idToHoc),
+    ['A-MAIN', 'B-MAIN', 'A-MAIN'],
+    'response của A vượt watchUntil thì không được request B trong cùng tick'
+  );
+});
+
+await section('w19) auth recovery waits for the next tick after login or token refresh', async () => {
+  clock = 1_000_000;
+  const registerCalls = [];
+  let refreshCalls = 0;
+  const made = makeManager({
+    gateSequence: [true],
+    watchIntervalMs: 1_000,
+    login: async (mssv, password, count) => ({ token: `tok-login-${count}`, refreshToken: 'ref-login' }),
+    refresh: async () => {
+      refreshCalls += 1;
+      if (refreshCalls === 1) return { refreshToken: 'ref-login' };
+      return { token: 'tok-refreshed', refreshToken: 'ref-refreshed' };
+    },
+    register: async (args) => {
+      registerCalls.push({ idToHoc: args.idToHoc, at: clock });
+      if (registerCalls.length === 1) return failResponse('hết chỗ');
+      if (registerCalls.length <= 3) throw Object.assign(new Error('expired'), { status: 401, code: 'AUTH_EXPIRED' });
+      return okResponse('RS-WATCH-OK');
+    }
+  });
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok-old', refreshToken: 'ref-old', items: [chinhA],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  let final;
+  for (let i = 0; i < 3_000; i += 1) {
+    final = made.manager.getForStudent(run.runId, 'SV001');
+    if (['done', 'failed', 'stopped'].includes(final?.status)) break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(final?.status, 'done');
+  assert.equal(made.calls.login.length, 2, 'một login khởi tạo và một login khôi phục sau 401');
+  assert.equal(refreshCalls, 2);
+  assert.deepEqual(made.calls.register.map((call) => call.token), [
+    'tok-login-1', 'tok-login-1', 'tok-login-2', 'tok-refreshed'
+  ]);
+  assert.ok(registerCalls[2].at - registerCalls[1].at >= 1_000, 'login thành công không retry ngay trong tick');
+  assert.ok(registerCalls[3].at - registerCalls[2].at >= 1_000, 'refresh thành công cũng đợi tick kế tiếp');
+});
+
+await section('w20) stop during deferred conflict cleanup prevents more withdrawals', async () => {
+  clock = 1_000_000;
+  let manager;
+  let runId;
+  let bAttempts = 0;
+  let watchSucceeded = false;
+  const withdrawals = [];
+  const made = makeManager({
+    gateSequence: [true],
+    register: async (args) => {
+      if (args.isChecked === false) {
+        withdrawals.push({ idToHoc: args.idToHoc, watchSucceeded });
+        manager.stop(runId, 'SV001');
+        return okResponse('RS-WITHDRAW');
+      }
+      if (args.idToHoc === 'B-MAIN') {
+        bAttempts += 1;
+        if (bAttempts === 1) return failResponse('hết chỗ');
+        watchSucceeded = true;
+      }
+      return okResponse(`RS-${args.idToHoc}`);
+    }
+  });
+  manager = made.manager;
+  const { run } = await manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, conflictB, conflictC],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    autoFixScheduleConflict: true,
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  runId = run.runId;
+  let final;
+  for (let i = 0; i < 3_000; i += 1) {
+    final = manager.getForStudent(runId, 'SV001');
+    if (['done', 'failed', 'stopped'].includes(final?.status)) break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(final?.status, 'stopped');
+  assert.equal(watchSucceeded, true);
+  assert.equal(withdrawals.length, 1, 'Dừng trong lần rút đầu tiên thì không được gọi BDU để rút tiếp');
+  assert.equal(withdrawals[0].watchSucceeded, true, 'cleanup phải được hoãn tới sau watcher');
+});
+
+await section('w21) watcher defers auto-fix and runs it once at the end', async () => {
+  clock = 1_000_000;
+  let bAttempts = 0;
+  const events = [];
+  const made = makeManager({
+    gateSequence: [true],
+    register: async (args) => {
+      if (args.isChecked === false) {
+        events.push(`withdraw:${args.idToHoc}`);
+        return okResponse('RS-WITHDRAW');
+      }
+      if (args.idToHoc === 'B-MAIN') {
+        bAttempts += 1;
+        events.push(bAttempts === 1 ? 'register:B' : 'watch:B');
+        if (bAttempts === 1) return failResponse('hết chỗ');
+      } else {
+        events.push(`register:${args.idToHoc}`);
+      }
+      return okResponse(`RS-${args.idToHoc}`);
+    }
+  });
+  const { run } = await made.manager.start({
+    password: 'pw', mssv: 'SV001', token: 'tok', items: [chinhA, conflictB],
+    triggerAt: new Date(clock + 1_000).toISOString(),
+    autoFixScheduleConflict: true,
+    watchSlots: true, watchUntil: new Date(clock + 5 * 60_000).toISOString()
+  });
+  let final;
+  for (let i = 0; i < 3_000; i += 1) {
+    final = made.manager.getForStudent(run.runId, 'SV001');
+    if (['done', 'failed', 'stopped'].includes(final?.status)) break;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(final?.status, 'done');
+  assert.deepEqual(events, ['register:A-MAIN', 'register:B', 'watch:B', 'withdraw:B-MAIN']);
+  assert.equal(final.summary.rut.length, 1);
+  assert.equal(final.summary.canh_slot.length, 1);
 });
 
 console.log('OK');

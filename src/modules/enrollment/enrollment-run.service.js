@@ -700,12 +700,7 @@ export class EnrollmentRunManager {
       await this.sleep(100);
     }
 
-    if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
-    if (run.autoFixScheduleConflict) {
-      await this.autoFixConflicts(run);
-      await this.persistRun(run);
-    }
-    await this.finishRun(run, 'done');
+    await this.finishRegistrationPhase(run);
   }
 
   async markRunFailed(row, error) {
@@ -1133,56 +1128,50 @@ export class EnrollmentRunManager {
   async watchTick(run) {
     let pauseMs = 0;
     for (const maMon of this.watchSubjects(run)) {
-      if (run.stopRequested) return { pauseMs };
+      if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs };
       const items = [...run.snapshot]
         .filter((item) => item.maMon === maMon)
         .sort((a, b) => (a.thuTu ?? 0) - (b.thuTu ?? 0));
       for (const item of items) {
-        if (run.stopRequested) return { pauseMs };
+        if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs };
         const key = String(item.idToHoc ?? `${item.maMon}:${item.thuTu}`);
         if (run.watchDropped.has(key)) continue;
 
         let res;
         let cls;
-        let authRetried = false;
-        while (true) {
-          try {
-            // Exactly one BDU register request per item in a tick; auth may
-            // refresh the session and retry this same item once.
-            // eslint-disable-next-line no-await-in-loop
-            res = await this.bduCall(() => this.service.registerGroup(run.token, {
-              idToHoc: item.idToHoc,
-              isChecked: true,
-              svNganh: run.svNganh,
-              idRs: run.lastIdRs
-            }));
-            if (res?.idRs) run.lastIdRs = res.idRs;
-            cls = classifyRegisterResult(res);
-          } catch (error) {
-            cls = error?.status === 429
-              ? 'rate_limit'
-              : error?.status === 401 || error?.status === 426 || error?.code === 'AUTH_EXPIRED'
-                ? 'auth'
-                : 'transient';
-            res = error;
-          }
+        if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs };
+        try {
+          // Exactly one BDU register request per item in a tick. Sau khi khôi
+          // phục phiên thành công, lớp này chỉ được thử lại ở tick kế tiếp.
+          // eslint-disable-next-line no-await-in-loop
+          res = await this.bduCall(() => this.service.registerGroup(run.token, {
+            idToHoc: item.idToHoc,
+            isChecked: true,
+            svNganh: run.svNganh,
+            idRs: run.lastIdRs
+          }));
+          if (res?.idRs) run.lastIdRs = res.idRs;
+          cls = classifyRegisterResult(res);
+        } catch (error) {
+          cls = error?.status === 429
+            ? 'rate_limit'
+            : error?.status === 401 || error?.status === 426 || error?.code === 'AUTH_EXPIRED'
+              ? 'auth'
+              : 'transient';
+          res = error;
+        }
 
-          if (cls !== 'auth') break;
-          if (run.stopRequested) return { pauseMs: 0 };
-          if (authRetried) {
-            run.authExpired = true;
-            return { pauseMs, failed: 'Phiên đăng nhập đã hết hạn' };
-          }
+        run.watchAttempts.set(maMon, (run.watchAttempts.get(maMon) ?? 0) + 1);
+        if (cls === 'auth') {
+          if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs: 0 };
           const refreshed = await this.tryRefresh(run, { allowPassword: true });
-          if (run.stopRequested) return { pauseMs: 0 };
+          if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs: 0 };
           if (!refreshed) {
             run.authExpired = true;
             return { pauseMs, failed: 'Phiên đăng nhập đã hết hạn' };
           }
-          authRetried = true;
+          continue;
         }
-
-        run.watchAttempts.set(maMon, (run.watchAttempts.get(maMon) ?? 0) + 1);
         if (cls === 'thanh_cong' || cls === 'already_registered') {
           await this.recordWatchSuccess(run, item);
           break;
@@ -1196,8 +1185,10 @@ export class EnrollmentRunManager {
         if (cls === 'rejected' && isStaleIdResponse(res)) {
           const now = this.now();
           if (!run.watchCatalogRefreshAtMs || now - run.watchCatalogRefreshAtMs >= WATCH_CATALOG_REFRESH_MS) {
+            if (run.stopRequested || now >= run.watchUntilMs) return { pauseMs };
             run.watchCatalogRefreshAtMs = now;
             await this.refreshCatalogIds(run);
+            if (run.stopRequested || this.now() >= run.watchUntilMs) return { pauseMs };
           }
           continue;
         }
@@ -1246,6 +1237,8 @@ export class EnrollmentRunManager {
           return { status: 'failed', error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' };
         }
       }
+      if (run.stopRequested) return { status: 'stopped' };
+      if (this.now() >= run.watchUntilMs) continue;
 
       const outcome = await this.watchTick(run);
       if (outcome.failed) return { status: 'failed', error: outcome.failed };
@@ -1288,6 +1281,7 @@ export class EnrollmentRunManager {
           continue;
         }
         if (!groupsConflict(a.segments, b.segments)) continue;
+        if (run.stopRequested) return 'stopped';
         const victim = a.thuTu > b.thuTu ? a : b;
         const survivor = victim === a ? b : a;
         this.appendLog(run, 'warning', `${a.maMon} và ${b.maMon} trùng lịch — tự rút ${victim.maMon} (ưu tiên thấp hơn).`);
@@ -1301,10 +1295,11 @@ export class EnrollmentRunManager {
         if (res?.idRs) run.lastIdRs = res.idRs;
         if (res?.isThanhCong !== true) {
           this.appendLog(run, 'warning', `Tự rút ${victim.maMon} thất bại (${res?.rawMessage || 'BDU từ chối'}). Vui lòng rút thủ công.`);
-          continue;
+        } else {
+          run.summaryAcc.rut.push({ ma_mon: victim.maMon, id_to_hoc: victim.idToHoc, ly_do: 'trùng lịch (tự dọn)' });
+          this.appendLog(run, 'info', `Đã rút ${victim.maMon}; giữ ${survivor.maMon}.`);
         }
-        run.summaryAcc.rut.push({ ma_mon: victim.maMon, id_to_hoc: victim.idToHoc, ly_do: 'trùng lịch (tự dọn)' });
-        this.appendLog(run, 'info', `Đã rút ${victim.maMon}; giữ ${survivor.maMon}.`);
+        if (run.stopRequested) return 'stopped';
       }
     }
   }
@@ -1414,28 +1409,42 @@ export class EnrollmentRunManager {
       await this.sleep(100);
     }
 
+    await this.finishRegistrationPhase(run);
+  }
+
+  async finishRegistrationPhase(run) {
     if (run.stopRequested) { await this.finishRun(run, 'stopped'); return; }
     await this.cleanupSuccessfulPriorities(run);
     const canWatch = run.watchSlots === true && this.watchSubjects(run).length > 0 && this.now() < run.watchUntilMs;
     if (!canWatch) {
+      let autoFixStatus;
       if (run.autoFixScheduleConflict) {
-        await this.autoFixConflicts(run);
+        autoFixStatus = await this.autoFixConflicts(run);
         await this.persistRun(run);
       }
-      await this.finishRun(run, 'done');
+      const status = autoFixStatus === 'stopped' || run.stopRequested ? 'stopped' : 'done';
+      await this.finishRun(run, status);
       return;
     }
 
     run.phase = 'watching';
     this.appendLog(run, 'info', `Bắt đầu canh slot ${this.watchSubjects(run).length} môn tới ${new Date(run.watchUntilMs).toLocaleTimeString('vi-VN')}. Thử lại mỗi ${this.watchIntervalMs / 1000}s.`);
+    // Pha watching không được resume sau restart, nên credential chỉ cần tồn
+    // tại trong RAM cho refresh/login; bản persist không còn cần thiết nữa.
+    try {
+      await this.store.deleteCredential?.(run.id);
+    } catch { /* best-effort: vòng canh vẫn tiếp tục với credential trong RAM */ }
     this.emit(run, { type: 'snapshot', run: this.serialize(run) });
     await this.persistRun(run);
     const outcome = await this.runWatcher(run);
+    let finalStatus = outcome.status;
     if (outcome.status === 'done' && run.autoFixScheduleConflict) {
-      await this.autoFixConflicts(run);
+      const autoFixStatus = await this.autoFixConflicts(run);
       await this.persistRun(run);
+      if (autoFixStatus === 'stopped') finalStatus = 'stopped';
     }
-    await this.finishRun(run, outcome.status, { error: outcome.error });
+    if (run.stopRequested) finalStatus = 'stopped';
+    await this.finishRun(run, finalStatus, { error: outcome.error });
   }
 
   async finishRun(run, status, { error } = {}) {
