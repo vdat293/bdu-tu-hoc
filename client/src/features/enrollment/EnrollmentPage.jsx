@@ -230,6 +230,14 @@ export default function EnrollmentPage() {
     }
   }, [auth.token]);
 
+  const loadRegisteredRef = useRef(loadRegistered);
+  const loadPriorityRef = useRef(loadPriority);
+
+  useEffect(() => {
+    loadRegisteredRef.current = loadRegistered;
+    loadPriorityRef.current = loadPriority;
+  }, [loadRegistered, loadPriority]);
+
   const loadSchedule = useCallback(async () => {
     if (!auth.token) return;
     try {
@@ -358,14 +366,14 @@ export default function EnrollmentPage() {
             setSelected((current) => current.filter((item) => !removed.includes(item.maMon)));
             notify(`Đã gỡ ${removed.length} môn đã đăng ký khỏi danh sách ưu tiên.`, 'info');
           }
-          loadRegistered();
+          loadRegisteredRef.current();
           return;
         }
         if (payload.type === 'done') {
           setRun((current) => ({ ...(payload.run ?? current), status: payload.run?.status ?? current?.status ?? 'done' }));
           setRestoreNotice('');
-          loadRegistered();
-          if (!dirtyRef.current) loadPriority();
+          loadRegisteredRef.current();
+          if (!dirtyRef.current) loadPriorityRef.current();
           notify(payload.run?.status === 'done' ? 'Lượt đăng ký đã hoàn tất.' : 'Lượt đăng ký kết thúc với lỗi.', payload.run?.status === 'done' ? 'success' : 'warning');
         }
       },
