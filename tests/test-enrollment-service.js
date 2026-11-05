@@ -291,6 +291,42 @@ await section('refreshSession rejects when BDU refuses the refresh token', async
   });
 });
 
+await section('login exchanges MSSV + password for a token', async () => {
+  const { calls, fetchImpl } = createFetchMock({
+    [`POST ${BASE}/auth/login`]: { access_token: 'tok-new', refresh_token: 'ref-new' }
+  });
+  const result = await new EnrollmentService({ fetchImpl }).login('24050126', 'secret');
+  assert.deepEqual(result, { token: 'tok-new', refreshToken: 'ref-new' });
+  assert.equal(calls[0].url, `${BASE}/auth/login`);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['Content-Type'], 'application/x-www-form-urlencoded');
+  const body = new URLSearchParams(calls[0].options.body);
+  assert.equal(body.get('grant_type'), 'password');
+  assert.equal(body.get('username'), '24050126');
+  assert.equal(body.get('password'), 'secret');
+});
+
+await section('login maps a rejected password to 401 INVALID_CREDENTIALS', async () => {
+  const { fetchImpl } = createFetchMock({
+    [`POST ${BASE}/auth/login`]: { body: { message: 'Sai mật khẩu' }, status: 400 }
+  });
+  await assert.rejects(() => new EnrollmentService({ fetchImpl }).login('24050126', 'wrong'), (error) => {
+    assert.equal(error.status, 401);
+    assert.equal(error.code, 'INVALID_CREDENTIALS');
+    assert.equal(error.message, 'Sai mật khẩu');
+    return true;
+  });
+});
+
+await section('login maps a network failure to 502 BDU_UNREACHABLE', async () => {
+  const service = new EnrollmentService({ fetchImpl: async () => { throw new Error('offline'); } });
+  await assert.rejects(() => service.login('24050126', 'secret'), (error) => {
+    assert.equal(error.status, 502);
+    assert.equal(error.code, 'BDU_UNREACHABLE');
+    return true;
+  });
+});
+
 const classify = (body, status = 200) => classifyRegisterResult({
   httpStatus: status,
   code: body?.code ?? null,

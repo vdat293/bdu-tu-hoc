@@ -257,6 +257,38 @@ export class EnrollmentService {
     return { token: data.access_token, refreshToken: data.refresh_token || refreshToken };
   }
 
+  // Đăng nhập lại bằng MSSV + mật khẩu (password grant). Mật khẩu chỉ đi qua
+  // request này; service không lưu lại ở đâu.
+  async login(username, password) {
+    let response;
+    try {
+      response = await this.fetchImpl(`${BDU_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'password',
+          username: String(username ?? ''),
+          password: String(password ?? '')
+        }).toString()
+      });
+    } catch {
+      throw new EnrollmentBduError('Không kết nối được tới sv.bdu.edu.vn để đăng nhập.', { status: 502, code: 'BDU_UNREACHABLE' });
+    }
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      throw new EnrollmentBduError('Phản hồi đăng nhập từ BDU không hợp lệ.', { status: 502, code: 'BDU_BAD_RESPONSE' });
+    }
+    if (!data?.access_token) {
+      throw new EnrollmentBduError(
+        pickString(data?.message, data?.error_description, 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.'),
+        { status: 401, code: 'INVALID_CREDENTIALS' }
+      );
+    }
+    return { token: data.access_token, refreshToken: data.refresh_token || '' };
+  }
+
   async registerGroup(token, { idToHoc, isChecked, svNganh = 1, idRs = '' } = {}) {
     if (!idToHoc) throw new EnrollmentBduError('Thiếu id_to_hoc.', { status: 400, code: 'BAD_REQUEST' });
     const { httpStatus, data } = await this.#post(token, 'dkmh/w-xulydkmhsinhvien', {
