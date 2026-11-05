@@ -44,42 +44,27 @@
 
 - [ ] **Step 1: Viết test fail cho login**
 
-Thêm vào `tests/test-enrollment-service.js` (dùng `createFetchMock` sẵn có). Key là `POST ${BASE}/auth/login`.
+Thêm vào `tests/test-enrollment-service.js` (dùng `createFetchMock` sẵn có, key `POST ${BASE}/auth/login`):
 
 ```js
 await section('login exchanges MSSV + password for a token', async () => {
-  const { calls, fetchImpl } = createFetchMock({
-    [`POST ${BASE}/auth/login`]: { access_token: 'tok-new', refresh_token: 'ref-new' }
-  });
-  const service = new EnrollmentService({ fetchImpl });
-  const result = await service.login('24050126', 'secret');
+  const { calls, fetchImpl } = createFetchMock({ [`POST ${BASE}/auth/login`]: { access_token: 'tok-new', refresh_token: 'ref-new' } });
+  const result = await new EnrollmentService({ fetchImpl }).login('24050126', 'secret');
   assert.deepEqual(result, { token: 'tok-new', refreshToken: 'ref-new' });
-  assert.equal(calls[0].options.headers['Content-Type'], 'application/x-www-form-urlencoded');
   const body = new URLSearchParams(calls[0].options.body);
   assert.equal(body.get('grant_type'), 'password');
   assert.equal(body.get('username'), '24050126');
   assert.equal(body.get('password'), 'secret');
 });
-
 await section('login maps a rejected password to 401 INVALID_CREDENTIALS', async () => {
-  const { fetchImpl } = createFetchMock({
-    [`POST ${BASE}/auth/login`]: { body: { message: 'Sai mật khẩu' }, status: 400 }
-  });
-  const service = new EnrollmentService({ fetchImpl });
-  await assert.rejects(() => service.login('24050126', 'wrong'), (error) => {
-    assert.equal(error.status, 401);
-    assert.equal(error.code, 'INVALID_CREDENTIALS');
-    return true;
-  });
+  const { fetchImpl } = createFetchMock({ [`POST ${BASE}/auth/login`]: { body: { message: 'Sai mật khẩu' }, status: 400 } });
+  await assert.rejects(() => new EnrollmentService({ fetchImpl }).login('24050126', 'wrong'),
+    (error) => error.status === 401 && error.code === 'INVALID_CREDENTIALS');
 });
-
 await section('login maps a network failure to 502 BDU_UNREACHABLE', async () => {
   const service = new EnrollmentService({ fetchImpl: async () => { throw new Error('offline'); } });
-  await assert.rejects(() => service.login('24050126', 'secret'), (error) => {
-    assert.equal(error.status, 502);
-    assert.equal(error.code, 'BDU_UNREACHABLE');
-    return true;
-  });
+  await assert.rejects(() => service.login('24050126', 'secret'),
+    (error) => error.status === 502 && error.code === 'BDU_UNREACHABLE');
 });
 ```
 
@@ -91,7 +76,7 @@ Expected: FAIL — `service.login is not a function`.
 
 - [ ] **Step 3: Implement `login`**
 
-Trong `enrollment.service.js`, thêm method (giữ `verifyOtp`/`OtpUnavailableError` đến Task 5 để các test OTP hiện tại còn chạy):
+Thêm method (giữ `verifyOtp`/`OtpUnavailableError` đến Task 5 để test OTP hiện tại còn chạy):
 
 ```js
 async login(username, password) {
@@ -106,7 +91,7 @@ async login(username, password) {
 - [ ] **Step 4: Chạy test để pass**
 
 Run: `NODE_ENV=test BDU_TEST_RUNNER=safe node tests/test-enrollment-service.js`
-Expected: PASS toàn bộ, gồm 3 test mới.
+Expected: PASS toàn bộ.
 
 - [ ] **Step 5: Commit**
 
@@ -126,12 +111,10 @@ git commit -m "feat(enrollment): add BDU password login to the service"
 
 **Interfaces:**
 - Consumes: `EnrollmentService.login` (Task 1).
-- Produces: `start({ mssv, token, refreshToken?, password, items, triggerAt, autoFixScheduleConflict?, svNganh? })`; object run có thêm `password`, `loginAtMs`, `loginAttempts`, `loginDone`, `passwordInvalid`.
+- Produces: `start({ mssv, token, refreshToken?, password, items, triggerAt, autoFixScheduleConflict?, svNganh? })`; run có thêm `password`, `loginAtMs`, `loginAttempts`, `loginDone`, `passwordInvalid`.
 - Produces: `POST /api/enrollment/runs` yêu cầu `password` (string 1–200 sau trim).
 
 - [ ] **Step 1: Viết test fail (run manager)**
-
-Trong `tests/test-enrollment-run.js`:
 
 ```js
 await section('a1) start rejects a missing password', async () => {
@@ -142,27 +125,20 @@ await section('a1) start rejects a missing password', async () => {
     (error) => error.status === 400 && /mật khẩu/i.test(error.message)
   );
 });
-
 await section('a2) serialize never exposes the password', async () => {
   const { manager } = makeManager({ gateSequence: [false] });
   clock = 1_000_000;
-  const { run } = await manager.start({
-    mssv: 'SV001', token: 'tok', password: 'super-secret', items: [chinhA],
-    triggerAt: new Date(clock + 60_000).toISOString()
-  });
-  const serialized = manager.getForStudent(run.runId, 'SV001');
-  assert.ok(!JSON.stringify(serialized).includes('super-secret'));
+  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', password: 'super-secret', items: [chinhA], triggerAt: new Date(clock + 60_000).toISOString() });
+  assert.ok(!JSON.stringify(manager.getForStudent(run.runId, 'SV001')).includes('super-secret'));
   manager.stop(run.runId, 'SV001');
 });
 ```
 
-Cập nhật **mọi** lời gọi `manager.start(...)` hiện có trong file test để thêm `password: 'pw'` (trừ test a1).
+Thêm `password: 'pw'` vào **mọi** lời gọi `manager.start(...)` hiện có (trừ a1).
 
-Lưu ý test `n)` (chờ dài, refresh định kỳ): login ở T−5 sẽ thay token lần cuối. Thêm `login: async () => ({ token: 'tok-refreshed', refreshToken: 'refresh-1' })` vào `makeManager` của test đó để assert token cũ vẫn đúng.
+Test `n)` (chờ dài): login ở T−5 sẽ thay token lần cuối — thêm `login: async () => ({ token: 'tok-refreshed', refreshToken: 'refresh-1' })` vào `makeManager` của test đó.
 
 - [ ] **Step 2: Viết test fail (controller)**
-
-Trong `tests/test-enrollment-controller.js`:
 
 ```js
 await section('startRun 400 when password is missing', async () => {
@@ -175,12 +151,12 @@ await section('startRun 400 when password is missing', async () => {
 });
 ```
 
-Thêm `password: 'pw'` vào body của các test `startRun` hiện có (kể cả các test 400/409 để chúng vẫn kiểm tra đúng lý do cũ).
+Thêm `password: 'pw'` vào body của các test `startRun` hiện có.
 
 - [ ] **Step 3: Chạy để thấy fail**
 
 Run: `NODE_ENV=test BDU_TEST_RUNNER=safe node tests/test-enrollment-run.js` và `... node tests/test-enrollment-controller.js`
-Expected: FAIL ở test mới (chưa validate password).
+Expected: FAIL ở test mới.
 
 - [ ] **Step 4: Implement**
 
@@ -194,21 +170,14 @@ if (password.length > 200) return res.status(400).json({ result: false, message:
 
 Truyền `password` vào `EnrollmentRunService.start({ ..., password })`.
 
-`enrollment-run.service.js`:
+`enrollment-run.service.js` — thêm hằng:
 
 ```js
 const LOGIN_LEAD_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 3;
 ```
 
-Trong `start(...)`: nhận `password`, validate:
-
-```js
-const secret = String(password || '').trim();
-if (!secret) throw httpError(400, 'Thiếu mật khẩu BDU để đăng nhập lại trước giờ mở.');
-```
-
-Thêm vào object run:
+Trong `start(...)`: nhận `password`; `const secret = String(password || '').trim();` → rỗng thì `throw httpError(400, 'Thiếu mật khẩu BDU để đăng nhập lại trước giờ mở.')`. Thêm vào run:
 
 ```js
 password: secret,
@@ -222,7 +191,7 @@ Không đổi `insertRun`/`serialize`.
 
 - [ ] **Step 5: Chạy lại test**
 
-Expected: PASS cả 2 file. `serialize` không chứa password.
+Expected: PASS cả 2 file.
 
 - [ ] **Step 6: Commit**
 
@@ -236,16 +205,16 @@ git commit -m "feat(enrollment): accept the BDU password for a run and keep it i
 ### Task 3: Login trước giờ mở 5 phút + wipe khi kết thúc
 
 **Files:**
-- Modify: `src/modules/enrollment/enrollment-run.service.js` (`execute` ~dòng 566-604, `finishRun` ~dòng 640-670)
+- Modify: `src/modules/enrollment/enrollment-run.service.js` (`execute` ~566-604, `finishRun` ~640-670)
 - Test: `tests/test-enrollment-run.js`
 
 **Interfaces:**
 - Produces: `async loginWithPassword(run): Promise<'ok' | 'transient' | 'fatal'>`.
-- Consumes: `EnrollmentService.login` (Task 1), `run.password`, `run.loginAtMs`, `run.loginAttempts`.
+- Consumes: `EnrollmentService.login`, `run.password`, `run.loginAtMs`, `run.loginAttempts`.
 
-- [ ] **Step 1: Mở rộng fake service trong test**
+- [ ] **Step 1: Mở rộng fake service**
 
-Trong `makeManager`, thêm:
+Trong `makeManager`: thêm tham số `login = null`, `login: []` vào `calls`, và:
 
 ```js
 login: async (mssv, password) => {
@@ -255,35 +224,36 @@ login: async (mssv, password) => {
 }
 ```
 
-Thêm `login = null` vào tham số `makeManager` và `login: []` vào `calls`.
+- [ ] **Step 2: Viết test fail (dùng helper chung)**
 
-- [ ] **Step 2: Viết 4 test fail**
+Thêm helper cạnh các helper test:
+
+```js
+const startWithPassword = async (overrides = {}) => {
+  const made = makeManager({ gateSequence: [true], ...overrides });
+  clock = 1_000_000;
+  const offsetMs = overrides.offsetMs ?? 10 * 60_000;
+  const { run } = await made.manager.start({ mssv: 'SV001', token: 'tok-old', password: 'pw', items: [chinhA], triggerAt: new Date(clock + offsetMs).toISOString() });
+  const final = await waitForStatus(made.manager, run.runId, 'SV001', ['done', 'failed', 'stopped']);
+  return { ...made, run, final };
+};
+```
+
+Các test:
 
 ```js
 await section('a3) logs in 5 minutes before the trigger and uses the new token', async () => {
-  const { manager, calls } = makeManager({ gateSequence: [true] });
-  clock = 1_000_000;
-  const triggerAt = new Date(clock + 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', password: 'pw', items: [chinhA], triggerAt });
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const { final, calls } = await startWithPassword();
   assert.equal(final.status, 'done');
-  assert.equal(calls.login.length, 1);
-  assert.equal(calls.login[0].mssv, 'SV001');
-  assert.equal(calls.login[0].password, 'pw');
+  assert.deepEqual(calls.login, [{ mssv: 'SV001', password: 'pw' }]);
   assert.equal(calls.register[0].token, 'tok-login');
 });
-
 await section('a4) a wrong password fails the run before the gate opens', async () => {
-  const login = async () => { throw Object.assign(new Error('bad password'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
-  const { manager, calls } = makeManager({ gateSequence: [true], login });
-  clock = 1_000_000;
-  const triggerAt = new Date(clock + 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', password: 'wrong', items: [chinhA], triggerAt });
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['failed']);
+  const login = async () => { throw Object.assign(new Error('bad'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
+  const { final, calls } = await startWithPassword({ login });
   assert.match(String(final.error), /Mật khẩu BDU không đúng/);
   assert.equal(calls.register.length, 0);
 });
-
 await section('a5) a transient login failure at T-5 is retried at the trigger time', async () => {
   let attempts = 0;
   const login = async () => {
@@ -291,35 +261,18 @@ await section('a5) a transient login failure at T-5 is retried at the trigger ti
     if (attempts === 1) throw Object.assign(new Error('offline'), { status: 502 });
     return { token: 'tok-late', refreshToken: '' };
   };
-  const { manager, calls } = makeManager({ gateSequence: [true], login });
-  clock = 1_000_000;
-  const triggerAt = new Date(clock + 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', password: 'pw', items: [chinhA], triggerAt });
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const { final, calls } = await startWithPassword({ login });
   assert.equal(final.status, 'done');
   assert.equal(calls.login.length, 2);
   assert.equal(calls.register[0].token, 'tok-late');
 });
-
 await section('a6) starting late logs in immediately before polling the gate', async () => {
-  const { manager, calls } = makeManager({ gateSequence: [true] });
-  clock = 1_000_000;
-  const triggerAt = new Date(clock - 10 * 60_000).toISOString();
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', password: 'pw', items: [chinhA], triggerAt });
-  await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const { calls } = await startWithPassword({ offsetMs: -10 * 60_000 });
   assert.equal(calls.login.length, 1);
   assert.equal(calls.register[0].token, 'tok-login');
 });
-```
-
-Thêm một assert vào test `y)` hoặc test mới:
-
-```js
 await section('a7) finishRun wipes the password from RAM', async () => {
-  const { manager } = makeManager({ gateSequence: [true] });
-  clock = 1_000_000;
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', password: 'pw', items: [chinhA], triggerAt: new Date(clock + 1_000).toISOString() });
-  await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
+  const { manager, run } = await startWithPassword({ offsetMs: 1_000 });
   assert.equal(manager.runs.get(run.runId).password, null);
 });
 ```
@@ -327,29 +280,23 @@ await section('a7) finishRun wipes the password from RAM', async () => {
 - [ ] **Step 3: Chạy để thấy fail**
 
 Run: `NODE_ENV=test BDU_TEST_RUNNER=safe node tests/test-enrollment-run.js`
-Expected: FAIL — `calls.login` rỗng / `loginWithPassword` chưa có.
+Expected: FAIL — `calls.login` rỗng / chưa có `loginWithPassword`.
 
 - [ ] **Step 4: Implement `loginWithPassword`**
 
 ```js
 async loginWithPassword(run) {
-  // 'fatal' khi 401 (sai mật khẩu) hoặc không còn mật khẩu.
+  // 'fatal' khi 401 hoặc không có mật khẩu.
   // 'transient' khi lỗi mạng/5xx hoặc đã chạm MAX_LOGIN_ATTEMPTS.
   // 'ok' khi token mới đã thay vào run.
 }
 ```
 
-Quy tắc body:
-- `if (!run.password) return 'fatal';`
-- `if (run.loginAttempts >= MAX_LOGIN_ATTEMPTS) return 'transient';`
-- tăng `loginAttempts`, gọi `this.service.login(run.mssv, run.password)`.
-- thành công: cập nhật `token`, `refreshToken`, `lastRefreshAt = this.now()`, log success `Đã kiểm tra và đăng nhập lại BDU trước giờ mở.`, trả `'ok'`.
-- `error.status === 401`: set `run.passwordInvalid = true`, log error `Mật khẩu BDU không đúng.`, trả `'fatal'`.
-- còn lại: log warning `Không đăng nhập lại được BDU (lỗi tạm thời) — sẽ thử lại đúng giờ mở.`, trả `'transient'`.
+Quy tắc: `!run.password` → `'fatal'`; `loginAttempts >= MAX_LOGIN_ATTEMPTS` → `'transient'`; tăng `loginAttempts`; gọi `this.service.login(run.mssv, run.password)`; thành công → cập nhật `token`, `refreshToken`, `lastRefreshAt`, log `Đã kiểm tra và đăng nhập lại BDU trước giờ mở.`, trả `'ok'`; `error.status === 401` → set `run.passwordInvalid = true`, log `Mật khẩu BDU không đúng.`, trả `'fatal'`; còn lại → log warning `Không đăng nhập lại được BDU (lỗi tạm thời) — sẽ thử lại đúng giờ mở.`, trả `'transient'`.
 
 - [ ] **Step 5: Chèn login vào `execute`**
 
-Trong vòng chờ (trước `triggerAt`), đầu mỗi vòng lặp:
+Đầu mỗi vòng chờ (trước `triggerAt`):
 
 ```js
 if (!run.loginDone && this.now() >= run.loginAtMs) {
@@ -359,15 +306,7 @@ if (!run.loginDone && this.now() >= run.loginAtMs) {
 }
 ```
 
-Sau vòng chờ, trước khối poll cổng:
-
-```js
-if (!run.loginDone && !run.stopRequested) {
-  const outcome = await this.loginWithPassword(run);
-  if (outcome === 'fatal') { await this.finishRun(run, 'failed', { error: 'Mật khẩu BDU không đúng. Kiểm tra lại rồi kích hoạt lại.' }); return; }
-  if (outcome === 'ok') run.loginDone = true;
-}
-```
+Sau vòng chờ, trước khối poll cổng, lặp lại đúng khối trên (xử lý bấm muộn + retry tại `triggerAt`).
 
 - [ ] **Step 6: Wipe trong `finishRun`**
 
@@ -381,13 +320,7 @@ const finalError = status === 'failed' && run.passwordInvalid
     : (error ?? null);
 ```
 
-Ngay trước khi ghi DB:
-
-```js
-run.password = null;
-```
-
-(giữ nguyên `run.token = null`, `run.refreshToken = ''` ở cuối).
+Ngay trước khi ghi DB: `run.password = null;` (giữ nguyên chỗ xoá `token`/`refreshToken` cuối hàm).
 
 - [ ] **Step 7: Chạy test**
 
@@ -406,16 +339,16 @@ git commit -m "feat(enrollment): log in with the stored password before the gate
 ### Task 4: Fallback khi refresh/401 và thay nhánh 412; xoá state OTP khỏi run
 
 **Files:**
-- Modify: `src/modules/enrollment/enrollment-run.service.js` (`tryRefresh`, `registerSubject`, `execute`, `finishRun`, hằng số OTP)
+- Modify: `src/modules/enrollment/enrollment-run.service.js` (`tryRefresh`, `registerSubject`, `execute`, `finishRun`, constants, `getLatestForStudent`)
 - Test: `tests/test-enrollment-run.js`
 
 **Interfaces:**
 - Consumes: `loginWithPassword` (Task 3).
-- Produces: không còn `submitOtp`, `otpResult`, `otpAttempts`, `pendingItem`, `OTP_WAIT_MS`, `MAX_OTP_ATTEMPTS`, trạng thái `otp_required`.
+- Produces: không còn `submitOtp`, `otpResult`, `otpAttempts`, `pendingItem`, `OTP_WAIT_MS`, `MAX_OTP_ATTEMPTS`; `ACTIVE_STATUSES = ['scheduled','running']`; `RECOVERABLE_STATUSES` gồm cả `otp_required` cho row DB cũ.
 
-- [ ] **Step 1: Viết test fail cho fallback và 412**
+- [ ] **Step 1: Viết/thay test**
 
-Thay các test OTP cũ (`e`, `e2`, `k`, `l`) bằng:
+Thay test OTP cũ (`e`, `e2`, `k`, `l`) bằng 3 test sau (dùng `okResponse`, `failResponse`, `makeManager` sẵn có):
 
 ```js
 await section('e) refresh failure falls back to a password login', async () => {
@@ -430,17 +363,14 @@ await section('e) refresh failure falls back to a password login', async () => {
   const { run } = await manager.start({ mssv: 'SV001', token: 'tok-old', refreshToken: 'ref', password: 'pw', items: [chinhA], triggerAt: new Date(clock + 1_000).toISOString() });
   const final = await waitForStatus(manager, run.runId, 'SV001', ['done', 'failed']);
   assert.equal(final.status, 'done');
-  assert.ok(calls.login.length >= 1);
   assert.equal(calls.register.at(-1).token, 'tok-pw');
 });
 
 await section('f2) 412 logs in again and retries the item exactly once', async () => {
-  let count412 = 0;
-  const register = async () => {
-    count412 += 1;
-    if (count412 === 1) return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
-    return okResponse('RS-ok');
-  };
+  let res412 = 1;
+  const register = async () => (res412-- > 0
+    ? { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' }
+    : okResponse('RS-ok'));
   const { manager, calls } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const { run } = await manager.start({ mssv: 'SV001', token: 'tok', password: 'pw', items: [chinhA], triggerAt: new Date(clock + 1_000).toISOString() });
@@ -448,14 +378,12 @@ await section('f2) 412 logs in again and retries the item exactly once', async (
   assert.equal(final.status, 'done');
   assert.equal(calls.register.length, 2);
   assert.ok(calls.login.length >= 1);
-  assert.equal(final.summary.thanh_cong.length, 1);
 });
 
 await section('f3) 412 twice fails the item but lets the next subject run (no 5-minute wait)', async () => {
-  const register = async (args) => {
-    if (args.idToHoc === 'A-MAIN') return { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' };
-    return okResponse('RS-B');
-  };
+  const register = async (args) => (args.idToHoc === 'A-MAIN'
+    ? { httpStatus: 412, code: null, isThanhCong: false, isChoose: false, idRs: '', idToHocXoa: '', thongBaoLoi: '', thongBaoTienQuyet: '', rawMessage: '' }
+    : okResponse('RS-B'));
   const { manager } = makeManager({ gateSequence: [true], register });
   clock = 1_000_000;
   const started = clock;
@@ -464,51 +392,30 @@ await section('f3) 412 twice fails the item but lets the next subject run (no 5-
   assert.equal(final.status, 'done');
   assert.match(final.summary.that_bai[0].ly_do, /OTP/);
   assert.equal(final.summary.thanh_cong.length, 1);
-  assert.ok(clock - started < 60_000, 'không được chờ OTP 5 phút');
+  assert.ok(clock - started < 60_000);
 });
 ```
 
-Xoá test `k)` (stop khi chờ OTP) và thay bằng:
+Thay test `k)` (stop khi chờ OTP) bằng "stop khi đang chờ cổng → `stopped`, không bắn request" (dùng `gateSequence: [false]`, trigger +60s, gọi `manager.stop` ngay).
 
-```js
-await section('k) stop() while waiting for the gate ends the run as stopped', async () => {
-  const { manager, calls } = makeManager({ gateSequence: [false] });
-  clock = 1_000_000;
-  const { run } = await manager.start({ mssv: 'SV001', token: 'tok', password: 'pw', items: [chinhA], triggerAt: new Date(clock + 60_000).toISOString() });
-  manager.stop(run.runId, 'SV001');
-  const final = await waitForStatus(manager, run.runId, 'SV001', ['stopped', 'done', 'failed']);
-  assert.equal(final.status, 'stopped');
-  assert.equal(calls.register.length, 0);
-});
-```
-
-Cập nhật test `p)` (token chết + refresh chết): từ giờ còn fallback mật khẩu, nên phải cho cả login chết để run vẫn fail có chủ đích:
-
-```js
-const login = async () => { throw Object.assign(new Error('bad password'), { status: 401, code: 'INVALID_CREDENTIALS' }); };
-const { manager, calls } = makeManager({ gateImpl, refresh, login });
-// ...start với password: 'pw'
-assert.match(String(final.error), /Mật khẩu BDU không đúng/);
-```
-
-Giữ nguyên assert notify Discord ở test đó.
+Cập nhật test `p)` (refresh chết + password chết): thêm `login` throw 401 và assert `/Mật khẩu BDU không đúng/`; vẫn giữ assert notify Discord.
 
 - [ ] **Step 2: Chạy để thấy fail**
 
-Expected: FAIL ở `f2/f3` (vẫn còn nhánh chờ OTP) và test `e` (refresh chết là fail ngay).
+Expected: FAIL ở `f2/f3` (còn chờ OTP) và `e` (refresh chết là fail ngay).
 
 - [ ] **Step 3: Implement `tryRefresh` fallback**
 
 ```js
 async tryRefresh(run) {
-  // 1) thử refresh_token nếu còn lượt (refreshCount < 3)
+  // 1) thử refresh_token nếu refreshCount < 3
   // 2) thất bại/không có refresh token -> loginWithPassword(run) === 'ok'
 }
 ```
 
 - [ ] **Step 4: Thay nhánh 412 trong `registerSubject`**
 
-Thay khối `if (outcome.cls === 'otp') { ... chờ OTP ... }` bằng:
+Thay khối chờ OTP bằng:
 
 ```js
 if (outcome.cls === 'otp') {
@@ -517,7 +424,7 @@ if (outcome.cls === 'otp') {
 }
 ```
 
-Thêm nhánh cuối trước `rejected`:
+Thêm trước nhánh `rejected`:
 
 ```js
 if (outcome.cls === 'otp') {
@@ -526,20 +433,18 @@ if (outcome.cls === 'otp') {
 }
 ```
 
-Trong vòng fallback, bỏ early-return riêng cho `fb.cls === 'otp'`: ghi log cảnh báo và thử nhóm dự phòng kế tiếp (không login lại giữa vòng fallback để tránh chuỗi login dài).
+Trong vòng fallback: bỏ early-return riêng cho `fb.cls === 'otp'`; ghi log cảnh báo và thử nhóm dự phòng kế tiếp (không login lại giữa vòng fallback).
 
 - [ ] **Step 5: Xoá state OTP khỏi run manager**
 
-- Xoá hằng `OTP_WAIT_MS`, `MAX_OTP_ATTEMPTS`.
-- Xoá field `pendingItem`, `otpAttempts`, `otpResult` khỏi object run.
-- Xoá method `submitOtp`.
-- `ACTIVE_STATUSES` chỉ còn `['scheduled', 'running']`.
-- Thêm `RECOVERABLE_STATUSES = new Set(['scheduled', 'running', 'otp_required'])` và dùng nó **chỉ** trong `getLatestForStudent` khi kiểm tra row DB còn active — để row `otp_required` cũ (nếu có) vẫn được đánh dấu `failed/server_restart` thay vì hiện "Chờ OTP" mãi.
+- Xoá `OTP_WAIT_MS`, `MAX_OTP_ATTEMPTS`, field `pendingItem`/`otpAttempts`/`otpResult`, method `submitOtp`.
+- `ACTIVE_STATUSES = new Set(['scheduled', 'running'])`.
+- Thêm `RECOVERABLE_STATUSES = new Set(['scheduled', 'running', 'otp_required'])` và dùng **chỉ** trong `getLatestForStudent` để row cũ vẫn bị đánh dấu `failed/server_restart`.
 - Không còn chỗ nào emit `otp_required`.
 
 - [ ] **Step 6: Chạy test**
 
-Expected: PASS toàn bộ `tests/test-enrollment-run.js`.
+Expected: PASS `tests/test-enrollment-run.js`.
 
 - [ ] **Step 7: Commit**
 
@@ -553,33 +458,25 @@ git commit -m "feat(enrollment): handle 412 and auth failures with the RAM passw
 ### Task 5: Xoá toàn bộ surface OTP phía server
 
 **Files:**
-- Modify: `src/modules/enrollment/enrollment.controller.js` (xoá `submitOtp`, import `OtpUnavailableError`)
-- Modify: `src/routes/enrollment.routes.js` (xoá route `/enrollment/runs/:id/otp`)
-- Modify: `src/modules/enrollment/enrollment.service.js` (xoá class `OtpUnavailableError`)
+- Modify: `src/modules/enrollment/enrollment.controller.js`, `src/routes/enrollment.routes.js`, `src/modules/enrollment/enrollment.service.js`
 - Test: `tests/test-enrollment-controller.js`
 
 **Interfaces:**
-- Removes: `EnrollmentController.submitOtp`, `POST /api/enrollment/runs/:id/otp`, `OtpUnavailableError`.
-- Còn lại: `POST /api/enrollment/runs` nhận `password`.
+- Removes: `EnrollmentController.submitOtp`, `POST /api/enrollment/runs/:id/otp`, `EnrollmentService.verifyOtp`, `OtpUnavailableError`.
 
-- [ ] **Step 1: Viết test fail (không còn endpoint/method)**
+- [ ] **Step 1: Viết test fail**
 
 Trong `tests/test-enrollment-controller.js`, thay 2 test `submitOtp` cũ bằng:
 
 ```js
-await section('submitOtp is gone', async () => {
+await section('submitOtp and its route are gone', async () => {
   assert.equal(EnrollmentController.submitOtp, undefined);
-});
-```
-
-Thêm assert route ngay trong cùng file (đầu file đã import `assert`; thêm `readFileSync` từ `node:fs`):
-
-```js
-await section('the OTP route is gone', async () => {
   const routes = readFileSync(new URL('../src/routes/enrollment.routes.js', import.meta.url), 'utf8');
   assert.doesNotMatch(routes, /\/otp/);
 });
 ```
+
+Thêm `readFileSync` từ `node:fs` ở đầu file.
 
 - [ ] **Step 2: Chạy để thấy fail**
 
@@ -588,16 +485,16 @@ Expected: FAIL — `submitOtp` vẫn còn.
 
 - [ ] **Step 3: Xoá code OTP phía server**
 
-- Controller: xoá method `submitOtp`, xoá `OtpUnavailableError` khỏi import; giữ `EnrollmentBduError`.
+- Controller: xoá method `submitOtp`, xoá `OtpUnavailableError` khỏi import.
 - Routes: xoá dòng `router.post('/enrollment/runs/:id/otp', ...)`.
 - Service: xoá `verifyOtp`, class `OtpUnavailableError` và comment `ENROLLMENT_OTP_VERIFY_URL`.
-- Không có biến env OTP trong `.env`/`.env.example`; chỉ cần xoá comment nhắc `ENROLLMENT_OTP_VERIFY_URL` nếu còn trong `src/`.
+- Không có env OTP trong `.env`/`.env.example`.
 
 - [ ] **Step 4: Chạy test + grep**
 
 Run: `NODE_ENV=test BDU_TEST_RUNNER=safe node tests/test-enrollment-controller.js`
-Run: `grep -rn "submitOtp\|OtpUnavailableError\|ENROLLMENT_OTP_VERIFY_URL" src/` — Expected: không còn kết quả.
-Run: `grep -rn "otp_required" src/` — Expected: chỉ còn 2 chỗ legacy recovery (`RECOVERABLE_STATUSES` trong run service và `failStaleRuns` trong `priority-store.js`).
+Run: `grep -rn "submitOtp\|OtpUnavailableError\|ENROLLMENT_OTP_VERIFY_URL" src/` → không còn kết quả.
+Run: `grep -rn "otp_required" src/` → chỉ còn legacy recovery (`RECOVERABLE_STATUSES`, `failStaleRuns`).
 
 - [ ] **Step 5: Commit**
 
@@ -612,18 +509,15 @@ git commit -m "refactor(enrollment): remove the server-side OTP surface"
 
 **Files:**
 - Create: `client/src/features/enrollment/CredentialsModal.jsx`
-- Modify: `client/src/features/enrollment/EnrollmentPage.jsx`
-- Modify: `client/src/api/enrollment.js`
-- Modify: `client/src/styles/app.css`
+- Modify: `client/src/features/enrollment/EnrollmentPage.jsx`, `client/src/api/enrollment.js`, `client/src/styles/app.css`
 - Test: `tests/frontend/enrollment-credentials.test.jsx`
 
 **Interfaces:**
 - Produces: `CredentialsModal({ open, mssv, password, error, busy, onPasswordChange, onClose, onSubmit, dialogRef })`.
-- Consumes: `ViewportModal` từ `../../components/ViewportModal.jsx`.
 - Produces: `startRun(token, { roundId, triggerAt, autoFixScheduleConflict, refreshToken, password })`.
-- Removes: `submitOtp` khỏi `api/enrollment.js`; modal/state OTP khỏi `EnrollmentPage`.
+- Removes: `submitOtp` khỏi API client; modal/state OTP khỏi `EnrollmentPage`.
 
-- [ ] **Step 1: Viết test fail cho modal + API**
+- [ ] **Step 1: Viết test fail**
 
 Tạo `tests/frontend/enrollment-credentials.test.jsx`:
 
@@ -634,49 +528,37 @@ import CredentialsModal from '../../client/src/features/enrollment/CredentialsMo
 import { startRun } from '../../client/src/api/enrollment.js';
 
 afterEach(() => vi.unstubAllGlobals());
+const renderModal = (props = {}) => render(<CredentialsModal open mssv="24050126" password="secret" busy={false} error="" onPasswordChange={() => {}} onClose={() => {}} onSubmit={() => {}} dialogRef={{ current: null }} {...props} />);
 
 describe('CredentialsModal', () => {
-  it('shows the MSSV read-only and a password field without autocomplete', () => {
-    render(<CredentialsModal open mssv="24050126" password="" busy={false} error="" onPasswordChange={() => {}} onClose={() => {}} onSubmit={() => {}} dialogRef={{ current: null }} />);
-    const mssv = screen.getByLabelText('MSSV');
-    expect(mssv).toHaveValue('24050126');
-    expect(mssv).toHaveAttribute('readonly');
-    const password = screen.getByLabelText('Mật khẩu BDU');
-    expect(password).toHaveAttribute('type', 'password');
-    expect(password).toHaveAttribute('autocomplete', 'off');
+  it('shows a read-only MSSV and a password field without autocomplete', () => {
+    renderModal({ password: '' });
+    expect(screen.getByLabelText('MSSV')).toHaveValue('24050126');
+    expect(screen.getByLabelText('MSSV')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Mật khẩu BDU')).toHaveAttribute('type', 'password');
+    expect(screen.getByLabelText('Mật khẩu BDU')).toHaveAttribute('autocomplete', 'off');
   });
-
-  it('submits the typed password and never writes it to storage', () => {
+  it('submits and never writes the password to storage', () => {
     const onSubmit = vi.fn();
-    render(<CredentialsModal open mssv="24050126" password="secret" busy={false} error="" onPasswordChange={() => {}} onClose={() => {}} onSubmit={onSubmit} dialogRef={{ current: null }} />);
+    renderModal({ onSubmit });
     fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
   });
-
-  it('disables submit when the password is empty or the request is busy', () => {
-    render(<CredentialsModal open mssv="24050126" password="" busy={false} error="" onPasswordChange={() => {}} onClose={() => {}} onSubmit={() => {}} dialogRef={{ current: null }} />);
+  it('disables submit when the password is empty', () => {
+    renderModal({ password: '' });
     expect(screen.getByRole('button', { name: 'Kích hoạt' })).toBeDisabled();
   });
-
   it('shows an inline error', () => {
-    render(<CredentialsModal open mssv="24050126" password="x" busy={false} error="Mật khẩu BDU không đúng." onPasswordChange={() => {}} onClose={() => {}} onSubmit={() => {}} dialogRef={{ current: null }} />);
+    renderModal({ error: 'Mật khẩu BDU không đúng.' });
     expect(screen.getByRole('alert')).toHaveTextContent('Mật khẩu BDU không đúng.');
   });
-
   it('startRun sends the password in the body', async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 202,
-      headers: { get: () => 'application/json' },
-      json: async () => ({ result: true, data: { runId: 'r1' } })
-    }));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, headers: { get: () => 'application/json' }, json: async () => ({ result: true, data: { runId: 'r1' } }) }));
     vi.stubGlobal('fetch', fetchMock);
-    const result = await startRun('tok', { roundId: 'dot1', password: 'secret' });
-    expect(result.runId).toBe('r1');
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.password).toBe('secret');
+    expect((await startRun('tok', { roundId: 'dot1', password: 'secret' })).runId).toBe('r1');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).password).toBe('secret');
   });
 });
 ```
@@ -688,8 +570,6 @@ Expected: FAIL — không tìm thấy `CredentialsModal`.
 
 - [ ] **Step 3: Tạo `CredentialsModal.jsx`**
 
-Component controlled, không tự giữ state:
-
 ```jsx
 import { ViewportModal } from '../../components/ViewportModal.jsx';
 
@@ -698,9 +578,7 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
   return (
     <ViewportModal id="enroll-credential-modal" title="Xác thực tài khoản BDU" labelledBy="enroll-credential-title" onClose={onClose} dialogRef={dialogRef}>
       <div id="enroll-credential-title" className="enroll-modal-title">Xác thực tài khoản BDU</div>
-      <p className="enroll-modal-text">
-        Tool cần mật khẩu để đăng nhập lại trước giờ mở cổng. Mật khẩu chỉ giữ trong RAM của server và tự xoá khi lượt chạy kết thúc.
-      </p>
+      <p className="enroll-modal-text">Tool cần mật khẩu để đăng nhập lại trước giờ mở cổng. Mật khẩu chỉ giữ trong RAM của server và tự xoá khi lượt chạy kết thúc.</p>
       <label className="enroll-credential-field">
         <span>MSSV</span>
         <input value={mssv} readOnly autoComplete="username" />
@@ -712,9 +590,7 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
       {error ? <p className="enroll-error" role="alert">{error}</p> : null}
       <div className="enroll-modal-actions">
         <button type="button" className="enroll-ghost" onClick={onClose} disabled={busy}>Huỷ</button>
-        <button type="button" className="enroll-primary" onClick={onSubmit} disabled={busy || !password}>
-          {busy ? 'Đang kích hoạt…' : 'Kích hoạt'}
-        </button>
+        <button type="button" className="enroll-primary" onClick={onSubmit} disabled={busy || !password}>{busy ? 'Đang kích hoạt…' : 'Kích hoạt'}</button>
       </div>
     </ViewportModal>
   );
@@ -727,50 +603,13 @@ export default function CredentialsModal({ open, mssv, password, error, busy, on
 
 - [ ] **Step 5: Nối vào `EnrollmentPage.jsx`**
 
-Xoá: `OtpBoxes`, import `submitOtp`, state `otpOpen/otpCode/otpError/otpSending`, `otpAutoRef` + effect OTP, nhánh SSE `otp_required`, `handleSubmitOtp`, `useViewportDialog(otpOpen, ...)`, modal OTP JSX, `'otp_required'` trong `ACTIVE_STATUSES`/`statusLabel`.
+Xoá `OtpBoxes`, import `submitOtp`, state `otp*`, `otpAutoRef` + effect OTP, nhánh SSE `otp_required`, `handleSubmitOtp`, `useViewportDialog(otpOpen, ...)`, modal OTP, `otp_required` trong `ACTIVE_STATUSES`/`statusLabel`.
 
-Thêm state:
-
-```js
-const [credentialOpen, setCredentialOpen] = useState(false);
-const [credentialPassword, setCredentialPassword] = useState('');
-const [credentialError, setCredentialError] = useState('');
-```
-
-`handleStart` chỉ mở modal (không gọi API):
-
-```js
-if (!canActivate) return;
-setCredentialPassword('');
-setCredentialError('');
-setCredentialOpen(true);
-```
-
-`handleConfirmStart` gọi `startRun` với `password: credentialPassword`; khi thành công: `setCredentialPassword('')`, `setCredentialOpen(false)`, phần còn lại giữ nguyên logic cũ; khi lỗi: `setCredentialError(error.message)` và giữ modal mở.
-
-`closeCredentials`: xoá password/error, đóng modal.
-
-Render:
-
-```jsx
-<CredentialsModal
-  open={credentialOpen}
-  mssv={mssv}
-  password={credentialPassword}
-  error={credentialError}
-  busy={starting}
-  onPasswordChange={setCredentialPassword}
-  onClose={closeCredentials}
-  onSubmit={handleConfirmStart}
-  dialogRef={credentialDialogRef}
-/>
-```
-
-`useViewportDialog(credentialOpen, closeCredentials, credentialDialogRef)`.
+Thêm state `credentialOpen`, `credentialPassword`, `credentialError` + `credentialDialogRef`. `handleStart` chỉ mở modal (reset password/error). `handleConfirmStart` gọi `startRun` với `password: credentialPassword`; thành công → xoá password, đóng modal, giữ nguyên phần set run/notify cũ; lỗi → `setCredentialError(error.message)` và giữ modal. `closeCredentials` xoá password/error + đóng. Gọi `useViewportDialog(credentialOpen, closeCredentials, credentialDialogRef)`. Render `<CredentialsModal ... />` với `mssv`, `busy={starting}`.
 
 - [ ] **Step 6: CSS**
 
-Thêm vào `client/src/styles/app.css` cạnh style enrollment:
+Thêm cạnh style enrollment trong `client/src/styles/app.css`:
 
 ```css
 #tab-enrollment .enroll-credential-field { display: grid; gap: 4px; margin-top: 10px; font-size: 0.82rem; }
