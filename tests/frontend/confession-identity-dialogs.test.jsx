@@ -60,12 +60,12 @@ function renderPage() {
   );
 }
 
-function CinematicHarness({ frame }) {
+function CinematicHarness({ frame, introOnMount }) {
   const avatarRef = useRef(null);
   const bannerRef = useRef(null);
   const announcementRef = useRef(null);
   const particleFieldRef = useRef(null);
-  useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef, particleFieldRef });
+  useFrameCinematic({ frame, introOnMount, avatarRef, bannerRef, announcementRef, particleFieldRef });
   return (
     <div ref={bannerRef}>
       <div ref={avatarRef}>
@@ -144,6 +144,25 @@ describe('Confession identity dialogs', () => {
       rerender(<CinematicHarness frame={getEquippedFrame('anime-itachi')} />);
       expect(avatar).toHaveClass('frame-intro-burst', 'frame-effect-itachi-crow-genjutsu');
       expect(avatar).not.toHaveClass('frame-cinematic-complete');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('không phát lại intro khi trang mở với khung đã trang bị sẵn', () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(
+        <CinematicHarness frame={getEquippedFrame('anime-gojo')} introOnMount={false} />
+      );
+      const avatar = container.firstElementChild?.firstElementChild;
+
+      // Mở trang: art hiện ngay, không có timeline "mọc" từng lớp.
+      expect(avatar).not.toHaveClass('frame-intro-burst', 'frame-cinematic-active', 'frame-effect-gojo-limitless-awaken');
+
+      // Đổi khung trong lúc đang mở trang thì intro vẫn diễn ra bình thường.
+      rerender(<CinematicHarness frame={getEquippedFrame('anime-itachi')} introOnMount={false} />);
+      expect(avatar).toHaveClass('frame-intro-burst', 'frame-effect-itachi-crow-genjutsu');
     } finally {
       vi.useRealTimers();
     }

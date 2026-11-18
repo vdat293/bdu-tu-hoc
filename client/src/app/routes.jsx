@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireAuth from '../features/auth/RequireAuth.jsx';
 import AuthLayout from '../layouts/AuthLayout.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
+import { loadConfessionPage } from './confession-preload.js';
+import { PageSpinner } from '../components/feedback/Loading.jsx';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage.jsx'));
 const GpaPage = lazy(() => import('../features/gpa/GpaPage.jsx'));
@@ -35,12 +37,12 @@ const TtcdsHubPage = lazy(() => import('../features/ttcds/TtcdsHubPage.jsx'));
 const TtcdsGroupPage = lazy(() => import('../features/ttcds/TtcdsGroupPage.jsx'));
 const TtcdsStudentPage = lazy(() => import('../features/ttcds/TtcdsStudentPage.jsx'));
 const TtcdsLookupPage = lazy(() => import('../features/ttcds/TtcdsLookupPage.jsx'));
-const ConfessionPage = lazy(() => import('../features/confession/ConfessionPage.jsx'));
+const ConfessionPage = lazy(loadConfessionPage);
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const KillerSudokuPage = lazy(() => import('../features/games/KillerSudokuPage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
-function Lazy({ children }) { return <Suspense fallback={null}>{children}</Suspense>; }
+function Lazy({ children, fallback = null }) { return <Suspense fallback={fallback}>{children}</Suspense>; }
 
 export default function AppRoutes() {
   return <Routes>
@@ -73,7 +75,7 @@ export default function AppRoutes() {
       <Route path="grammar/lesson/:lessonId" element={<Lazy><GrammarLessonPage /></Lazy>} />
       <Route path="clans" element={<Lazy><ClubDirectoryPage /></Lazy>} />
       <Route path="clans/:clanId" element={<Lazy><ClubDetailPage /></Lazy>} />
-      <Route path="confession" element={<Lazy><ConfessionPage /></Lazy>} />
+      <Route path="confession" element={<Lazy fallback={<PageSpinner label="Đang tải BDU Confession…" />}><ConfessionPage /></Lazy>} />
       <Route path="confession/profile/:mssv" element={<Lazy><ConfessionProfilePage /></Lazy>} />
       <Route path="killer-sudoku" element={<Lazy><KillerSudokuPage /></Lazy>} />
       <Route path="mystudent" element={<Lazy><TtcdsPage /></Lazy>} />

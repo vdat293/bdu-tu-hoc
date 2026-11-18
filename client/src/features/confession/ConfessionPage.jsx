@@ -5,16 +5,22 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   createCommunityPost,
   deleteCommunityPost,
-  getCommunityPosts,
   toggleCommunityPostLike,
   getCommunityPostComments,
   addCommunityPostComment,
   updateCommunityPost
 } from '../../api/community.js';
-import { getIdentityFrames, getMyIdentityPresentation, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
-import { getMyAcademicRanking, getProfile } from '../../api/academics.js';
+import { getIdentityFrames, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth, useRealtimeRoom, useRealtimeStatus, useToasts } from '../../app/providers.jsx';
-import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
+import ConfessionPageSkeleton, { ForumPostSkeletonList } from './ConfessionPageSkeleton.jsx';
+import { useConfessionAssetsReady } from './useConfessionAssets.js';
+import {
+  confessionFeedQueryKey,
+  confessionFeedQueryOptions,
+  confessionPresentationQueryOptions,
+  confessionProfileQueryOptions,
+  confessionRankingQueryOptions
+} from './confession-queries.js';
 import {
   AvatarContent,
   FrameArtwork,
@@ -969,25 +975,17 @@ export default function ConfessionPage() {
   const filter = ['all', 'mine', 'anon'].includes(params.get('filter')) ? params.get('filter') : 'all';
   // Khu vực nguồn: web (portal, mặc định) | facebook (crawl) | all (chung cả hai).
   const sourceTab = ['web', 'facebook', 'all'].includes(params.get('source')) ? params.get('source') : 'web';
-  const queryKey = useMemo(() => ['confession', auth.user?.mssv, filter, sourceTab], [auth.user?.mssv, filter, sourceTab]);
+  const queryKey = useMemo(
+    () => confessionFeedQueryKey(auth.user?.mssv, filter, sourceTab),
+    [auth.user?.mssv, filter, sourceTab]
+  );
 
-  const query = useQuery({
-    queryKey,
-    queryFn: ({ signal }) =>
-      getCommunityPosts(auth.token, {
-        // The server's forum scope aggregates school, faculty, and institute
-        // posts. Using `school` here made those latter posts disappear.
-        scope: 'forum',
-        scopeId: null,
-        filter,
-        category: filter === 'anon' ? 'confession' : undefined,
-        // Backend map: web -> portal, facebook -> facebook, all -> không lọc.
-        source: sourceTab,
-        limit: 50,
-        signal
-      }),
-    enabled: Boolean(auth.token)
-  });
+  const query = useQuery(confessionFeedQueryOptions({
+    token: auth.token,
+    mssv: auth.user?.mssv,
+    filter,
+    sourceTab
+  }));
 
   useRealtimeRoom('forum', Boolean(auth.token));
   useCommunityRealtimeSync(client);
@@ -995,12 +993,10 @@ export default function ConfessionPage() {
   // cadence while the live gateway remains unavailable.
   useForumRealtimeFallback({ token: auth.token, status: realtimeStatus, client, queryKey });
 
-  const presentationQuery = useQuery({
-    queryKey: ['identity-presentation', auth.user?.mssv],
-    queryFn: ({ signal }) => getMyIdentityPresentation(auth.token, { signal }),
-    enabled: Boolean(auth.token),
-    staleTime: 5 * 60 * 1000
-  });
+  const presentationQuery = useQuery(confessionPresentationQueryOptions({
+    token: auth.token,
+    mssv: auth.user?.mssv
+  }));
 
   useQuery({
     queryKey: ['identity-frames'],
@@ -1013,19 +1009,17 @@ export default function ConfessionPage() {
     staleTime: 5 * 60 * 1000
   });
 
-  const profileQuery = useQuery({
-    queryKey: ['profile', auth.user?.mssv],
-    queryFn: ({ signal }) => getProfile(auth.token, { idsv: auth.user?.idsv, mssv: auth.user?.mssv, signal }),
-    enabled: Boolean(auth.token),
-    staleTime: 5 * 60 * 1000
-  });
+  const profileQuery = useQuery(confessionProfileQueryOptions({
+    token: auth.token,
+    mssv: auth.user?.mssv,
+    idsv: auth.user?.idsv
+  }));
 
-  const rankingQuery = useQuery({
-    queryKey: ['academic-ranking', auth.user?.mssv],
-    queryFn: ({ signal }) => getMyAcademicRanking(auth.token, { signal }),
-    enabled: Boolean(auth.token && !presentationQuery.data?.equipped_frame_id),
-    staleTime: 5 * 60 * 1000
-  });
+  const rankingQuery = useQuery(confessionRankingQueryOptions({
+    token: auth.token,
+    mssv: auth.user?.mssv,
+    equippedFrameId: presentationQuery.data?.equipped_frame_id
+  }));
 
   const saveTitles = useMutation({
     mutationFn: (selectedTitleIds) => updateMyIdentityPresentation(auth.token, selectedTitleIds),
@@ -1254,8 +1248,23 @@ export default function ConfessionPage() {
   const identityUser = { ...auth.user, name: displayName, photoUrl: getIdentityPhoto(auth.user, presentation) || profilePhotoFrom(profileQuery.data) };
   const frameCinematic = getFrameCinematicMetadata(equippedFrame);
   const identityReady = presentationQuery.isFetched && profileQuery.isFetched;
+  // Khung tự động chỉ biết sau khi ranking trả về; phải chờ để không hiện hero
+  // bằng khung mặc định rồi đổi sang khung thật ngay trước mắt người dùng.
+  const frameResolved = Boolean(presentation?.equipped_frame_id) || rankingQuery.isFetched;
+  const assetsReady = useConfessionAssetsReady({ frame: equippedFrame, photoUrl: identityUser.photoUrl });
+  // Chỉ chặn ở lần dựng đầu, khi presentation + profile + khung + ảnh + feed chưa
+  // xong. Sau đó đổi filter/nguồn hay refetch nền giữ nguyên nội dung đang có.
+  const [bootReady, setBootReady] = useState(false);
+  const booting = Boolean(auth.token) && !bootReady
+    && (!identityReady || !frameResolved || query.isLoading || !assetsReady);
+  useEffect(() => {
+    if (!booting) setBootReady(true);
+  }, [booting]);
   useFrameCinematic({
-    frame: identityReady ? equippedFrame : null,
+    frame: identityReady && !booting ? equippedFrame : null,
+    // Khung đã trang bị từ trước thì vào trang là thấy ngay, không phát lại
+    // timeline 2.8s (hiệu ứng chỉ dành cho lúc người dùng đổi khung).
+    introOnMount: false,
     avatarRef: heroAvatarRef,
     bannerRef: heroBannerRef,
     announcementRef: frameAnnouncementRef,
@@ -1333,6 +1342,8 @@ export default function ConfessionPage() {
 
   // Popup bài viết khoá cuộn trang, trả focus về nút đã mở, đóng bằng Escape.
   useViewportDialog(openPost, closePostModal, postDialogRef, postCloseButtonRef, postOpenerRef);
+
+  if (booting) return <ConfessionPageSkeleton />;
 
   const realtimeMeta = realtimeStatusMeta(realtimeStatus);
 
@@ -1538,22 +1549,7 @@ export default function ConfessionPage() {
           {/* Posts Feed Stream */}
           <div id="confession-feed-stream" className="forum-posts-stream">
             {query.isLoading ? (
-              [1, 2, 3].map((post) => (
-                <article className="forum-post-card glass-panel skeleton-forum-post" key={post} aria-hidden="true">
-                  <div className="forum-post-header">
-                    <SkeletonBlock className="skeleton-avatar" />
-                    <div className="skeleton-copy">
-                      <SkeletonBlock className="skeleton-line heading" />
-                      <SkeletonBlock className="skeleton-line short" />
-                    </div>
-                  </div>
-                  <div className="skeleton-copy skeleton-forum-post-copy">
-                    <SkeletonBlock className="skeleton-line wide" />
-                    <SkeletonBlock className="skeleton-line wide" />
-                    <SkeletonBlock className="skeleton-line medium" />
-                  </div>
-                </article>
-              ))
+              <ForumPostSkeletonList />
             ) : posts.length === 0 ? (
               <div className="empty-state-box glass-panel" style={{ textAlign: 'center', padding: '48px 24px', borderRadius: 'var(--radius-lg)' }}>
                 <span style={{ fontSize: '36px', display: 'block', marginBottom: '10px' }}>💬</span>

@@ -1,10 +1,12 @@
-import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { navigation, findRouteMeta, filterNavigation } from '../app/navigation.js';
 import { useAuth } from '../app/providers.jsx';
 import { useTtcdsCapabilities } from '../features/ttcds/useTtcdsCapabilities.jsx';
 import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
+import { loadConfessionPage, prefetchConfession } from '../app/confession-preload.js';
 
 const navGroupsFor = (items) => [
   { title: 'CỔNG SINH VIÊN', items: items.filter((i) => i.section !== 'ttcds').slice(0, 4) },
@@ -107,6 +109,7 @@ export default function AppLayout() {
   const auth = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const mainRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -115,6 +118,30 @@ export default function AppLayout() {
   const capsQuery = useTtcdsCapabilities();
   const visibleNavigation = useMemo(() => filterNavigation(navigation, capsQuery.data), [capsQuery.data]);
   const navGroups = useMemo(() => navGroupsFor(visibleNavigation), [visibleNavigation]);
+
+  // Chỉ nạp dữ liệu khi có ý định mở trang (hover/focus/chạm). Người không dùng
+  // Confession không phát sinh request feed; ai sắp mở thì vào là có nội dung.
+  const preloadConfession = useCallback(() => {
+    if (auth.status !== 'authenticated' || !auth.token) return;
+    prefetchConfession(queryClient, {
+      token: auth.token,
+      mssv: auth.user?.mssv,
+      idsv: auth.user?.idsv,
+      photoUrl: auth.user?.photoUrl || auth.user?.photo_url || auth.user?.avatar_url || auth.user?.student_image || auth.user?.image
+    });
+  }, [auth.status, auth.token, auth.user?.idsv, auth.user?.mssv, auth.user?.photoUrl, auth.user?.photo_url, auth.user?.avatar_url, auth.user?.student_image, auth.user?.image, queryClient]);
+
+  // Chunk JS nhẹ nên nạp lúc rảnh để lần điều hướng đầu tiên không phải chờ tải.
+  useEffect(() => {
+    if (auth.status !== 'authenticated') return undefined;
+    const preload = () => { loadConfessionPage().catch(() => {}); };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(preload, { timeout: 3000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(preload, 1500);
+    return () => window.clearTimeout(timer);
+  }, [auth.status]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -189,6 +216,9 @@ export default function AppLayout() {
                   <NavLink
                     key={item.path}
                     to={item.path}
+                    onMouseEnter={item.path === '/confession' ? preloadConfession : undefined}
+                    onFocus={item.path === '/confession' ? preloadConfession : undefined}
+                    onTouchStart={item.path === '/confession' ? preloadConfession : undefined}
                     className={({ isActive }) =>
                       `nav-item ${isActive || (item.path !== '/gpa' && location.pathname.startsWith(`${item.path}/`)) ? 'active' : ''}`
                     }

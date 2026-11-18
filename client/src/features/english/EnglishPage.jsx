@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   getEnglishActivities,
   getEnglishCourses,
@@ -10,12 +10,15 @@ import {
   createEventStream
 } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import './sakuga-button.js';
+import './sakuga-progress.js';
 
 export default function EnglishPage() {
   const auth = useAuth();
   const { notify } = useToasts();
 
   const [form, setForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
   const [session, setSession] = useState(null);
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -35,28 +38,122 @@ export default function EnglishPage() {
 
   const terminalEndRef = useRef(null);
   const cleanupStreamRef = useRef(null);
+  const sakugaBtnRef = useRef(null);
+  const sakugaProgressRef = useRef(null);
+  const progressTimerRef = useRef(null);
 
-  const updateForm = (key) => (e) => setForm((cur) => ({ ...cur, [key]: e.target.value }));
+  const updateForm = (key) => (e) => {
+    setLoginError('');
+    setForm((cur) => ({ ...cur, [key]: e.target.value }));
+  };
 
   useEffect(() => {
     if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      terminalEndRef.current.scrollIntoView?.({ behavior: 'smooth' });
     }
   }, [log]);
 
   useEffect(() => {
-    if (session?.sessionId) {
-      setupEventStream(session.sessionId, session.streamToken);
-    }
-    return () => {
-      if (cleanupStreamRef.current) {
-        cleanupStreamRef.current();
-        cleanupStreamRef.current = null;
+    if (!busy || session) return;
+
+    const mainEl = document.getElementById('main-content');
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevDocOverflow = document.documentElement.style.overflow;
+    const prevMainOverflow = mainEl ? mainEl.style.overflow : '';
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (mainEl) mainEl.style.overflow = 'hidden';
+
+    const preventScroll = (e) => {
+      e.preventDefault();
+    };
+    const preventScrollKeys = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
+        e.preventDefault();
       }
     };
-  }, [session?.sessionId, session?.streamToken]);
 
-  function setupEventStream(sessionId, streamToken) {
+    window.addEventListener('wheel', preventScroll, { passive: false });
+    window.addEventListener('touchmove', preventScroll, { passive: false });
+    window.addEventListener('keydown', preventScrollKeys, { passive: false });
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevDocOverflow;
+      if (mainEl) mainEl.style.overflow = prevMainOverflow;
+      window.removeEventListener('wheel', preventScroll);
+      window.removeEventListener('touchmove', preventScroll);
+      window.removeEventListener('keydown', preventScrollKeys);
+    };
+  }, [busy, session]);
+
+  useEffect(() => {
+    if (!busy || session) {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      return;
+    }
+
+    const progEl = sakugaProgressRef.current;
+    let progressGoal = 0.08;
+    let tickCount = 0;
+    if (progEl) {
+      progEl.reset?.();
+      progEl.set?.(progressGoal);
+    }
+
+    progressTimerRef.current = setInterval(() => {
+      tickCount += 1;
+      const step = (0.995 - progressGoal) * (0.14 + 0.04 * Math.sin(tickCount * 0.7));
+      progressGoal = Math.min(0.995, progressGoal + Math.max(0.015, step));
+      sakugaProgressRef.current?.set?.(progressGoal);
+    }, 100);
+
+    return () => {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+    };
+  }, [busy, session]);
+
+  async function reachNinetyNinePercent() {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    const progEl = sakugaProgressRef.current;
+    if (!progEl) return;
+
+    const isRealBrowser =
+      typeof window !== 'undefined' && typeof window.Path2D !== 'undefined' && !window.SakugaFX?.calm;
+    if (!isRealBrowser) {
+      progEl.set?.(0.995, true);
+      return;
+    }
+
+    progEl.set?.(0.995);
+    await new Promise((resolve) => {
+      const start = performance.now();
+      const timer = setInterval(() => {
+        const currentP = progEl.p || 0;
+        const elapsed = performance.now() - start;
+        if (currentP >= 0.99 || elapsed > 900) {
+          clearInterval(timer);
+          progEl.set?.(0.995, true);
+          setTimeout(resolve, 180);
+        } else if (currentP < 0.85 && elapsed > 200) {
+          progEl.set?.(Math.min(0.995, currentP + 0.2), true);
+          progEl.set?.(0.995);
+        }
+      }, 45);
+    });
+  }
+
+  const setupEventStream = useCallback((sessionId, streamToken) => {
     if (cleanupStreamRef.current) cleanupStreamRef.current();
     const streamUrl = `/api/english/${encodeURIComponent(sessionId)}/stream?streamToken=${encodeURIComponent(streamToken || '')}`;
     cleanupStreamRef.current = createEventStream(streamUrl, {
@@ -114,15 +211,33 @@ export default function EnglishPage() {
         }
       }
     });
-  }
+  }, [notify]);
+
+  useEffect(() => {
+    if (session?.sessionId) {
+      setupEventStream(session.sessionId, session.streamToken);
+    }
+    return () => {
+      if (cleanupStreamRef.current) {
+        cleanupStreamRef.current();
+        cleanupStreamRef.current = null;
+      }
+    };
+  }, [session?.sessionId, session?.streamToken, setupEventStream]);
 
   async function handleBrowseCourses(e) {
     if (e) e.preventDefault();
     if (!form.username.trim() || !form.password) {
+      setLoginError('Vui lòng nhập đầy đủ Tài khoản (MSSV) và Mật khẩu Moodle.');
       notify('Vui lòng nhập đầy đủ Tài khoản (MSSV) và Mật khẩu Moodle.', 'error');
       return;
     }
 
+    if (sakugaBtnRef.current && (!sakugaBtnRef.current.lastImpactAt || performance.now() - sakugaBtnRef.current.lastImpactAt > 150)) {
+      sakugaBtnRef.current.impact?.();
+    }
+
+    setLoginError('');
     setBusy(true);
     setLog((cur) => [
       ...cur,
@@ -133,6 +248,31 @@ export default function EnglishPage() {
       const credentials = { username: form.username.trim(), password: form.password };
       setForm((current) => ({ ...current, password: '' }));
       const res = await loginEnglish(auth.token, credentials);
+
+      // Luôn cho thanh chạy tới 99% trước khi nhảy lên 100% khi đúng TK/MK
+      await reachNinetyNinePercent();
+
+      sakugaBtnRef.current?.done?.();
+      const progEl = sakugaProgressRef.current;
+      if (progEl) {
+        const isRealBrowser =
+          typeof window !== 'undefined' && typeof window.Path2D !== 'undefined' && !window.SakugaFX?.calm;
+        progEl.set?.(1, !isRealBrowser);
+        if (isRealBrowser) {
+          await new Promise((resolve) => {
+            let settled = false;
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              resolve();
+            };
+            const onDone = () => setTimeout(finish, 600);
+            progEl.addEventListener?.('sakuga:done', onDone, { once: true });
+            setTimeout(finish, 850);
+          });
+        }
+      }
+
       setSession(res);
 
       const courseList = Array.isArray(res.courses) ? res.courses : [];
@@ -154,10 +294,14 @@ export default function EnglishPage() {
         selectCourse(res.sessionId, courseList[0]);
       }
     } catch (err) {
-      notify(err.message || 'Đăng nhập Moodle thất bại.', 'error');
+      // Vẫn chạy tới 99% rồi dừng lại và báo lỗi khi sai TK/MK hoặc lỗi kết nối
+      await reachNinetyNinePercent();
+      const errMsg = err.message || 'Đăng nhập Moodle thất bại.';
+      setLoginError(errMsg);
+      notify(errMsg, 'error');
       setLog((cur) => [
         ...cur,
-        { time: new Date().toLocaleTimeString(), text: `Lỗi đăng nhập: ${err.message}`, type: 'error' }
+        { time: new Date().toLocaleTimeString(), text: `Lỗi đăng nhập: ${errMsg}`, type: 'error' }
       ]);
     } finally {
       setBusy(false);
@@ -322,7 +466,15 @@ export default function EnglishPage() {
   return (
     <section id="tab-english" className="tab-pane active">
       {/* Header Banner */}
-      <div className="section-header-box glass-panel">
+      <div
+        className="section-header-box glass-panel"
+        style={{
+          filter: busy && !session ? 'blur(6px)' : 'none',
+          opacity: busy && !session ? 0.35 : 1,
+          pointerEvents: busy && !session ? 'none' : 'auto',
+          transition: 'filter 0.3s ease, opacity 0.3s ease'
+        }}
+      >
         <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
         <div className="header-split">
           <div>
@@ -335,8 +487,21 @@ export default function EnglishPage() {
 
       {/* STATE 1: CHƯA ĐĂNG NHẬP (Hiển thị 1 Modal Form Duyệt Khóa Học) */}
       {!session ? (
-        <div style={{ maxWidth: '520px', margin: '40px auto' }}>
-          <div className="english-card glass-panel" style={{ padding: '32px', borderRadius: '16px' }}>
+        <div style={{ maxWidth: '520px', margin: '40px auto', position: 'relative' }}>
+          {/* Làm mờ luôn cả div lớn .english-card bên ngoài form đăng nhập khi đang kết nối */}
+          <div
+            id="english-login-form-content"
+            className="english-card glass-panel"
+            style={{
+              padding: '32px',
+              borderRadius: '16px',
+              filter: busy ? 'blur(8px)' : 'none',
+              opacity: busy ? 0.25 : 1,
+              pointerEvents: busy ? 'none' : 'auto',
+              userSelect: busy ? 'none' : 'auto',
+              transition: 'filter 0.3s ease, opacity 0.3s ease'
+            }}
+          >
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div
                 style={{
@@ -360,6 +525,26 @@ export default function EnglishPage() {
                 Nhập tài khoản và mật khẩu Moodle để quét tất cả các khóa học cùng mức độ hoàn thành (% Progress).
               </p>
             </div>
+
+            {loginError && !busy && (
+              <div
+                id="english-login-error"
+                role="alert"
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#fca5a5',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  lineHeight: '1.45'
+                }}
+              >
+                ⚠️ {loginError}
+              </div>
+            )}
 
             <form onSubmit={handleBrowseCourses}>
               <div className="form-group" style={{ marginBottom: '16px' }}>
@@ -394,33 +579,106 @@ export default function EnglishPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                id="btn-english-connect"
-                className="btn btn-primary btn-block"
-                style={{
-                  padding: '14px',
-                  fontSize: '15px',
-                  fontWeight: '700',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                  cursor: busy ? 'not-allowed' : 'pointer'
-                }}
-                disabled={busy}
-              >
-                {busy ? (
-                  <span>⏳ Đang kết nối Moodle & duyệt khóa học…</span>
-                ) : (
-                  <span>🚀 Duyệt khóa học</span>
-                )}
-              </button>
+              <button type="submit" tabIndex={-1} aria-hidden="true" style={{ display: 'none' }} />
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <sakuga-button
+                  ref={sakugaBtnRef}
+                  id="btn-english-connect"
+                  type="submit"
+                  disabled={busy || undefined}
+                >
+                  {busy ? '⏳ Đang kết nối Moodle…' : '🚀 Duyệt khóa học'}
+                </sakuga-button>
+              </div>
             </form>
 
             <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted, #64748b)' }}>
               🔒 Mật khẩu chỉ dùng tạo phiên làm việc trong bộ nhớ tạm và không được lưu giữ.
             </div>
           </div>
+
+          {/* Thanh Sakuga Progress nổi sắc nét ở chính giữa phía trên khối div đã bị làm mờ */}
+          {busy && (
+            <div
+              id="english-connect-progress-wrap"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 20,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '24px'
+              }}
+            >
+              <div
+                id="english-connect-status"
+                role="status"
+                aria-live="polite"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 18px',
+                  border: '2.5px solid var(--sk-ink, #1d1a4a)',
+                  borderRadius: '16px',
+                  background: 'var(--sk-card, #ffffff)',
+                  color: 'var(--sk-ink, #1d1a4a)',
+                  boxShadow: '4px 4px 0 var(--sk-fill, #ff5fa8)',
+                  transform: 'skewX(-8deg)',
+                  font: 'italic 800 15px/1.2 "Avenir Next", "Nunito", -apple-system, "Segoe UI", sans-serif',
+                  letterSpacing: '-0.01em',
+                  marginBottom: '10px',
+                  userSelect: 'none',
+                  zIndex: 25
+                }}
+              >
+                <span>Đang đăng nhập, chờ tí</span>
+                <span
+                  className="sakuga-dot sakuga-dot-1"
+                  style={{
+                    display: 'inline-block',
+                    marginLeft: '2px',
+                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animationDelay: '0s'
+                  }}
+                >
+                  .
+                </span>
+                <span
+                  className="sakuga-dot sakuga-dot-2"
+                  style={{
+                    display: 'inline-block',
+                    marginLeft: '2px',
+                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animationDelay: '0.18s'
+                  }}
+                >
+                  .
+                </span>
+                <span
+                  className="sakuga-dot sakuga-dot-3"
+                  style={{
+                    display: 'inline-block',
+                    marginLeft: '2px',
+                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animationDelay: '0.36s'
+                  }}
+                >
+                  .
+                </span>
+              </div>
+              <sakuga-progress
+                ref={sakugaProgressRef}
+                id="english-connect-progress"
+                label="Đang đăng nhập, chờ tí…"
+                done-label="100% ✓"
+                style={{ '--sk-progress-width': '320px', margin: '0 auto' }}
+              />
+            </div>
+          )}
         </div>
       ) : (
         /* STATE 2: ĐÃ ĐĂNG NHẬP (Hiển thị Bảng Khóa Học & % Hoàn Thành) */

@@ -69,8 +69,9 @@ function createParticles(field, frame) {
 }
 
 /** Replays the legacy frame opening timeline after React has committed artwork. */
-export function useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef, particleFieldRef }) {
+export function useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef, particleFieldRef, introOnMount = true }) {
   const timerRef = useRef(null);
+  const hasPlayedRef = useRef(false);
   const frameRef = useRef(frame);
   frameRef.current = frame;
 
@@ -81,6 +82,9 @@ export function useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef
     const field = particleFieldRef.current;
     const metadata = getFrameCinematicMetadata(frameRef.current);
     if (!avatar || !banner || !metadata) return undefined;
+
+    const isFirstPlayback = !hasPlayedRef.current;
+    hasPlayedRef.current = true;
 
     const effectClass = `frame-effect-${metadata.introEffect}`;
     removeEffectClasses(avatar);
@@ -94,29 +98,37 @@ export function useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef
       element.style.setProperty('--frame-rgb', metadata.theme.rgb);
     });
     announcement?.classList.add('is-persistent');
-    createParticles(field, metadata);
 
     window.clearTimeout(timerRef.current);
     avatar.classList.remove('frame-intro-burst');
     banner.classList.remove('frame-cinematic-active');
     announcement?.classList.remove('is-revealing');
 
-    if (prefersReducedMotion()) {
+    if (!introOnMount && isFirstPlayback) {
+      // Trang vừa mở với khung đã trang bị sẵn: hiện ngay trạng thái tĩnh,
+      // không phát lại timeline mở khung (tránh cảm giác ảnh "mọc" dần).
+      field?.replaceChildren();
       removeEffectClasses(avatar);
       removeEffectClasses(banner);
     } else {
-      void avatar.offsetWidth;
-      avatar.classList.add('frame-intro-burst');
-      banner.classList.add('frame-cinematic-active');
-      announcement?.classList.add('is-revealing');
-      timerRef.current = window.setTimeout(() => {
-        avatar.classList.remove('frame-intro-burst');
-        banner.classList.remove('frame-cinematic-active');
-        announcement?.classList.remove('is-revealing');
+      createParticles(field, metadata);
+      if (prefersReducedMotion()) {
         removeEffectClasses(avatar);
         removeEffectClasses(banner);
-        timerRef.current = null;
-      }, INTRO_DURATION_MS);
+      } else {
+        void avatar.offsetWidth;
+        avatar.classList.add('frame-intro-burst');
+        banner.classList.add('frame-cinematic-active');
+        announcement?.classList.add('is-revealing');
+        timerRef.current = window.setTimeout(() => {
+          avatar.classList.remove('frame-intro-burst');
+          banner.classList.remove('frame-cinematic-active');
+          announcement?.classList.remove('is-revealing');
+          removeEffectClasses(avatar);
+          removeEffectClasses(banner);
+          timerRef.current = null;
+        }, INTRO_DURATION_MS);
+      }
     }
 
     return () => {
@@ -132,5 +144,5 @@ export function useFrameCinematic({ frame, avatarRef, bannerRef, announcementRef
       });
       field?.replaceChildren();
     };
-  }, [announcementRef, avatarRef, bannerRef, frame?.key, frame?.introEffect, frame?.themeKey, particleFieldRef]);
+  }, [announcementRef, avatarRef, bannerRef, frame?.key, frame?.introEffect, frame?.themeKey, introOnMount, particleFieldRef]);
 }

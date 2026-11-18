@@ -76,7 +76,10 @@ describe('forum realtime convergence', () => {
     vi.useFakeTimers();
     realtime.status = 'unavailable';
     const view = renderForum();
-    await act(async () => { await Promise.resolve(); });
+    // Trang chỉ thoát skeleton sau khi feed + danh tính + profile đã fetch
+    // xong; fake timers cần được đẩy để React Query phát state mới.
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(getCommunityPosts).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Cập nhật trực tiếp tạm gián đoạn')).toBeInTheDocument();
 
