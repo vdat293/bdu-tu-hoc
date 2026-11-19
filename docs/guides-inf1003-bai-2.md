@@ -27,4 +27,18 @@ Khi thiếu `INF1003_SCRIPT_DIR`, sinh viên vẫn có thể tạo key cho hai I
 
 Reverse proxy cần chuyển `/deploy` và `/api/` đến Express và chuyển trạng thái HTTPS qua cấu hình `TRUST_PROXY`. Trang cấp key cũng hỗ trợ HTTP qua loopback khi chạy development.
 
-Launcher lưu phản hồi trong thư mục tạm riêng do hệ điều hành cấp và dọn thư mục đó khi kết thúc. Launcher chọn trình thông dịch và chạy trên máy nhận key. Các bản `deploy.sh` và `clean.sh` trong kho dùng `THI_GK_PROJECT_DIR` do launcher truyền để tìm thư mục `thi-gk`. `deploy.sh` cần `clean.sh`, thư mục `anh`, source `three-tier+s3` và môi trường AWS. Khi dùng key **Xóa tài nguyên**, chạy launcher trong thư mục đã dùng để dựng web. `clean.sh` đọc trạng thái triển khai lưu ở đó và kiểm tra tài khoản AWS trước khi xóa.
+Launcher lưu phản hồi trong thư mục tạm riêng do hệ điều hành cấp và dọn thư mục đó khi kết thúc. Máy nhận key chỉ cần đặt `start-gk.sh` trong thư mục làm lab. Bản **Dựng web** tự giải nén `clean.sh`, source ứng dụng và ảnh vào thư mục tạm. Script dùng AWS CloudFormation để dựng hạ tầng rồi đưa ứng dụng lên Docker.
+
+Luồng **Dựng web** kiểm tra AWS CLI từ bản 2.32.0 và gọi bộ cài chính thức nếu thiếu hoặc cũ hơn. macOS kiểm tra chữ ký gói PKG và có thể hỏi mật khẩu quản trị. Sau đó người dùng đăng nhập AWS trong trình duyệt như bình thường. Máy chạy cần Bash, Python 3 và các công cụ dòng lệnh có trong quy trình deploy. [Hướng dẫn cài AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) · [Yêu cầu của aws login](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)
+
+Chạy launcher với key **Xóa tài nguyên** trong cùng thư mục đã dùng để dựng web. `clean.sh` đọc trạng thái ở đó và kiểm tra tài khoản AWS trước khi xóa.
+
+## Đóng gói lại thư mục thi-gk
+
+Dùng Python 3.9 trở lên trên máy đóng gói. Cả đầu ra và kho đăng ký phải nằm ngoài thư mục phục vụ web.
+
+```bash
+python scripts/package-inf1003-thi-gk.py "/path/to/thi-gk" "/path/to/private-payloads"
+```
+
+Chép hai file đầu ra vào kho script riêng đã cấu hình. Bộ đóng gói chỉ lấy các file source và ảnh cần cho lab. File `.env`, khóa PEM và thư mục trạng thái AWS nằm ngoài gói.
