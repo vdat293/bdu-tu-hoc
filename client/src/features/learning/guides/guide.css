@@ -1081,3 +1081,31 @@ body.theme-dark .guide-step-stage {
 .guide-deploy-key {
   overflow-wrap: anywhere;
 }
+
+.guide-deploy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 8px 0 0;
+  border: 0;
+}
+
+.guide-deploy-actions legend {
+  font-weight: 600;
+}
+
+.guide-deploy-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, var(--border, #ddd));
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.guide-deploy-choice input {
+  width: auto;
+  margin: 0;
+}

@@ -10,7 +10,8 @@ import {
 } from '../src/modules/learning/inf1003-deploy.service.js';
 
 const catalog = [
-  { id: 'thi-gk', label: 'Thi giữa kỳ', file: 'deploy.sh' },
+  { id: 'thi-gk', label: 'Dựng web', file: 'deploy.sh' },
+  { id: 'thi-gk-clean', label: 'Xóa tài nguyên', file: 'clean.sh' },
   { id: 'kiem-tra', label: 'Kiểm tra môi trường', file: 'check.py' }
 ];
 
@@ -28,7 +29,7 @@ test('the catalog supports different script types and rejects paths and duplicat
   const manifest = path.join(directory, 'manifest.json');
   try {
     const fallback = await loadScriptCatalog('');
-    assert.deepEqual(fallback, { root: null, scripts: [{ id: 'thi-gk', label: 'Thi giữa kỳ' }] });
+    assert.deepEqual(fallback, { root: null, scripts: catalog.slice(0, 2).map(({ id, label }) => ({ id, label })) });
     await writeFile(manifest, JSON.stringify(catalog));
     assert.deepEqual((await loadScriptCatalog(directory)).scripts, catalog);
     for (const invalid of [[{ ...catalog[0], file: '../deploy.sh' }], [catalog[0], catalog[0]]]) {
@@ -78,6 +79,7 @@ test('Bài 2 issues keys without a runner and returns the exact registered scrip
 
     process.env.INF1003_SCRIPT_DIR = directory;
     const shell = Buffer.from('#!/usr/bin/env bash\r\nprintf hello\r\n', 'utf8');
+    const cleanup = Buffer.from('#!/usr/bin/env bash\nprintf cleanup\n', 'utf8');
     const python = Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from('print("xin chào")\n')]);
     await writeFile(path.join(directory, 'manifest.json'), JSON.stringify(catalog));
     await assert.rejects(redeemDeployKey(pending.key), { status: 503 });
@@ -87,11 +89,18 @@ test('Bài 2 issues keys without a runner and returns the exact registered scrip
     await assert.rejects(issueDeployKey(student, '../deploy.sh'), { status: 400 });
 
     const expired = await issueDeployKey(student, 'thi-gk');
-    await query("UPDATE inf1003_deploy_keys SET expires_at = NOW() - INTERVAL '1 second' WHERE mssv = $1", [student]);
+    await query("UPDATE inf1003_deploy_keys SET expires_at = NOW() - INTERVAL '1 second' WHERE key_hash = $1", [hashDeploySecret(expired.key)]);
     await assert.rejects(redeemDeployKey(expired.key), { status: 400 });
     const replaced = await issueDeployKey(student, 'thi-gk');
-    const current = await issueDeployKey(student, 'kiem-tra');
+    const deploy = await issueDeployKey(student, 'thi-gk');
+    const clean = await issueDeployKey(student, 'thi-gk-clean');
+    await writeFile(path.join(directory, 'clean.sh'), cleanup);
     await assert.rejects(redeemDeployKey(replaced.key), { status: 400 });
+    assert.deepEqual(await redeemDeployKey(deploy.key), { id: 'thi-gk', filename: 'deploy.sh', content: shell });
+    assert.deepEqual(await redeemDeployKey(clean.key), { id: 'thi-gk-clean', filename: 'clean.sh', content: cleanup });
+    await assert.rejects(redeemDeployKey(clean.key), { status: 400 });
+
+    const current = await issueDeployKey(student, 'kiem-tra');
 
     await writeFile(path.join(directory, 'check.py'), python);
     const claim = () => redeemDeployKey(current.key);

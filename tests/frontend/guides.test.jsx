@@ -1053,17 +1053,22 @@ describe('stepClean', () => {
 });
 
 describe('GuideIndexPage resume', () => {
-  it('opens Bài 2 and lets the signed-in student generate a key', async () => {
+  it('keeps a separate visible key for each Bài 2 action', async () => {
     mocks.getCourseGuide.mockResolvedValue({
       enabled: true,
       lessons: [{ id: 'bai-2', title: 'Bài 2 — Triển khai ứng dụng bằng key', doneCount: 0 }]
     });
     mocks.getInf1003Deployment.mockResolvedValue({
       deliveryConfigured: false,
-      scripts: [{ id: 'thi-gk', label: 'Thi giữa kỳ' }, { id: 'kiem-tra', label: 'Kiểm tra môi trường' }]
+      scripts: [{ id: 'thi-gk', label: 'Dựng web' }, { id: 'thi-gk-clean', label: 'Xóa tài nguyên' }]
     });
-    const key = 'a'.repeat(64);
-    mocks.issueInf1003DeployKey.mockResolvedValue({ key, scriptId: 'kiem-tra', expiresAt: new Date(Date.now() + 600_000).toISOString() });
+    const deployKey = 'a'.repeat(64);
+    const cleanKey = 'b'.repeat(64);
+    mocks.issueInf1003DeployKey.mockImplementation((_token, scriptId) => Promise.resolve({
+      key: scriptId === 'thi-gk' ? deployKey : cleanKey,
+      scriptId,
+      expiresAt: new Date(Date.now() + 600_000).toISOString()
+    }));
     renderWithClient(
       <Routes>
         <Route path="/learning/:courseCode/guides" element={<GuideIndexPage />} />
@@ -1073,12 +1078,17 @@ describe('GuideIndexPage resume', () => {
     );
 
     fireEvent.click(await screen.findByRole('link', { name: 'Mở Bài 2' }));
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Script cần chạy' }), { target: { value: 'kiem-tra' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo key' }));
+    expect(await screen.findByText(deployKey)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: 'Xóa tài nguyên' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo key' }));
+    expect(await screen.findByText(cleanKey)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: 'Dựng web' }));
+    expect(screen.getByText(deployKey)).toBeVisible();
     expect(screen.queryByRole('link', { name: 'start-gk.sh' })).not.toBeInTheDocument();
-    expect(await screen.findByText(key)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Sao chép key' })).toBeVisible();
-    expect(mocks.issueInf1003DeployKey).toHaveBeenCalledWith('test-token', 'kiem-tra');
+    expect(mocks.issueInf1003DeployKey).toHaveBeenNthCalledWith(1, 'test-token', 'thi-gk');
+    expect(mocks.issueInf1003DeployKey).toHaveBeenNthCalledWith(2, 'test-token', 'thi-gk-clean');
   });
 
   function DestinationProbe() {

@@ -1,23 +1,23 @@
 # INF1003 Bài 2 — Triển khai ứng dụng bằng key
 
-Sinh viên có INF1003 trong dữ liệu học phần BDU tạo key tại `/learning/INF1003/guides/bai-2`. File `start-gk.sh` được cung cấp riêng. Mỗi key được gắn với một ID script, dùng một lần và hết hạn sau 10 phút. Cấp key mới thay key trước đó của cùng sinh viên.
+Sinh viên có INF1003 trong dữ liệu học phần BDU chọn **Dựng web** hoặc **Xóa tài nguyên** và tạo key tại `/learning/INF1003/guides/bai-2`. File `start-gk.sh` được cung cấp riêng. Mỗi key được gắn với một ID script, dùng một lần và hết hạn sau 10 phút. Cấp key mới thay key trước đó của cùng sinh viên cho thao tác đang chọn.
 
 ## Đăng ký script
 
-Áp dụng migration `073_inf1003_deploy.sql` và `074_inf1003_script_delivery.sql`. Đặt `INF1003_SCRIPT_DIR` thành đường dẫn tuyệt đối đến kho script nằm ngoài các thư mục web. Docker Compose mount `data/inf1003-scripts` ở chế độ chỉ đọc. Đặt `INF1003_SCRIPT_DIR=/app/data/inf1003-scripts` để dùng kho này.
+Áp dụng các migration INF1003 đến `075_inf1003_keys_per_script.sql`. Đặt `INF1003_SCRIPT_DIR` thành đường dẫn tuyệt đối đến kho script nằm ngoài các thư mục web. Docker Compose mount `data/inf1003-scripts` ở chế độ chỉ đọc. Đặt `INF1003_SCRIPT_DIR=/app/data/inf1003-scripts` để dùng kho này.
 
 Đặt `manifest.json` và các file đã duyệt trong kho. Ví dụ:
 
 ```json
 [
-  { "id": "thi-gk", "label": "Thi giữa kỳ", "file": "deploy.sh" },
-  { "id": "kiem-tra", "label": "Kiểm tra môi trường", "file": "kiem-tra.py" }
+  { "id": "thi-gk", "label": "Dựng web", "file": "deploy.sh" },
+  { "id": "thi-gk-clean", "label": "Xóa tài nguyên", "file": "clean.sh" }
 ]
 ```
 
 Trang Bài 2 hiển thị nhãn trong manifest. API cấp key chấp nhận ID trong danh sách. Mỗi mục trỏ tới một file tối đa 16 MiB và API trả nguyên byte. Dùng ID mới khi cần giữ đồng thời các phiên bản script khác nhau.
 
-Khi thiếu `INF1003_SCRIPT_DIR`, sinh viên vẫn có thể tạo key cho ID mặc định `thi-gk`. Đăng ký mục `thi-gk` trong manifest để giao script tương ứng. Lỗi kho file trả về 503 và giữ key của lần gọi đó cho tới hạn.
+Khi thiếu `INF1003_SCRIPT_DIR`, sinh viên vẫn có thể tạo key cho hai ID mặc định `thi-gk` và `thi-gk-clean`. Đăng ký hai mục này trong manifest để giao script tương ứng. Lỗi kho file trả về 503 và giữ key của lần gọi đó cho tới hạn.
 
 ## Giao tiếp với file chạy riêng
 
@@ -27,4 +27,4 @@ Khi thiếu `INF1003_SCRIPT_DIR`, sinh viên vẫn có thể tạo key cho ID m�
 
 Reverse proxy cần chuyển `/deploy` và `/api/` đến Express và chuyển trạng thái HTTPS qua cấu hình `TRUST_PROXY`. Trang cấp key cũng hỗ trợ HTTP qua loopback khi chạy development.
 
-File chạy riêng chịu trách nhiệm chọn trình thông dịch và chạy trên máy nhận key. `deploy.sh` gốc của `thi-gk` cần `clean.sh`, thư mục `anh`, source `three-tier+s3` và môi trường AWS. Nếu đăng ký file đó, chuẩn bị các phụ thuộc trên máy chạy hoặc dùng một script đã đóng gói phù hợp.
+Launcher lưu phản hồi trong thư mục tạm riêng do hệ điều hành cấp và dọn thư mục đó khi kết thúc. Launcher chọn trình thông dịch và chạy trên máy nhận key. Các bản `deploy.sh` và `clean.sh` trong kho dùng `THI_GK_PROJECT_DIR` do launcher truyền để tìm thư mục `thi-gk`. `deploy.sh` cần `clean.sh`, thư mục `anh`, source `three-tier+s3` và môi trường AWS. Khi dùng key **Xóa tài nguyên**, chạy launcher trong thư mục đã dùng để dựng web. `clean.sh` đọc trạng thái triển khai lưu ở đó và kiểm tra tài khoản AWS trước khi xóa.

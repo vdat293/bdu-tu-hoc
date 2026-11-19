@@ -9,7 +9,7 @@ import GuideLayout from '../GuideLayout.jsx';
 export default function DeployLessonPage() {
   const { token, user } = useAuth();
   const [selectedId, setSelectedId] = useState('');
-  const [issued, setIssued] = useState(null);
+  const [issuedKeys, setIssuedKeys] = useState(() => new Map());
   const deployment = useQuery({
     queryKey: ['inf1003-deployment', user?.mssv],
     queryFn: ({ signal }) => getInf1003Deployment(token, signal),
@@ -19,19 +19,22 @@ export default function DeployLessonPage() {
   const issue = useMutation({
     mutationFn: (scriptId) => issueInf1003DeployKey(token, scriptId),
     gcTime: 0,
-    onSuccess: setIssued
+    onSuccess: (issued) => setIssuedKeys((keys) => new Map(keys).set(issued.scriptId, issued))
   });
 
   useEffect(() => {
-    if (!issued) return undefined;
-    const delay = Math.max(0, new Date(issued.expiresAt).getTime() - Date.now());
-    const timer = window.setTimeout(() => setIssued(null), delay);
+    if (!issuedKeys.size) return undefined;
+    const nextExpiry = Math.min(...Array.from(issuedKeys.values(), ({ expiresAt }) => Date.parse(expiresAt)));
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setIssuedKeys((keys) => new Map([...keys].filter(([, { expiresAt }]) => Date.parse(expiresAt) > now)));
+    }, Math.max(0, nextExpiry - Date.now()));
     return () => window.clearTimeout(timer);
-  }, [issued]);
+  }, [issuedKeys]);
 
   const scripts = deployment.data?.scripts ?? [];
   const selected = scripts.find(({ id }) => id === selectedId) ?? scripts[0];
-  const currentKey = issued?.scriptId === selected?.id ? issued : null;
+  const currentKey = issuedKeys.get(selected?.id);
 
   return (
     <GuideLayout courseCode="INF1003">
@@ -49,16 +52,22 @@ export default function DeployLessonPage() {
           {selected && !deployment.isError && (
             <>
               <p>Chạy file <code>start-gk.sh</code> đã được cung cấp riêng, rồi dán key vào terminal khi được hỏi.</p>
-              <p>Mỗi key dùng một lần trong 10 phút. Tạo key mới sẽ thay key đã cấp trước đó.</p>
+              <p>Mỗi thao tác có key riêng, dùng một lần trong 10 phút. Tạo lại chỉ thay key của thao tác đang chọn.</p>
               {scripts.length > 1 ? (
-                <label className="guide-workdir-label">
-                  Script cần chạy{' '}
-                  <select className="guide-workdir-input" value={selected.id} disabled={issue.isPending}
-                    onChange={(event) => { setSelectedId(event.target.value); issue.reset(); }}>
-                    {scripts.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
-                  </select>
-                </label>
-              ) : <p>Script được cấp key <strong>{selected.label}</strong>.</p>}
+                <fieldset className="guide-deploy-actions" disabled={issue.isPending}>
+                  <legend>Chọn thao tác</legend>
+                  {scripts.map(({ id, label }) => (
+                    <label className="guide-deploy-choice" key={id}>
+                      <input type="radio" name="deploy-action" value={id} checked={id === selected.id}
+                        onChange={() => { setSelectedId(id); issue.reset(); }} />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              ) : <p>Thao tác được cấp key <strong>{selected.label}</strong>.</p>}
+              {selected.id === 'thi-gk-clean' && (
+                <p>Khi dùng key xóa, chạy launcher trong cùng thư mục <code>thi-gk</code> đã dùng để dựng web.</p>
+              )}
               <div className="guide-step-actions">
                 <button type="button" className="btn btn-primary" disabled={issue.isPending}
                   onClick={() => issue.mutate(selected.id)}>

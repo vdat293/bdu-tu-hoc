@@ -8,7 +8,10 @@ import { findAccessibleCourse } from '../../services/learning.service.js';
 const SECRET_PATTERN = /^[a-f0-9]{64}$/;
 const SCRIPT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const FILENAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
-const DEFAULT_SCRIPTS = [{ id: 'thi-gk', label: 'Thi giữa kỳ' }];
+const DEFAULT_SCRIPTS = [
+  { id: 'thi-gk', label: 'Dựng web' },
+  { id: 'thi-gk-clean', label: 'Xóa tài nguyên' }
+];
 const MAX_SCRIPT_BYTES = 16 * 1024 * 1024;
 const MANIFEST = 'manifest.json';
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -101,8 +104,8 @@ export async function issueDeployKey(mssv, requestedScriptId) {
     if (!scripts.some(({ id }) => id === scriptId)) throw deployError(400, 'Script đã chọn không có trong Bài 2.');
     const result = await db.query(`INSERT INTO inf1003_deploy_keys (mssv, key_hash, script_id, expires_at)
       VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes')
-      ON CONFLICT (mssv) DO UPDATE SET key_hash = EXCLUDED.key_hash, script_id = EXCLUDED.script_id,
-        expires_at = EXCLUDED.expires_at, used_at = NULL, region = NULL, bucket = NULL
+      ON CONFLICT (mssv, script_id) DO UPDATE SET key_hash = EXCLUDED.key_hash,
+        expires_at = EXCLUDED.expires_at, used_at = NULL
       RETURNING expires_at`, [mssv, hashDeploySecret(key), scriptId]);
     return { scriptId, expiresAt: result.rows[0].expires_at };
   });
