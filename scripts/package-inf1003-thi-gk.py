@@ -63,6 +63,21 @@ def prepare_clean(text, setup_path):
     aws_cli login || die 'aws login thất bại. Cần AWS CLI v2.32.0 trở lên.'
   fi""",
     )
+    text = replace_once(text, """  elif [[ -d $path ]]; then
+    chmod 700 -- "$path"
+  else
+    chmod 600 -- "$path"
+  fi""",
+        """  else
+    # BSD chmod treats arguments after the mode as paths.
+    [[ $path == /* ]] || path="./$path"
+    if [[ -d $path ]]; then
+      chmod 700 "$path"
+    else
+      chmod 600 "$path"
+    fi
+  fi""",
+    )
     return replace_once(text, """  local state
   [[ -f $STATE_FILE ]] || die 'Không tìm thấy lần triển khai trong thi-gk.'
   mapfile -t state < "$STATE_FILE"
