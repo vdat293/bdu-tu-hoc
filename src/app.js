@@ -21,6 +21,7 @@ import { attachRequestContext } from './utils/request-context.js';
 import { globalLimiter, authLimiter, heavyLimiter } from './utils/rate-limit.js';
 import { BduIdentityService } from './services/bdu-identity.service.js';
 import { TtcdsService } from './services/ttcds.service.js';
+import { Inf1003DeployController } from './modules/learning/inf1003-deploy.controller.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -268,6 +269,7 @@ export function createApp() {
 
   // Mount API routes
   app.use('/api', apiRoutes);
+  app.post('/deploy', globalLimiter, Inf1003DeployController.redeem);
 
   // Fallback SPA routing
   app.get('*', (req, res) => {

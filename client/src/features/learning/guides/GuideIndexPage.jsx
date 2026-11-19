@@ -36,6 +36,7 @@ export default function GuideIndexPage() {
 
   const serverLessons = Array.isArray(guide?.lessons) ? guide.lessons : [];
   const doneByLesson = new Map(serverLessons.map((item) => [item.id, Number(item.doneCount || 0)]));
+  const deployLesson = serverLessons.find((item) => item.id === 'bai-2' && courseCode?.toUpperCase() === 'INF1003');
 
   const reset = useMutation({
     mutationFn: ({ lessonId }) => resetGuideProgress(token, courseCode, lessonId),
@@ -119,7 +120,7 @@ export default function GuideIndexPage() {
                   </p>
                 </div>
                 {targetStep && (
-                  <>
+                  <div className="guide-index-item-actions">
                     <Link
                       className="btn btn-primary btn-sm"
                       to={`/learning/${encodeURIComponent(courseCode)}/guides/${encodeURIComponent(lesson.id)}/${encodeURIComponent(targetStep)}`}
@@ -141,11 +142,22 @@ export default function GuideIndexPage() {
                         Làm lại từ đầu
                       </button>
                     )}
-                  </>
+                  </div>
                 )}
               </li>
             );
           })}
+          {deployLesson && (
+            <li className="guide-index-item">
+              <div className="guide-index-item-text">
+                <h2 className="guide-index-item-title">{deployLesson.title}</h2>
+                <p className="guide-index-item-summary">Chọn script và lấy key dùng một lần.</p>
+              </div>
+              <div className="guide-index-item-actions">
+                <Link className="btn btn-primary btn-sm" to="/learning/INF1003/guides/bai-2">Mở Bài 2</Link>
+              </div>
+            </li>
+          )}
         </ul>
       </section>
       {confirmUI}

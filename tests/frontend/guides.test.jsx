@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getLabResult: vi.fn(),
   saveLabResult: vi.fn(),
   resetGuideProgress: vi.fn(),
+  getInf1003Deployment: vi.fn(),
+  issueInf1003DeployKey: vi.fn(),
   getQuizSets: vi.fn(),
   getCoursePosts: vi.fn(),
   createCoursePost: vi.fn(),
@@ -28,7 +30,9 @@ vi.mock('../../client/src/api/guides.js', () => ({
   saveGuideProgress: mocks.saveGuideProgress,
   getLabResult: mocks.getLabResult,
   saveLabResult: mocks.saveLabResult,
-  resetGuideProgress: mocks.resetGuideProgress
+  resetGuideProgress: mocks.resetGuideProgress,
+  getInf1003Deployment: mocks.getInf1003Deployment,
+  issueInf1003DeployKey: mocks.issueInf1003DeployKey
 }));
 
 vi.mock('../../client/src/api/community.js', () => ({
@@ -79,6 +83,7 @@ vi.mock('../../client/src/components/feedback/ConfirmDialog.jsx', () => ({
 import GuideSidebar from '../../client/src/features/learning/guides/GuideSidebar.jsx';
 import GuideLessonPage, { stepClean } from '../../client/src/features/learning/guides/GuideLessonPage.jsx';
 import GuideIndexPage from '../../client/src/features/learning/guides/GuideIndexPage.jsx';
+import DeployLessonPage from '../../client/src/features/learning/guides/inf1003/DeployLessonPage.jsx';
 import BlockRenderer from '../../client/src/features/learning/guides/BlockRenderer.jsx';
 import BlockConnection from '../../client/src/features/learning/guides/BlockConnection.jsx';
 import BlockKeyDownloads from '../../client/src/features/learning/guides/BlockKeyDownloads.jsx';
@@ -1048,6 +1053,34 @@ describe('stepClean', () => {
 });
 
 describe('GuideIndexPage resume', () => {
+  it('opens Bài 2 and lets the signed-in student generate a key', async () => {
+    mocks.getCourseGuide.mockResolvedValue({
+      enabled: true,
+      lessons: [{ id: 'bai-2', title: 'Bài 2 — Triển khai ứng dụng bằng key', doneCount: 0 }]
+    });
+    mocks.getInf1003Deployment.mockResolvedValue({
+      deliveryConfigured: false,
+      scripts: [{ id: 'thi-gk', label: 'Thi giữa kỳ' }, { id: 'kiem-tra', label: 'Kiểm tra môi trường' }]
+    });
+    const key = 'a'.repeat(64);
+    mocks.issueInf1003DeployKey.mockResolvedValue({ key, scriptId: 'kiem-tra', expiresAt: new Date(Date.now() + 600_000).toISOString() });
+    renderWithClient(
+      <Routes>
+        <Route path="/learning/:courseCode/guides" element={<GuideIndexPage />} />
+        <Route path="/learning/INF1003/guides/bai-2" element={<DeployLessonPage />} />
+      </Routes>,
+      ['/learning/INF1003/guides']
+    );
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Mở Bài 2' }));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Script cần chạy' }), { target: { value: 'kiem-tra' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo key' }));
+    expect(screen.queryByRole('link', { name: 'start-gk.sh' })).not.toBeInTheDocument();
+    expect(await screen.findByText(key)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sao chép key' })).toBeVisible();
+    expect(mocks.issueInf1003DeployKey).toHaveBeenCalledWith('test-token', 'kiem-tra');
+  });
+
   function DestinationProbe() {
     const { pathname, search } = useLocation();
     return <p>{pathname}{search}</p>;

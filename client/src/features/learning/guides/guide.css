@@ -98,10 +98,14 @@
 
 .guide-body {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
   min-width: 0;
+}
+
+.guide-body--with-sidebar {
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .guide-main {
@@ -173,17 +177,15 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 12px;
 }
 
 .guide-index-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 12px;
-  flex-wrap: wrap;
   padding: 14px;
   border: 1px solid var(--border-color, var(--border, #ddd));
   border-radius: 12px;
@@ -191,8 +193,15 @@
 }
 
 .guide-index-item-text {
-  flex: 1 1 220px;
+  flex: 1;
   min-width: 0;
+}
+
+.guide-index-item-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .guide-index-item-title {
@@ -1054,7 +1063,7 @@ body.theme-dark .guide-step-stage {
 
 /* Mobile: phần nội dung chuyển thành một cột; mục lục có CSS Module riêng. */
 @media (max-width: 860px) {
-  .guide-body {
+  .guide-body--with-sidebar {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1068,8 +1077,7 @@ body.theme-dark .guide-step-stage {
     flex: 1 1 auto;
   }
 
-  .guide-index-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
+}
+.guide-deploy-key {
+  overflow-wrap: anywhere;
 }

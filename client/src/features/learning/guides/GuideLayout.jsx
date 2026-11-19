@@ -36,7 +36,7 @@ export default function GuideLayout({ courseCode, sidebar, children }) {
           {drawerOpen ? 'Đóng mục lục' : 'Mục lục'}
         </button>
       )}
-      <div className="guide-body">
+      <div className={sidebar ? 'guide-body guide-body--with-sidebar' : 'guide-body'}>
         {sidebar && (
           <div className={`${sidebarStyles.rail}${drawerOpen ? ` ${sidebarStyles.open}` : ''}`}>
             <GuideSidebar

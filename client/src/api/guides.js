@@ -1,5 +1,21 @@
 import { request, unwrap } from './http.js';
 
+const inf1003DeployLesson = '/api/learning/courses/INF1003/guides/bai-2';
+
+export async function getInf1003Deployment(token, signal) {
+  const response = await request(`${inf1003DeployLesson}/deployment`, {
+    token, signal, defaultMessage: 'Không thể tải trạng thái triển khai.'
+  });
+  return unwrap(response);
+}
+
+export async function issueInf1003DeployKey(token, scriptId) {
+  const response = await request(`${inf1003DeployLesson}/deployment/key`, {
+    method: 'POST', token, body: { scriptId }, defaultMessage: 'Không thể tạo key triển khai.'
+  });
+  return unwrap(response);
+}
+
 export async function getCourseGuide(token, courseCode, { signal } = {}) {
   const data = await request(`/api/learning/courses/${encodeURIComponent(courseCode)}/guide`, { token, signal, defaultMessage: 'Không thể tải hướng dẫn thực hành.' });
   return unwrap(data, { enabled: false, lessons: [] });

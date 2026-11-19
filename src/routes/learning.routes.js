@@ -5,6 +5,7 @@
  * @param {object} [deps] Reserved for dependency-injection overrides.
  */
 import { ApiController } from './_shared/http-deps.js';
+import { Inf1003DeployController } from '../modules/learning/inf1003-deploy.controller.js';
 
 export function registerLearningRoutes(router, deps = {}) {
   router.get('/learning/resources', ApiController.getLearningResources);
@@ -29,4 +30,6 @@ export function registerLearningRoutes(router, deps = {}) {
   router.get('/learning/courses/:courseCode/guides/:lessonId/lab-result', ApiController.getLabResult);
   router.post('/learning/courses/:courseCode/guides/:lessonId/lab-result', ApiController.saveLabResult);
   router.delete('/learning/courses/:courseCode/guides/:lessonId/reset', ApiController.deleteGuideProgress);
+  router.get('/learning/courses/INF1003/guides/bai-2/deployment', Inf1003DeployController.lesson);
+  router.post('/learning/courses/INF1003/guides/bai-2/deployment/key', Inf1003DeployController.issue);
 }

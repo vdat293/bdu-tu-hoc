@@ -39,6 +39,8 @@ services:
       - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
       - DATABASE_SSL=false
       - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-10}
+      # Xem docs/guides-inf1003-bai-2.md để mount kho script chỉ đọc.
+      - INF1003_SCRIPT_DIR=${INF1003_SCRIPT_DIR:-}
       - SYSTEM_OWNER_MSSV=${SYSTEM_OWNER_MSSV:-}
       - ADMIN_DASHBOARD_KEY=${ADMIN_DASHBOARD_KEY:-}
       - AVATAR_MAX_SIZE_MB=${AVATAR_MAX_SIZE_MB:-3}
@@ -151,6 +153,7 @@ services:
       - ./data/fb-profile:/app/data/fb-profile
       - ./data/fb-import:/app/data/fb-import
       - ./data/client-assets:/app/data/client-assets
+      - ./data/inf1003-scripts:/app/data/inf1003-scripts:ro
       # Backup DB chạy qua `docker compose run --rm bdu-hub` (bước 2 của
       # deploy.sh và db:backup:verify). Volume này là thứ giữ bản dump tồn tại
       # sau khi container tạm bị xoá. Phải khớp BACKUP_LOCAL_DIR ở trên.
