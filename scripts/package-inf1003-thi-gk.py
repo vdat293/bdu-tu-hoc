@@ -52,16 +52,42 @@ def prepare_clean(text, setup_path):
         'PROJECT_DIR=$(cd -- "${THI_GK_PROJECT_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}" && pwd -P)',
     )
     text = replace_once(text, "prepare() {\n", setup_path + "prepare() {\n  setup_aws_path\n")
+    text = replace_once(text, "fresh_login() {\n", """choose_login_region() {
+  local default_region=$REGION
+  if [[ -n ${THI_GK_LOGIN_REGION:-} ]]; then
+    LOGIN_REGION=$THI_GK_LOGIN_REGION
+    [[ $LOGIN_REGION =~ ^[a-z]{2}(-[a-z0-9]+)+-[0-9]+$ ]] ||
+      die 'THI_GK_LOGIN_REGION phải là mã vùng AWS, ví dụ ap-southeast-2.'
+    return
+  fi
+
+  printf 'Tài khoản dùng AWS Projects chọn vùng trong AWS Settings → Project → Additional Info.\\n'
+  while true; do
+    printf 'Vùng đăng nhập AWS [%s]: ' "$default_region"
+    IFS= read -r LOGIN_REGION || die 'Chưa nhập vùng đăng nhập AWS.'
+    LOGIN_REGION=${LOGIN_REGION%$'\\r'}
+    LOGIN_REGION=${LOGIN_REGION:-$default_region}
+    if [[ $LOGIN_REGION =~ ^[a-z]{2}(-[a-z0-9]+)+-[0-9]+$ ]]; then return; fi
+    printf 'Vùng đăng nhập không hợp lệ. Nhập mã vùng, ví dụ ap-southeast-2.\\n' >&2
+  done
+}
+
+fresh_login() {
+  choose_login_region
+""")
     text = replace_once(text, """  local args=()
   if [[ ${THI_GK_REMOTE_LOGIN:-0} == 1 ]]; then args+=(--remote); fi
   printf 'Mở phiên aws login mới. Chọn đúng tài khoản trong trình duyệt.\\n'
   aws_cli login "${args[@]}" || die 'aws login thất bại. Lệnh này cần AWS CLI v2.32.0 trở lên.'""",
-        """  printf 'Mở phiên aws login mới. Chọn đúng tài khoản trong trình duyệt.\\n'
-  if [[ ${THI_GK_REMOTE_LOGIN:-0} == 1 ]]; then
-    aws_cli login --remote || die 'aws login thất bại. Cần AWS CLI v2.32.0 trở lên.'
-  else
-    aws_cli login || die 'aws login thất bại. Cần AWS CLI v2.32.0 trở lên.'
-  fi""",
+        '''  set --
+  if [[ ${THI_GK_REMOTE_LOGIN:-0} == 1 ]]; then set -- --remote; fi
+  printf 'Mở phiên aws login mới ở %s. Chọn đúng tài khoản trong trình duyệt.\\n' "$LOGIN_REGION"
+  REGION="$LOGIN_REGION" aws_cli login "$@" ||
+    die "aws login thất bại ở $LOGIN_REGION. Kiểm tra vùng project trong AWS Settings và phiên bản AWS CLI."''',
+    )
+    text = replace_once(
+        text, "ACCOUNT=$(aws_cli sts get-caller-identity",
+        'ACCOUNT=$(REGION="$LOGIN_REGION" aws_cli sts get-caller-identity',
     )
     text = replace_once(text, """  elif [[ -d $path ]]; then
     chmod 700 -- "$path"
@@ -102,6 +128,13 @@ def prepare_deploy(text):
     )
     text = replace_once(text, 'SOURCE="$PROJECT_DIR/three-tier+s3/three-tier+s3"', 'SOURCE="$bundle_root/three-tier+s3/three-tier+s3"')
     text = replace_once(text, 'IMAGES="$PROJECT_DIR/anh"', 'IMAGES="$bundle_root/anh"')
+    text = replace_once(text, "  REGION=ap-northeast-2\n  fresh_login\n  choose_region",
+                        '  REGION=ap-southeast-2\n  fresh_login\n  REGION=$LOGIN_REGION\n  choose_region')
+    text = replace_once(text, '  local answer rows code status entry index=0',
+                        '  local answer rows code status entry index=0 default_region="$REGION"')
+    text = replace_once(text, "    printf 'Nhập số hoặc mã vùng AWS [ap-northeast-2]: '",
+                        '''    printf 'Nhập số hoặc mã vùng triển khai AWS [%s]: ' "$default_region"''')
+    text = replace_once(text, "    code=${answer:-ap-northeast-2}", "    code=${answer:-$default_region}")
     text = replace_once(text, "  local -A statuses=()\n", "")
     text = replace_once(text, """  while read -r code status; do
     if [[ -n $code ]]; then statuses[$code]=$status; fi

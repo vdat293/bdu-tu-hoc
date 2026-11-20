@@ -31,6 +31,8 @@ Launcher lưu phản hồi trong thư mục tạm riêng do hệ điều hành c
 
 Luồng **Dựng web** kiểm tra AWS CLI từ bản 2.32.0 và gọi bộ cài chính thức nếu thiếu hoặc cũ hơn. macOS kiểm tra chữ ký gói PKG và có thể hỏi mật khẩu quản trị. Sau đó người dùng đăng nhập AWS trong trình duyệt như bình thường. Máy chạy cần Bash, Python 3 và các công cụ dòng lệnh có trong quy trình deploy. [Hướng dẫn cài AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) · [Yêu cầu của aws login](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)
 
+Ở câu hỏi **Vùng đăng nhập AWS**, nhập mã vùng của project trong AWS Settings → Project → Additional Info. Lượt dựng mới mặc định chọn Sydney (`ap-southeast-2`). Sau khi đăng nhập, chọn vùng triển khai trong phạm vi tài khoản được phép sử dụng. Lượt xóa hoặc tiếp tục mặc định lấy vùng từ trạng thái của stack. Nếu vùng đăng nhập khác vùng của stack, nhập vùng đăng nhập tại câu hỏi hoặc đặt `THI_GK_LOGIN_REGION` trước khi chạy launcher. [Vùng AWS của project](https://docs.aws.amazon.com/accounts/latest/reference/project-regions.html)
+
 Chạy launcher với key **Xóa tài nguyên** trong cùng thư mục đã dùng để dựng web. `clean.sh` đọc trạng thái ở đó và kiểm tra tài khoản AWS trước khi xóa.
 
 ## Đóng gói lại thư mục thi-gk
