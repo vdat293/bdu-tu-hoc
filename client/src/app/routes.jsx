@@ -41,6 +41,7 @@ const TtcdsLookupPage = lazy(() => import('../features/ttcds/TtcdsLookupPage.jsx
 const ConfessionPage = lazy(loadConfessionPage);
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const KillerSudokuPage = lazy(() => import('../features/games/KillerSudokuPage.jsx'));
+const GradeCardShowcasePage = lazy(() => import('../components/grades/GradeCardShowcasePage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
 function Lazy({ children, fallback = null }) { return <Suspense fallback={fallback}>{children}</Suspense>; }
@@ -90,6 +91,7 @@ export default function AppRoutes() {
 <Route path="ttcds/tra-cuu" element={<Lazy><TtcdsLookupPage /></Lazy>} />
 <Route path="ttcds/students" element={<Lazy><TtcdsLookupPage /></Lazy>} />
     </Route>
+    <Route path="/grade-card-gallery" element={<Lazy><GradeCardShowcasePage /></Lazy>} />
     {/* 404 đứng riêng một trang, không mượn khung sidebar/topbar của cổng. */}
     <Route path="*" element={<Lazy><NotFoundPage /></Lazy>} />
   </Routes>;

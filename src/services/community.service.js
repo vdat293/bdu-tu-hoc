@@ -356,13 +356,99 @@ export function parseDriveOrMediaUrl(urlStr, label = '', forceType = null) {
   };
 }
 
+const VALID_GRADE_LETTER = /^(?:A\+?|[BCDF]\+?|P|I|X)$/;
+const VALID_GRADE_TIERS = new Set(['excellent', 'good', 'fair', 'average', 'fail']);
+
+function parseBoundedNumber(raw, min, max) {
+  if (raw === undefined || raw === null || String(raw).trim() === '' || String(raw).trim() === '--') {
+    return null;
+  }
+  const parsed = Number.parseFloat(String(raw).trim().replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
+function resolveGradeCardTier({ score10, score4, letter, status }) {
+  const cleanLetter = String(letter || '').trim().toUpperCase();
+  if (['F', 'F+', 'I', 'X'].includes(cleanLetter) || status === 'failed') return 'fail';
+  if (cleanLetter === 'A+' || cleanLetter === 'A') return 'excellent';
+  if (cleanLetter === 'B+' || cleanLetter === 'B') return 'good';
+  if (cleanLetter === 'C+' || cleanLetter === 'C') return 'fair';
+  if (cleanLetter === 'D+' || cleanLetter === 'D' || cleanLetter === 'P') return 'average';
+
+  if (score10 !== null) {
+    if (score10 >= 8.5) return 'excellent';
+    if (score10 >= 7.0) return 'good';
+    if (score10 >= 5.5) return 'fair';
+    if (score10 >= 4.0) return 'average';
+    return 'fail';
+  }
+  if (score4 !== null) {
+    if (score4 >= 3.6) return 'excellent';
+    if (score4 >= 3.0) return 'good';
+    if (score4 >= 2.0) return 'fair';
+    if (score4 >= 1.0) return 'average';
+    return 'fail';
+  }
+  return 'average';
+}
+
+export function isGradeCardAttachment(item) {
+  return Boolean(item && typeof item === 'object' && item.type === 'grade_card');
+}
+
+export function sanitizeGradeCardAttachment(item) {
+  if (!isGradeCardAttachment(item)) return null;
+  const courseName = String(item.course_name ?? item.ten_mon ?? '').trim().slice(0, 160);
+  if (!courseName) return null;
+
+  const courseCode = String(item.course_code ?? item.ma_mon ?? '').trim().slice(0, 40);
+  const semester = String(item.semester ?? '').trim().slice(0, 100);
+  const credits = parseBoundedNumber(item.credits ?? item.so_tin_chi, 0, 30);
+  const score10 = parseBoundedNumber(item.score_10 ?? item.diem_tk, 0, 10);
+  const score4 = parseBoundedNumber(item.score_4 ?? item.diem_tk_so, 0, 4);
+  const rawLetter = String(item.letter ?? item.diem_tk_chu ?? '').trim().toUpperCase();
+  const letter = VALID_GRADE_LETTER.test(rawLetter) ? rawLetter : '';
+
+  if (score10 === null && score4 === null && !letter) return null;
+
+  const rawStatus = String(item.status || '').trim().toLowerCase();
+  let status = rawStatus === 'failed' ? 'failed' : (rawStatus === 'passed' ? 'passed' : null);
+  if (!status) {
+    if (['F', 'F+', 'I', 'X'].includes(letter) || (score10 !== null && score10 < 4) || (score4 !== null && score4 < 1)) {
+      status = 'failed';
+    } else {
+      status = 'passed';
+    }
+  }
+
+  const computedTier = resolveGradeCardTier({ score10, score4, letter, status });
+  const tier = VALID_GRADE_TIERS.has(computedTier) ? computedTier : 'average';
+
+  return {
+    type: 'grade_card',
+    course_name: courseName,
+    course_code: courseCode,
+    semester,
+    credits,
+    score_10: score10,
+    score_4: score4,
+    letter,
+    status,
+    tier
+  };
+}
+
 /**
  * Chuẩn hoá attachments của bài viết: ảnh do người dùng tải lên R2 giữ nguyên
- * descriptor (đã whitelist host/prefix), các URL khác đi qua bộ phân tích
- * Drive/YouTube/Link như trước.
+ * descriptor (đã whitelist host/prefix), thẻ khoe điểm đi qua bộ kiểm tra
+ * riêng, các URL khác đi qua bộ phân tích Drive/YouTube/Link như trước.
  */
 function parsePostAttachments(attachments) {
   const parsed = attachments.map((item) => {
+    if (isGradeCardAttachment(item)) {
+      return sanitizeGradeCardAttachment(item);
+    }
     if (MediaUploadService.isImageAttachment(item)) {
       return MediaUploadService.sanitizeImageAttachment(item)
         || MediaUploadService.sanitizeLegacyImageAttachment(item);
@@ -379,6 +465,10 @@ function parsePostAttachments(attachments) {
   const imageCount = parsed.filter(MediaUploadService.isImageAttachment).length;
   if (imageCount > MediaUploadService.MAX_POST_IMAGES) {
     throw httpError(`Mỗi bài viết chỉ được đính kèm tối đa ${MediaUploadService.MAX_POST_IMAGES} ảnh.`);
+  }
+  const gradeCardCount = parsed.filter(isGradeCardAttachment).length;
+  if (gradeCardCount > 1) {
+    throw httpError('Mỗi bài viết chỉ được đính kèm tối đa 1 thẻ điểm.');
   }
   return parsed;
 }
@@ -454,9 +544,10 @@ export const CommunityService = {
     if (!cleanMssv) throw httpError('MSSV của tác giả là bắt buộc.');
     if (!POST_SCOPES.has(cleanScope)) throw httpError('Phạm vi bài viết không hợp lệ.');
     if (cleanScope === 'clan' && !cleanScopeId) throw httpError('Bài viết CLB phải xác định CLB nhận bài.');
-    const hasImageAttachment = Array.isArray(attachments) && attachments.some(MediaUploadService.isImageAttachment);
+    const hasRichAttachment = Array.isArray(attachments)
+      && attachments.some((item) => MediaUploadService.isImageAttachment(item) || isGradeCardAttachment(item));
     if (!cleanTitle) throw httpError('Tiêu đề bài viết không được để trống.');
-    if (!cleanContent && !hasImageAttachment) throw httpError('Nội dung bài viết không được để trống.');
+    if (!cleanContent && !hasRichAttachment) throw httpError('Nội dung bài viết không được để trống.');
     if (cleanTitle.length > MAX_TITLE_LENGTH) throw httpError(`Tiêu đề không được vượt quá ${MAX_TITLE_LENGTH} ký tự.`);
     if (cleanContent.length > MAX_CONTENT_LENGTH) throw httpError(`Nội dung không được vượt quá ${MAX_CONTENT_LENGTH} ký tự.`);
     if (!Array.isArray(attachments)) throw httpError('Danh sách tệp đính kèm không hợp lệ.');
@@ -963,11 +1054,12 @@ export const CommunityService = {
     if (cleanContent !== null && !cleanContent) {
       // Cho phép bài chỉ có ảnh: kiểm tra attachments mới (nếu client gửi)
       // hoặc attachments hiện tại của bài trước khi báo lỗi.
-      const hasImages = Array.isArray(attachments)
-        ? attachments.some(MediaUploadService.isImageAttachment)
+      const isRichAttachment = (item) => MediaUploadService.isImageAttachment(item) || isGradeCardAttachment(item);
+      const hasRich = Array.isArray(attachments)
+        ? attachments.some(isRichAttachment)
         : Boolean((await query('SELECT attachments FROM community_posts WHERE id = $1', [cleanPostId]))
-          .rows[0]?.attachments?.some(MediaUploadService.isImageAttachment));
-      if (!hasImages) throw httpError('Nội dung bài viết không được để trống.');
+          .rows[0]?.attachments?.some(isRichAttachment));
+      if (!hasRich) throw httpError('Nội dung bài viết không được để trống.');
     }
     if (attachments !== undefined && !Array.isArray(attachments)) throw httpError('Danh sách tệp đính kèm không hợp lệ.');
     if (Array.isArray(attachments) && attachments.length > MAX_ATTACHMENTS) {

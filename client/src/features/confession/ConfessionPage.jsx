@@ -40,6 +40,7 @@ import { useAvatarUpload } from '../../components/identity/useAvatarUpload.js';
 import AvatarCropDialog from '../../components/identity/AvatarCropDialog.jsx';
 import AvatarManagerDialog from '../../components/identity/AvatarManagerDialog.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
+import GradeShareCard from '../../components/grades/GradeShareCard.jsx';
 import MentionAutocomplete from './MentionAutocomplete.jsx';
 import { renderContentWithMentions } from './renderMentions.jsx';
 import {
@@ -275,6 +276,9 @@ function FacebookLinkPreview({ attachment }) {
 
 function AttachmentRenderer({ attachment }) {
   if (!attachment) return null;
+  if (attachment.type === 'grade_card') {
+    return <GradeShareCard card={attachment} compact />;
+  }
   const targetUrl = attachment.direct_url || attachment.url || '#';
   const isVideo = attachment.type === 'youtube' || attachment.type === 'video';
   const isDrive = attachment.type === 'drive_file' || attachment.type === 'drive_folder';
@@ -359,7 +363,12 @@ function PostAttachments({ attachments, sourceUrl = null }) {
       )}
       {others.length > 0 && (
         <div className="fbc-attachments">
-          {others.map((item, index) => <AttachmentRenderer key={`${item.url}-${index}`} attachment={item} />)}
+          {others.map((item, index) => (
+            <AttachmentRenderer
+              key={`${item.type || 'att'}-${item.course_code || item.url || ''}-${index}`}
+              attachment={item}
+            />
+          ))}
         </div>
       )}
     </>
@@ -1155,7 +1164,8 @@ export default function ConfessionPage() {
     if (editPostId === null) return;
     const content = editDraft.content.trim();
     const existingImages = (editDraft.attachments || []).filter((item) => item?.type === 'image' && item.url);
-    if (!content && existingImages.length === 0 && editImages.images.length === 0) {
+    const hasGradeCard = (editDraft.attachments || []).some((item) => item?.type === 'grade_card');
+    if (!content && existingImages.length === 0 && editImages.images.length === 0 && !hasGradeCard) {
       notify('Vui lòng nhập nội dung bài viết.', 'warning');
       return;
     }

@@ -74,6 +74,7 @@ export const SAFE_NODE_TESTS = [
   'test-community-features.js',
   'test-community-post-editing.js',
   'test-community-media.js',
+  'test-grade-card-attachment.js',
   'test-ranking-frames.js',
   'test-admin-tool-flow.js',
   'test-new-identity-titles.js',

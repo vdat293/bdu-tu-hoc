@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getGrades, getMyAcademicRanking, getProfile } from '../../api/academics.js';
+import { createCommunityPost } from '../../api/community.js';
 import { getMyIdentityPresentation } from '../../api/identity.js';
-import { useAuth } from '../../app/providers.jsx';
+import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import { AvatarContent, getIdentityPhoto } from '../../components/identity/Identity.jsx';
 import { useAvatarUpload } from '../../components/identity/useAvatarUpload.js';
 import AvatarCropDialog from '../../components/identity/AvatarCropDialog.jsx';
 import AvatarManagerDialog from '../../components/identity/AvatarManagerDialog.jsx';
+import GradeShareCard, { buildGradeCardPayload } from '../../components/grades/GradeShareCard.jsx';
 import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import GpaTrendChart from './GpaTrendChart.jsx';
 import GradeDistChart from './GradeDistChart.jsx';
@@ -204,11 +206,19 @@ function finiteOrNull(value) {
 
 export default function GpaPage() {
   const auth = useAuth();
+  const { notify } = useToasts();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const semester = params.get('semester') || 'ALL';
   const status = params.get('status') || 'ALL';
   const queryText = params.get('q') || '';
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [shareCourse, setShareCourse] = useState(null);
+  const [shareCaption, setShareCaption] = useState('');
+  const [shareAnonymous, setShareAnonymous] = useState(false);
+  const [shareSubmitted, setShareSubmitted] = useState(false);
+  const [sharePreviewTier, setSharePreviewTier] = useState(null);
   // Tính thử điểm còn thiếu: mặc định là bảng điểm bình thường.
   // Bấm nút mở → bắt buộc hiện hộp thoại → xác nhận mới vào phiên tính thử.
   const [simEntries, setSimEntries] = useState({});
@@ -220,6 +230,9 @@ export default function GpaPage() {
   const detailDialogRef = useRef(null);
   const detailCloseRef = useRef(null);
   const detailOpenerRef = useRef(null);
+  const shareDialogRef = useRef(null);
+  const shareCloseRef = useRef(null);
+  const shareOpenerRef = useRef(null);
   const simDialogRef = useRef(null);
   const simCloseRef = useRef(null);
   const simOpenerRef = useRef(null);
@@ -386,6 +399,66 @@ export default function GpaPage() {
     detailOpenerRef.current = opener;
     setSelectedCourse({ ...course, sem_name: semTitle });
   };
+
+  const selectedCourseResult = useMemo(
+    () => (selectedCourse ? getCourseResult(selectedCourse) : null),
+    [selectedCourse]
+  );
+
+  const shareCardPayload = useMemo(
+    () => (shareCourse ? buildGradeCardPayload(shareCourse, { semester: shareCourse.sem_name || '' }) : null),
+    [shareCourse]
+  );
+
+  const closeShareGrade = () => {
+    setShareCourse(null);
+    setShareCaption('');
+    setShareAnonymous(false);
+    setShareSubmitted(false);
+    setSharePreviewTier(null);
+  };
+
+  useViewportDialog(
+    Boolean(shareCourse),
+    closeShareGrade,
+    shareDialogRef,
+    shareCloseRef,
+    shareOpenerRef
+  );
+
+  const openShareGrade = (course, opener) => {
+    if (!course || !getCourseResult(course).graded) return;
+    shareOpenerRef.current = opener || detailOpenerRef.current || null;
+    setSelectedCourse(null);
+    setShareCaption('');
+    setShareAnonymous(false);
+    setShareSubmitted(false);
+    setSharePreviewTier(null);
+    setShareCourse(course);
+  };
+
+  const shareGradeMutation = useMutation({
+    mutationFn: async () => {
+      if (!shareCardPayload) throw new Error('Không tìm thấy dữ liệu điểm để chia sẻ.');
+      return createCommunityPost(auth.token, {
+        title: 'BDU Confession',
+        content: shareCaption.trim(),
+        scope: 'school',
+        scopeId: null,
+        category: 'confession',
+        isAnonymous: shareAnonymous,
+        attachments: [shareCardPayload]
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['confession'] });
+      setShareSubmitted(true);
+      notify('Đã khoe điểm lên Confession!', 'success');
+    },
+    onError: (error) => {
+      notify(error?.message || 'Không thể chia sẻ điểm lên Confession.', 'error');
+    }
+  });
 
   const closeSimDisclaimer = () => {
     setPendingSimSem(null);
@@ -1148,10 +1221,180 @@ export default function GpaPage() {
             </div>
 
             <div className="modal-footer">
+              {selectedCourseResult?.graded && (
+                <button
+                  id="modal-btn-share-grade"
+                  type="button"
+                  className="btn gpa-flex-btn"
+                  onClick={(event) => openShareGrade(selectedCourse, event.currentTarget)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                  <span>Khoe điểm lên Confession</span>
+                </button>
+              )}
               <button id="modal-btn-dismiss" type="button" className="btn btn-secondary" onClick={closeCourseDetails}>
                 Đóng
               </button>
             </div>
+        </ViewportModal>
+      )}
+
+      {/* Modal: Khoe điểm lên Confession */}
+      {shareCourse && shareCardPayload && (
+        <ViewportModal
+          id="share-grade-modal"
+          title="Khoe điểm lên Confession"
+          labelledBy="share-grade-title"
+          onClose={closeShareGrade}
+          dialogRef={shareDialogRef}
+          className="gpa-share-dialog"
+        >
+          <div className="modal-header">
+            <div className="modal-title-group">
+              <h3 id="share-grade-title" className="modal-title">Khoe điểm lên Confession</h3>
+              <span className="modal-badge">{shareCardPayload.course_code || 'Bảng điểm BDU'}</span>
+            </div>
+            <button
+              ref={shareCloseRef}
+              type="button"
+              className="modal-close-btn"
+              title="Đóng"
+              aria-label="Đóng hộp thoại khoe điểm"
+              onClick={closeShareGrade}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="18" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="modal-body">
+            <GradeShareCard
+              card={sharePreviewTier
+                ? {
+                  ...shareCardPayload,
+                  tier: sharePreviewTier,
+                  status: sharePreviewTier === 'fail' ? 'failed' : 'passed'
+                }
+                : shareCardPayload}
+            />
+
+            {!shareSubmitted && (
+              <div className="share-tier-preview-bar">
+                <div className="share-tier-preview-head">
+                  <span>Bộ sưu tập hoạ tiết theo thang điểm:</span>
+                </div>
+                <div className="share-tier-preview-pills" role="group" aria-label="Xem thử thiết kế theo thang điểm">
+                  {[
+                    { id: null, text: 'Thẻ môn này' },
+                    { id: 'excellent', text: 'A · Kim Long' },
+                    { id: 'good', text: 'B · Bích Phượng' },
+                    { id: 'fair', text: 'C · Tinh Đồ' },
+                    { id: 'average', text: 'D · Ấn Nguyệt Quế' },
+                    { id: 'fail', text: 'F · Hỏa Kiếm' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.id || 'actual'}
+                      type="button"
+                      className={`share-tier-pill-btn${sharePreviewTier === opt.id ? ' is-active' : ''}`}
+                      onClick={() => setSharePreviewTier(opt.id)}
+                    >
+                      {opt.text}
+                    </button>
+                  ))}
+                </div>
+                {sharePreviewTier && sharePreviewTier !== shareCardPayload.tier && (
+                  <p className="share-tier-preview-note">
+                    Đang xem thử hoạ tiết sưu tầm — khi đăng sẽ giữ nguyên điểm và hạng thật của môn học.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {shareSubmitted ? (
+              <p className="share-grade-hint">
+                Thẻ điểm của bạn đã được đăng lên BDU Confession. Bạn có thể mở Confession để xem ngay bài viết vừa chia sẻ.
+              </p>
+            ) : (
+              <>
+                <div className="share-grade-field">
+                  <label htmlFor="share-grade-caption" className="share-grade-label">
+                    Lời nhắn kèm theo (tuỳ chọn)
+                  </label>
+                  <textarea
+                    id="share-grade-caption"
+                    className="share-grade-textarea"
+                    placeholder="Viết vài dòng chia sẻ cảm nghĩ về môn học này..."
+                    maxLength={1000}
+                    value={shareCaption}
+                    onChange={(event) => setShareCaption(event.target.value)}
+                    disabled={shareGradeMutation.isPending}
+                  />
+                </div>
+
+                <label className="share-grade-anon-row">
+                  <input
+                    type="checkbox"
+                    checked={shareAnonymous}
+                    onChange={(event) => setShareAnonymous(event.target.checked)}
+                    disabled={shareGradeMutation.isPending}
+                  />
+                  <span>Đăng ẩn danh (giấu tên và MSSV của bạn)</span>
+                </label>
+
+                <p className="share-grade-hint">
+                  Giao diện thẻ điểm được tự động thiết kế theo thang điểm của môn học và hiển thị trực tiếp trên BDU Confession.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="modal-footer">
+            {shareSubmitted ? (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={closeShareGrade}>
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  className="btn gpa-flex-btn"
+                  onClick={() => {
+                    closeShareGrade();
+                    navigate('/confession');
+                  }}
+                >
+                  Xem trên Confession
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeShareGrade}
+                  disabled={shareGradeMutation.isPending}
+                >
+                  Hủy
+                </button>
+                <button
+                  id="btn-confirm-share-grade"
+                  type="button"
+                  className="btn gpa-flex-btn"
+                  disabled={shareGradeMutation.isPending}
+                  onClick={() => shareGradeMutation.mutate()}
+                >
+                  {shareGradeMutation.isPending ? 'Đang đăng...' : 'Đăng lên Confession'}
+                </button>
+              </>
+            )}
+          </div>
         </ViewportModal>
       )}
 

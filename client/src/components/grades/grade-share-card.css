@@ -1,0 +1,724 @@
+/* ============================================================
+   GradeShareCard — Thẻ Vinh Danh Khoe Điểm (Collector Prestige)
+   Dùng chung cho preview trong Bảng điểm và bài đăng Confession.
+   ============================================================ */
+
+.grade-share-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 224px;
+  border-radius: 18px;
+  padding: 20px 22px 16px;
+  color: #f8fafc;
+  background-color: #120b04;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 36px -14px rgba(15, 23, 42, 0.58);
+  isolation: isolate;
+  font-family: var(--font-sans, 'Be Vietnam Pro', system-ui, -apple-system, sans-serif);
+}
+
+.grade-share-card.is-compact {
+  min-height: 208px;
+  padding: 18px 20px 14px;
+}
+
+/* Tranh minh hoạ truyền thống độ phân giải cao nằm chìm toàn khung */
+.grade-share-card .gsc-watermark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+  pointer-events: none;
+  z-index: -3;
+  user-select: none;
+  opacity: 0.94;
+  transition: transform 0.45s ease;
+}
+
+.grade-share-card:hover .gsc-watermark {
+  transform: scale(1.02);
+}
+
+/* Lớp phủ chuyển sắc bên trái để tên môn luôn tương phản rõ mà vẫn giữ trọn độ rực của Rồng/Phượng bên phải */
+.grade-share-card .gsc-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+}
+
+.grade-share-card .gsc-corner-filigree {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ---------- Tier 1: Xuất sắc (A / A+ / >= 8.5) — Kim Long Hoàng Bào ---------- */
+.grade-share-card.is-tier-excellent {
+  background-color: #130a02;
+  border-color: rgba(251, 191, 36, 0.72);
+  box-shadow:
+    0 18px 40px -12px rgba(180, 83, 9, 0.55),
+    inset 0 1px 0 rgba(254, 243, 199, 0.48),
+    inset 0 0 28px rgba(245, 158, 11, 0.14);
+}
+
+.grade-share-card.is-tier-excellent .gsc-scrim {
+  background:
+    linear-gradient(90deg, rgba(16, 9, 2, 0.86) 0%, rgba(18, 10, 2, 0.62) 34%, rgba(18, 10, 2, 0.08) 62%, rgba(18, 10, 2, 0.24) 100%),
+    linear-gradient(180deg, rgba(16, 9, 2, 0.32) 0%, transparent 32%, transparent 72%, rgba(16, 9, 2, 0.52) 100%);
+}
+
+.grade-share-card.is-tier-excellent .gsc-corner-filigree {
+  color: #fde68a;
+}
+
+.grade-share-card.is-tier-excellent .gsc-tier-pill {
+  background: linear-gradient(135deg, #fde047 0%, #fbbf24 52%, #d97706 100%);
+  color: #241302;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.44);
+}
+
+.grade-share-card.is-tier-excellent .gsc-emblem-title {
+  color: #fde68a;
+}
+
+.grade-share-card.is-tier-excellent .gsc-score-box {
+  border-color: rgba(253, 224, 71, 0.48);
+  color: #fde68a;
+}
+
+.grade-share-card.is-tier-excellent .gsc-score-value {
+  background: linear-gradient(180deg, #ffffff 0%, #fef08a 45%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.grade-share-card.is-tier-excellent .gsc-letter-badge {
+  background: linear-gradient(135deg, #fef08a, #f59e0b);
+  color: #241302;
+  border-color: rgba(255, 251, 235, 0.82);
+}
+
+.grade-share-card.is-tier-excellent .gsc-meter-fill {
+  background: linear-gradient(90deg, #d97706 0%, #fbbf24 55%, #fef08a 100%);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.58);
+}
+
+/* ---------- Tier 2: Giỏi (B+ / B / 7.0 - 8.49) — Bích Phượng Triều Dương ---------- */
+.grade-share-card.is-tier-good {
+  background-color: #031613;
+  border-color: rgba(52, 211, 153, 0.62);
+  box-shadow:
+    0 16px 36px -12px rgba(5, 150, 105, 0.48),
+    inset 0 1px 0 rgba(167, 243, 208, 0.36);
+}
+
+.grade-share-card.is-tier-good .gsc-scrim {
+  background:
+    linear-gradient(90deg, rgba(3, 20, 17, 0.86) 0%, rgba(3, 22, 19, 0.62) 34%, rgba(3, 22, 19, 0.08) 62%, rgba(3, 22, 19, 0.26) 100%),
+    linear-gradient(180deg, rgba(3, 20, 17, 0.3) 0%, transparent 32%, transparent 72%, rgba(3, 20, 17, 0.52) 100%);
+}
+
+.grade-share-card.is-tier-good .gsc-corner-filigree {
+  color: #6ee7b7;
+}
+
+.grade-share-card.is-tier-good .gsc-tier-pill {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.46), rgba(20, 184, 166, 0.36));
+  color: #ecfdf5;
+  border: 1px solid rgba(110, 231, 183, 0.65);
+}
+
+.grade-share-card.is-tier-good .gsc-emblem-title {
+  color: #a7f3d0;
+}
+
+.grade-share-card.is-tier-good .gsc-score-box {
+  border-color: rgba(52, 211, 153, 0.44);
+  color: #6ee7b7;
+}
+
+.grade-share-card.is-tier-good .gsc-score-value {
+  background: linear-gradient(180deg, #ffffff 0%, #a7f3d0 52%, #34d399 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.grade-share-card.is-tier-good .gsc-letter-badge {
+  background: rgba(16, 185, 129, 0.36);
+  color: #ecfdf5;
+  border-color: rgba(110, 231, 183, 0.68);
+}
+
+.grade-share-card.is-tier-good .gsc-meter-fill {
+  background: linear-gradient(90deg, #059669 0%, #34d399 58%, #67e8f9 100%);
+}
+
+/* ---------- Tier 3: Khá (C+ / C / 5.5 - 6.99) — Thiên Văn Tinh Đồ ---------- */
+.grade-share-card.is-tier-fair {
+  background-color: #050f22;
+  border-color: rgba(96, 165, 250, 0.58);
+  box-shadow:
+    0 16px 34px -12px rgba(37, 99, 235, 0.44),
+    inset 0 1px 0 rgba(191, 219, 254, 0.32);
+}
+
+.grade-share-card.is-tier-fair .gsc-scrim {
+  background:
+    linear-gradient(90deg, rgba(5, 14, 33, 0.86) 0%, rgba(5, 14, 33, 0.64) 36%, rgba(5, 14, 33, 0.1) 64%, rgba(5, 14, 33, 0.28) 100%),
+    linear-gradient(180deg, rgba(5, 14, 33, 0.32) 0%, transparent 32%, transparent 72%, rgba(5, 14, 33, 0.54) 100%);
+}
+
+.grade-share-card.is-tier-fair .gsc-corner-filigree {
+  color: #93c5fd;
+}
+
+.grade-share-card.is-tier-fair .gsc-tier-pill {
+  background: rgba(37, 99, 235, 0.42);
+  color: #eff6ff;
+  border: 1px solid rgba(147, 197, 253, 0.62);
+}
+
+.grade-share-card.is-tier-fair .gsc-emblem-title {
+  color: #bae6fd;
+}
+
+.grade-share-card.is-tier-fair .gsc-score-box {
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #93c5fd;
+}
+
+.grade-share-card.is-tier-fair .gsc-score-value {
+  background: linear-gradient(180deg, #ffffff 0%, #bae6fd 55%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.grade-share-card.is-tier-fair .gsc-letter-badge {
+  background: rgba(59, 130, 246, 0.36);
+  color: #eff6ff;
+  border-color: rgba(147, 197, 253, 0.68);
+}
+
+.grade-share-card.is-tier-fair .gsc-meter-fill {
+  background: linear-gradient(90deg, #2563eb 0%, #38bdf8 60%, #bae6fd 100%);
+}
+
+/* ---------- Tier 4: Qua môn (D+ / D / P / 4.0 - 5.49) — Ấn Bảo Nguyệt Quế ---------- */
+.grade-share-card.is-tier-average {
+  background-color: #160c07;
+  border: 1.5px dashed rgba(251, 146, 60, 0.66);
+  box-shadow:
+    0 15px 32px -12px rgba(154, 52, 18, 0.46),
+    inset 0 1px 0 rgba(254, 215, 170, 0.26);
+}
+
+.grade-share-card.is-tier-average .gsc-scrim {
+  background:
+    linear-gradient(90deg, rgba(21, 11, 7, 0.86) 0%, rgba(21, 11, 7, 0.64) 36%, rgba(21, 11, 7, 0.1) 64%, rgba(21, 11, 7, 0.28) 100%),
+    linear-gradient(180deg, rgba(21, 11, 7, 0.3) 0%, transparent 32%, transparent 72%, rgba(21, 11, 7, 0.54) 100%);
+}
+
+.grade-share-card.is-tier-average .gsc-corner-filigree {
+  color: #fdba74;
+}
+
+.grade-share-card.is-tier-average .gsc-tier-pill {
+  background: rgba(234, 88, 12, 0.34);
+  color: #fff7ed;
+  border: 1px dashed rgba(253, 186, 116, 0.76);
+}
+
+.grade-share-card.is-tier-average .gsc-emblem-title {
+  color: #fed7aa;
+}
+
+.grade-share-card.is-tier-average .gsc-score-box {
+  border-color: rgba(251, 146, 60, 0.44);
+  color: #fdba74;
+}
+
+.grade-share-card.is-tier-average .gsc-score-value {
+  color: #fed7aa;
+}
+
+.grade-share-card.is-tier-average .gsc-letter-badge {
+  background: rgba(249, 115, 22, 0.34);
+  color: #fff7ed;
+  border-color: rgba(253, 186, 116, 0.68);
+}
+
+.grade-share-card.is-tier-average .gsc-meter-fill {
+  background: linear-gradient(90deg, #c2410c 0%, #fb923c 65%, #fed7aa 100%);
+}
+
+/* ---------- Tier 5: Chưa đạt (F / < 4.0) — Niết Bàn Hỏa Kiếm ---------- */
+.grade-share-card.is-tier-fail {
+  background-color: #140408;
+  border-color: rgba(251, 113, 133, 0.62);
+  box-shadow:
+    0 16px 34px -12px rgba(190, 18, 60, 0.52),
+    inset 0 1px 0 rgba(254, 205, 211, 0.26);
+}
+
+.grade-share-card.is-tier-fail .gsc-scrim {
+  background:
+    linear-gradient(90deg, rgba(20, 4, 8, 0.86) 0%, rgba(20, 4, 8, 0.64) 36%, rgba(20, 4, 8, 0.08) 64%, rgba(20, 4, 8, 0.26) 100%),
+    linear-gradient(180deg, rgba(20, 4, 8, 0.3) 0%, transparent 32%, transparent 72%, rgba(20, 4, 8, 0.54) 100%);
+}
+
+.grade-share-card.is-tier-fail .gsc-corner-filigree {
+  color: #fda4af;
+}
+
+.grade-share-card.is-tier-fail .gsc-tier-pill {
+  background: rgba(225, 29, 72, 0.42);
+  color: #fff1f2;
+  border: 1px solid rgba(251, 113, 133, 0.68);
+}
+
+.grade-share-card.is-tier-fail .gsc-emblem-title {
+  color: #fecdd3;
+}
+
+.grade-share-card.is-tier-fail .gsc-score-box {
+  border-color: rgba(251, 113, 133, 0.44);
+  color: #fda4af;
+}
+
+.grade-share-card.is-tier-fail .gsc-score-value {
+  color: #fecdd3;
+}
+
+.grade-share-card.is-tier-fail .gsc-letter-badge {
+  background: rgba(225, 29, 72, 0.42);
+  color: #fff1f2;
+  border-color: rgba(253, 164, 175, 0.72);
+}
+
+.grade-share-card.is-tier-fail .gsc-meter-fill {
+  background: linear-gradient(90deg, #be123c 0%, #fb7185 70%, #ffe4e6 100%);
+}
+
+/* ---------- Card layout ---------- */
+.gsc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.gsc-tier-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.gsc-tier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.gsc-emblem-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.94;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.gsc-meta-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.gsc-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.95);
+  background: rgba(8, 12, 22, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.gsc-chip-sem {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gsc-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gsc-course {
+  min-width: 0;
+  max-width: 58%;
+  flex: 1 1 auto;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+
+.gsc-code {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(248, 250, 252, 0.96);
+  background: rgba(8, 12, 22, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.gsc-course-name {
+  margin: 0 0 5px;
+  font-size: clamp(1.04rem, 2.25vw, 1.24rem);
+  font-weight: 800;
+  line-height: 1.3;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.gsc-motto {
+  margin: 0;
+  font-size: 12.5px;
+  color: rgba(248, 250, 252, 0.86);
+}
+
+.gsc-score-box {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(8, 11, 19, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  min-width: 114px;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.65);
+}
+
+.gsc-score-crest {
+  position: absolute;
+  right: -22px;
+  top: -22px;
+  width: 96px;
+  height: 96px;
+  pointer-events: none;
+}
+
+.gsc-score-hero {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1;
+}
+
+.gsc-score-value {
+  font-size: clamp(1.78rem, 3.8vw, 2.24rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gsc-score-denom {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(248, 250, 252, 0.72);
+}
+
+.gsc-score-sub {
+  position: relative;
+  margin-top: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gsc-letter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.gsc-score4 {
+  font-size: 12px;
+  color: rgba(248, 250, 252, 0.88);
+  white-space: nowrap;
+}
+
+.gsc-score4 strong {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.gsc-meter {
+  margin-top: 15px;
+}
+
+.gsc-meter-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.gsc-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.gsc-footer {
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: rgba(248, 250, 252, 0.82);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+.gsc-brand {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.gsc-status-tag {
+  font-weight: 700;
+  color: rgba(248, 250, 252, 0.96);
+}
+
+/* ---------- Modal Khoe Điểm trong Bảng điểm ---------- */
+#share-grade-modal .gpa-share-dialog {
+  width: min(580px, 100%);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+}
+
+#share-grade-modal .gpa-share-dialog .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.share-tier-preview-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.share-tier-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.share-tier-preview-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.share-tier-pill-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.share-tier-pill-btn:hover {
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.share-tier-pill-btn.is-active {
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fde68a;
+}
+
+.share-tier-preview-note {
+  margin: 0;
+  font-size: 11.5px;
+  color: #fbbf24;
+}
+
+.share-grade-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-grade-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.share-grade-textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.14));
+  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.share-grade-textarea:focus {
+  outline: none;
+  border-color: var(--accent, #38bdf8);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+}
+
+.share-grade-anon-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text-main);
+}
+
+.share-grade-anon-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #38bdf8);
+}
+
+.share-grade-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.gpa-flex-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 6px 16px -6px rgba(234, 88, 12, 0.55);
+}
+
+.gpa-flex-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.gpa-flex-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#detail-modal .gpa-detail-dialog .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 540px) {
+  .grade-share-card {
+    min-height: 210px;
+    padding: 16px 16px 14px;
+  }
+
+  .gsc-course {
+    max-width: 100%;
+  }
+
+  .gsc-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gsc-score-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .gsc-score-sub {
+    margin-top: 0;
+  }
+}
