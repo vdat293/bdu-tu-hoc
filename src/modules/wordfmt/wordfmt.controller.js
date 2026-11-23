@@ -28,6 +28,22 @@ function resolveWordFmtDownloadPath(filename) {
 }
 
 export const WordFmtController = {
+  // Tools: Preview DOCX structure (for the role editor before formatting)
+  async previewDocxStructure(req, res) {
+    if (!req.file) {
+      return res.status(400).json({ result: false, message: 'Vui lòng chọn file Word (.docx) để tải lên.' });
+    }
+    try {
+      const preview = await WordFmtService.previewStructure(req.file.path, req.body?.roleOverrides);
+      return res.json({ result: true, preview });
+    } catch (err) {
+      console.error('WordFmt preview error:', err.message);
+      return res.status(400).json({ result: false, message: err.message || 'Không thể phân tích cấu trúc file DOCX.' });
+    } finally {
+      try { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); } catch { /* best effort */ }
+    }
+  },
+
   // 5. Tools: Format DOCX
   async formatDocx(req, res) {
     try {
@@ -81,7 +97,9 @@ export const WordFmtController = {
         frontMatter,
         profile,
         onlyExistingCaptions: onlyExistingCaptions === 'true' || onlyExistingCaptions === true,
-        skipProposal: skipProposal === 'true' || skipProposal === true
+        skipProposal: skipProposal === 'true' || skipProposal === true,
+        roleOverrides: req.body.roleOverrides,
+        paragraphNotes: req.body.paragraphNotes
       });
 
       const downloadUrl = `/api/wordfmt/download/${encodeURIComponent(result.outputFile)}`;

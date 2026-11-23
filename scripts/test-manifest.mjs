@@ -21,6 +21,7 @@ export const SAFE_NODE_TESTS = [
   'test-queue.js',
   'test-docx-postprocessor.js',
   'test-docx-structure.js',
+  'test-docx-role-overrides.js',
   'test-docx-graduation.js',
   'test-english-exercise.js',
   'test-english-queue.js',

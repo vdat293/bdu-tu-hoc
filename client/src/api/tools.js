@@ -5,6 +5,11 @@ export async function formatDocx(token, formData, { signal } = {}) {
   return data;
 }
 
+export async function previewDocxStructure(token, formData, { signal } = {}) {
+  const data = await request('/api/wordfmt/preview', { method: 'POST', token, body: formData, signal, defaultMessage: 'Không thể phân tích cấu trúc file.' });
+  return data?.preview || null;
+}
+
 export async function downloadWordFmt(token, url, { signal } = {}) {
   return request(url, { token, responseType: 'blob', signal, defaultMessage: 'Không thể tải file Word đã chuẩn hóa.' });
 }

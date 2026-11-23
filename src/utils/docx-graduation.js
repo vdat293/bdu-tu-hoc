@@ -363,7 +363,7 @@ export function prepareGraduation(analysis, options) {
       const artwork=$(e).find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length;
       if(signatureNodes.has(e)) {$(e).remove();continue;}
       if(e.name==='w:tbl' && $(e).find(tag('p')).toArray().some(q=>isRole(text($,q)))) signature=e;
-      else if((t && !/^[.\s…_\-]+$/.test(t)) || artwork) kept.push(e);
+      else if((t && !/^[.\s…_\-]+$/.test(t) && !/^[-–—_.*~\s]*o[0o]o[-–—_.*~\s]*$/i.test(t)) || artwork) kept.push(e);
       $(e).remove();
     }
     const block=$(p(`NHẬN XÉT CỦA ${roles[i]}`,{size:16,bold:true,after:24,style:'WFGraduationForm'})).toArray();

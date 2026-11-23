@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { downloadWordFmt, formatDocx } from '../../api/tools.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { downloadWordFmt, formatDocx, previewDocxStructure } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
+import StructurePreview from './StructurePreview.jsx';
+import AiSkillPanel from './AiSkillPanel.jsx';
 import '../../styles/wordfmt-status.css';
+import '../../styles/wordfmt-preview.css';
 
 const WORD_FMT_STAGES = [
   { title: 'Kiểm tra tệp', inProgress: 'Đang kiểm tra tệp DOCX', description: 'Đang ước tính khả năng đọc tệp và mức độ tương thích.' },
@@ -56,6 +59,19 @@ export function buildCompletionCards(result, choices) {
       tone: 'info',
       title: 'Cấu trúc tài liệu',
       description: `Đã nhận diện ${chapterCount} chương trong tài liệu.`
+    });
+  }
+
+  const manualRoleOverrides = asCount(structure?.manualRoleOverrides);
+  const manualNotes = asCount(structure?.manualNotes);
+  if (manualRoleOverrides || manualNotes) {
+    cards.push({
+      tone: 'info',
+      title: 'Chỉnh sửa từ bản xem trước',
+      description: [
+        manualRoleOverrides && `Đã áp dụng ${manualRoleOverrides} đoạn đổi kiểu theo bạn chọn.`,
+        manualNotes && `Đã chèn ${manualNotes} ghi chú dạng comment vào file Word.`
+      ].filter(Boolean).join(' ')
     });
   }
 
@@ -179,8 +195,8 @@ export default function WordFmtPage() {
   const [file, setFile] = useState(null);
   const [documentType, setDocumentType] = useState('tieu_luan');
   const [instructor, setInstructor] = useState('');
-  const [student, setStudent] = useState(auth.user?.name || '');
-  const [studentId, setStudentId] = useState(auth.user?.mssv || '');
+  const [student, setStudent] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [className, setClassName] = useState('');
   const [topic, setTopic] = useState('');
   const [docTitle, setDocTitle] = useState('TIỂU LUẬN MÔN HỌC');
@@ -203,6 +219,72 @@ export default function WordFmtPage() {
   const [run, setRun] = useState(() => getToolRun('wordfmt') || { status: 'idle', result: null });
   const [downloading, setDownloading] = useState(false);
   const [confirmUI, askConfirm] = useConfirm();
+
+  // Structure preview & manual corrections (shown in Review step after submit).
+  const [inReview, setInReview] = useState(false);
+  const [skillOpen, setSkillOpen] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [previewDirty, setPreviewDirty] = useState(false);
+  const [roleOverrides, setRoleOverrides] = useState({});
+  const [paragraphNotes, setParagraphNotes] = useState({});
+  const previewRequestRef = useRef(0);
+
+  const loadPreview = useCallback(async (targetFile, overrides = {}) => {
+    if (!targetFile || !auth.token) return;
+    const requestId = ++previewRequestRef.current;
+    setPreviewLoading(true);
+    setPreviewError('');
+    try {
+      const body = new FormData();
+      body.append('document', targetFile);
+      if (Object.keys(overrides).length) body.append('roleOverrides', JSON.stringify(overrides));
+      const next = await previewDocxStructure(auth.token, body);
+      if (requestId !== previewRequestRef.current) return;
+      setPreview(next);
+      setPreviewDirty(false);
+    } catch (error) {
+      if (requestId !== previewRequestRef.current) return;
+      setPreviewError(error?.message || 'Không thể phân tích cấu trúc file.');
+    } finally {
+      if (requestId === previewRequestRef.current) setPreviewLoading(false);
+    }
+  }, [auth.token]);
+
+  useEffect(() => {
+    previewRequestRef.current += 1;
+    setInReview(false);
+    setPreview(null);
+    setPreviewError('');
+    setPreviewDirty(false);
+    setRoleOverrides({});
+    setParagraphNotes({});
+    setPreviewLoading(false);
+  }, [file]);
+
+  const changeRole = (index, role) => {
+    setRoleOverrides((current) => {
+      const next = { ...current };
+      if (role) next[index] = role; else delete next[index];
+      return next;
+    });
+    setPreviewDirty(true);
+  };
+
+  const changeNote = (index, note) => {
+    setParagraphNotes((current) => {
+      const next = { ...current };
+      if (note && note.trim()) next[index] = note; else delete next[index];
+      return next;
+    });
+  };
+
+  const resetCorrections = () => {
+    setRoleOverrides({});
+    setParagraphNotes({});
+    if (file) loadPreview(file);
+  };
 
   useEffect(() => {
     return subscribeToolRun('wordfmt', (next) => {
@@ -277,6 +359,14 @@ export default function WordFmtPage() {
       if (!proceed) return;
     }
 
+    setInReview(true);
+    if (!preview || previewDirty) {
+      loadPreview(file, roleOverrides);
+    }
+  };
+
+  const confirmAndFormat = () => {
+    if (!file || isRunning) return;
     const body = new FormData();
     body.append('document', file);
     const frontMatter = [
@@ -306,7 +396,12 @@ export default function WordFmtPage() {
     body.append('frontMatter', frontMatter);
     body.append('onlyExistingCaptions', onlyExistingCaptions);
     body.append('skipProposal', skipProposal);
+    if (Object.keys(roleOverrides).length) body.append('roleOverrides', JSON.stringify(roleOverrides));
+    const cleanNotes = Object.fromEntries(Object.entries(paragraphNotes)
+      .map(([index, note]) => [index, String(note).trim()]).filter(([, note]) => note));
+    if (Object.keys(cleanNotes).length) body.append('paragraphNotes', JSON.stringify(cleanNotes));
 
+    setInReview(false);
     startToolRun('wordfmt', () => formatDocx(auth.token, body), {
       stageCount: WORD_FMT_STAGES.length,
       summaryChoices: { includeCover, includeComments, includeThanks, onlyExistingCaptions, skipProposal }
@@ -357,11 +452,59 @@ export default function WordFmtPage() {
               Tự động định dạng lề A4, font chữ, Heading H1-H4, mục lục, bảng/hình, bìa chuẩn viện HTTT/BDU
             </p>
           </div>
-          <span className="badge-mini badge-pill-emerald">.NET 10 Engine</span>
+          <div className="wf-header-badges">
+            <button
+              type="button"
+              className="wf-skill-trigger"
+              onClick={() => {
+                setSkillOpen(true);
+                window.setTimeout(() => {
+                  document.getElementById('wordfmt-ai-skill')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                }, 0);
+              }}
+            >
+              Skill / Prompt cho AI
+            </button>
+            <span className="badge-mini badge-pill-emerald">.NET 10 Engine</span>
+          </div>
         </div>
       </div>
 
-      <div className="wordfmt-layout">
+      {inReview && file ? (
+        <StructurePreview
+          fileName={file.name}
+          coverInfo={{
+            includeCover,
+            documentType,
+            institution,
+            faculty,
+            docTitle,
+            topic,
+            course,
+            instructor,
+            student,
+            studentId,
+            className,
+            location,
+            month,
+            year
+          }}
+          preview={preview}
+          loading={previewLoading}
+          error={previewError}
+          dirty={previewDirty}
+          isSubmitting={isRunning}
+          overrides={roleOverrides}
+          notes={paragraphNotes}
+          onRoleChange={changeRole}
+          onNoteChange={changeNote}
+          onRefresh={() => loadPreview(file, roleOverrides)}
+          onReset={resetCorrections}
+          onBack={() => setInReview(false)}
+          onConfirm={confirmAndFormat}
+        />
+      ) : (
+        <div className="wordfmt-layout">
         {/* Left: Upload & Config Form */}
         <div className="wordfmt-card glass-panel">
           <form id="form-wordfmt" onSubmit={submit}>
@@ -820,6 +963,18 @@ export default function WordFmtPage() {
                     </article>
                   )}
                 </div>
+                {file && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-block wf-status-reformat-btn"
+                    onClick={() => {
+                      setInReview(true);
+                      if (!preview) loadPreview(file, roleOverrides);
+                    }}
+                  >
+                    Mở lại bản xem trước để chỉnh sửa
+                  </button>
+                )}
               </div>
             )}
 
@@ -837,6 +992,27 @@ export default function WordFmtPage() {
           </div>
         </div>
       </div>
+      )}
+      <AiSkillPanel
+        info={{
+          documentType,
+          docTitle,
+          institution,
+          faculty,
+          topic,
+          course,
+          instructor,
+          student,
+          studentId,
+          className,
+          location,
+          month,
+          year
+        }}
+        open={skillOpen}
+        onToggle={() => setSkillOpen((prev) => !prev)}
+        onNotify={notify}
+      />
       {confirmUI}
     </section>
   );

@@ -8,7 +8,10 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { AsyncQueue } from '../utils/async-queue.js';
-import { analyzeDocxStructure, formatStructuredDocx } from '../utils/docx-structure.js';
+import AdmZip from 'adm-zip';
+import {
+  analyzeDocxStructure, formatStructuredDocx, applyRoleOverrides, applyParagraphNotes, buildStructurePreview, ROLE_OVERRIDE_KEYS
+} from '../utils/docx-structure.js';
 import {
   normalizeFormattedDocx,
   normalizeSourceLists
@@ -25,6 +28,52 @@ const outputOwners = new Map();
 function rememberOutputOwner(outputFile, ownerMssv) {
   const owner = String(ownerMssv || '').trim().toUpperCase();
   if (owner) outputOwners.set(path.basename(outputFile), owner);
+}
+
+const MAX_ROLE_OVERRIDES = 5000;
+
+/**
+ * Accepts a JSON string or object { "<paragraphIndex>": "<roleKey>|auto" } and
+ * returns a sanitized plain object. Unknown keys/roles are dropped.
+ */
+export function normalizeRoleOverrides(raw) {
+  if (!raw) return {};
+  let value = raw;
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw); } catch { throw new Error('Dữ liệu chỉnh sửa cấu trúc không hợp lệ.'); }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result = {};
+  for (const [index, role] of Object.entries(value).slice(0, MAX_ROLE_OVERRIDES)) {
+    if (!/^\d{1,6}$/.test(index)) continue;
+    if (role !== 'auto' && !ROLE_OVERRIDE_KEYS.includes(role)) continue;
+    result[index] = role;
+  }
+  return result;
+}
+
+export function normalizeParagraphNotes(raw) {
+  if (!raw) return {};
+  let value = raw;
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw); } catch { throw new Error('Dữ liệu ghi chú không hợp lệ.'); }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result = {};
+  for (const [index, note] of Object.entries(value).slice(0, 500)) {
+    const text = typeof note === 'string' ? note.trim().slice(0, 1000) : '';
+    if (/^\d{1,6}$/.test(index) && text) result[index] = text;
+  }
+  return result;
+}
+
+function withRoleOverrides(inputPath, overrides, targetPath, notes = {}) {
+  if (!Object.keys(overrides).length && !Object.keys(notes).length) return inputPath;
+  const archive = new AdmZip(inputPath);
+  applyRoleOverrides(archive, overrides);
+  applyParagraphNotes(archive, notes);
+  archive.writeZip(targetPath);
+  return targetPath;
 }
 
 // Concurrency Queue: max 3 concurrent dotnet processes by default (configurable via env)
@@ -85,7 +134,9 @@ export const WordFmtService = {
     // Safe default for uploaded academic documents. Callers can opt in to
     // placeholder insertion explicitly when they are preparing a new draft.
     onlyExistingCaptions = true,
-    skipProposal = false
+    skipProposal = false,
+    roleOverrides = {},
+    paragraphNotes = {}
   }) {
     if (!['tieu_luan', 'do_an_tot_nghiep'].includes(documentType)) {
       throw new Error('Loại tài liệu không hợp lệ.');
@@ -137,14 +188,27 @@ export const WordFmtService = {
     const structure = analyzeDocxStructure(inputPath);
     if (documentType === 'do_an_tot_nghiep' || documentType === 'tieu_luan' || structure.requiresStructuredFormatting || onlyExistingCaptions || skipProposal) {
       return wordFmtQueue.enqueue(async () => {
-        const result = formatStructuredDocx(inputPath, outputPath, {
-          profile: runtimeProfile, instructor, student, studentId, topic, className,
-          documentTitle, institution, institute, faculty, course, location, month, year,
-          documentMode, documentType, frontMatter,
-          onlyExistingCaptions, skipProposal
-        }, structure);
-        rememberOutputOwner(path.basename(outputPath), ownerMssv);
-        return { ...result, outputFile: path.basename(outputPath), stdout: '' };
+        const overridePath = path.join(TEMP_DIR, `overrides_${id}.docx`);
+        try {
+          const overrides = normalizeRoleOverrides(roleOverrides);
+          const notes = normalizeParagraphNotes(paragraphNotes);
+          const sourcePath = withRoleOverrides(inputPath, overrides, overridePath, notes);
+          const sourceStructure = sourcePath === inputPath ? structure : analyzeDocxStructure(sourcePath);
+          const result = formatStructuredDocx(sourcePath, outputPath, {
+            profile: runtimeProfile, instructor, student, studentId, topic, className,
+            documentTitle, institution, institute, faculty, course, location, month, year,
+            documentMode, documentType, frontMatter,
+            onlyExistingCaptions, skipProposal
+          }, sourceStructure);
+          if (result.report?.structure) {
+            result.report.structure.manualRoleOverrides = Object.keys(overrides).length;
+            result.report.structure.manualNotes = Object.keys(notes).length;
+          }
+          rememberOutputOwner(path.basename(outputPath), ownerMssv);
+          return { ...result, outputFile: path.basename(outputPath), stdout: '' };
+        } finally {
+          try { if (fs.existsSync(overridePath)) fs.unlinkSync(overridePath); } catch { /* best effort */ }
+        }
       });
     }
     fs.writeFileSync(runtimeProfilePath, JSON.stringify(runtimeProfile, null, 2));
@@ -262,6 +326,26 @@ export const WordFmtService = {
           });
         });
       });
+    });
+  },
+
+  /**
+   * Structure preview for the editor: how each paragraph will be classified.
+   * Paragraph indexes match the `roleOverrides` accepted by formatDocx for the
+   * same uploaded file.
+   */
+  async previewStructure(inputPath, roleOverrides = {}) {
+    if (!fs.existsSync(inputPath)) throw new Error('Không tìm thấy file tải lên.');
+    return wordFmtQueue.enqueue(async () => {
+      const overrides = normalizeRoleOverrides(roleOverrides);
+      let archive;
+      try {
+        archive = new AdmZip(inputPath);
+        if (Object.keys(overrides).length) applyRoleOverrides(archive, overrides);
+      } catch {
+        throw new Error('File Word không hợp lệ hoặc bị hỏng.');
+      }
+      return buildStructurePreview(analyzeDocxStructure(archive));
     });
   },
 

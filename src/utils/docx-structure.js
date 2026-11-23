@@ -172,6 +172,108 @@ function numberingReader(archive) {
   };
 }
 
+// Manual role overrides chosen in the preview editor. They are stored as hidden
+// bookmarks (leading underscore) so they survive every re-analysis pass and
+// remain valid OOXML; re-formatting an output keeps the user's decisions.
+export const ROLE_OVERRIDE_KEYS = ['chapter', 'heading2', 'heading3', 'heading4', 'major_title', 'front_title',
+  'intro_title', 'body', 'figure_caption', 'table_caption'];
+const ROLE_BOOKMARK_PREFIX = '_WFRole_';
+
+function forcedRoleOf($, p) {
+  const name = p.children(tag('bookmarkStart')).toArray().map(e => $(e).attr('w:name') || '')
+    .find(n => n.startsWith(ROLE_BOOKMARK_PREFIX));
+  const key = name?.slice(ROLE_BOOKMARK_PREFIX.length);
+  return ROLE_OVERRIDE_KEYS.includes(key) ? key : null;
+}
+
+/**
+ * Apply preview-editor role overrides to an archive in place.
+ * @param {AdmZip} archive
+ * @param {Record<string,string>} overrides paragraph index (as reported by
+ *   analyzeDocxStructure on the same input) → role key, or 'auto' to clear.
+ * @returns {number} number of paragraphs changed
+ */
+export function applyRoleOverrides(archive, overrides = {}) {
+  const entries = Object.entries(overrides || {}).filter(([index, role]) =>
+    /^\d+$/.test(index) && (role === 'auto' || ROLE_OVERRIDE_KEYS.includes(role)));
+  if (!entries.length) return 0;
+  const $ = parse(archive.readAsText('word/document.xml'));
+  const paragraphs = $(tag('body')).find(tag('p')).toArray();
+  let nextId = Math.max(880000, ...$(tag('bookmarkStart')).toArray().map(e => Number($(e).attr('w:id')) || 0)) + 1;
+  let changed = 0;
+  for (const [index, role] of entries) {
+    const element = paragraphs[Number(index)];
+    if (!element) continue;
+    const p = $(element);
+    p.children(tag('bookmarkStart')).each((_, e) => {
+      const node = $(e);
+      if (!(node.attr('w:name') || '').startsWith(ROLE_BOOKMARK_PREFIX)) return;
+      const id = node.attr('w:id');
+      p.children(tag('bookmarkEnd')).filter((__, end) => $(end).attr('w:id') === id).remove();
+      node.remove();
+    });
+    if (role !== 'auto') {
+      const id = nextId++;
+      const marker = `<w:bookmarkStart w:id="${id}" w:name="${ROLE_BOOKMARK_PREFIX}${role}"/><w:bookmarkEnd w:id="${id}"/>`;
+      const pPr = child(p, 'pPr');
+      if (pPr.length) pPr.after(marker); else p.prepend(marker);
+    }
+    changed++;
+  }
+  archive.updateFile('word/document.xml', Buffer.from(xmlOf($)));
+  return changed;
+}
+
+/**
+ * Attach preview-editor notes as Word comments, so the author can find the
+ * places they flagged directly in the formatted document.
+ * @param {AdmZip} archive
+ * @param {Record<string,string>} notes paragraph index → note text
+ * @returns {number} number of comments added
+ */
+export function applyParagraphNotes(archive, notes = {}, author = 'BDU WordFmt') {
+  const entries = Object.entries(notes || {})
+    .map(([index, note]) => [index, String(note ?? '').trim().slice(0, 1000)])
+    .filter(([index, note]) => /^\d+$/.test(index) && note);
+  if (!entries.length) return 0;
+  const $ = parse(archive.readAsText('word/document.xml'));
+  const paragraphs = $(tag('body')).find(tag('p')).toArray();
+  const commentsXml = archive.readAsText('word/comments.xml') || `<w:comments xmlns:w="${W}"></w:comments>`;
+  const $c = parse(commentsXml);
+  let nextId = Math.max(-1, ...$c(tag('comment')).toArray().map(e => Number($c(e).attr('w:id')) || 0),
+    ...$(tag('commentRangeStart')).toArray().map(e => Number($(e).attr('w:id')) || 0)) + 1;
+  const date = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  let added = 0;
+  for (const [index, note] of entries) {
+    const element = paragraphs[Number(index)];
+    if (!element) continue;
+    const p = $(element), id = nextId++;
+    const pPr = child(p, 'pPr');
+    const start = `<w:commentRangeStart w:id="${id}"/>`;
+    if (pPr.length) pPr.after(start); else p.prepend(start);
+    p.append(`<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`);
+    const body = note.split(/\r?\n/).map(line => `<w:p><w:r><w:t xml:space="preserve">${esc(line)}</w:t></w:r></w:p>`).join('');
+    $c(tag('comments')).append(`<w:comment w:id="${id}" w:author="${esc(author)}" w:initials="WF" w:date="${date}">${body}</w:comment>`);
+    added++;
+  }
+  if (!added) return 0;
+  archive.updateFile('word/document.xml', Buffer.from(xmlOf($)));
+  const commentsOut = xmlOf($c);
+  if (archive.getEntry('word/comments.xml')) archive.updateFile('word/comments.xml', Buffer.from(commentsOut));
+  else archive.addFile('word/comments.xml', Buffer.from(commentsOut));
+  const rels = parse(archive.readAsText('word/_rels/document.xml.rels'));
+  if (!rels('Relationship').toArray().some(e => /\/comments$/.test(rels(e).attr('Type') || ''))) {
+    rels('Relationships').append(`<Relationship Id="wfComments" Type="${R}/comments" Target="comments.xml"/>`);
+    archive.updateFile('word/_rels/document.xml.rels', Buffer.from(rels.xml()));
+  }
+  const types = parse(archive.readAsText('[Content_Types].xml'));
+  if (!types('Override').toArray().some(e => types(e).attr('PartName') === '/word/comments.xml')) {
+    types('Types').append('<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>');
+    archive.updateFile('[Content_Types].xml', Buffer.from(types.xml()));
+  }
+  return added;
+}
+
 export function analyzeDocxStructure(inputPath) {
   const archive = typeof inputPath === 'string' ? new AdmZip(inputPath) : inputPath;
   const $ = parse(archive.readAsText('word/document.xml'));
@@ -212,8 +314,43 @@ export function analyzeDocxStructure(inputPath) {
     rec.numbering = text ? nextNumber(p) : {marker:'',level:0};
     if (insideTable) { rec.role = 'table'; return; }
     if (p.parents(tag('txbxContent')).length) { rec.role = 'embedded'; return; }
-    if (/^DE CUONG(?:\s|$)/.test(key)) { region = 'proposal'; rec.role = 'proposal_title'; summary = false; }
-    else if (/^(?:NHAN XET|LOI CAM ON|LOI CAM DOAN|MUC LUC|DANH MUC)(?:\s|$)/.test(key) && text.length < 110) {
+    const forced = text ? forcedRoleOf($, p) : null;
+    const isBullet = rec.numbering.format === 'bullet';
+    const isUpper = /\p{L}/u.test(text) && text === text.toLocaleUpperCase('vi-VN');
+    const beforeContent = ['cover', 'front', 'proposal'].includes(region);
+    // List items such as "Danh mục môn học." inside a chapter are prose, not a
+    // new front-matter page. After the body starts, only an uppercase title
+    // without list numbering or trailing punctuation can open front matter.
+    const frontTitleLike = !isBullet && !/[.;,]$/.test(text) && text.length < 110 && (beforeContent || isUpper);
+    const frontKey = /^(?:NHAN XET|LOI CAM ON|LOI CAM DOAN|MUC LUC|DANH MUC)(?:\s|$)/.test(key)
+      || (beforeContent && /^(?:TOM TAT(?: DE TAI| DO AN| KHOA LUAN| TIEU LUAN)?|ABSTRACT|LOI NOI DAU|LOI GIOI THIEU|DANH SACH (?:HINH|BANG|CAC)[\p{L} ]*)$/u.test(key));
+    if (forced) {
+      rec.forced = forced;
+      const numberedText = rec.numbering.marker && !isBullet ? `${rec.numbering.marker} ${text}` : text;
+      rec.displayText = numberedText; summary = false;
+      if (forced === 'chapter') {
+        const chapterNumber = numberedText.match(/^CHƯƠNG\s+(\d+)/iu)?.[1] || String((currentChapter || 0) + 1);
+        rec.role = 'chapter'; rec.level = 1; rec.number = chapterNumber;
+        region = 'body'; currentChapter = Number(chapterNumber);
+      } else if (/^heading[2-4]$/.test(forced)) {
+        rec.role = 'heading'; rec.level = Number(forced.at(-1));
+        rec.number = numberedText.match(/^(\d+(?:\.\d+)*)\.?\s/u)?.[1] || '';
+        if (region === 'cover') region = 'front';
+      } else if (forced === 'major_title') {
+        rec.role = 'major_title'; currentChapter = null;
+        if (region === 'cover') region = 'front';
+      } else if (forced === 'front_title') {
+        rec.role = 'front_title';
+        if (region === 'cover') region = 'front';
+      } else if (forced === 'intro_title') {
+        rec.role = 'intro_title'; region = 'introduction';
+      } else {
+        rec.role = forced;
+        if (region === 'cover') region = 'front';
+      }
+    }
+    else if (/^DE CUONG(?:\s|$)/.test(key)) { region = 'proposal'; rec.role = 'proposal_title'; summary = false; }
+    else if (frontKey && frontTitleLike) {
       region = 'front'; rec.role = 'front_title'; summary = false;
     } else if (['MO DAU','PHAN MO DAU','LOI MO DAU'].includes(key)) {
       region = 'introduction'; rec.role = 'intro_title'; summary = false;
@@ -233,11 +370,18 @@ export function analyzeDocxStructure(inputPath) {
         region = 'body'; summary = false; currentChapter = Number(rec.number);
       } else if (region === 'body') {
         const match = numberedText.match(/^(\d+(?:\.\d+){1,3})\.?\s+\S/u);
+        // Outline levels inherited from Normal are a common template mistake;
+        // only direct levels or a dedicated (non-Normal) style count.
+        const styleOutline = styleId && !/^(?:Normal|WFBody)$/i.test(styleId) ? rec.numbering.outline : undefined;
+        const outline = Number(val(pp, 'outlineLvl') ?? styleOutline ?? styleId.match(/^Heading(\d)$/)?.[1] - 1);
         if (match) {
           rec.role = 'heading'; rec.level = match[1].split('.').length; rec.number = match[1]; rec.displayText = numberedText;
           if (Number(match[1].split('.')[0]) !== currentChapter) {
             warnings.push(`Mục ${match[1]} chưa khớp chương đang xét; giữ số nguồn.`);
           }
+        } else if (outline >= 1 && outline <= 3 && text.length <= 200 && !isBullet) {
+          // Word heading styles without a typed number ("Heading 2" + text).
+          rec.role = 'heading'; rec.level = outline + 1; rec.number = ''; rec.displayText = numberedText;
         }
       } else if (region === 'introduction') {
         if (/^\d+[.)]\s+/.test(numberedText) && (explicitHeading || child(pp, 'keepNext').length)) {
@@ -259,6 +403,7 @@ export function analyzeDocxStructure(inputPath) {
       }
     }
     rec.region = region; rec.chapter = currentChapter; rec.part = currentPart;
+    if (forced) return;
     if (region === 'proposal' && rec.role !== 'proposal_title') rec.role = 'proposal';
     if (region === 'appendix' && rec.role !== 'major_title') rec.role = 'appendix';
     if (region === 'cover') rec.role = 'cover';
@@ -283,6 +428,88 @@ export function analyzeDocxStructure(inputPath) {
       chapterSummariesPreserved: records.filter(r => r.role === 'chapter_summary').length, warnings } };
 }
 
+const PREVIEW_ROLE = { chapter: 'chapter', major_title: 'major_title', front_title: 'front_title', intro_title: 'intro_title',
+  part_title: 'part_title', intro_heading: 'intro_heading', figure_caption: 'figure_caption', table_caption: 'table_caption',
+  body: 'body', chapter_summary: 'body', proposal: 'proposal', proposal_title: 'proposal_title', appendix: 'appendix', cover: 'cover' };
+
+function allTextRunsBold($, p) {
+  const runs = p.find(tag('r')).toArray().filter(run => textOf($(run)).trim());
+  return runs.length > 0 && runs.every(run => isBoldPropertyOn($, $(run).children(tag('rPr')).first()[0]));
+}
+
+function suspectHeading($, rec) {
+  if (!['body', 'chapter_summary'].includes(rec.role) || rec.region === 'cover' || !rec.text) return null;
+  const text = rec.text;
+  if (text.length > 150 || /[.;,]$/.test(text) || rec.numbering?.format === 'bullet') return null;
+  const key = keyOf(text).replace(/[.:]+$/, '');
+  const numbered = text.match(/^(\d+(?:\.\d+){0,3})\.?\s+\S/u);
+  if (/^CHƯƠNG\s+\d+/iu.test(text)) return { reason: 'Bắt đầu bằng "Chương"', suggest: 'chapter' };
+  if (/^(?:TOM TAT|ABSTRACT|LOI NOI DAU|LOI MO DAU|MO DAU|KET LUAN|TAI LIEU THAM KHAO|PHU LUC|DANH MUC)(?:\s|$)/.test(key)) {
+    return { reason: 'Từ khóa tiêu đề lớn', suggest: /^(?:TOM TAT|ABSTRACT|LOI NOI DAU|DANH MUC)/.test(key) ? 'front_title' : 'major_title' };
+  }
+  if (numbered && numbered[1].includes('.') && text.length <= 120) {
+    return { reason: 'Có số mục như tiêu đề', suggest: `heading${Math.min(4, numbered[1].split('.').length)}` };
+  }
+  const isUpper = /\p{L}{2}/u.test(text) && text === text.toLocaleUpperCase('vi-VN');
+  if (isUpper && text.length >= 4 && text.length <= 100) return { reason: 'Chữ in hoa, ngắn', suggest: 'major_title' };
+  if (text.length <= 90 && !/:/.test(text.slice(0, -1)) && allTextRunsBold($, $(rec.element))) {
+    return { reason: 'In đậm toàn đoạn', suggest: rec.region === 'body' ? 'heading3' : 'front_title' };
+  }
+  return null;
+}
+
+/**
+ * Compact, JSON-safe outline of a document for the preview editor. `i` is the
+ * paragraph index accepted by applyRoleOverrides for the same input file.
+ */
+export function buildStructurePreview(analysis, { maxText = 280 } = {}) {
+  const { $, records } = analysis;
+  const items = [];
+  const seenTables = new Set(), seenIndexes = new Set();
+  for (const rec of records) {
+    const p = $(rec.element);
+    if (rec.inIndex) {
+      const id = rec.indexId ?? 'index';
+      if (!seenIndexes.has(id)) {
+        seenIndexes.add(id);
+        items.push({ i: rec.index, kind: 'index', t: 'Mục lục / danh mục tự động (sẽ được tạo lại)', role: 'index', region: rec.region });
+      }
+      continue;
+    }
+    if (rec.insideTable) {
+      const table = p.parents(tag('tbl')).last();
+      if (!table.length || seenTables.has(table[0])) continue;
+      seenTables.add(table[0]);
+      const cells = table.find(tag('tc')).toArray().slice(0, 4).map(c => textOf($(c)).trim()).filter(Boolean);
+      items.push({ i: rec.index, kind: 'table', t: cells.join(' | ').slice(0, maxText), rows: table.children(tag('tr')).length, role: 'table', region: rec.region });
+      continue;
+    }
+    if (rec.role === 'embedded') continue;
+    if (!rec.text) {
+      if (p.find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length) {
+        items.push({ i: rec.index, kind: 'image', t: '', role: 'image', region: rec.region });
+      }
+      continue;
+    }
+    const role = rec.role === 'heading' ? `heading${rec.level}` : PREVIEW_ROLE[rec.role] || 'body';
+    const item = { i: rec.index, kind: 'p', t: (rec.displayText || rec.text).slice(0, maxText), role, region: rec.region };
+    if (rec.forced) item.forced = true;
+    const suspect = suspectHeading($, rec);
+    if (suspect) { item.suspect = suspect.reason; item.suggest = suspect.suggest; }
+    items.push(item);
+  }
+  return {
+    items,
+    paragraphCount: records.length,
+    summary: {
+      chapterCount: analysis.chapters.length,
+      headingCount: records.filter(r => r.role === 'heading').length,
+      suspectCount: items.filter(item => item.suspect).length,
+      forcedCount: items.filter(item => item.forced).length
+    }
+  };
+}
+
 function ensureStyles(archive, profile) {
   const $ = parse(archive.readAsText('word/styles.xml'));
   const ids = ['WFBody', ...[1,2,3,4].map(i => `WFHeading${i}`), 'WFCaption', 'TableofFigures', 'TOC1','TOC2','TOC3','TOC4'];
@@ -301,6 +528,12 @@ function ensureStyles(archive, profile) {
       pp.append(`<w:spacing w:before="0" w:after="0" w:line="288" w:lineRule="auto"/><w:ind w:left="${id==='TableofFigures'?0:(Number(id.at(-1))-1)*360}" w:right="360"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs>`);
     }
     $(tag('style')).filter((_, s) => $(s).attr('w:styleId') === id).remove();
+    if (['WFBody', 'WFCaption'].includes(id)) {
+      // Source templates sometimes give Normal an outline level; body text must
+      // never inherit it into the navigation pane or outline-based TOCs.
+      let pp = child(add(e), 'pPr'); if (!pp.length) { add(e).append('<w:pPr/>'); pp = child(add(e), 'pPr'); }
+      child(pp, 'outlineLvl').remove(); pp.append('<w:outlineLvl w:val="9"/>');
+    }
     $(tag('styles')).append(add.xml(e));
   });
   for (const [id, base, level] of [['WFIntroTitle','WFHeading1',0],['WFPartTitle','WFHeading1',0],['WFMajorTitle','WFHeading1',0],['WFIntroHeading','WFHeading2',1],['WFFrontTitle','WFHeading1',9],['WFFigureCaption','WFCaption',9],['WFTableCaption','WFCaption',9]]) {
@@ -812,15 +1045,57 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       + (options.className?coverLine(`Lớp: ${options.className}`,14):'')
       + coverLine(`${options.location || profile.cover?.location || 'Thành phố Hồ Chí Minh'}${options.month?', tháng '+options.month:''}${options.year?', năm '+options.year:''}`,14,70,true));
   }
+  const commentLine='<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="460" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="left"/></w:pPr><w:r><w:tab/></w:r></w:p>';
   for (const [option,label] of [['comments','NHẬN XÉT CỦA GIẢNG VIÊN'],['thanks','LỜI CẢM ƠN']]) {
     if(graduation && option==='comments')continue;
     if (!requested.has(option) || records.some(r=>r.role==='front_title' && (option==='thanks'?keyOf(r.text)==='LOI CAM ON':keyOf(r.text).startsWith('NHAN XET')))) continue;
     const target=starts.find(s=>s.role==='front_title'||s.role==='intro_title'||s.role==='chapter'||s.role==='part_title');
     if (!target) continue;
-    const commentLine='<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="460" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="left"/></w:pPr><w:r><w:tab/></w:r></w:p>';
     const nodes=$(paragraph(label,'WFFrontTitle')+(option==='comments'?commentLine.repeat(24):paragraph('')));
     $(target.node).before(nodes);
     starts.push({node:nodes[0],role:'front_title',title:label});
+  }
+  // Existing coursework review pages (e.g. "NHẬN XÉT CỦA GIẢNG VIÊN HƯỚNG DẪN"
+  // / "NHẬN XÉT CỦA CÁN BỘ PHẢN BIỆN") often arrive without dotted writing lines.
+  // Fill them with dotted lines before the signature block so they match BDU form layout.
+  if (!graduation) {
+    const allChildren = body.children().toArray();
+    const startSet = new Set(starts.map(s => s.node));
+    const isDivider = t => /^[-–—_.*~\s]*o[0o]o[-–—_.*~\s]*$/i.test(t);
+    const isSignature = el => {
+      const k = keyOf(textOf($(el)));
+      if (el.name === 'w:tbl') return /(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)|NGAY.*THANG.*NAM/.test(k);
+      return /^(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)$/.test(k) || /(?:THANH PHO|BINH DUONG|NGAY).*THANG.*NAM/.test(k);
+    };
+    for (const start of starts) {
+      if (start.role !== 'front_title' || !keyOf(start.title).startsWith('NHAN XET')) continue;
+      const from = allChildren.indexOf(start.node);
+      if (from < 0) continue;
+      let to = from + 1;
+      while (to < allChildren.length && !startSet.has(allChildren[to])) to++;
+      const sectionNodes = allChildren.slice(from + 1, to);
+      const hasDottedLines = sectionNodes.some(el =>
+        $(el).find(`${tag('tab')}[w\\:leader="dot"]`).length > 0 || /^[.\s…_]{5,}$/.test(textOf($(el)).trim())
+      );
+      if (hasDottedLines) continue;
+      let signatureNode = null;
+      let hasWrittenReview = false;
+      for (const el of sectionNodes) {
+        const t = textOf($(el)).trim();
+        if (!signatureNode && isSignature(el)) { signatureNode = el; continue; }
+        if (el.name === 'w:p' && isDivider(t)) { prop($(el), 'jc', '<w:jc w:val="center"/>'); continue; }
+        if (t && !/^[.\s…_\-]+$/.test(t)) hasWrittenReview = true;
+      }
+      const lineCount = hasWrittenReview ? 4 : (signatureNode ? 20 : 24);
+      const lines = $(commentLine.repeat(lineCount));
+      if (signatureNode) {
+        $(signatureNode).before(lines);
+      } else if (sectionNodes.length) {
+        $(sectionNodes.at(-1)).after(lines);
+      } else {
+        $(start.node).after(lines);
+      }
+    }
   }
   // Rebuild only index pages already present in the source. Static lists and
   // stale cached Word results both become one canonical tool-owned field;
