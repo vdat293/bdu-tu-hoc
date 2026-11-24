@@ -9,6 +9,8 @@ export const ROLE_OPTIONS = [
   { value: 'heading4', label: 'Heading 4 · Mục 1.1.1.1', short: 'H4' },
   { value: 'intro_title', label: 'Tiêu đề Mở đầu', short: 'Mở đầu' },
   { value: 'body', label: 'Đoạn văn nội dung', short: 'Nội dung' },
+  { value: 'equation', label: 'Công thức toán học (căn giữa, 13pt)', short: 'Công thức toán' },
+  { value: 'signature', label: 'Khối chữ ký (lệch phải, 13pt)', short: 'Khối chữ ký' },
   { value: 'figure_caption', label: 'Chú thích hình', short: 'Chú thích hình' },
   { value: 'table_caption', label: 'Chú thích bảng', short: 'Chú thích bảng' }
 ];
@@ -32,7 +34,7 @@ const OUTLINE_LEVEL = {
   heading2: 2, intro_heading: 2, heading3: 3, heading4: 4
 };
 
-const QUICK_ROLES = ['chapter', 'major_title', 'heading2', 'heading3', 'heading4', 'body'];
+const QUICK_ROLES = ['chapter', 'major_title', 'heading2', 'heading3', 'heading4', 'equation', 'body'];
 const LOCKED_ROLES = new Set(['proposal', 'appendix', 'proposal_title']);
 
 export function effectiveRole(item, overrides) {
@@ -46,12 +48,27 @@ function isEditable(item) {
   return item.kind === 'p' && !LOCKED_ROLES.has(item.role);
 }
 
+function currentVietnamMonthYear() {
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      month: 'numeric',
+      year: 'numeric'
+    }).formatToParts(now);
+    const month = parts.find((p) => p.type === 'month')?.value;
+    const year = parts.find((p) => p.type === 'year')?.value;
+    if (month && year) return { month: String(Number(month)), year };
+  } catch { /* fallback */ }
+  return { month: String(now.getMonth() + 1), year: String(now.getFullYear()) };
+}
+
 function formatCoverDate(coverInfo) {
-  const parts = [];
-  if (coverInfo.location) parts.push(coverInfo.location);
-  if (coverInfo.month) parts.push(`tháng ${coverInfo.month}`);
-  if (coverInfo.year) parts.push(`năm ${coverInfo.year}`);
-  return parts.join(', ');
+  const { month: curMonth, year: curYear } = currentVietnamMonthYear();
+  const loc = String(coverInfo.location || 'Thành phố Hồ Chí Minh').trim();
+  const resolvedMonth = String(coverInfo.month || '').trim() || curMonth;
+  const resolvedYear = String(coverInfo.year || '').trim() || curYear;
+  return `${loc}, tháng ${resolvedMonth} năm ${resolvedYear}`;
 }
 
 export default function StructurePreview({

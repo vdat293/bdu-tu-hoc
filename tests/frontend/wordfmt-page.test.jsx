@@ -202,14 +202,65 @@ describe('WordFmtPage', () => {
 
     const code = screen.getByLabelText(/Nội dung skill cho AI/i);
     expect(code).toHaveTextContent('ThS. Nguyễn Hồ Hải');
+    expect(code).toHaveTextContent('ThS. NGUYỄN HỒ HẢI');
     expect(code).toHaveTextContent('Website quản lý học tập');
     expect(code).toHaveTextContent('20 dòng chấm ngang');
+    expect(code).toHaveTextContent('NGHIÊM CẤM TUYỆT ĐỐI TỰ VẼ LOGO GIẢ');
+    expect(code).toHaveTextContent('.agents/skills/bdu-academic-docx/assets/bdu-cover-logo.png');
+    expect(code).toHaveTextContent('https://sv.bdu.io.vn/assets/images/logo-hao-quang-transparent.png');
+
+    const logoDownload = screen.getByRole('link', { name: /Tải Logo chuẩn/i });
+    expect(logoDownload).toHaveAttribute('href', '/assets/images/logo-hao-quang-transparent.png');
 
     fireEvent.click(screen.getByRole('tab', { name: /Agent Skill/i }));
     expect(code).toHaveTextContent('name: bdu-academic-docx');
+    expect(code).toHaveTextContent('resolve_bdu_logo');
 
     fireEvent.click(screen.getByRole('button', { name: /Sao chép Prompt/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(writeText.mock.calls[0][0]).toContain('name: bdu-academic-docx');
+  });
+
+  it('switches prompt specification accurately when selecting graduation thesis', () => {
+    render(<WordFmtPage />);
+    fireEvent.change(screen.getByLabelText(/Loại tài liệu/i), { target: { value: 'do_an_tot_nghiep' } });
+    fireEvent.click(screen.getByRole('button', { name: /Xem & tùy chọn/i }));
+
+    const code = screen.getByLabelText(/Nội dung skill cho AI/i);
+    expect(code).toHaveTextContent('2 trang bìa giống hệt nhau 100%: Bìa chính & Bìa phụ');
+    expect(code).toHaveTextContent('NHẬN XÉT CỦA GIẢNG VIÊN HƯỚNG DẪN');
+    expect(code).toHaveTextContent('NHẬN XÉT CỦA GIẢNG VIÊN PHẢN BIỆN');
+    expect(code).toHaveTextContent('VIỆN TRÍ TUỆ NHÂN TẠO VÀ CHUYỂN ĐỔI SỐ');
+    expect(code).toHaveTextContent('public/assets/images/logo-hao-quang-transparent.png');
+    expect(code).toHaveTextContent('Giảng viên hướng dẫn:');
+    expect(code).not.toHaveTextContent('Người hướng dẫn:');
+    expect(code).toHaveTextContent('CHỈ BẮT ĐẦU HIỂN THỊ TỪ LỜI CẢM ƠN TRỞ ĐI');
+  });
+
+  it('auto-fills current month/year in cover preview and supports equation & signature roles', async () => {
+    const richPreview = {
+      items: [
+        { i: 2, kind: 'p', t: 'SINH VIÊN THỰC HIỆN', role: 'signature', region: 'front' },
+        { i: 5, kind: 'p', t: 'p = 1/(1 + exp(-z))', role: 'equation', region: 'body' }
+      ],
+      paragraphCount: 6,
+      summary: { chapterCount: 1, headingCount: 0, equationCount: 1, suspectCount: 0, forcedCount: 0 }
+    };
+    mocks.previewDocxStructure.mockResolvedValueOnce(richPreview);
+    render(<WordFmtPage />);
+    const file = new File(['DOCX fixture'], 'toan.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+    fireEvent.change(document.querySelector('#docx-file-input'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText(/Giảng Viên Hướng Dẫn/i), { target: { value: 'ThS. Nguyễn Hồ Hải' } });
+    fireEvent.change(screen.getByLabelText(/Tên Sinh Viên \/ Nhóm/i), { target: { value: 'Nguyễn Vũ Đạt' } });
+    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu chuẩn hóa văn bản/i }));
+
+    await waitFor(() => expect(mocks.previewDocxStructure).toHaveBeenCalled());
+    const coverPreview = await screen.findByLabelText(/Khung trang bìa dự kiến/i);
+    const currentYear = String(new Date().getFullYear());
+    expect(coverPreview).toHaveTextContent(new RegExp(`Thành phố Hồ Chí Minh, tháng \\d{1,2} năm ${currentYear}`));
+    expect(screen.getByText('Khối chữ ký')).toBeInTheDocument();
+    expect(screen.getByText('Công thức toán')).toBeInTheDocument();
   });
 });

@@ -86,6 +86,15 @@ export function buildCompletionCards(result, choices) {
     });
   }
 
+  const equationsFormatted = asCount(outputNormalization?.equationsFormatted);
+  if (equationsFormatted) {
+    cards.push({
+      tone: 'info',
+      title: 'Công thức toán học',
+      description: `Đã chuyển đổi chuẩn Word Equation (OMML) và căn giữa ${equationsFormatted} công thức toán học.`
+    });
+  }
+
   const tablesResized = asCount(outputNormalization?.tablesResized);
   if (tablesResized !== null) {
     cards.push({
@@ -695,7 +704,7 @@ export default function WordFmtPage() {
                     id="wf-month"
                     className="form-input"
                     inputMode="numeric"
-                    placeholder="Ví dụ: 9"
+                    placeholder={`Để trống = tháng hiện tại (${new Date().getMonth() + 1})`}
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
                   />
@@ -707,7 +716,7 @@ export default function WordFmtPage() {
                     id="wf-year"
                     className="form-input"
                     inputMode="numeric"
-                    placeholder="Ví dụ: 2026"
+                    placeholder={`Để trống = năm hiện tại (${new Date().getFullYear()})`}
                     value={year}
                     onChange={(e) => setYear(e.target.value)}
                   />
@@ -996,6 +1005,7 @@ export default function WordFmtPage() {
       <AiSkillPanel
         info={{
           documentType,
+          documentMode: mode,
           docTitle,
           institution,
           faculty,

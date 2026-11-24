@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import { prepareGraduation, prepareCourseworkCover, isolateProposalStyles } from './docx-graduation.js';
-import { readCoverMetadata } from './docx-graduation-cover.js';
+import { readCoverMetadata, getCurrentMonthYear, computeBalancedCenteredWrap } from './docx-graduation-cover.js';
 import {captureProposalBlock, markProposalBlock, restoreProposalBlock} from './docx-proposal-preservation.js';
 import { repairDataTable, normalizeStructuredCaptions, ensureAcknowledgementFrame, convertTabbedTableBlocks } from './docx-layout.js';
+import { upgradeEquationParagraphToOmml } from './docx-math.js';
 import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
 import {
@@ -13,6 +14,7 @@ import {
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 const parse = xml => load(xml, { xml: true });
 // Keep readable Unicode while retaining XML escapes for syntax characters.
 const xmlOf = ($, node) => $.xml(node).replace(/&#x([0-9a-f]+);/gi, (m, n) => Number.parseInt(n,16) > 127 ? String.fromCodePoint(Number.parseInt(n,16)) : m);
@@ -20,6 +22,8 @@ const tag = name => `w\\:${name}`;
 const child = (node, name) => node.children(tag(name));
 const val = (node, name) => child(node, name).attr('w:val');
 const textOf = node => node.find(tag('t')).toArray().map(n => n.children?.map(c => c.data || '').join('')).join('');
+const mathTextOf = node => node.find('m\\:t').toArray().map(n => n.children?.map(c => c.data || '').join('')).join('');
+const hasMathNode = node => node.find('m\\:oMathPara, m\\:oMath').length > 0;
 const keyOf = s => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'D').toUpperCase().replace(/\s+/g, ' ').trim();
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const cm = n => Math.round(n * 1440 / 2.54);
@@ -176,7 +180,7 @@ function numberingReader(archive) {
 // bookmarks (leading underscore) so they survive every re-analysis pass and
 // remain valid OOXML; re-formatting an output keeps the user's decisions.
 export const ROLE_OVERRIDE_KEYS = ['chapter', 'heading2', 'heading3', 'heading4', 'major_title', 'front_title',
-  'intro_title', 'body', 'figure_caption', 'table_caption'];
+  'intro_title', 'body', 'equation', 'signature', 'figure_caption', 'table_caption'];
 const ROLE_BOOKMARK_PREFIX = '_WFRole_';
 
 function forcedRoleOf($, p) {
@@ -274,20 +278,100 @@ export function applyParagraphNotes(archive, notes = {}, author = 'BDU WordFmt')
   return added;
 }
 
+function buildSourceStyleAlignmentMap(archive) {
+  const $s = parse(archive.readAsText('word/styles.xml') || '<w:styles/>');
+  return new Map($s(tag('style')).toArray().map(n => [$s(n).attr('w:styleId'), $s(n)]));
+}
+
+function resolveSourceLayout(p, styleMap) {
+  const pp = child(p, 'pPr');
+  let jc = val(pp, 'jc') || '';
+  let left = Number(child(pp, 'ind').attr('w:left') || 0);
+  let sId = val(pp, 'pStyle');
+  const seen = new Set();
+  while ((!jc || !left) && sId && !seen.has(sId) && styleMap.has(sId)) {
+    seen.add(sId);
+    const st = styleMap.get(sId);
+    const spp = child(st, 'pPr');
+    if (!jc) jc = val(spp, 'jc') || '';
+    if (!left) left = Number(child(spp, 'ind').attr('w:left') || 0);
+    sId = val(st, 'basedOn');
+  }
+  return { jc, left };
+}
+
+const SIGNATURE_ROLE_KEY_RE = /^(?:SINH VIEN(?: THUC HIEN)?|SVTH|NGUOI THUC HIEN|NHOM(?: SINH VIEN)?(?: THUC HIEN)?|TAC GIA|NGUOI VIET|HOC VIEN(?: THUC HIEN)?)$/;
+const SIGNATURE_DATE_KEY_RE = /^(?:[\p{L}\s.]+,\s*)?(?:NGAY\b[\s\S]*THANG\b[\s\S]*NAM\b|THANG\b[\s\S]*NAM\b)/iu;
+
+function isStandaloneEquation($, p, text, styleId, region, numbering, sourceJc = '') {
+  if (!['introduction', 'body', 'conclusion', 'front'].includes(region)) return false;
+  if (numbering?.numId && numbering.numId !== '0') return false;
+  if (/^(?:WFEquation|Equation|Formula|Math|DisplayEquation|BlockEquation)$/i.test(styleId)) return true;
+  if (p.find('m\\:oMathPara').length > 0) return true;
+  if (p.find('m\\:oMath').length > 0) {
+    const outsideText = p.find(tag('t')).toArray()
+      .filter(n => $(n).parents('m\\:oMath').length === 0)
+      .map(n => $(n).text())
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const strippedEqNum = outsideText.replace(/^(?:[\(\[]\d+(?:[.\-]\d+)*[\)\]])\s*|\s*(?:[\(\[]\d+(?:[.\-]\d+)*[\)\]])$/g, '').trim();
+    return !strippedEqNum;
+  }
+
+  const trimmed = text.trim();
+  if (trimmed.length < 3 || trimmed.length > 260) return false;
+  if (/^\s*(?:\$\$[\s\S]+\$\$|\\\[[\s\S]+\\\])\s*$/.test(trimmed)) return true;
+  if (/^\s*(?:[-+•◦▪‣●○]|\d+[.)]|[a-zA-Z][.)]|\[\d+\])\s+/u.test(trimmed)) return false;
+  const core = trimmed.replace(/\s*[\(\[]\d+(?:[.\-]\d+)+[\)\]]\s*$/, '').trim();
+  if (/(?<!\.)\.$|[;?!:]$/.test(core)) return false;
+  if (/https?:\/\/|www\./i.test(core)) return false;
+  if (/\b(?:const|let|var|function|return|import|export|class|def|async|await|SELECT|FROM|WHERE|INSERT|UPDATE|console\.log|System\.out)\b/.test(core)) return false;
+  const hasLatexMathCmd = /\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|hat|widehat|tilde|bar|vec|alpha|beta|gamma|delta|epsilon|eta|theta|lambda|mu|pi|sigma|omega|nabla|partial|infty|leq|geq|neq|approx|in|cdot|times)\b/.test(core);
+  if (hasLatexMathCmd) return true;
+
+  const wasCentered = sourceJc === 'center';
+  const hasVertAlignScript = p.find(`${tag('vertAlign')}[w\\:val="subscript"],${tag('vertAlign')}[w\\:val="superscript"]`).length > 0;
+  const hasSymbolFont = p.find(tag('rFonts')).toArray().some(e => /Cambria Math|Symbol|MT Extra|Euclid/i.test($(e).attr('w:ascii') || $(e).attr('w:hAnsi') || ''));
+  const hasMathUnicode = /[∑∏∫∬∮√∛∇∂∞≈≠≡≤≥≪≫±∓×÷⋅∘⊗⊕⊙∈∉⊂⊃⊆⊇∪∩∀∃⇒⇔↦∼∝⊥∥∠°′″₀-₉⁰-⁹⁺⁻⁼⁽⁾ᵢⱼₖₙₘᵣᵤᵥᵀ̂̄̃⃗α-ωΑ-Ω]/u.test(core);
+  const hasMathFunc = /\b(?:exp|ln|log|log2|log10|sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|arcsin|arccos|arctan|lim|sup|inf|argmin|argmax|softmax|sigmoid|ReLU|GELU|Var|Cov|Std|MSE|RMSE|MAE|MAPE|SSE|SST|SSR|BCE|CE|OLS|KL|IoU|AUC)\b/.test(core);
+  const hasRelationOp = /(?:=|≈|≠|≡|≤|≥|<=|>=|->|→|⇒|⇔|↦|∼|∝)/.test(core);
+  const hasArithmeticOp = /(?:[+\-−*/^]|×|÷)/.test(core);
+
+  if (!hasRelationOp && !(hasArithmeticOp && (hasMathUnicode || hasVertAlignScript || hasMathFunc))) return false;
+  const hasMathFeature = hasMathUnicode || hasVertAlignScript || hasSymbolFont || hasMathFunc
+    || /[()[\]|_^]/.test(core)
+    || /\b[a-zA-Z]\s*=\s*[-+0-9a-zA-Z(]/.test(core);
+  if (!hasMathFeature) return false;
+
+  const words = core.split(/\s+/).filter(Boolean);
+  const viProseWords = words.filter(w => {
+    const clean = w.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+    return clean.length >= 2 && /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/iu.test(clean);
+  });
+  if (wasCentered) return viProseWords.length <= 8;
+  return viProseWords.length <= 4 && (viProseWords.length / Math.max(1, words.length)) <= 0.45;
+}
+
 export function analyzeDocxStructure(inputPath) {
   const archive = typeof inputPath === 'string' ? new AdmZip(inputPath) : inputPath;
   const $ = parse(archive.readAsText('word/document.xml'));
   const body = $(tag('body'));
   if (body.length !== 1) throw new Error('DOCX không có phần thân tài liệu hợp lệ.');
   const nextNumber = numberingReader(archive);
+  const styleMap = buildSourceStyleAlignmentMap(archive);
   const records = [], fieldStack = [], warnings = [];
   let region = 'cover', summary = false, currentChapter = null, currentPart = null;
+  let currentFrontKey = '', inSignatureBlock = false;
   let fieldId = 0;
   // Field ranges are tracked across paragraphs and content controls, including
   // TOC result paragraphs with no TOC style. No cached text establishes context.
   body.find(tag('p')).each((index, element) => {
-    const p = $(element), text = textOf(p).trim(), key = keyOf(text).replace(/[.:]+$/, '');
+    const p = $(element), rawWText = textOf(p).trim(), rawMText = mathTextOf(p).trim();
+    const text = rawWText || rawMText;
+    const key = keyOf(rawWText).replace(/[.:]+$/, '');
     const pp = child(p, 'pPr'), styleId = val(pp, 'pStyle') || '';
+    const sourceLayout = resolveSourceLayout(p, styleMap);
     let inIndex = fieldStack.some(f => f.toc), indexId = fieldStack.find(f => f.toc)?.id;
     let indexCode = fieldStack.find(f => f.toc)?.code;
     p.find(`${tag('fldChar')},${tag('instrText')},${tag('fldSimple')}`).each((_, e) => {
@@ -306,88 +390,91 @@ export function analyzeDocxStructure(inputPath) {
     });
     const insideTable = p.parents(tag('tbl')).length > 0;
     const rec = { index, element, text, styleId, region, role: 'body', chapter: currentChapter,
-      part: currentPart, inIndex: inIndex || /^TOC\d|^TableofFigures$/i.test(styleId), indexId, indexCode, insideTable };
+      part: currentPart, inIndex: inIndex || /^TOC\d|^TableofFigures$/i.test(styleId), indexId, indexCode, insideTable,
+      hasOmml: hasMathNode(p), sourceJc: sourceLayout.jc, sourceLeft: sourceLayout.left };
     records.push(rec);
     if (rec.inIndex) { rec.role = 'index'; return; }
     // Reading table list counters is necessary for preserving subsequent lists,
     // but table text never changes the report's region or heading hierarchy.
-    rec.numbering = text ? nextNumber(p) : {marker:'',level:0};
+    rec.numbering = rawWText ? nextNumber(p) : {marker:'',level:0};
     if (insideTable) { rec.role = 'table'; return; }
     if (p.parents(tag('txbxContent')).length) { rec.role = 'embedded'; return; }
-    const forced = text ? forcedRoleOf($, p) : null;
+    const forced = (text || rec.hasOmml) ? forcedRoleOf($, p) : null;
     const isBullet = rec.numbering.format === 'bullet';
-    const isUpper = /\p{L}/u.test(text) && text === text.toLocaleUpperCase('vi-VN');
+    const isUpper = /\p{L}/u.test(rawWText) && rawWText === rawWText.toLocaleUpperCase('vi-VN');
     const beforeContent = ['cover', 'front', 'proposal'].includes(region);
     // List items such as "Danh mục môn học." inside a chapter are prose, not a
     // new front-matter page. After the body starts, only an uppercase title
     // without list numbering or trailing punctuation can open front matter.
-    const frontTitleLike = !isBullet && !/[.;,]$/.test(text) && text.length < 110 && (beforeContent || isUpper);
+    const frontTitleLike = Boolean(rawWText) && !isBullet && !/[.;,]$/.test(rawWText) && rawWText.length < 110 && (beforeContent || isUpper);
     const frontKey = /^(?:NHAN XET|LOI CAM ON|LOI CAM DOAN|MUC LUC|DANH MUC)(?:\s|$)/.test(key)
       || (beforeContent && /^(?:TOM TAT(?: DE TAI| DO AN| KHOA LUAN| TIEU LUAN)?|ABSTRACT|LOI NOI DAU|LOI GIOI THIEU|DANH SACH (?:HINH|BANG|CAC)[\p{L} ]*)$/u.test(key));
     if (forced) {
       rec.forced = forced;
       const numberedText = rec.numbering.marker && !isBullet ? `${rec.numbering.marker} ${text}` : text;
-      rec.displayText = numberedText; summary = false;
+      rec.displayText = numberedText; summary = false; inSignatureBlock = false;
       if (forced === 'chapter') {
         const chapterNumber = numberedText.match(/^CHƯƠNG\s+(\d+)/iu)?.[1] || String((currentChapter || 0) + 1);
         rec.role = 'chapter'; rec.level = 1; rec.number = chapterNumber;
-        region = 'body'; currentChapter = Number(chapterNumber);
+        region = 'body'; currentChapter = Number(chapterNumber); currentFrontKey = '';
       } else if (/^heading[2-4]$/.test(forced)) {
         rec.role = 'heading'; rec.level = Number(forced.at(-1));
         rec.number = numberedText.match(/^(\d+(?:\.\d+)*)\.?\s/u)?.[1] || '';
         if (region === 'cover') region = 'front';
       } else if (forced === 'major_title') {
-        rec.role = 'major_title'; currentChapter = null;
+        rec.role = 'major_title'; currentChapter = null; currentFrontKey = '';
         if (region === 'cover') region = 'front';
       } else if (forced === 'front_title') {
-        rec.role = 'front_title';
+        rec.role = 'front_title'; currentFrontKey = key;
         if (region === 'cover') region = 'front';
       } else if (forced === 'intro_title') {
-        rec.role = 'intro_title'; region = 'introduction';
+        rec.role = 'intro_title'; region = 'introduction'; currentFrontKey = '';
       } else {
         rec.role = forced;
         if (region === 'cover') region = 'front';
       }
     }
-    else if (/^DE CUONG(?:\s|$)/.test(key)) { region = 'proposal'; rec.role = 'proposal_title'; summary = false; }
+    else if (/^DE CUONG(?:\s|$)/.test(key)) { region = 'proposal'; rec.role = 'proposal_title'; summary = false; currentFrontKey = ''; inSignatureBlock = false; }
     else if (frontKey && frontTitleLike) {
-      region = 'front'; rec.role = 'front_title'; summary = false;
+      region = 'front'; rec.role = 'front_title'; summary = false; currentFrontKey = key; inSignatureBlock = false;
     } else if (['MO DAU','PHAN MO DAU','LOI MO DAU'].includes(key)) {
-      region = 'introduction'; rec.role = 'intro_title'; summary = false;
+      region = 'introduction'; rec.role = 'intro_title'; summary = false; currentFrontKey = ''; inSignatureBlock = false;
     } else if (/^PHAN(?:\s+[IVX\d]+[.:]?)?\s+NOI DUNG$/.test(key)) {
-      region = 'body'; rec.role = 'part_title'; currentPart = text; summary = false;
+      region = 'body'; rec.role = 'part_title'; currentPart = rawWText; summary = false; currentFrontKey = ''; inSignatureBlock = false;
     } else if (['TAI LIEU THAM KHAO','REFERENCES','PHU LUC','APPENDIX','KET LUAN'].includes(key)) {
       region = key === 'PHU LUC' || key === 'APPENDIX' ? 'appendix' : key === 'KET LUAN' ? 'conclusion' : 'references';
-      rec.role = 'major_title'; currentChapter = null; summary = false;
+      rec.role = 'major_title'; currentChapter = null; summary = false; currentFrontKey = ''; inSignatureBlock = false;
     } else if (region !== 'proposal') {
       const numberedText = rec.numbering.marker && rec.numbering.format !== 'bullet'
-        ? `${rec.numbering.marker} ${text}` : text;
+        ? `${rec.numbering.marker} ${rawWText}` : rawWText;
       const chapterMatch = numberedText.match(/^CHƯƠNG\s+(\d+)\s*[.:–—-]?\s*(.*)$/iu);
       const explicitHeading = /^Heading\d|^WFHeading\d/.test(styleId);
-      const describesChapter = /(?:trình bày|hệ thống hoá|hệ thống hóa|đối chiếu|phân tích|giới thiệu|tổng kết)/iu.test(text.split(':').slice(1).join(':'));
+      const describesChapter = /(?:trình bày|hệ thống hoá|hệ thống hóa|đối chiếu|phân tích|giới thiệu|tổng kết)/iu.test(rawWText.split(':').slice(1).join(':'));
       if (chapterMatch && !(region === 'introduction' && (summary || describesChapter) && !explicitHeading)) {
         rec.role = 'chapter'; rec.level = 1; rec.number = chapterMatch[1]; rec.displayText = numberedText;
-        region = 'body'; summary = false; currentChapter = Number(rec.number);
+        region = 'body'; summary = false; currentChapter = Number(rec.number); currentFrontKey = ''; inSignatureBlock = false;
       } else if (region === 'body') {
         const match = numberedText.match(/^(\d+(?:\.\d+){1,3})\.?\s+\S/u);
         // Outline levels inherited from Normal are a common template mistake;
         // only direct levels or a dedicated (non-Normal) style count.
-        const styleOutline = styleId && !/^(?:Normal|WFBody)$/i.test(styleId) ? rec.numbering.outline : undefined;
+        const styleOutline = styleId && !/^(?:Normal|WFBody|WFEquation|WFSignature)$/i.test(styleId) ? rec.numbering.outline : undefined;
         const outline = Number(val(pp, 'outlineLvl') ?? styleOutline ?? styleId.match(/^Heading(\d)$/)?.[1] - 1);
         if (match) {
           rec.role = 'heading'; rec.level = match[1].split('.').length; rec.number = match[1]; rec.displayText = numberedText;
+          inSignatureBlock = false;
           if (Number(match[1].split('.')[0]) !== currentChapter) {
             warnings.push(`Mục ${match[1]} chưa khớp chương đang xét; giữ số nguồn.`);
           }
-        } else if (outline >= 1 && outline <= 3 && text.length <= 200 && !isBullet) {
+        } else if (outline >= 1 && outline <= 3 && rawWText.length <= 200 && !isBullet) {
           // Word heading styles without a typed number ("Heading 2" + text).
           rec.role = 'heading'; rec.level = outline + 1; rec.number = ''; rec.displayText = numberedText;
+          inSignatureBlock = false;
         }
       } else if (region === 'introduction') {
         if (/^\d+[.)]\s+/.test(numberedText) && (explicitHeading || child(pp, 'keepNext').length)) {
-          rec.role = 'intro_heading'; rec.displayText = numberedText;
+          rec.role = 'intro_heading'; rec.displayText = numberedText; inSignatureBlock = false;
         }
-        if (/cấu trúc|bố cục|trình bày trong\s+\d+\s+chương/iu.test(text)) summary = true;
+        if (/cấu trúc|bố cục|trình bày trong\s+\d+\s+chương/iu.test(rawWText)) summary = true;
         if (chapterMatch) rec.role = 'chapter_summary';
       }
       const captionStyle = /^(?:HNH|BNG|Caption|WFFigureCaption|WFTableCaption)$/i.test(styleId);
@@ -395,11 +482,40 @@ export function analyzeDocxStructure(inputPath) {
       // Manual captions need a title separator; established caption styles or
       // SEQ fields also supply evidence when that separator is absent.
       const captionEvidence = captionStyle || /\bSEQ\b/i.test(p.find(tag('instrText')).text())
-        || /^(Hình|Bảng)\s*:\s*\S/iu.test(text)
-        || /^(Hình|Bảng)\s*:\s*$/iu.test(text)
-        || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*[.:]\s+\S/iu.test(text);
-      if (rec.role === 'body' && captionEvidence && (/^(Hình|Bảng)\s*:/iu.test(text) || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*\s*[.:]?\s+\S/iu.test(text))) {
-        rec.role = /^Hình/iu.test(text) ? 'figure_caption' : 'table_caption';
+        || /^(Hình|Bảng)\s*:\s*\S/iu.test(rawWText)
+        || /^(Hình|Bảng)\s*:\s*$/iu.test(rawWText)
+        || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*[.:]\s+\S/iu.test(rawWText);
+      if (rec.role === 'body' && captionEvidence && (/^(Hình|Bảng)\s*:/iu.test(rawWText) || /^(Hình|Bảng)\s+\d+(?:[.\-]\d+)*\s*[.:]?\s+\S/iu.test(rawWText))) {
+        rec.role = /^Hình/iu.test(rawWText) ? 'figure_caption' : 'table_caption';
+        inSignatureBlock = false;
+      }
+
+      // Preserve right-aligned / right-indented author signature blocks at the end
+      // of Lời cảm ơn / Lời cam đoan / Mở đầu instead of flattening them into WFBody.
+      const inSignableSection = (region === 'front' && /^(?:LOI CAM ON|LOI CAM DOAN|LOI NOI DAU|LOI GIOI THIEU)\b/.test(currentFrontKey))
+        || region === 'introduction';
+      if (rec.role === 'body' && inSignableSection && (!rec.numbering?.numId || rec.numbering.numId === '0')) {
+        const isSigRole = SIGNATURE_ROLE_KEY_RE.test(key) || styleId === 'WFSignature';
+        const isSigDate = rawWText.length > 0 && rawWText.length <= 95 && !/[.;]$/.test(rawWText) && SIGNATURE_DATE_KEY_RE.test(key);
+        const isRightShort = region === 'front' && rawWText.length > 0 && rawWText.length <= 85 && !/[.;]$/.test(rawWText)
+          && (sourceLayout.jc === 'right' || sourceLayout.jc === 'end' || sourceLayout.left >= 2880);
+        if (isSigRole || isSigDate || isRightShort) {
+          inSignatureBlock = true;
+        }
+        if (inSignatureBlock) {
+          if (!rawWText || (rawWText.length <= 95 && !/[.;]$/.test(rawWText))) {
+            rec.role = 'signature';
+          } else {
+            inSignatureBlock = false;
+          }
+        }
+      }
+
+      // Detect standalone mathematical display formulas (both native OMML and
+      // Unicode/sub-superscript formula lines) so they stay centered and clean.
+      if (rec.role === 'body' && isStandaloneEquation($, p, rawWText, styleId, region, rec.numbering, sourceLayout.jc)) {
+        rec.role = 'equation';
+        if (!rec.displayText && rawMText && !rawWText) rec.displayText = rawMText;
       }
     }
     rec.region = region; rec.chapter = currentChapter; rec.part = currentPart;
@@ -430,6 +546,7 @@ export function analyzeDocxStructure(inputPath) {
 
 const PREVIEW_ROLE = { chapter: 'chapter', major_title: 'major_title', front_title: 'front_title', intro_title: 'intro_title',
   part_title: 'part_title', intro_heading: 'intro_heading', figure_caption: 'figure_caption', table_caption: 'table_caption',
+  equation: 'equation', signature: 'signature',
   body: 'body', chapter_summary: 'body', proposal: 'proposal', proposal_title: 'proposal_title', appendix: 'appendix', cover: 'cover' };
 
 function allTextRunsBold($, p) {
@@ -442,6 +559,7 @@ function suspectHeading($, rec) {
   const text = rec.text;
   if (text.length > 150 || /[.;,]$/.test(text) || rec.numbering?.format === 'bullet') return null;
   const key = keyOf(text).replace(/[.:]+$/, '');
+  if (SIGNATURE_ROLE_KEY_RE.test(key)) return null;
   const numbered = text.match(/^(\d+(?:\.\d+){0,3})\.?\s+\S/u);
   if (/^CHƯƠNG\s+\d+/iu.test(text)) return { reason: 'Bắt đầu bằng "Chương"', suggest: 'chapter' };
   if (/^(?:TOM TAT|ABSTRACT|LOI NOI DAU|LOI MO DAU|MO DAU|KET LUAN|TAI LIEU THAM KHAO|PHU LUC|DANH MUC)(?:\s|$)/.test(key)) {
@@ -486,7 +604,9 @@ export function buildStructurePreview(analysis, { maxText = 280 } = {}) {
     }
     if (rec.role === 'embedded') continue;
     if (!rec.text) {
-      if (p.find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length) {
+      if (rec.hasOmml) {
+        items.push({ i: rec.index, kind: 'p', t: '[Công thức toán học]', role: PREVIEW_ROLE[rec.role] || 'equation', region: rec.region });
+      } else if (p.find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length) {
         items.push({ i: rec.index, kind: 'image', t: '', role: 'image', region: rec.region });
       }
       continue;
@@ -504,6 +624,7 @@ export function buildStructurePreview(analysis, { maxText = 280 } = {}) {
     summary: {
       chapterCount: analysis.chapters.length,
       headingCount: records.filter(r => r.role === 'heading').length,
+      equationCount: records.filter(r => r.role === 'equation').length,
       suspectCount: items.filter(item => item.suspect).length,
       forcedCount: items.filter(item => item.forced).length
     }
@@ -539,6 +660,14 @@ function ensureStyles(archive, profile) {
   for (const [id, base, level] of [['WFIntroTitle','WFHeading1',0],['WFPartTitle','WFHeading1',0],['WFMajorTitle','WFHeading1',0],['WFIntroHeading','WFHeading2',1],['WFFrontTitle','WFHeading1',9],['WFFigureCaption','WFCaption',9],['WFTableCaption','WFCaption',9]]) {
     $(tag('style')).filter((_, e) => $(e).attr('w:styleId') === id).remove();
     $(tag('styles')).append(`<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${id}"/><w:basedOn w:val="${base}"/><w:pPr><w:keepNext w:val="${id==='WFFigureCaption'?0:1}"/><w:pageBreakBefore w:val="0"/><w:outlineLvl w:val="${level}"/></w:pPr></w:style>`);
+  }
+  $(tag('style')).filter((_, e) => $(e).attr('w:styleId') === 'WFEquation').remove();
+  $(tag('styles')).append('<w:style w:type="paragraph" w:styleId="WFEquation"><w:name w:val="WFEquation"/><w:basedOn w:val="WFBody"/><w:pPr><w:keepLines/><w:pageBreakBefore w:val="0"/><w:spacing w:before="160" w:after="160" w:line="288" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="center"/><w:outlineLvl w:val="9"/></w:pPr></w:style>');
+  $(tag('style')).filter((_, e) => $(e).attr('w:styleId') === 'WFSignature').remove();
+  $(tag('styles')).append('<w:style w:type="paragraph" w:styleId="WFSignature"><w:name w:val="WFSignature"/><w:basedOn w:val="WFBody"/><w:pPr><w:keepLines/><w:pageBreakBefore w:val="0"/><w:spacing w:before="60" w:after="0" w:line="288" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="right"/><w:outlineLvl w:val="9"/></w:pPr></w:style>');
+  for (const id of ['WFGraduationForm', 'WFCoverStart', 'WFGraduationCover']) {
+    $(tag('style')).filter((_, e) => $(e).attr('w:styleId') === id).remove();
+    $(tag('styles')).append(`<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${id}"/><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/><w:outlineLvl w:val="9"/></w:pPr><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="26"/><w:color w:val="000000"/></w:rPr></w:style>`);
   }
   if (!$(tag('style')).filter((_, e) => $(e).attr('w:styleId') === 'TableGrid').length) {
     $(tag('styles')).append('<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:basedOn w:val="TableNormal"/><w:uiPriority w:val="39"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr></w:style>');
@@ -591,7 +720,12 @@ function applyParagraphFormat($, p, rec, profile, options = {}) {
   const heading = rec.role === 'chapter' || rec.role === 'heading';
   const id = heading ? `WFHeading${rec.level}` : ({ intro_title:'WFIntroTitle', part_title:'WFPartTitle',
     major_title:'WFMajorTitle', front_title:'WFFrontTitle', intro_heading:'WFIntroHeading',
-    figure_caption:'WFFigureCaption', table_caption:'WFTableCaption' })[rec.role] || 'WFBody';
+    figure_caption:'WFFigureCaption', table_caption:'WFTableCaption',
+    equation:'WFEquation', signature:'WFSignature' })[rec.role] || 'WFBody';
+  const existingPPr = child(p, 'pPr');
+  const existingSpacing = child(existingPPr, 'spacing');
+  const srcBefore = Number(existingSpacing.attr('w:before') || 0);
+  const srcAfter = Number(existingSpacing.attr('w:after') || 0);
   style(p, id);
   const number = rec.numbering;
   if (number?.numId && number.numId !== '0') prop(p, 'numPr', `<w:numPr><w:ilvl w:val="${number.level}"/><w:numId w:val="${number.numId}"/></w:numPr>`);
@@ -605,30 +739,144 @@ function applyParagraphFormat($, p, rec, profile, options = {}) {
     const level = rec.level || (rec.role === 'intro_heading' ? 2 : 1);
     const cfg = profile.headings?.[level === 1 ? 'chapter' : `level${level}`] || {};
     const numberPosition = cm(cfg.number_position_cm ?? (level === 3 ? 1.27 : level === 4 ? 2.54 : 0));
+    const size = (rec.role==='front_title' && keyOf(rec.text)==='LOI CAM ON' ? 16 : cfg.size_pt) || (level === 1 ? 18 : level === 2 ? 16 : level === 3 ? 14 : 13);
     // Reserve enough room for long labels; for manual labels measure their
     // approximate glyph width instead of inserting whitespace into user text.
     const label = number?.marker || rec.number || '';
     const labelWidth = level === 1 ? 0 : Math.max(360, Math.ceil(label.length * (cfg.size_pt || 14) * 10 + 90));
-    const indent = level === 1 ? '<w:ind w:left="0" w:right="0" w:firstLine="0"/>'
+    const centeredWrap = level === 1 ? computeBalancedCenteredWrap(rec.displayText || rec.text, size, 9071) : { indentDxa: 0 };
+    const indent = level === 1 ? `<w:ind w:left="${centeredWrap.indentDxa}" w:right="${centeredWrap.indentDxa}" w:firstLine="0"/>`
       : `<w:ind w:left="${numberPosition + labelWidth}" w:right="0" w:hanging="${labelWidth}"/>`;
     prop(p, 'ind', indent);
     prop(p, 'tabs', `<w:tabs><w:tab w:val="clear" w:pos="720"/><w:tab w:val="left" w:pos="${numberPosition + labelWidth}"/></w:tabs>`);
     prop(p, 'pageBreakBefore', '<w:pageBreakBefore w:val="0"/>');
-    const size = (rec.role==='front_title' && keyOf(rec.text)==='LOI CAM ON' ? 16 : cfg.size_pt) || (level === 1 ? 18 : level === 2 ? 16 : level === 3 ? 14 : 13);
     // Mutate each existing rPr through a local XML selection supplied by the
     // caller's Cheerio API (all text and bookmarks stay at the same positions).
     p.find(tag('r')).each((_, e) => {
       const r = $(e);
+      if (r.parents('m\\:oMath').length) return;
       let rp = child(r, 'rPr'); if (!rp.length) { r.prepend('<w:rPr/>'); rp = child(r, 'rPr'); }
       for (const name of ['rStyle','rFonts','sz','szCs','b','bCs','i','iCs','color','caps','smallCaps']) child(rp,name).remove();
-      rp.append(`<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b w:val="${level < 4 ? 1 : 0}"/><w:i w:val="${level >= 3 ? 1 : 0}"/><w:color w:val="000000"/><w:sz w:val="${size*2}"/><w:szCs w:val="${size*2}"/>`);
+      rp.append(`<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:b w:val="${level < 4 ? 1 : 0}"/><w:i w:val="${level >= 3 ? 1 : 0}"/><w:color w:val="000000"/><w:sz w:val="${size*2}"/><w:szCs w:val="${size*2}"/>`);
     });
-  } else if (!number?.numId || number.numId === '0') {
+    return false;
+  }
+  if (rec.role === 'equation') {
+    prop(p, 'keepLines', '<w:keepLines/>');
+    prop(p, 'pageBreakBefore', '<w:pageBreakBefore w:val="0"/>');
+    prop(p, 'ind', '<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
+    prop(p, 'spacing', '<w:spacing w:before="160" w:after="160" w:line="288" w:lineRule="auto"/>');
+    const upgraded = upgradeEquationParagraphToOmml($, p[0]);
+    if (upgraded && upgraded.numbered) {
+      prop(p, 'tabs', '<w:tabs><w:tab w:val="center" w:pos="4536"/><w:tab w:val="right" w:pos="9071"/></w:tabs>');
+      prop(p, 'jc', '<w:jc w:val="left"/>');
+      return false;
+    }
+    if (upgraded && upgraded.upgraded) {
+      prop(p, 'jc', '<w:jc w:val="center"/>');
+      return false;
+    }
+    const hasInlineTab = p.find(tag('tab')).length > 0;
+    const trailingEqNumber = hasInlineTab && /[\(\[]\d+(?:[.\-]\d+)*[\)\]]\s*$/.test(rec.text || '');
+    if (trailingEqNumber) {
+      prop(p, 'tabs', '<w:tabs><w:tab w:val="center" w:pos="4536"/><w:tab w:val="right" w:pos="9071"/></w:tabs>');
+      prop(p, 'jc', '<w:jc w:val="left"/>');
+      const firstContent = p.children().toArray().find(n => n.name !== 'w:pPr' && n.name !== 'w:bookmarkStart' && n.name !== 'w:bookmarkEnd');
+      const startsWithTab = firstContent && (firstContent.name === 'w:tab' || $(firstContent).children().first()[0]?.name === 'w:tab');
+      if (!startsWithTab) {
+        const anchor = child(p, 'pPr');
+        if (anchor.length) anchor.after('<w:r><w:tab/></w:r>'); else p.prepend('<w:r><w:tab/></w:r>');
+      }
+    } else {
+      prop(p, 'jc', '<w:jc w:val="center"/>');
+    }
+    p.find('m\\:oMathPara').each((_, mp) => {
+      const omp = $(mp);
+      let mpPr = omp.children('m\\:oMathParaPr');
+      if (!mpPr.length) { omp.prepend('<m:oMathParaPr/>'); mpPr = omp.children('m\\:oMathParaPr'); }
+      mpPr.children('m\\:jc').remove();
+      mpPr.append('<m:jc m:val="center"/>');
+    });
+    p.find(tag('r')).each((_, e) => {
+      const r = $(e);
+      if (r.parents('m\\:oMath').length) return;
+      if (!child(r, 't').length) return;
+      child(r, 't').each((__, tNode) => {
+        if (/\s{2,}|^\s|\s$/.test($(tNode).text())) $(tNode).attr('xml:space', 'preserve');
+      });
+      let rp = child(r, 'rPr'); if (!rp.length) { r.prepend('<w:rPr/>'); rp = child(r, 'rPr'); }
+      const existingFont = child(rp, 'rFonts').attr('w:ascii') || child(rp, 'rFonts').attr('w:hAnsi') || '';
+      if (!/Cambria Math|Symbol|MT Extra|Euclid/i.test(existingFont)) {
+        child(rp, 'rFonts').remove();
+        rp.prepend('<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>');
+      }
+      for (const name of ['sz', 'szCs']) child(rp, name).remove();
+      rp.append('<w:sz w:val="26"/><w:szCs w:val="26"/>');
+    });
+    return false;
+  }
+  if (rec.role === 'signature') {
+    prop(p, 'pageBreakBefore', '<w:pageBreakBefore w:val="0"/>');
+    if (rec.sourceLeft >= 2880 && rec.sourceJc === 'center') {
+      prop(p, 'ind', `<w:ind w:left="${rec.sourceLeft}" w:right="0" w:firstLine="0"/>`);
+      prop(p, 'jc', '<w:jc w:val="center"/>');
+    } else {
+      prop(p, 'ind', '<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
+      prop(p, 'jc', '<w:jc w:val="right"/>');
+    }
+    const sigKey = keyOf(rec.text || '').replace(/[.:]+$/, '');
+    const isSigRole = SIGNATURE_ROLE_KEY_RE.test(sigKey);
+    const isSigDate = Boolean(rec.text) && SIGNATURE_DATE_KEY_RE.test(sigKey);
+    const isSigHint = /^\(?KY\b[\s\S]*HO TEN\)?$/i.test(sigKey) || /^\(KY TEN\)$/i.test(sigKey);
+    const nextP = p.next();
+    const nextText = nextP[0]?.name === 'w:p' ? textOf(nextP).trim() : '';
+    const nextHasBlankOrHint = nextP[0]?.name === 'w:p' && (!nextText || /KY\b[\s\S]*HO TEN|KY TEN/i.test(keyOf(nextText)));
+    if (!rec.text) {
+      prop(p, 'keepNext', '<w:keepNext/>');
+      prop(p, 'spacing', '<w:spacing w:before="0" w:after="0" w:line="288" w:lineRule="auto"/>');
+      return false;
+    }
+    if (isSigDate) {
+      prop(p, 'keepNext', '<w:keepNext/>');
+      prop(p, 'spacing', `<w:spacing w:before="${Math.max(240, srcBefore)}" w:after="60" w:line="288" w:lineRule="auto"/>`);
+    } else if (isSigRole) {
+      prop(p, 'keepNext', '<w:keepNext/>');
+      const prevIsDate = p.prev()[0]?.name === 'w:p' && SIGNATURE_DATE_KEY_RE.test(keyOf(textOf(p.prev())));
+      const afterDxa = nextHasBlankOrHint ? Math.max(60, srcAfter) : Math.max(480, srcAfter);
+      prop(p, 'spacing', `<w:spacing w:before="${prevIsDate ? 60 : Math.max(240, srcBefore)}" w:after="${afterDxa}" w:line="288" w:lineRule="auto"/>`);
+    } else if (isSigHint) {
+      prop(p, 'keepNext', '<w:keepNext/>');
+      const nextIsBlank = nextP[0]?.name === 'w:p' && !nextText;
+      prop(p, 'spacing', `<w:spacing w:before="0" w:after="${nextIsBlank ? 60 : Math.max(480, srcAfter)}" w:line="240" w:lineRule="auto"/>`);
+    } else {
+      prop(p, 'keepLines', '<w:keepLines/>');
+      prop(p, 'spacing', `<w:spacing w:before="${srcBefore > 120 ? srcBefore : 60}" w:after="0" w:line="288" w:lineRule="auto"/>`);
+    }
+    const szVal = isSigHint ? 24 : 26;
+    p.find(tag('r')).each((_, e) => {
+      const r = $(e);
+      if (!child(r, 't').length) return;
+      let rp = child(r, 'rPr'); if (!rp.length) { r.prepend('<w:rPr/>'); rp = child(r, 'rPr'); }
+      for (const name of ['rFonts', 'sz', 'szCs', 'color']) child(rp, name).remove();
+      rp.prepend('<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>');
+      if (isSigRole) {
+        for (const name of ['b', 'bCs', 'i', 'iCs']) child(rp, name).remove();
+        rp.append('<w:b/><w:bCs/>');
+      } else if (isSigDate || isSigHint) {
+        for (const name of ['b', 'bCs', 'i', 'iCs']) child(rp, name).remove();
+        rp.append('<w:i/><w:iCs/>');
+      }
+      rp.append(`<w:color w:val="000000"/><w:sz w:val="${szVal}"/><w:szCs w:val="${szVal}"/>`);
+    });
+    return false;
+  }
+  if (!number?.numId || number.numId === '0') {
     if (rec.role === 'body' || rec.role === 'chapter_summary') prop(p, 'ind', '<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
   }
   if (!heading && !major && rec.role !== 'intro_heading') {
     p.find(tag('r')).each((_, e) => {
       const r = $(e);
+      if (r.parents('m\\:oMath').length) return;
       if (!child(r,'t').length) return;
       let rp = child(r,'rPr'); if (!rp.length) { r.prepend('<w:rPr/>'); rp = child(r,'rPr'); }
       // Keep emphasis and symbol fonts, but remove source body font sizes.
@@ -652,6 +900,7 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
     if (el.name === 'w:p') {
       const p = $(el);
       if (p.find('w\\:drawing, w\\:pict').length > 0) return true;
+      if (hasMathNode(p)) return true;
       if (p.find('w\\:sectPr').length > 0) return true;
       return textOf(p).trim().length > 0;
     }
@@ -849,10 +1098,11 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const convertibleRegions = new Set(['introduction', 'body', 'conclusion']);
   tabbedTableResult = convertTabbedTableBlocks(analysis.$, analysis.body, {
     width: tableWidthForConversion,
-    // Cover, front-matter, proposal and signature layouts also use tabs by
-    // design. Only prose regions are eligible for table recovery.
+    // Cover, front-matter, proposal, equation and signature layouts also use tabs by
+    // design. Only prose paragraphs are eligible for table recovery.
     shouldConvert: paragraph => {
       const record = analysis.records.find(item => item.element === paragraph);
+      if (record && (record.role === 'equation' || record.role === 'signature')) return false;
       return !record || convertibleRegions.has(record.region);
     }
   });
@@ -878,6 +1128,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     analysis.warnings.push('Tùy chọn "Bỏ qua định dạng đề cương" được bật nhưng tài liệu không có phần đề cương.');
   }
   $(tag('document')).attr('xmlns:r', R);
+  $(tag('document')).attr('xmlns:m', M);
   const originalNumbering = archive.readAsText('word/numbering.xml');
   const originalProposal = records.filter(r=>r.region==='proposal' && !r.inIndex && r.text).map(r=>r.text);
   const originalAppendix = records.filter(r=>r.region==='appendix' && !r.inIndex && r.text).map(r=>r.text);
@@ -921,7 +1172,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     let node=$(e).parents(tag('p')).first();
     while(node.length && node[0]!==body[0]) {
       let previous=node.prev();
-      while(previous[0]?.name==='w:p' && !textOf(previous).trim()
+      while(previous[0]?.name==='w:p' && !textOf(previous).trim() && !hasMathNode(previous)
         && !previous.find('w\\:fldChar,w\\:instrText,w\\:fldSimple,w\\:drawing,w\\:pict,w\\:object,w\\:sectPr,w\\:bookmarkStart,w\\:bookmarkEnd,w\\:tab').length) {
         const next=previous.prev(); previous.remove(); previous=next;
       }
@@ -1027,7 +1278,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     }
   }
   // Source files sometimes start with empty page-break paragraphs, not a cover.
-  while (body.children().first()[0]?.name === 'w:p' && !textOf(body.children().first()).trim()
+  while (body.children().first()[0]?.name === 'w:p' && !textOf(body.children().first()).trim() && !hasMathNode(body.children().first())
     && !body.children().first().find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length) body.children().first().remove();
   // An initial page break before the first cover text is a blank page artifact.
   body.children().first().find(`${tag('br')}[w\\:type="page"]`).first().remove();
@@ -1035,15 +1286,18 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const hasCover = records.some(r=>r.role==='cover' && r.text);
   const coverLine = (text,size,before=0,bold=false) => `<w:p><w:pPr><w:spacing w:before="${before*20}" w:after="120"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b w:val="${bold?1:0}"/><w:sz w:val="${size*2}"/></w:rPr><w:t>${esc(text)}</w:t></w:r></w:p>`;
   if (requested.has('cover') && !hasCover && !records.some(r=>r.role==='cover')) {
+    const { month: fallbackMonth, year: fallbackYear } = getCurrentMonthYear();
+    const resolvedFallbackMonth = String(options.month || '').trim() || fallbackMonth;
+    const resolvedFallbackYear = String(options.year || '').trim() || fallbackYear;
     body.prepend(coverLine(options.institution || profile.cover?.institution || '',15,0,true)
       + coverLine(options.faculty || profile.cover?.faculty || '',15,0,true)
       + coverLine('---oOo---',15) + coverLine(options.documentTitle || 'TIỂU LUẬN MÔN HỌC',24,70,true)
       + coverLine('Tên đề tài:',16,18) + coverLine(options.topic || 'TÊN ĐỀ TÀI',20,6,true)
-      + coverLine(`Người hướng dẫn: ${options.instructor}`,14,60)
+      + coverLine(`Giảng viên hướng dẫn: ${options.instructor}`,14,60)
       + coverLine(`Sinh viên thực hiện: ${options.student}`,14)
       + (options.studentId?coverLine(`Mã số sinh viên: ${options.studentId}`,14):'')
       + (options.className?coverLine(`Lớp: ${options.className}`,14):'')
-      + coverLine(`${options.location || profile.cover?.location || 'Thành phố Hồ Chí Minh'}${options.month?', tháng '+options.month:''}${options.year?', năm '+options.year:''}`,14,70,true));
+      + coverLine(`${options.location || profile.cover?.location || 'Thành phố Hồ Chí Minh'}, tháng ${resolvedFallbackMonth} năm ${resolvedFallbackYear}`,14,70,true));
   }
   const commentLine='<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="460" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="left"/></w:pPr><w:r><w:tab/></w:r></w:p>';
   for (const [option,label] of [['comments','NHẬN XÉT CỦA GIẢNG VIÊN'],['thanks','LỜI CẢM ƠN']]) {
@@ -1238,7 +1492,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   // nextPage section is added. Clear only the boundary whitespace, not content.
   for (const start of starts.slice(1)) {
     let prev = $(start.node).prev();
-    while (prev.length && prev[0].name === 'w:p' && !textOf(prev).trim() && !prev.find(`${tag('drawing')},${tag('pict')},${tag('object')},${tag('tab')}`).length) {
+    while (prev.length && prev[0].name === 'w:p' && !textOf(prev).trim() && !hasMathNode(prev) && !prev.find(`${tag('drawing')},${tag('pict')},${tag('object')},${tag('tab')}`).length) {
       const next = prev.prev(); prev.remove(); prev = next;
     }
     $(start.node).find(`${tag('br')}[w\\:type="page"]`).remove();
@@ -1261,6 +1515,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     : 13;
   const headerFooterSizeHalfPoints = Math.round(headerFooterSizePt * 2);
   const hfRunProperties = `<w:rFonts w:ascii="${esc(headerFooterFont)}" w:hAnsi="${esc(headerFooterFont)}" w:eastAsia="${esc(headerFooterFont)}" w:cs="${esc(headerFooterFont)}"/><w:sz w:val="${headerFooterSizeHalfPoints}"/><w:szCs w:val="${headerFooterSizeHalfPoints}"/>`;
+  const emptyHfParagraph = `<w:p><w:pPr><w:rPr>${hfRunProperties}</w:rPr></w:pPr></w:p>`;
   const hfRun = text => `<w:r><w:rPr>${hfRunProperties}</w:rPr><w:t>${esc(text)}</w:t></w:r>`;
   const hfFieldRun = content => `<w:r><w:rPr>${hfRunProperties}</w:rPr>${content}</w:r>`;
   const hfParagraph = (left, right, page = false) => {
@@ -1270,12 +1525,17 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:${page?'top':'bottom'} w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0],'left',hfRun(left))}${page?cell(widths[1],'center',pageField):''}${cell(widths.at(-1),'right',hfRun(right))}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
   };
   let bodyStarted = false;
-  const firstNumberedSection = starts.findIndex(s=>s.role!=='cover');
+  const firstNumberedSection = starts.findIndex(s => s.role !== 'cover');
+  const thanksSectionIndex = starts.findIndex(s => s.role === 'front_title' && keyOf(s.title) === 'LOI CAM ON');
   let coverSectionCount = 0;
   for (let i=0; i<starts.length; i++) {
     const s = starts[i]; if(s.isFirstChapter) bodyStarted = true;
-    const h = addPart(`wfStructureHeader${i}.xml`,'header', `<w:hdr xmlns:w="${W}">${s.role==='cover'?'<w:p/>':hfParagraph(title,s.title)}</w:hdr>`);
-    const f = addPart(`wfStructureFooter${i}.xml`,'footer', `<w:ftr xmlns:w="${W}">${s.role==='cover'?'<w:p/>':hfParagraph(`GVHD: ${options.instructor}`,`SVTH: ${options.student}`,true)}</w:ftr>`);
+    const isPreThanksFrontMatter = s.role === 'cover'
+      || s.role === 'proposal_title'
+      || (s.role === 'front_title' && /^(?:NHAN XET|LOI CAM DOAN)\b/.test(keyOf(s.title)));
+    const showHeaderFooter = s.role !== 'cover' && (thanksSectionIndex >= 0 ? i >= thanksSectionIndex : !isPreThanksFrontMatter);
+    const h = addPart(`wfStructureHeader${i}.xml`,'header', `<w:hdr xmlns:w="${W}">${showHeaderFooter ? hfParagraph(title, s.title) : emptyHfParagraph}</w:hdr>`);
+    const f = addPart(`wfStructureFooter${i}.xml`,'footer', `<w:ftr xmlns:w="${W}">${showHeaderFooter ? hfParagraph(`GVHD: ${options.instructor}`, `SVTH: ${options.student}`, true) : emptyHfParagraph}</w:ftr>`);
     const margins = (s.role==='cover' && profile.cover?.margins_cm) || profile.page?.margins_cm || {top:2,bottom:2,left:3,right:2};
     let geometry = `<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="${cm(margins.top)}" w:right="${cm(margins.right)}" w:bottom="${cm(margins.bottom)}" w:left="${cm(margins.left)}" w:header="567" w:footer="567" w:gutter="0"/>`;
     if(s.role==='proposal_title' && proposalGeometry) {
@@ -1296,7 +1556,20 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       }
     }
     let section = `<w:sectPr><w:headerReference w:type="default" r:id="${h}"/><w:headerReference w:type="even" r:id="${h}"/><w:headerReference w:type="first" r:id="${h}"/><w:footerReference w:type="default" r:id="${f}"/><w:footerReference w:type="even" r:id="${f}"/><w:footerReference w:type="first" r:id="${f}"/><w:type w:val="nextPage"/>${geometry}${coverBorder}<w:pgNumType w:fmt="${bodyStarted?'decimal':'lowerRoman'}"${s.isFirstChapter || i===firstNumberedSection ? ' w:start="1"':''}/>${isCoverSection ? '<w:titlePg/>' : ''}</w:sectPr>`;
-    if(preserveProposal && s.role==='proposal_title' && originalProposalSection) section=normalizeWordprocessingPropertyOrder(originalProposalSection).xml;
+    if(preserveProposal && s.role==='proposal_title' && originalProposalSection) {
+      if (shouldSkipProposal) {
+        section = normalizeWordprocessingPropertyOrder(originalProposalSection).xml;
+      } else {
+        const propSec = parse(originalProposalSection);
+        const sp = propSec(tag('sectPr')).first();
+        child(sp, 'headerReference').remove();
+        child(sp, 'footerReference').remove();
+        sp.prepend(`<w:headerReference w:type="default" r:id="${h}"/><w:headerReference w:type="even" r:id="${h}"/><w:headerReference w:type="first" r:id="${h}"/><w:footerReference w:type="default" r:id="${f}"/><w:footerReference w:type="even" r:id="${f}"/><w:footerReference w:type="first" r:id="${f}"/>`);
+        child(sp, 'pgNumType').remove();
+        sp.append(`<w:pgNumType w:fmt="lowerRoman"${i === firstNumberedSection ? ' w:start="1"' : ''}/>`);
+        section = normalizeWordprocessingPropertyOrder(propSec.xml()).xml;
+      }
+    }
     if (i === starts.length-1) body.append(section);
     else $(starts[i+1].node).before(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/>${section}</w:pPr></w:p>`);
   }
@@ -1321,8 +1594,12 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   archive.updateFile('word/document.xml', Buffer.from(documentXml));
   archive.updateFile('word/_rels/document.xml.rels', Buffer.from(relationshipResult.xml));
   archive.updateFile('[Content_Types].xml', Buffer.from(types.xml()));
-  const settings = parse(archive.readAsText('word/settings.xml') || `<w:settings xmlns:w="${W}"/>`);
+  const settings = parse(archive.readAsText('word/settings.xml') || `<w:settings xmlns:w="${W}" xmlns:m="${M}"/>`);
+  settings(tag('settings')).attr('xmlns:m', M);
   settings(tag('updateFields')).remove(); settings(tag('settings')).append('<w:updateFields w:val="true"/>');
+  if (records.some(r => r.role === 'equation' || r.hasOmml) && !settings('m\\:mathPr').length) {
+    settings(tag('settings')).append('<m:mathPr><m:mathFont m:val="Cambria Math"/><m:brkBin m:val="before"/><m:brkBinSub m:val="--"/><m:smallFrac m:val="0"/><m:dispDef/><m:lMargin m:val="0"/><m:rMargin m:val="0"/><m:defJc m:val="centerGroup"/><m:wrapIndent m:val="1440"/><m:intLim m:val="subSup"/><m:naryLim m:val="undOvr"/></m:mathPr>');
+  }
   archive.addFile('word/settings.xml', Buffer.from(settings.xml()));
   archive.writeZip(outputPath);
   const verified = analyzeDocxStructure(outputPath);
@@ -1349,12 +1626,15 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     return wrap<0 || (extent>=0 && wrap>extent && (effectExtent<0 || wrap>effectExtent));
   });
   const wordprocessingPropertyOrder=normalizeWordprocessingPropertyOrder(documentXml).xml===documentXml;
+  const equationsFormatted = records.filter(r => r.role === 'equation').length;
+  const signaturesFormatted = records.filter(r => r.role === 'signature' && r.text).length;
   return { success:true, outputPath, fileSize:fs.statSync(outputPath).size,
     report: { appliedProfile:{profileId:profile.profile_id,sourceRevision:profile.source_revision},
       structure:{...analysis.summary,hasAppendix,appendixPreserved,engine:'ooxml-structure-v1',proposalPolicy:shouldSkipProposal?'skipped':'preserve',documentTitle:title,documentType:options.documentType || 'tieu_luan',...graduationReport},
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
         indexPagesRebuilt, leadingPageBordersDetected, borderedLeadingCoverPagesReplaced, tableFontSizePt:13,
         headerFooterFont, headerFooterSizePt,
+        equationsFormatted, signaturesFormatted,
         enDashesReplaced:dashReplacements, hyperlinksRemoved:hyperlinks.stats.hyperlinksRemoved, frontMatterReordered, bindingPagesInserted,
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,

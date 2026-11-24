@@ -84,11 +84,12 @@ try {
   assert.equal(tlTitle.find('w\\:spacing').attr('w:after'), '120', 'Tiêu đề có after 6pt (120 dxa)');
 
   // Verify metadata fields with proper indents & tab stops
-  const instructorP = $tl('w\\:p').filter((_, el) => $tl(el).text().includes('Người hướng dẫn:'));
-  assert.equal(instructorP.length, 1, 'Bìa tiểu luận có dòng Người hướng dẫn');
+  assert.equal($tl.text().includes('Người hướng dẫn:'), false, 'Không còn dùng nhãn Người hướng dẫn trên bìa');
+  const instructorP = $tl('w\\:p').filter((_, el) => $tl(el).text().includes('Giảng viên hướng dẫn:'));
+  assert.equal(instructorP.length, 1, 'Bìa tiểu luận có dòng Giảng viên hướng dẫn');
   assert.ok(instructorP.find('w\\:ind').attr('w:left'), 'Metadata có dynamic left indent');
   assert.equal(instructorP.find('w\\:tab').attr('w:pos'), instructorP.find('w\\:ind').attr('w:left'), 'Metadata có tab stop khớp left indent');
-  assert.ok(Number(instructorP.find('w\\:spacing').attr('w:before')) > 0, 'Người hướng dẫn có dynamic before gap');
+  assert.ok(Number(instructorP.find('w\\:spacing').attr('w:before')) > 0, 'Giảng viên hướng dẫn có dynamic before gap');
 
   // Verify date line
   const dateP = $tl('w\\:p').filter((_, el) => $tl(el).text().includes('Thành phố Hồ Chí Minh, tháng'));

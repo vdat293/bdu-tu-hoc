@@ -89,11 +89,11 @@ try {
   assert.equal(out.a.$('w\\:sym[w\\:font="Wingdings"][w\\:char="F026"]').length,2,'both covers include the Wingdings decorative separator');
   assert.equal(out.a.$('w\\:drawing').length,3,'two cover logos and the existing thanks decoration');
   assert.ok(out.z.getEntry('word/media/wf-bdu-cover-logo.png'),'BDU logo is embedded, with no Downloads dependency');
-  const instructorParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Người hướng dẫn:'));
+  const instructorParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Giảng viên hướng dẫn:'));
   const studentParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Sinh viên thực hiện:'));
   const studentIdParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Mã số sinh viên:'));
   const classParas = out.a.body.children('w\\:p').filter((_,e)=>out.a.$(e).text().includes('Lớp:'));
-  assert.equal(instructorParas.length, 2, 'both covers have Người hướng dẫn');
+  assert.equal(instructorParas.length, 2, 'both covers have Giảng viên hướng dẫn');
   assert.equal(studentParas.length, 2, 'both covers have Sinh viên thực hiện');
   assert.equal(studentIdParas.length, 2, 'both covers have Mã số sinh viên');
   assert.equal(classParas.length, 2, 'both covers have Lớp');

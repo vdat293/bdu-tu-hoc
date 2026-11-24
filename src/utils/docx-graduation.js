@@ -1,6 +1,6 @@
 // Graduation front matter is prepared separately from the shared body formatter.
 import {load} from 'cheerio';
-import {formatGraduationCovers} from './docx-graduation-cover.js';
+import {formatGraduationCovers, getCurrentMonthYear} from './docx-graduation-cover.js';
 const tag = n => `w\\:${n}`;
 const key = s => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'D').toUpperCase().replace(/\s+/g, ' ').trim();
 const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -15,7 +15,7 @@ const table = (cells, widths, right=false) => `<w:tbl><w:tblPr><w:tblW w:w="${wi
 export function isolateProposalStyles({$, records, archive}) {
   const styles=load(archive.readAsText('word/styles.xml'),{xml:true});
   const definitions=new Map(styles(tag('style')).toArray().map(e=>[styles(e).attr('w:styleId'),e]));
-  const replaced=new Set(['WFBody','WFCaption','WFIntroTitle','WFPartTitle','WFMajorTitle','WFIntroHeading','WFFrontTitle','WFFigureCaption','WFTableCaption','WFGraduationForm','WFCoverStart','TableofFigures',...[1,2,3,4].flatMap(n=>[`WFHeading${n}`,`TOC${n}`])]);
+  const replaced=new Set(['WFBody','WFEquation','WFSignature','WFCaption','WFIntroTitle','WFPartTitle','WFMajorTitle','WFIntroHeading','WFFrontTitle','WFFigureCaption','WFTableCaption','WFGraduationForm','WFCoverStart','WFGraduationCover','TableofFigures',...[1,2,3,4].flatMap(n=>[`WFHeading${n}`,`TOC${n}`])]);
   for(const [id,e] of definitions)if(/^(toc [1-4]|table of figures)$/i.test(styles(e).children(tag('name')).attr('w:val') || ''))replaced.add(id);
   const affected=(id,seen=new Set())=>{
     if(seen.has(id) || !definitions.has(id))return false;
@@ -283,11 +283,12 @@ export function prepareGraduation(analysis, options) {
   covers = [...new Set(covers)];
   if(covers.length>2) throw new Error('Phát hiện hơn hai bìa đồ án; cần kiểm tra các bìa trước khi định dạng.');
   if(!covers.length) {
+    const { month: curM, year: curY } = getCurrentMonthYear();
     const cover = $(p(institution,{size:15,bold:true,style:'WFCoverStart'})+p(faculty,{size:15,bold:true})
       +p('ĐỒ ÁN TỐT NGHIỆP',{size:16,bold:true,before:60})
       +p((options.topic || 'TÊN ĐỀ TÀI').toUpperCase(),{size:20,bold:true})
-      +p(`GVHD: ${options.instructor}`,{before:60})+p(`SVTH: ${options.student}${(options.studentId?' – '+options.studentId:'')}${(options.className?' – '+options.className:'')}`)
-      +p(`${location}, tháng ${options.month || '…'} năm ${options.year || '…'}`,{before:70,bold:true}));
+      +p(`Giảng viên hướng dẫn: ${options.instructor}`,{before:60})+p(`SVTH: ${options.student}${(options.studentId?' – '+options.studentId:'')}${(options.className?' – '+options.className:'')}`)
+      +p(`${location}, tháng ${options.month || curM} năm ${options.year || curY}`,{before:70,bold:true}));
     body.prepend(cover);covers=[cover[0]];report.coversAdded++;
   }
   if(covers.length===1) {
@@ -453,11 +454,12 @@ export function prepareCourseworkCover(analysis, options) {
 
   let coversAdded = 0;
   if (!covers.length) {
+    const { month: curM, year: curY } = getCurrentMonthYear();
     const cover = $(p(institution, { size: 15, bold: true, style: 'WFCoverStart' }) + p(faculty, { size: 15, bold: true })
       + p(docType, { size: 16, bold: true, before: 60 })
       + p((options.topic || 'TÊN ĐỀ TÀI'), { size: 20, bold: true })
-      + p(`GVHD: ${options.instructor}`, { before: 60 }) + p(`SVTH: ${options.student}${(options.studentId ? ' – ' + options.studentId : '')}${(options.className ? ' – ' + options.className : '')}`)
-      + p(`${location}, tháng ${options.month || '…'} năm ${options.year || '…'}`, { before: 70, bold: true }));
+      + p(`Giảng viên hướng dẫn: ${options.instructor}`, { before: 60 }) + p(`SVTH: ${options.student}${(options.studentId ? ' – ' + options.studentId : '')}${(options.className ? ' – ' + options.className : '')}`)
+      + p(`${location}, tháng ${options.month || curM} năm ${options.year || curY}`, { before: 70, bold: true }));
     body.prepend(cover);
     covers = [cover[0]];
     coversAdded = 1;

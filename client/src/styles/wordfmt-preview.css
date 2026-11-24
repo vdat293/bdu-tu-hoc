@@ -427,6 +427,14 @@
 #tab-wordfmt .wf-pv-heading4 .wf-pv-text { margin-top: 6px; padding-left: 48px; font-size: 15px; font-style: italic; }
 #tab-wordfmt .wf-pv-figure_caption .wf-pv-text,
 #tab-wordfmt .wf-pv-table_caption .wf-pv-text { font-size: 14px; font-style: italic; text-align: center; }
+#tab-wordfmt .wf-pv-equation .wf-pv-text {
+  margin: 6px 0;
+  font-family: 'Cambria Math', 'Times New Roman', serif;
+  font-size: 15.5px;
+  text-align: center;
+  color: #0f172a;
+}
+#tab-wordfmt .wf-pv-signature .wf-pv-text { font-size: 15px; text-align: right; color: #1f2937; }
 #tab-wordfmt .wf-pv-cover .wf-pv-text { font-size: 15px; text-align: center; color: #374151; }
 #tab-wordfmt .wf-pv-proposal .wf-pv-text,
 #tab-wordfmt .wf-pv-appendix .wf-pv-text { font-size: 14px; color: #6b7280; }
@@ -621,9 +629,42 @@
   margin-bottom: 0;
 }
 
+#tab-wordfmt .wf-skill-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 #tab-wordfmt .wf-skill-toolbar .btn-ghost {
   border: 1px solid rgba(74, 85, 104, .25);
   background: transparent;
+  text-decoration: none;
+}
+
+#tab-wordfmt .wf-skill-logo-note {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(14, 116, 144, .25);
+  border-radius: 12px;
+  background: #ecfeff;
+  color: #155e75;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#tab-wordfmt .wf-skill-logo-note p {
+  margin: 0;
+}
+
+#tab-wordfmt .wf-skill-logo-thumb {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
 }
 
 #tab-wordfmt .wf-skill-code {

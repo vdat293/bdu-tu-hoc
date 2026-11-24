@@ -1027,6 +1027,11 @@ export function normalizeCoverParagraphs(documentXml, options = {}) {
       labelsRenamed += 1;
     }
 
+    if (styleId === 'WFCoverMeta' && /Người hướng dẫn:/i.test(getParagraphText(paragraphXml))) {
+      normalized = normalized.replace(/Người hướng dẫn:/gi, 'Giảng viên hướng dẫn:');
+      labelsRenamed += 1;
+    }
+
     if (styleId === 'WFCoverMeta' && /Sinh viên\/nhóm thực hiện:/i.test(getParagraphText(paragraphXml))) {
       normalized = normalized.replace(/Sinh viên\/nhóm thực hiện:/gi, 'Sinh viên thực hiện:');
     }
@@ -1042,9 +1047,17 @@ export function normalizeCoverParagraphs(documentXml, options = {}) {
     }
 
     if (styleId === 'WFCoverDate') {
+      const now = new Date();
+      let defaultMonth = String(now.getMonth() + 1);
+      let defaultYear = String(now.getFullYear());
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', month: 'numeric', year: 'numeric' }).formatToParts(now);
+        defaultMonth = String(Number(parts.find(p => p.type === 'month')?.value || defaultMonth));
+        defaultYear = parts.find(p => p.type === 'year')?.value || defaultYear;
+      } catch { /* fallback */ }
       const location = options.location?.trim() || 'Thành phố Hồ Chí Minh';
-      const month = options.month?.trim() || '.....';
-      const year = options.year?.trim() || '........';
+      const month = options.month?.trim() || defaultMonth;
+      const year = options.year?.trim() || defaultYear;
       const runMatch = normalized.match(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/);
       if (runMatch) normalized = normalized.replace(runMatch[0], replaceRunText(runMatch[0], `${location}, tháng ${month} năm ${year}`));
       if (!/<w:framePr\b/.test(normalized)) {

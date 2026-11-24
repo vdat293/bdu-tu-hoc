@@ -364,7 +364,7 @@ export function normalizeStructuredCaptions($, records, warnings) {
   }
   let referencesUpdated=0;
   for(const rec of records) {
-    if(rec.inIndex||rec.region==='proposal'||rec.region==='appendix'||rec.region==='cover'||/_caption$/.test(rec.role))continue;
+    if(rec.inIndex||rec.region==='proposal'||rec.region==='appendix'||rec.region==='cover'||rec.role==='equation'||/_caption$/.test(rec.role))continue;
     const p=$(rec.element), s=text(p), replacements=[];
     const targetFor=(kind,number)=>{
       const candidates=mappings.get(`${kind} ${number}`)||[];

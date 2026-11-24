@@ -46,8 +46,8 @@ try {
   assert.ok(docXml.includes('cx="1260000" cy="1260000"'), 'Logo bìa phải có kích thước tỉ lệ 1:1 (1260000 EMU)');
 
   // 2. Verify metadata uses dynamic hanging indent where tab stop matches left indent
-  assert.ok(/w:left="(\d+)" w:hanging="2300"/.test(docXml), 'Metadata bìa phải sử dụng lề treo động hanging=2300');
-  const match = docXml.match(/w:ind w:left="(\d+)" w:hanging="2300"/);
+  assert.ok(/w:left="(\d+)" w:hanging="2760"/.test(docXml), 'Metadata bìa phải sử dụng lề treo động hanging=2760 cho nhãn Giảng viên hướng dẫn:');
+  const match = docXml.match(/w:ind w:left="(\d+)" w:hanging="2760"/);
   assert.ok(match, 'Tìm thấy ind left động');
   assert.ok(docXml.includes(`w:pos="${match[1]}"`), 'Tab stop phải khớp chính xác với left indent động');
 
