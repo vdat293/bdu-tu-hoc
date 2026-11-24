@@ -111,6 +111,8 @@ services:
       # Giữ chunk cũ của các bản build trước để HTML còn cache không 404.
       - CLIENT_ASSET_HISTORY_DIR=/app/data/client-assets
       - CLIENT_ASSET_HISTORY_DAYS=${CLIENT_ASSET_HISTORY_DAYS:-30}
+      # Snapshot thông số VPS chỉ-đọc do bdu-vps-agent trên host ghi ra.
+      - VPS_TELEMETRY_SNAPSHOT_PATH=${VPS_TELEMETRY_SNAPSHOT_PATH:-/app/data/vps-telemetry/snapshot.json}
       # Maintenance DB (backup/restore) chạy bằng `docker compose run --rm bdu-hub
       # npm run db:backup|db:restore`; các biến này phải nằm trong env của
       # service thì container mới thấy. Xem .env.example phần "Sao lưu DB".
@@ -154,6 +156,7 @@ services:
       - ./data/fb-import:/app/data/fb-import
       - ./data/client-assets:/app/data/client-assets
       - ./data/inf1003-scripts:/app/data/inf1003-scripts:ro
+      - ./data/vps-telemetry:/app/data/vps-telemetry:ro
       # Backup DB chạy qua `docker compose run --rm bdu-hub` (bước 2 của
       # deploy.sh và db:backup:verify). Volume này là thứ giữ bản dump tồn tại
       # sau khi container tạm bị xoá. Phải khớp BACKUP_LOCAL_DIR ở trên.

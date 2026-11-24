@@ -7,6 +7,7 @@ import { SkeletonBlock } from '../../components/feedback/Loading.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import GrammarRunner from './GrammarRunner.jsx';
 import { buildItems, friendlyErrorMessage, sanitizeHtml } from './grammar-lib.js';
+import { trackAction } from '../../services/telemetry.js';
 import './grammar.css';
 
 function accuracyOf(correct, total) {
@@ -110,6 +111,11 @@ export default function GrammarLessonPage() {
 
   const startQuiz = (resume) => {
     const canResume = Boolean(progress && !progress.completed_at && progress.answered > 0 && progress.answered < items.length);
+    trackAction('grammar_quiz_start', {
+      label: resume && canResume ? 'Làm tiếp bài tập ngữ pháp' : 'Bắt đầu bài tập ngữ pháp',
+      featureId: 'grammar',
+      metadata: { lessonId }
+    });
     setStart(resume && canResume ? roundStartFrom(progress) : FRESH_ROUND);
     setRoundKey((k) => k + 1);
     setPhase('quiz');
@@ -119,6 +125,11 @@ export default function GrammarLessonPage() {
     const canResume = Boolean(
       extraProgress && !extraProgress.completed_at && extraProgress.answered > 0 && extraProgress.answered < extraItems.length
     );
+    trackAction('grammar_extra_start', {
+      label: 'Luyện bài tập ngữ pháp mở rộng',
+      featureId: 'grammar',
+      metadata: { lessonId }
+    });
     setExtraStart(resume && canResume ? roundStartFrom(extraProgress) : FRESH_ROUND);
     setRoundKey((k) => k + 1);
     setPhase('extra-quiz');

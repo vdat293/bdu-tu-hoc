@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppProviders } from './providers.jsx';
 import AppErrorBoundary from './AppErrorBoundary.jsx';
 import AppRoutes from './routes.jsx';
+import TelemetryBridge from './TelemetryBridge.jsx';
 import '../styles/app.css';
 
 // Cổng bảo trì KHÔNG bọc ở đây nữa: trước đây nó phủ toàn bộ <AppRoutes/> nên
@@ -9,5 +10,5 @@ import '../styles/app.css';
 // chuyển sang nhóm khác được. Nay nó nằm trong AppLayout quanh <Outlet/> nên chỉ
 // thay vùng nội dung, giữ sidebar/topbar (xem client/src/layouts/AppLayout.jsx).
 export default function App() {
-  return <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AppErrorBoundary><AppProviders><AppRoutes /></AppProviders></AppErrorBoundary></BrowserRouter>;
+  return <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AppErrorBoundary><AppProviders><TelemetryBridge /><AppRoutes /></AppProviders></AppErrorBoundary></BrowserRouter>;
 }

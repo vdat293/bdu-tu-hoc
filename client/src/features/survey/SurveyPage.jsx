@@ -4,6 +4,7 @@ import { getProfile } from '../../api/academics.js';
 import { getSurveyForms } from '../../api/tools.js';
 import { clearSurveyLogs, getSurveyRun, restoreSurveyRun, startSurvey, subscribeSurvey } from './runner.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import { trackAction } from '../../services/telemetry.js';
 
 function findGenderValue(value, depth = 0) {
   if (value && typeof value === 'object' && depth < 4) {
@@ -211,6 +212,11 @@ export default function SurveyPage() {
   const start = async () => {
     if (isRunning || selectedCourses.length === 0) return;
     processedKeysRef.current = new Set();
+    trackAction('survey_run', {
+      label: `Chạy auto khảo sát (${selectedCourses.length} môn)`,
+      featureId: 'survey',
+      metadata: { count: selectedCourses.length }
+    });
     try {
       const runState = await startSurvey({
         token: auth.token,

@@ -1,13 +1,27 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const source = fs.readFileSync('public/admin/admin.js', 'utf8');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const adminFiles = [
+  path.join(ROOT, 'client', 'admin.html')
+];
 
-assert.match(source, /const safeMssv = escapeHtml\(s\.mssv\)/);
-assert.match(source, /const safeFullName = escapeHtml\(s\.full_name/);
-assert.match(source, /const methodCls = `method-\$\{cssToken\(method\)\}`/);
-assert.match(source, /data-log="\$\{jsonStr\}"/);
-assert.doesNotMatch(source, /class="mssv-tag" style="font-weight: 700;">\$\{s\.mssv\}/);
-assert.doesNotMatch(source, /title="\$\{ep\.path\}">\$\{ep\.path\}/);
+function collectJsx(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) collectJsx(full);
+    else if (/\.(js|jsx)$/.test(entry.name)) adminFiles.push(full);
+  }
+}
+collectJsx(path.join(ROOT, 'client', 'src', 'admin'));
 
-console.log('✅ Admin dynamic renderers escape or normalize untrusted values.');
+for (const file of adminFiles) {
+  const src = fs.readFileSync(file, 'utf8');
+  assert.doesNotMatch(src, /dangerouslySetInnerHTML/, `${path.relative(ROOT, file)} must never use dangerouslySetInnerHTML`);
+  assert.doesNotMatch(src, /24050126/, `${path.relative(ROOT, file)} must never hardcode owner MSSV`);
+  assert.doesNotMatch(src, /SYSTEM_OWNER_MSSV/, `${path.relative(ROOT, file)} must never mention SYSTEM_OWNER_MSSV`);
+}
+
+console.log(`✅ React Admin Dashboard rendering safety verified across ${adminFiles.length} files (no dangerouslySetInnerHTML or owner leaks).`);

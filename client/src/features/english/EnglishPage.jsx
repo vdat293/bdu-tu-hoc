@@ -10,6 +10,7 @@ import {
   createEventStream
 } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
+import { trackAction } from '../../services/telemetry.js';
 import './sakuga-button.js';
 import './sakuga-progress.js';
 
@@ -248,6 +249,10 @@ export default function EnglishPage() {
       const credentials = { username: form.username.trim(), password: form.password };
       setForm((current) => ({ ...current, password: '' }));
       const res = await loginEnglish(auth.token, credentials);
+      trackAction('english_login', {
+        label: 'Đăng nhập Moodle tiếng Anh',
+        featureId: 'english'
+      });
 
       // Luôn cho thanh chạy tới 99% trước khi nhảy lên 100% khi đúng TK/MK
       await reachNinetyNinePercent();
@@ -372,6 +377,11 @@ export default function EnglishPage() {
 
     setBusy(true);
     setIsRunning(true);
+    trackAction('english_auto_finish', {
+      label: all ? 'Chạy auto tất cả khóa tiếng Anh' : 'Chạy auto khóa tiếng Anh',
+      featureId: 'english',
+      metadata: { allCourses: all }
+    });
 
     try {
       await startEnglishCourseFinish(auth.token, session.sessionId, {
@@ -402,6 +412,11 @@ export default function EnglishPage() {
 
     setBusy(true);
     setIsRunning(true);
+    trackAction('english_single_quiz', {
+      label: `Làm bài tiếng Anh (${actType})`,
+      featureId: 'english',
+      metadata: { actType }
+    });
     try {
       await startEnglishExercise(auth.token, session.sessionId, {
         cmid: selectedActivity,

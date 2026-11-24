@@ -9,8 +9,11 @@ import { RankingSchedulerService } from '../../services/ranking-scheduler.servic
 import { SystemSettingsService } from '../../services/system-settings.service.js';
 import { ServiceLockService } from '../../services/service-lock.service.js';
 import { TrafficInsightsService } from './traffic-insights.service.js';
+import { InteractionTelemetryService } from './interaction-telemetry.service.js';
+import { VpsMonitorService } from './vps-monitor.service.js';
+import { describeApiAction, featureLabelForId } from './action-translator.js';
 import { CommunityRealtime } from '../../services/community-realtime.service.js';
-import { isDatabaseConfigured } from '../../db/database.js';
+import { isDatabaseConfigured, query } from '../../db/database.js';
 
 function normalizeMssv(value) {
   return String(value || '').trim().toUpperCase();
@@ -291,6 +294,35 @@ export const AdminDashboardController = {
     try {
       const { page, limit, search, filter, sortBy, sortDir } = req.query;
       const data = await TrafficService.getVisitedStudents({ page, limit, search, filter, sortBy, sortDir });
+      const mssvList = Array.isArray(data?.students) ? data.students.map((s) => s.mssv).filter(Boolean) : [];
+      if (isDatabaseConfigured() && mssvList.length > 0) {
+        try {
+          const uiRes = await query(`
+            SELECT
+              mssv,
+              COUNT(*) FILTER (WHERE event_type IN ('page_view', 'click', 'action', 'search'))::int AS interaction_count,
+              (ARRAY_AGG(feature_id ORDER BY created_at DESC) FILTER (WHERE feature_id <> 'other'))[1] AS recent_feature,
+              MAX(created_at) AS last_interaction_at
+            FROM user_interaction_events
+            WHERE mssv = ANY($1::text[])
+            GROUP BY mssv;
+          `, [mssvList]);
+          const uiMap = new Map((uiRes.rows ?? []).map((r) => [r.mssv, r]));
+          data.students = data.students.map((s) => {
+            const ui = uiMap.get(s.mssv);
+            const featureId = ui?.recent_feature || null;
+            return {
+              ...s,
+              interaction_count: ui?.interaction_count || 0,
+              recent_feature: featureId,
+              recent_feature_label: featureId ? featureLabelForId(featureId) : null,
+              last_interaction_at: ui?.last_interaction_at || null
+            };
+          });
+        } catch {
+          // Bỏ qua êm nếu bảng user_interaction_events chưa được migrate
+        }
+      }
       return res.json({ result: true, data });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi getVisitedStudents:', err.message);
@@ -311,7 +343,7 @@ export const AdminDashboardController = {
 
   async getLogs(req, res) {
     try {
-      const { page, limit, mssv, ip, status, path, route, method, search, timeRange } = req.query;
+      const { page, limit, mssv, ip, status, path, route, method, search, hideNoise, timeRange } = req.query;
       const data = await TrafficService.getDetailedLogs({
         page,
         limit,
@@ -322,8 +354,21 @@ export const AdminDashboardController = {
         route,
         method,
         search,
+        hideNoise,
         timeRange
       });
+      if (Array.isArray(data?.logs)) {
+        data.logs = data.logs.map((log) => {
+          const translated = describeApiAction(log.method, log.route || log.path);
+          return {
+            ...log,
+            actionLabel: translated.label,
+            featureId: translated.featureId,
+            featureLabel: translated.featureLabel,
+            isNoise: translated.isNoise
+          };
+        });
+      }
       return res.json({ result: true, data });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi getLogs:', err.message);
@@ -362,6 +407,7 @@ export const AdminDashboardController = {
   async getSystem(req, res) {
     try {
       const data = await TrafficService.getSystemMetrics();
+      data.telemetry = InteractionTelemetryService.getBufferStats();
       return res.json({ result: true, data });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi getSystem:', err.message);
@@ -371,12 +417,20 @@ export const AdminDashboardController = {
 
   async purgeLogs(req, res) {
     try {
-      const { olderThanDays } = req.body;
-      const data = await TrafficService.purgeLogs({ olderThanDays });
+      const { olderThanDays, scope = 'all' } = req.body || {};
+      const purgeTraffic = scope === 'all' || scope === 'traffic';
+      const purgeInteractions = scope === 'all' || scope === 'interactions';
+      const [trafficRes, interactionRes] = await Promise.all([
+        purgeTraffic ? TrafficService.purgeLogs({ olderThanDays }) : Promise.resolve({ deletedCount: 0 }),
+        purgeInteractions ? InteractionTelemetryService.purgeEvents({ olderThanDays }) : Promise.resolve({ deletedCount: 0 })
+      ]);
+      const trafficDeletedCount = trafficRes.deletedCount || 0;
+      const interactionDeletedCount = interactionRes.deletedCount || 0;
+      const deletedCount = trafficDeletedCount + interactionDeletedCount;
       return res.json({
         result: true,
-        message: `Đã dọn dẹp thành công ${data.deletedCount} bản ghi log cũ.`,
-        data
+        message: `Đã dọn dẹp ${trafficDeletedCount} HTTP logs và ${interactionDeletedCount} sự kiện tương tác cũ.`,
+        data: { deletedCount, trafficDeletedCount, interactionDeletedCount }
       });
     } catch (err) {
       console.error('[AdminDashboard] Lỗi purgeLogs:', err.message);
@@ -687,6 +741,142 @@ export const AdminDashboardController = {
           ? (err.message || 'Tham số hành trình không hợp lệ.')
           : 'Không thể lấy hành trình người dùng.'
       });
+    }
+  },
+
+  async getLive(req, res) {
+    try {
+      const data = await InteractionTelemetryService.getLiveSnapshot();
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getLive:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lấy trạng thái người dùng trực tuyến.' });
+    }
+  },
+
+  async getInteractionsSummary(req, res) {
+    try {
+      const { timeRange } = req.query || {};
+      const data = await InteractionTelemetryService.getInteractionSummary({ timeRange });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInteractionsSummary:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lấy tổng quan tương tác người dùng.' });
+    }
+  },
+
+  async getInteractionsPages(req, res) {
+    try {
+      const { timeRange, featureId, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getTopPages({ timeRange, featureId, limit });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInteractionsPages:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lấy thống kê trang được xem.' });
+    }
+  },
+
+  async getInteractionsElements(req, res) {
+    try {
+      const { timeRange, featureId, pagePath, eventType, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getTopElements({
+        timeRange,
+        featureId,
+        pagePath,
+        eventType,
+        limit
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInteractionsElements:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lấy thống kê nút và thao tác.' });
+    }
+  },
+
+  async getInteractionsFlows(req, res) {
+    try {
+      const { timeRange, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getNavigationFlows({ timeRange, limit });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInteractionsFlows:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể lấy luồng di chuyển trên website.' });
+    }
+  },
+
+  async getInteractionsStream(req, res) {
+    try {
+      const { timeRange, eventType, featureId, mssv, search, page, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getInteractionStream({
+        timeRange,
+        eventType,
+        featureId,
+        mssv,
+        search,
+        page,
+        limit
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getInteractionsStream:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể tải dòng sự kiện tương tác.' });
+    }
+  },
+
+  async getUserUnifiedTimeline(req, res) {
+    try {
+      const { timeRange, includeNoise, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getUnifiedUserTimeline({
+        mssv: normalizeMssv(req.params?.mssv),
+        timeRange,
+        includeNoise: includeNoise === 'true' || includeNoise === '1',
+        limit
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getUserUnifiedTimeline:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể tải dòng thời gian tương tác của sinh viên.' });
+    }
+  },
+
+  async getAutomationTools(req, res) {
+    try {
+      const { timeRange, toolId, status, search, limit } = req.query || {};
+      const data = await InteractionTelemetryService.getAutomationToolUsage({
+        timeRange,
+        toolId,
+        status,
+        search,
+        limit
+      });
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getAutomationTools:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể thống kê mức độ sử dụng bộ công cụ tự động.' });
+    }
+  },
+
+  async getVpsMetrics(req, res) {
+    try {
+      const data = await VpsMonitorService.getSnapshot();
+      return res.json({ result: true, data });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi getVpsMetrics:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể đọc thông số tài nguyên VPS & RAM.' });
+    }
+  },
+
+  async flushVpsBuffers(req, res) {
+    try {
+      const data = await VpsMonitorService.flushRuntimeBuffers();
+      return res.json({
+        result: true,
+        data,
+        message: 'Đã xả toàn bộ hàng đợi log & telemetry trong RAM xuống database.'
+      });
+    } catch (err) {
+      console.error('[AdminDashboard] Lỗi flushVpsBuffers:', err.message);
+      return res.status(500).json({ result: false, message: 'Không thể xả bộ đệm RAM xuống database.' });
     }
   }
 };

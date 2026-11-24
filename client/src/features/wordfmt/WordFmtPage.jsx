@@ -10,6 +10,7 @@ import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-
 import DocxReviewWorkspace from './DocxReviewWorkspace.jsx';
 import AiSkillPanel from './AiSkillPanel.jsx';
 import { SakugaButton, SakugaProgress } from './SakugaVfx.jsx';
+import { trackAction } from '../../services/telemetry.js';
 import '../../styles/wordfmt-status.css';
 import '../../styles/wordfmt-preview.css';
 
@@ -408,13 +409,18 @@ export default function WordFmtPage() {
       if (requestId !== previewRequestRef.current) return;
       setPreview(next);
       setPreviewDirty(false);
+      trackAction('wordfmt_preview', {
+        label: 'Upload & xem trước cấu trúc Word',
+        featureId: 'wordfmt',
+        metadata: { documentType }
+      });
     } catch (error) {
       if (requestId !== previewRequestRef.current) return;
       setPreviewError(error?.message || 'Không thể phân tích cấu trúc file.');
     } finally {
       if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }
-  }, [auth.token, appendFormattingParams]);
+  }, [auth.token, appendFormattingParams, documentType]);
 
   useEffect(() => {
     previewRequestRef.current += 1;
@@ -737,6 +743,11 @@ export default function WordFmtPage() {
     setDismissedCompletedRun(null);
     setDownloadDoneCount(0);
     setInReview(false);
+    trackAction('wordfmt_format', {
+      label: 'Chạy chuẩn hóa file Word',
+      featureId: 'wordfmt',
+      metadata: { documentType, includeCover, includeComments, includeThanks }
+    });
     startToolRun('wordfmt', () => formatDocx(auth.token, body), {
       stageCount: WORD_FMT_STAGES.length,
       summaryChoices: { includeCover, includeComments, includeThanks, onlyExistingCaptions, skipProposal }
@@ -765,6 +776,7 @@ export default function WordFmtPage() {
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
       setDownloadDoneCount((n) => n + 1);
+      trackAction('wordfmt_download', { label: 'Tải file Word đã chuẩn hóa', featureId: 'wordfmt' });
     } catch (error) {
       notify(error.message || 'Không thể tải file Word đã chuẩn hóa.', 'error');
     } finally {

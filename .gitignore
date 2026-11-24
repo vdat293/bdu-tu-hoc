@@ -22,6 +22,7 @@ data/fb-profile/
 data/fb-import/
 data/client-assets/
 data/inf1003-scripts/
+data/vps-telemetry/
 dist/
 .vite/
 .playwright-mcp/

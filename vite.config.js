@@ -1,5 +1,9 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 // Docker build context excludes .git, so the build id cannot be a git SHA.
 // A timestamp keeps each image distinct; CI/VPS can pin BUILD_ID explicitly.
@@ -27,9 +31,25 @@ function buildMetaPlugin() {
   };
 }
 
+function adminDevRewritePlugin() {
+  return {
+    name: 'bdu-admin-dev-rewrite',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const rawUrl = req.url || '';
+        const [pathname, search = ''] = rawUrl.split('?');
+        if ((pathname === '/admin' || pathname.startsWith('/admin/')) && !path.extname(pathname)) {
+          req.url = `/admin.html${search ? `?${search}` : ''}`;
+        }
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig(({ command }) => ({
   root: 'client',
-  plugins: [react(), buildMetaPlugin()],
+  plugins: [react(), buildMetaPlugin(), adminDevRewritePlugin()],
   publicDir: false,
   // Dev server không có build id riêng: để trống cho client bỏ qua banner
   // "bản mới" thay vì so với dist/client/build.json còn sót từ lần build trước.
@@ -43,10 +63,15 @@ export default defineConfig(({ command }) => ({
     // cảnh báo để log build còn tín hiệu cho các chunk thật sự bị phình.
     chunkSizeWarningLimit: 800,
     rollupOptions: {
+      input: {
+        main: path.resolve(currentDir, 'client/index.html'),
+        admin: path.resolve(currentDir, 'client/admin.html')
+      },
       output: {
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query']
+          query: ['@tanstack/react-query'],
+          charts: ['chart.js']
         }
       }
     }
@@ -63,7 +88,6 @@ export default defineConfig(({ command }) => ({
       '/css': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/games': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/admin-tool': { target: 'http://127.0.0.1:3000', changeOrigin: false },
-      '/admin': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/ws': { target: 'ws://127.0.0.1:3000', ws: true, changeOrigin: false }
     }
   }

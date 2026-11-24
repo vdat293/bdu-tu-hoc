@@ -257,17 +257,26 @@ export const TrafficService = {
       const reqPath = req.originalUrl || req.url || '';
 
       // Skip asset requests from cluttering database logs
+      const cleanReqPath = reqPath.split(/[?#]/, 1)[0];
       const isStaticAsset = (
         reqPath.startsWith('/app-assets/') ||
         reqPath.startsWith('/media/avatars/') ||
-        /\.(js|css|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/i.test(reqPath.split('?')[0])
+        /\.(js|css|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/i.test(cleanReqPath)
+      );
+      const isInternalTelemetryOrAdminPoll = (
+        cleanReqPath === '/api/telemetry' ||
+        cleanReqPath.startsWith('/api/telemetry/') ||
+        cleanReqPath === '/api/admin/dashboard' ||
+        cleanReqPath.startsWith('/api/admin/dashboard/')
       );
 
       // Intercept response finish
       res.on('finish', () => {
         try {
-          // Log all API endpoints, HTML pages, and all error responses
+          // Log all API endpoints, HTML pages, and all error responses, while keeping
+          // admin dashboard auto-refresh and UI telemetry traffic out of traffic_logs.
           if (isStaticAsset && res.statusCode < 400) return;
+          if (isInternalTelemetryOrAdminPoll && res.statusCode < 500) return;
 
           const durationNs = process.hrtime.bigint() - startHr;
           const responseTimeMs = Math.round(Number(durationNs) / 1e4) / 100; // 2 decimal places
@@ -549,6 +558,7 @@ export const TrafficService = {
     route = null,
     method = null,
     search = null,
+    hideNoise = false,
     timeRange = '24h'
   } = {}) {
     if (!isDatabaseConfigured()) {
@@ -565,6 +575,19 @@ export const TrafficService = {
     if (timeRange && timeRange !== 'all') {
       const intervalSql = getTimeRangeInterval(timeRange);
       if (intervalSql) conditions.push(`tl.created_at >= NOW() - ${intervalSql}`);
+    }
+
+    if (hideNoise === true || hideNoise === 'true' || hideNoise === '1') {
+      conditions.push(`NOT (
+        COALESCE(tl.route, split_part(tl.path, '?', 1)) IN (
+          '/api/version', '/api/health', '/api/status', '/api/queue-status', '/api/ttcds/capabilities'
+        )
+        OR COALESCE(tl.route, split_part(tl.path, '?', 1)) LIKE '/api/service-lock%'
+        OR COALESCE(tl.route, split_part(tl.path, '?', 1)) LIKE '/api/notifications/unread%'
+        OR COALESCE(tl.route, split_part(tl.path, '?', 1)) LIKE '/api/identity/catalog%'
+        OR COALESCE(tl.route, split_part(tl.path, '?', 1)) LIKE '/api/admin/dashboard%'
+        OR COALESCE(tl.route, split_part(tl.path, '?', 1)) LIKE '/api/telemetry%'
+      )`);
     }
 
     if (mssv) {

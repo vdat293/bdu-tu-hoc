@@ -12,6 +12,7 @@ import { CommunityRealtime } from './src/services/community-realtime.service.js'
 import { KillerSudokuRealtime } from './src/services/killer-sudoku-realtime.service.js';
 import { EntertainmentGameService } from './src/services/entertainment-game.service.js';
 import { TrafficService } from './src/services/traffic.service.js';
+import { InteractionTelemetryService } from './src/modules/admin/interaction-telemetry.service.js';
 
 const app = createApp();
 const PORT = process.env.PORT || 3000;
@@ -49,7 +50,10 @@ async function shutdown(signal) {
   console.log(`[server] Nhận ${signal}, đang dừng an toàn...`);
   stopJobs();
   CommunityRealtime.close();
-  await TrafficService.flush().catch((error) => { console.error('[server] flush traffic failed:', error); });
+  await Promise.all([
+    TrafficService.flush().catch((error) => { console.error('[server] flush traffic failed:', error); }),
+    InteractionTelemetryService.flush().catch((error) => { console.error('[server] flush telemetry failed:', error); })
+  ]);
   server.close(async () => {
     await closeDatabase().catch((error) => { console.error('[server] close DB failed:', error); });
     process.exit(0);

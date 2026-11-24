@@ -385,7 +385,10 @@ console.log('✓ login with ADMIN_DASHBOARD_KEY passed');
 
 // Test 6: The static admin login page must not leak the owner MSSV
 console.log('6. Testing admin login page leaks...');
-const adminHtml = await fs.readFile(new URL('../public/admin/index.html', import.meta.url), 'utf8');
+const adminHtml = await fs.readFile(new URL('../client/admin.html', import.meta.url), 'utf8');
+const authModalJsx = await fs.readFile(new URL('../client/src/admin/components/AuthGateModal.jsx', import.meta.url), 'utf8');
+assert(!authModalJsx.includes('24050126'), 'auth modal must not hardcode the owner MSSV');
+assert(!authModalJsx.includes('SYSTEM_OWNER_MSSV'), 'auth modal must not reveal the owner env var');
 assert(!adminHtml.includes('24050126'), 'admin login page must not hardcode the owner MSSV');
 assert(!adminHtml.includes('SYSTEM_OWNER_MSSV'), 'admin login page must not reveal the owner env var');
 console.log('✓ admin login page does not leak owner identity');

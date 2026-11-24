@@ -5,6 +5,7 @@ import { getVocabWords, saveVocabProgress } from '../../api/vocab.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { FlashcardGame, QuizGame, TypingGame, MatchGame } from './games.jsx';
 import { patchProgressInCache } from './vocab-cache.js';
+import { trackAction } from '../../services/telemetry.js';
 import './vocab.css';
 
 const GAME_MODES = new Set(['flashcard', 'quiz', 'typing', 'match']);
@@ -57,7 +58,14 @@ export default function VocabGamePage() {
     try { await progressMutation.mutateAsync({ wordId, next }); } catch { /* toast đã hiện */ }
   };
 
-  const replay = () => setRound((r) => r + 1);
+  const replay = () => {
+    trackAction('vocab_replay', {
+      label: `Chơi lại từ vựng (${mode})`,
+      featureId: 'vocab',
+      metadata: { setId, mode }
+    });
+    setRound((r) => r + 1);
+  };
   const unitUrl = setId ? `/vocab/set/${encodeURIComponent(setId)}` : '/vocab';
   // Deep link trực tiếp vào game không có history để quay lại -> fallback về trang bộ từ.
   const location = useLocation();

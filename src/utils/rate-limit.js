@@ -27,3 +27,13 @@ export const heavyLimiter = rateLimit({
   legacyHeaders: false,
   message: { result: false, message: 'Endpoint nặng: vui lòng thử lại sau.' }
 });
+
+// Dedicated bucket for batched UI interaction telemetry so analytics traffic
+// never competes with student academic API quotas.
+export const telemetryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { result: false, message: 'Quá nhiều sự kiện telemetry. Vui lòng thử lại sau.' }
+});

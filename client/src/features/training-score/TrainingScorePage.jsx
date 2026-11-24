@@ -7,6 +7,7 @@ import {
   syncTraining616
 } from '../../api/tools.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import { trackAction } from '../../services/telemetry.js';
 
 const MUC5_PENALTY_CODE = '5.5';
 const MUC5_PENALTY_DIEM = -10;
@@ -206,6 +207,11 @@ export default function TrainingScorePage() {
       const data = await syncTraining616(auth.token, { hocKy: Number(selectedHocKy) });
       setCdsCriterion(data.criterion);
       setActivityNote((current) => mergeActivityLines(current, criteria?.summary?.ghiChuSv, buildActivityLines(data.criterion)));
+      trackAction('training_score_cds_sync', {
+        label: 'Đồng bộ điểm 6.16 từ CDS',
+        featureId: 'training',
+        metadata: { hocKy: Number(selectedHocKy) }
+      });
       notify(`Đã lấy 6.16: ${data.criterion?.diemThucTe ?? 0} điểm (${data.criterion?.minhChung?.length || 0} sự kiện).`, 'success');
     } catch (err) {
       setCdsError(err.message || 'Không thể lấy danh sách sự kiện cho tiêu chí 6.16.');
@@ -237,6 +243,11 @@ export default function TrainingScorePage() {
         ghiChuSv: activityNote
       });
       setCriteria((current) => (current ? { ...current, summary: data.summary, selection: data.selection } : current));
+      trackAction('training_score_submit', {
+        label: `Lưu điểm rèn luyện (${data.summary?.total ?? 0}/100)`,
+        featureId: 'training',
+        metadata: { hocKy: Number(selectedHocKy), total: data.summary?.total ?? 0 }
+      });
       notify(`Đã lưu điểm rèn luyện: ${data.summary?.total ?? 0}/100${data.summary?.xepLoai ? ` (${data.summary.xepLoai})` : ''}.`, 'success');
     } catch (err) {
       setError(err.message || 'Không thể lưu điểm rèn luyện.');

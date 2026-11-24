@@ -17,6 +17,7 @@ import {
   subscribeRun
 } from '../../api/enrollment.js';
 import { groupBySubject, moveItem, removeItem, toSavePayload } from './priority.js';
+import { trackAction } from '../../services/telemetry.js';
 import CredentialsModal from './CredentialsModal.jsx';
 import ScheduleCard from './ScheduleCard.jsx';
 import ReminderSettings from '../../components/notifications/ReminderSettings.jsx';
@@ -502,6 +503,11 @@ export default function EnrollmentPage() {
       if (saved.conflicts.length) {
         notify(`Trùng lịch học: ${saved.conflicts.map(formatConflictPair).join('; ')}`, 'warning');
       }
+      trackAction('enrollment_save_priority', {
+        label: `Lưu danh sách ưu tiên (${selected.length} lớp)`,
+        featureId: 'enrollment',
+        metadata: { count: selected.length }
+      });
       notify('Đã lưu danh sách ưu tiên.', 'success');
     } catch (error) {
       notify(error.message || 'Không lưu được danh sách.', 'error');
@@ -655,13 +661,18 @@ export default function EnrollmentPage() {
         error: null
       });
       setNowTick(Date.now());
+      trackAction('enrollment_start', {
+        label: 'Kích hoạt auto đăng ký môn học',
+        featureId: 'enrollment',
+        metadata: { roundId: selectedRound, subjectCount: selected.length }
+      });
       notify('Đã kích hoạt lượt đăng ký.', 'success');
     } catch (error) {
       setCredentialError(error.message || 'Không khởi chạy được.');
     } finally {
       setStarting(false);
     }
-  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, watchSlots, credentialPassword, mssv, notify]);
+  }, [auth.token, auth.refreshToken, canActivate, selectedRound, selectedRoundInfo, autoFixScheduleConflict, watchSlots, credentialPassword, mssv, selected.length, notify]);
 
   const handleStop = useCallback(async () => {
     if (!auth.token || !run?.runId) return;
@@ -680,6 +691,10 @@ export default function EnrollmentPage() {
     setWithdrawing(true);
     try {
       await withdraw(auth.token, withdrawTarget.idToHoc);
+      trackAction('enrollment_withdraw', {
+        label: 'Rút môn học đã đăng ký',
+        featureId: 'enrollment'
+      });
       notify('Đã rút môn học.', 'success');
       setWithdrawTarget(null);
       loadRegistered();

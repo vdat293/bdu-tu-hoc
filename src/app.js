@@ -18,10 +18,11 @@ import { TrafficService } from './services/traffic.service.js';
 import { ServiceLockService } from './services/service-lock.service.js';
 import { createServiceLockGuard } from './utils/service-lock-guard.js';
 import { attachRequestContext } from './utils/request-context.js';
-import { globalLimiter, authLimiter, heavyLimiter } from './utils/rate-limit.js';
+import { globalLimiter, authLimiter, heavyLimiter, telemetryLimiter } from './utils/rate-limit.js';
 import { BduIdentityService } from './services/bdu-identity.service.js';
 import { TtcdsService } from './services/ttcds.service.js';
 import { Inf1003DeployController } from './modules/learning/inf1003-deploy.controller.js';
+import { TelemetryController } from './modules/admin/telemetry.controller.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -213,21 +214,17 @@ export function createApp() {
     res.sendFile(path.join(sudokuSiteDir, 'index.html'));
   });
 
-  // Admin Dashboard - Standalone Traffic & Logs site (completely independent from portal)
-  const adminSiteDir = path.join(ROOT_DIR, 'public', 'admin');
-  app.use('/admin', express.static(adminSiteDir, {
-    index: false,
-    redirect: false,
-    fallthrough: true,
-    setHeaders(res) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-    }
-  }));
+  // Admin Dashboard - Standalone React entry built at dist/client/admin.html
+  const adminBuildIndexPath = path.join(clientDistDir, 'admin.html');
   app.get(['/admin', '/admin/', '/admin/*'], (req, res) => {
+    if (path.extname(req.path)) {
+      return res.status(404).json({ result: false, message: 'Resource not found' });
+    }
     res.setHeader('Cache-Control', 'no-store');
-    res.sendFile(path.join(adminSiteDir, 'index.html'));
+    if (fs.existsSync(adminBuildIndexPath)) {
+      return res.sendFile(adminBuildIndexPath);
+    }
+    return res.status(503).send('Admin Dashboard chưa được build. Chạy npm run build:client.');
   });
 
   // Mount public chung phải đứng SAU các mount chuyên biệt (/games, /admin,
@@ -260,6 +257,9 @@ export function createApp() {
   app.use('/api/login', authLimiter);
   app.use('/api/rankings', heavyLimiter);
   app.use('/api/odp', heavyLimiter);
+  // Batched interaction telemetry uses its own bucket so analytics never
+  // competes with academic APIs or triggers service-lock maintenance screens.
+  app.post('/api/telemetry/events', telemetryLimiter, TelemetryController.ingestEvents);
   // KHÔNG áp heavyLimiter (30 request/15 phút) cho /api/vocab: mỗi lần bấm
   // "đã thuộc" là một request hợp lệ, người dùng đánh dấu vài chục từ sẽ bị
   // chặn với thông báo "Endpoint nặng" dù endpoint chỉ là một UPSERT nhỏ.

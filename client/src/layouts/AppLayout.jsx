@@ -7,6 +7,7 @@ import { useTtcdsCapabilities } from '../features/ttcds/useTtcdsCapabilities.jsx
 import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
 import { loadConfessionPage, prefetchConfession } from '../app/confession-preload.js';
+import { trackAction } from '../services/telemetry.js';
 
 const navGroupsFor = (items) => [
   { title: 'CỔNG SINH VIÊN', items: items.filter((i) => i.section !== 'ttcds').slice(0, 4) },
@@ -50,7 +51,11 @@ function CommandPalette({ open, onClose, itemsProp }) {
     `${item.label} ${item.keywords}`.toLocaleLowerCase('vi-VN').includes(query.toLocaleLowerCase('vi-VN'))
   );
 
-  const go = (path) => {
+  const go = (path, label) => {
+    trackAction('command_palette_navigate', {
+      label: label ? `Tìm nhanh: ${label}` : `Mở nhanh ${path}`,
+      metadata: { to: path }
+    });
     navigate(path);
     onClose();
   };
@@ -68,7 +73,7 @@ function CommandPalette({ open, onClose, itemsProp }) {
         <div className="palette-results">
           {items.length ? (
             items.map((item) => (
-              <button type="button" key={item.path} onClick={() => go(item.path)}>
+              <button type="button" key={item.path} onClick={() => go(item.path, item.label)}>
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-text">{item.label}</span>
                 <kbd>Enter</kbd>
@@ -173,7 +178,11 @@ export default function AppLayout() {
   }, []);
 
   const toggleTheme = () => {
-    setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark';
+      trackAction('theme_toggle', { label: next === 'dark' ? 'Bật giao diện tối' : 'Bật giao diện sáng' });
+      return next;
+    });
   };
 
   const displayName = auth.user?.name || 'Sinh viên';
@@ -246,7 +255,10 @@ export default function AppLayout() {
           <button
             id="btn-logout"
             className="btn-logout"
-            onClick={() => auth.logout({ message: 'Đã đăng xuất tài khoản.' })}
+            onClick={() => {
+              trackAction('auth_logout', { label: 'Đăng xuất tài khoản', featureId: 'portal' });
+              auth.logout({ message: 'Đã đăng xuất tài khoản.' });
+            }}
             title="Đăng xuất"
             aria-label="Đăng xuất"
           >

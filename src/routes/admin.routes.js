@@ -22,6 +22,8 @@ export function registerAdminRoutes(router, deps = {}) {
   router.get('/admin/dashboard/routes', AdminDashboardController.getRoutes);
   router.get('/admin/dashboard/users/:mssv/activity', AdminDashboardController.getUserActivity);
   router.get('/admin/dashboard/system', AdminDashboardController.getSystem);
+  router.get('/admin/dashboard/vps', AdminDashboardController.getVpsMetrics);
+  router.post('/admin/dashboard/vps/flush-buffers', AdminDashboardController.flushVpsBuffers);
   router.get('/admin/dashboard/ranking-sync', AdminDashboardController.getRankingSync);
   router.put('/admin/dashboard/ranking-sync', AdminDashboardController.updateRankingSync);
   router.get('/admin/dashboard/odp-sync', AdminDashboardController.getOdpSync);
@@ -33,5 +35,13 @@ export function registerAdminRoutes(router, deps = {}) {
   router.get('/admin/dashboard/insights/cohort', AdminDashboardController.getInsightsCohort);
   router.get('/admin/dashboard/insights/quality', AdminDashboardController.getInsightsQuality);
   router.get('/admin/dashboard/insights/users/:mssv/journey', AdminDashboardController.getInsightsJourney);
+  router.get('/admin/dashboard/live', AdminDashboardController.getLive);
+  router.get('/admin/dashboard/interactions/summary', AdminDashboardController.getInteractionsSummary);
+  router.get('/admin/dashboard/interactions/pages', AdminDashboardController.getInteractionsPages);
+  router.get('/admin/dashboard/interactions/elements', AdminDashboardController.getInteractionsElements);
+  router.get('/admin/dashboard/interactions/flows', AdminDashboardController.getInteractionsFlows);
+  router.get('/admin/dashboard/interactions/stream', AdminDashboardController.getInteractionsStream);
+  router.get('/admin/dashboard/interactions/tools', AdminDashboardController.getAutomationTools);
+  router.get('/admin/dashboard/interactions/users/:mssv/timeline', AdminDashboardController.getUserUnifiedTimeline);
   router.post('/admin/dashboard/purge', AdminDashboardController.purgeLogs);
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { goToReturnTo, isInternalReturnTo } from './session.js';
+import { trackAction } from '../../services/telemetry.js';
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -41,6 +42,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await auth.login(trimmedUsername, password, remember);
+      trackAction('auth_login', { label: 'Đăng nhập thành công', featureId: 'portal' });
       handleReturnTo(returnTo);
     } catch (error) {
       const message = loginErrorMessage(error);

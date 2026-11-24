@@ -15,6 +15,8 @@ import { MediaCleanupService } from '../services/media-cleanup.service.js';
 import { IdentityAdminService } from '../services/identity-admin.service.js';
 import { EntertainmentGameService } from '../services/entertainment-game.service.js';
 import { TrafficService } from '../services/traffic.service.js';
+import { InteractionTelemetryService } from '../modules/admin/interaction-telemetry.service.js';
+import { VpsMonitorService } from '../modules/admin/vps-monitor.service.js';
 import { AssetHistoryService } from '../services/asset-history.service.js';
 import { EnrollmentRunService } from '../modules/enrollment/enrollment-run.service.js';
 
@@ -23,6 +25,8 @@ export function startJobs() {
   ReminderSchedulerService.start();
   OutboxMailerService.start();
   TrafficService.start();
+  InteractionTelemetryService.start();
+  VpsMonitorService.start();
   AssetHistoryService.start();
   MediaCleanupService.start();
   EnrollmentRunService.resumeActiveRuns().catch((err) => {
@@ -42,6 +46,8 @@ export function stopJobs() {
   ReminderSchedulerService.stop();
   OutboxMailerService.stop();
   TrafficService.stop();
+  InteractionTelemetryService.stop();
+  VpsMonitorService.stop();
   EntertainmentGameService.stop();
   AssetHistoryService.stop();
   MediaCleanupService.stop();
