@@ -74,7 +74,8 @@ try {
   assert.match(documentXml, /TOC \\c &quot;Hinh&quot; \\h/);
   assert.match(documentXml, /TOC \\c &quot;Bang&quot; \\h/);
 
-  assert.match(documentXml, /Người hướng dẫn:/);
+  assert.match(documentXml, /Giảng viên hướng dẫn:/);
+  assert.doesNotMatch(documentXml, /Người hướng dẫn:/);
   assert.match(documentXml, /Sinh viên thực hiện:/);
   assert.match(documentXml, /Thành phố Hồ Chí Minh, tháng 9 năm 2026/);
   const bodyStyle = styleOf(stylesXml, 'WFBody');
