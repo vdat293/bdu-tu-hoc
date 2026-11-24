@@ -10,8 +10,12 @@ import { fileURLToPath } from 'url';
 import { AsyncQueue } from '../utils/async-queue.js';
 import AdmZip from 'adm-zip';
 import {
-  analyzeDocxStructure, formatStructuredDocx, applyRoleOverrides, applyParagraphNotes, buildStructurePreview, ROLE_OVERRIDE_KEYS
+  analyzeDocxStructure, formatStructuredDocx, applyRoleOverrides, applyParagraphNotes, applyParagraphMutations, buildStructurePreview, ROLE_OVERRIDE_KEYS
 } from '../utils/docx-structure.js';
+import {
+  stampSourceParagraphBookmarks,
+  buildRenderedDocxPreview
+} from '../utils/docx-preview-renderer.js';
 import {
   normalizeFormattedDocx,
   normalizeSourceLists
@@ -36,6 +40,8 @@ const MAX_ROLE_OVERRIDES = 5000;
  * Accepts a JSON string or object { "<paragraphIndex>": "<roleKey>|auto" } and
  * returns a sanitized plain object. Unknown keys/roles are dropped.
  */
+const VALID_PARAGRAPH_KEY_RE = /^(?:\d{1,6}|ins_[a-zA-Z0-9_-]{1,32})$/;
+
 export function normalizeRoleOverrides(raw) {
   if (!raw) return {};
   let value = raw;
@@ -45,7 +51,7 @@ export function normalizeRoleOverrides(raw) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result = {};
   for (const [index, role] of Object.entries(value).slice(0, MAX_ROLE_OVERRIDES)) {
-    if (!/^\d{1,6}$/.test(index)) continue;
+    if (!VALID_PARAGRAPH_KEY_RE.test(index)) continue;
     if (role !== 'auto' && !ROLE_OVERRIDE_KEYS.includes(role)) continue;
     result[index] = role;
   }
@@ -62,16 +68,75 @@ export function normalizeParagraphNotes(raw) {
   const result = {};
   for (const [index, note] of Object.entries(value).slice(0, 500)) {
     const text = typeof note === 'string' ? note.trim().slice(0, 1000) : '';
-    if (/^\d{1,6}$/.test(index) && text) result[index] = text;
+    if (VALID_PARAGRAPH_KEY_RE.test(index) && text) result[index] = text;
   }
   return result;
 }
 
-function withRoleOverrides(inputPath, overrides, targetPath, notes = {}) {
-  if (!Object.keys(overrides).length && !Object.keys(notes).length) return inputPath;
+export function normalizeParagraphMutations(raw) {
+  const empty = { edits: {}, deletes: [], inserts: [], count: 0 };
+  if (!raw) return empty;
+  let value = raw;
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw); } catch { throw new Error('Dữ liệu chỉnh sửa nội dung không hợp lệ.'); }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return empty;
+
+  const edits = {};
+  if (value.edits && typeof value.edits === 'object' && !Array.isArray(value.edits)) {
+    for (const [key, text] of Object.entries(value.edits).slice(0, 3000)) {
+      if (!VALID_PARAGRAPH_KEY_RE.test(key) || typeof text !== 'string') continue;
+      edits[key] = text.slice(0, 20000);
+    }
+  }
+
+  const deletes = [];
+  if (Array.isArray(value.deletes)) {
+    const seen = new Set();
+    for (const rawKey of value.deletes.slice(0, 3000)) {
+      const k = String(rawKey || '').trim();
+      if (VALID_PARAGRAPH_KEY_RE.test(k) && !seen.has(k)) {
+        seen.add(k);
+        deletes.push(k);
+      }
+    }
+  }
+
+  const inserts = [];
+  if (Array.isArray(value.inserts)) {
+    const seenIds = new Set();
+    for (const item of value.inserts.slice(0, 2000)) {
+      if (!item || typeof item !== 'object') continue;
+      const id = String(item.id || '').trim();
+      if (!/^ins_[a-zA-Z0-9_-]{1,32}$/.test(id) || seenIds.has(id)) continue;
+      seenIds.add(id);
+      const afterKey = item.afterKey !== undefined && item.afterKey !== null ? String(item.afterKey).trim() : '';
+      const beforeKey = item.beforeKey !== undefined && item.beforeKey !== null ? String(item.beforeKey).trim() : '';
+      const role = ROLE_OVERRIDE_KEYS.includes(item.role) ? item.role : 'body';
+      const text = typeof item.text === 'string' ? item.text.slice(0, 20000) : '';
+      inserts.push({
+        id,
+        afterKey: VALID_PARAGRAPH_KEY_RE.test(afterKey) ? afterKey : '',
+        beforeKey: VALID_PARAGRAPH_KEY_RE.test(beforeKey) ? beforeKey : '',
+        role,
+        text
+      });
+    }
+  }
+
+  const count = Object.keys(edits).length + deletes.length + inserts.length;
+  return { edits, deletes, inserts, count };
+}
+
+function withRoleOverrides(inputPath, overrides, targetPath, notes = {}, mutations = null) {
+  const hasMutations = Boolean(mutations && mutations.count > 0);
+  if (!Object.keys(overrides).length && !Object.keys(notes).length && !hasMutations) return inputPath;
   const archive = new AdmZip(inputPath);
   applyRoleOverrides(archive, overrides);
   applyParagraphNotes(archive, notes);
+  if (hasMutations) {
+    applyParagraphMutations(archive, { ...mutations, roleOverrides: overrides });
+  }
   archive.writeZip(targetPath);
   return targetPath;
 }
@@ -136,7 +201,8 @@ export const WordFmtService = {
     onlyExistingCaptions = true,
     skipProposal = false,
     roleOverrides = {},
-    paragraphNotes = {}
+    paragraphNotes = {},
+    paragraphMutations = null
   }) {
     if (!['tieu_luan', 'do_an_tot_nghiep'].includes(documentType)) {
       throw new Error('Loại tài liệu không hợp lệ.');
@@ -192,7 +258,8 @@ export const WordFmtService = {
         try {
           const overrides = normalizeRoleOverrides(roleOverrides);
           const notes = normalizeParagraphNotes(paragraphNotes);
-          const sourcePath = withRoleOverrides(inputPath, overrides, overridePath, notes);
+          const mutations = normalizeParagraphMutations(paragraphMutations);
+          const sourcePath = withRoleOverrides(inputPath, overrides, overridePath, notes, mutations);
           const sourceStructure = sourcePath === inputPath ? structure : analyzeDocxStructure(sourcePath);
           const result = formatStructuredDocx(sourcePath, outputPath, {
             profile: runtimeProfile, instructor, student, studentId, topic, className,
@@ -203,6 +270,7 @@ export const WordFmtService = {
           if (result.report?.structure) {
             result.report.structure.manualRoleOverrides = Object.keys(overrides).length;
             result.report.structure.manualNotes = Object.keys(notes).length;
+            result.report.structure.manualContentEdits = mutations.count;
           }
           rememberOutputOwner(path.basename(outputPath), ownerMssv);
           return { ...result, outputFile: path.basename(outputPath), stdout: '' };
@@ -330,22 +398,162 @@ export const WordFmtService = {
   },
 
   /**
-   * Structure preview for the editor: how each paragraph will be classified.
-   * Paragraph indexes match the `roleOverrides` accepted by formatDocx for the
-   * same uploaded file.
+   * Structure & rendered A4 page preview for the editor.
+   * Backward-compatible: second argument may be plain `roleOverrides` OR an
+   * options object `{ renderDocument: true, roleOverrides, paragraphNotes, ... }`.
    */
-  async previewStructure(inputPath, roleOverrides = {}) {
+  async previewStructure(inputPath, roleOverridesOrOptions = {}) {
     if (!fs.existsSync(inputPath)) throw new Error('Không tìm thấy file tải lên.');
+    const isRichOptions = Boolean(
+      roleOverridesOrOptions
+      && typeof roleOverridesOrOptions === 'object'
+      && !Array.isArray(roleOverridesOrOptions)
+      && (
+        'renderDocument' in roleOverridesOrOptions
+        || 'documentType' in roleOverridesOrOptions
+        || 'roleOverrides' in roleOverridesOrOptions
+        || 'paragraphNotes' in roleOverridesOrOptions
+        || 'paragraphMutations' in roleOverridesOrOptions
+      )
+    );
+    const rawOverrides = isRichOptions ? roleOverridesOrOptions.roleOverrides : roleOverridesOrOptions;
+    const renderDocument = Boolean(isRichOptions && roleOverridesOrOptions.renderDocument);
+
     return wordFmtQueue.enqueue(async () => {
-      const overrides = normalizeRoleOverrides(roleOverrides);
+      const overrides = normalizeRoleOverrides(rawOverrides);
+      const notes = isRichOptions ? normalizeParagraphNotes(roleOverridesOrOptions.paragraphNotes) : {};
+      const mutations = isRichOptions ? normalizeParagraphMutations(roleOverridesOrOptions.paragraphMutations) : { edits: {}, deletes: [], inserts: [], count: 0 };
       let archive;
       try {
         archive = new AdmZip(inputPath);
+        if (renderDocument || mutations.count > 0) stampSourceParagraphBookmarks(archive);
         if (Object.keys(overrides).length) applyRoleOverrides(archive, overrides);
+        if (Object.keys(notes).length) applyParagraphNotes(archive, notes);
+        if (mutations.count > 0) {
+          applyParagraphMutations(archive, { ...mutations, roleOverrides: overrides }, { stampPreviewBookmarks: renderDocument || mutations.count > 0 });
+        }
       } catch {
         throw new Error('File Word không hợp lệ hoặc bị hỏng.');
       }
-      return buildStructurePreview(analyzeDocxStructure(archive));
+
+      const sourceAnalysis = analyzeDocxStructure(archive);
+      const structurePreview = buildStructurePreview(sourceAnalysis, { maxText: renderDocument ? 600 : 280 });
+      if (!renderDocument) return structurePreview;
+
+      const id = `pv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const tempSrcPath = path.join(TEMP_DIR, `${id}_src.docx`);
+      const tempOutPath = path.join(TEMP_DIR, `${id}_out.docx`);
+      try {
+        const documentType = roleOverridesOrOptions.documentType === 'do_an_tot_nghiep' ? 'do_an_tot_nghiep' : 'tieu_luan';
+        const profileName = documentType === 'do_an_tot_nghiep' ? 'do_an_tot_nghiep.json' : 'tieu_luan.json';
+        const baseProfilePath = path.join(PROFILES_DIR, profileName);
+        const runtimeProfile = JSON.parse(fs.readFileSync(baseProfilePath, 'utf8'));
+        const documentMode = roleOverridesOrOptions.documentMode === 'binding_package' ? 'binding_package' : 'digital_document';
+
+        const institution = String(roleOverridesOrOptions.institution || '').trim();
+        const institute = String(roleOverridesOrOptions.institute || '').trim();
+        const faculty = String(roleOverridesOrOptions.faculty || '').trim();
+        const course = String(roleOverridesOrOptions.course || '').trim();
+        const location = String(roleOverridesOrOptions.location || '').trim();
+
+        runtimeProfile.cover = { ...(runtimeProfile.cover || {}) };
+        if (institution) runtimeProfile.cover.institution = institution;
+        if (institute) runtimeProfile.cover.institute = institute;
+        if (faculty) runtimeProfile.cover.faculty = faculty;
+        if (course) runtimeProfile.cover.course = course;
+        if (location) runtimeProfile.cover.location = location;
+        runtimeProfile.document_modes = {
+          ...(runtimeProfile.document_modes || {}),
+          default: documentMode
+        };
+
+        const instructor = String(roleOverridesOrOptions.instructor || '').trim() || '……………………';
+        const student = String(roleOverridesOrOptions.student || '').trim() || '……………………';
+        const studentId = String(roleOverridesOrOptions.studentId || '').trim();
+        const className = String(roleOverridesOrOptions.className || '').trim();
+        const topic = String(roleOverridesOrOptions.topic || '').trim();
+        const documentTitle = documentType === 'do_an_tot_nghiep'
+          ? 'ĐỒ ÁN TỐT NGHIỆP'
+          : (String(roleOverridesOrOptions.documentTitle || '').trim() || 'TIỂU LUẬN MÔN HỌC');
+        const month = String(roleOverridesOrOptions.month || '').trim();
+        const year = String(roleOverridesOrOptions.year || '').trim();
+        const frontMatter = roleOverridesOrOptions.frontMatter !== undefined
+          ? String(roleOverridesOrOptions.frontMatter)
+          : 'cover,comments,thanks';
+        const onlyExistingCaptions = roleOverridesOrOptions.onlyExistingCaptions === undefined
+          ? true
+          : (roleOverridesOrOptions.onlyExistingCaptions === 'true' || roleOverridesOrOptions.onlyExistingCaptions === true);
+        const skipProposal = roleOverridesOrOptions.skipProposal === 'true' || roleOverridesOrOptions.skipProposal === true;
+
+        archive.writeZip(tempSrcPath);
+        const stampedAnalysis = analyzeDocxStructure(tempSrcPath);
+        formatStructuredDocx(tempSrcPath, tempOutPath, {
+          profile: runtimeProfile,
+          instructor,
+          student,
+          studentId,
+          topic,
+          className,
+          documentTitle,
+          institution,
+          institute,
+          faculty,
+          course,
+          location,
+          month,
+          year,
+          documentMode,
+          documentType,
+          frontMatter,
+          onlyExistingCaptions,
+          skipProposal
+        }, stampedAnalysis);
+
+        const formattedArchive = new AdmZip(tempOutPath);
+        const document = buildRenderedDocxPreview(formattedArchive, {
+          sourcePreview: structurePreview,
+          overrides,
+          notes
+        });
+        return {
+          ...structurePreview,
+          document
+        };
+      } catch (renderErr) {
+        console.warn('WordFmt live document render fallback:', renderErr?.message);
+        return {
+          ...structurePreview,
+          document: null,
+          renderWarning: 'Chưa thể dựng bản in đầy đủ cho tệp này; đang hiển thị cấu trúc chuẩn.'
+        };
+      } finally {
+        try { if (fs.existsSync(tempSrcPath)) fs.unlinkSync(tempSrcPath); } catch { /* best effort */ }
+        try { if (fs.existsSync(tempOutPath)) fs.unlinkSync(tempOutPath); } catch { /* best effort */ }
+      }
+    });
+  },
+
+  /**
+   * Renders the paginated A4 preview of an already-formatted output file owned by `ownerMssv`.
+   */
+  async previewFormattedOutput(outputFile, ownerMssv) {
+    const safeName = path.basename(String(outputFile || ''));
+    if (!this.canDownload(safeName, ownerMssv)) {
+      return null;
+    }
+    const targetPath = path.join(TEMP_DIR, safeName);
+    if (!fs.existsSync(targetPath)) return null;
+    return wordFmtQueue.enqueue(async () => {
+      const archive = new AdmZip(targetPath);
+      const analysis = analyzeDocxStructure(archive);
+      const structurePreview = buildStructurePreview(analysis, { maxText: 600 });
+      const document = buildRenderedDocxPreview(archive, {
+        sourcePreview: structurePreview
+      });
+      return {
+        ...structurePreview,
+        document
+      };
     });
   },
 

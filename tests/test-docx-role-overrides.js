@@ -91,7 +91,11 @@ try {
 
   const again = analyzeDocxStructure(out);
   assert.equal(again.records.find(r => r.text === 'TÓM TẮT').role, 'major_title');
-  assert.equal(again.records.find(r => r.text === 'Tổng kết quy trình').level, 3);
+  const promotedSummary = again.records.find(r => r.text.includes('Tổng kết quy trình'));
+  assert.ok(promotedSummary, 'promoted Heading 3 survives re-analysis');
+  assert.equal(promotedSummary.text, '1.1.1. Tổng kết quy trình');
+  assert.equal(promotedSummary.level, 3);
+  assert.equal(promotedSummary.number, '1.1.1');
 
   // 4. "auto" clears a previous decision.
   const clearArchive = new AdmZip(prepared);

@@ -115,9 +115,9 @@ try {
   outputPaths.push(bindingResult.outputPath);
   const bindingArchive = new AdmZip(bindingResult.outputPath);
   const bindingDocumentXml = bindingArchive.readAsText('word/document.xml');
-  assert.equal(bindingResult.report.outputNormalization.bindingPagesInserted, 2);
+  assert.equal(bindingResult.report.outputNormalization.bindingPagesInserted, 1);
   assert.equal((bindingDocumentXml.match(/TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG/g) || []).length, 2);
-  assert.equal(bindingResult.report.outputNormalization.sectionsNormalized, result.report.outputNormalization.sectionsNormalized + 2);
+  assert.equal(bindingResult.report.outputNormalization.sectionsNormalized, result.report.outputNormalization.sectionsNormalized + 1);
 
   console.log('✅ WordFmt end-to-end: profile, OOXML, headers, lists, captions and references passed.');
 } finally {

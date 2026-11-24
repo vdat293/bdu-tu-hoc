@@ -942,7 +942,18 @@ export function processStylesXml(stylesXml, profile = {}) {
     WFCoverMeta: { run: [font, { name: 'sz', xml: '<w:sz w:val="28"/>' }, { name: 'szCs', xml: '<w:szCs w:val="28"/>' }] },
     WFCoverDate: { run: [font, { name: 'b', xml: '<w:b/>' }, { name: 'bCs', xml: '<w:bCs/>' }, { name: 'sz', xml: '<w:sz w:val="28"/>' }, { name: 'szCs', xml: '<w:szCs w:val="28"/>' }], paragraph: [{ name: 'jc', xml: '<w:jc w:val="center"/>' }] },
     WFFrontMatterTitle: { run: [font, black, { name: 'b', xml: '<w:b/>' }, { name: 'bCs', xml: '<w:bCs/>' }, { name: 'sz', xml: '<w:sz w:val="36"/>' }, { name: 'szCs', xml: '<w:szCs w:val="36"/>' }], paragraph: [{ name: 'pageBreakBefore', xml: '<w:pageBreakBefore/>' }, { name: 'jc', xml: '<w:jc w:val="center"/>' }] },
-    TableofFigures: { run: [font, black, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
+    TableofFigures: {
+      run: [
+        font, black,
+        { name: 'b', xml: '<w:b w:val="0"/>' },
+        { name: 'bCs', xml: '<w:bCs w:val="0"/>' },
+        { name: 'i', xml: '<w:i w:val="0"/>' },
+        { name: 'iCs', xml: '<w:iCs w:val="0"/>' },
+        { name: 'sz', xml: '<w:sz w:val="26"/>' },
+        { name: 'szCs', xml: '<w:szCs w:val="26"/>' }
+      ],
+      paragraph: []
+    },
     TOC1: { run: [font, black, { name: 'b', xml: '<w:b w:val="1"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
     TOC2: { run: [font, black, { name: 'b', xml: '<w:b w:val="1"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },
     TOC3: { run: [font, black, { name: 'b', xml: '<w:b w:val="0"/>' }, { name: 'i', xml: '<w:i w:val="0"/>' }, { name: 'sz', xml: '<w:sz w:val="26"/>' }, { name: 'szCs', xml: '<w:szCs w:val="26"/>' }], paragraph: [] },

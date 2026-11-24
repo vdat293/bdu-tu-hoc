@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 
 const CANONICAL_PUBLIC_ORIGIN = 'https://sv.bdu.io.vn';
 export const BDU_LOGO_WEB_PATH = '/assets/images/logo-hao-quang-transparent.png';
@@ -252,9 +253,13 @@ def resolve_bdu_logo(cache_path: Path = Path("bdu-cover-logo.png")) -> Path | No
 `;
 }
 
-export default function AiSkillPanel({ info, open, onToggle, onNotify }) {
+export default function AiSkillPanel({ info, open, onToggle, onClose, onNotify }) {
   const [tab, setTab] = useState('prompt');
   const [copied, setCopied] = useState(false);
+  const dialogRef = useRef(null);
+  const closeModal = onClose || onToggle;
+
+  useViewportDialog(Boolean(open), closeModal, dialogRef);
 
   const content = useMemo(
     () => (tab === 'skill' ? buildSkillMarkdown(info) : buildUniversalPrompt(info)),
@@ -290,72 +295,101 @@ export default function AiSkillPanel({ info, open, onToggle, onNotify }) {
   };
 
   return (
-    <section id="wordfmt-ai-skill" className="wf-skill glass-panel" aria-labelledby="wf-skill-title">
-      <div className="wf-skill-bar">
-        <div>
-          <p className="wf-preview-eyebrow">Dùng cho mọi mô hình AI · ChatGPT · Claude · Gemini · Cursor</p>
-          <h3 id="wf-skill-title" className="wf-skill-title">Skill / Prompt tự động định dạng chuẩn BDU</h3>
-          <p className="wf-skill-desc">
-            Sao chép prompt này dán sang bất kỳ AI nào để AI tự viết hoặc xuất file Word (`.docx`) đúng 100% quy chuẩn BDU
-            (đã kèm đường dẫn lấy Logo BDU chuẩn để chặn AI tự vẽ logo giả). Thông tin form phía trên được điền tự động.
-          </p>
+    <>
+      <section id="wordfmt-ai-skill" className="wf-skill-strip" aria-labelledby="wf-skill-title">
+        <div className="wf-skill-strip-copy">
+          <span className="wf-skill-strip-kicker">AI Prompt &amp; Agent Skill · Chuẩn BDU</span>
+          <h3 id="wf-skill-title" className="wf-skill-strip-title">
+            Dùng ChatGPT / Claude / Gemini tự xuất DOCX đúng quy chuẩn
+          </h3>
         </div>
         <div className="wf-skill-bar-actions">
-          <button type="button" className="btn btn-primary" onClick={copyContent}>
-            {copied ? '✓ Đã sao chép' : 'Sao chép Prompt'}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={copyContent}>
+            {copied ? '✓ Đã sao chép' : 'Sao chép nhanh'}
           </button>
-          <button type="button" className="btn btn-secondary" onClick={onToggle} aria-expanded={open}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onToggle} aria-expanded={open}>
             {open ? 'Thu gọn' : 'Xem & tùy chọn'}
           </button>
         </div>
-      </div>
+      </section>
 
-      {open && (
-        <div className="wf-skill-body">
-          <div className="wf-skill-logo-note">
-            <img src={BDU_LOGO_WEB_PATH} alt="Logo chuẩn Trường Đại học Bình Dương" className="wf-skill-logo-thumb" />
-            <p>
-              <strong>Chống AI tự tạo logo giả:</strong> Prompt đã tích hợp sẵn đường dẫn logo chuẩn cục bộ và URL công khai.
-              Nếu dùng ChatGPT / Claude / Gemini bản web (sandbox chặn Internet), hãy bấm <strong>Tải Logo chuẩn (.png)</strong> rồi đính kèm cùng prompt.
-            </p>
-          </div>
-          <div className="wf-skill-toolbar">
-            <div className="wf-preview-filters" role="tablist" aria-label="Định dạng skill">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'prompt'}
-                className={`wf-preview-filter${tab === 'prompt' ? ' is-active' : ''}`}
-                onClick={() => setTab('prompt')}
-              >
-                Prompt phổ quát (ChatGPT / Claude / Gemini)
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'skill'}
-                className={`wf-preview-filter${tab === 'skill' ? ' is-active' : ''}`}
-                onClick={() => setTab('skill')}
-              >
-                Agent Skill (SKILL.md)
-              </button>
+      {open ? (
+        <ViewportModal
+          id="wordfmt-ai-skill-modal"
+          labelledBy="wf-skill-modal-heading"
+          onClose={closeModal}
+          dialogRef={dialogRef}
+          className="wf-skill-modal"
+        >
+          <div className="wf-skill-modal-head">
+            <div>
+              <p className="wf-preview-eyebrow">ChatGPT · Claude · Gemini · Cursor · Antigravity</p>
+              <h3 id="wf-skill-modal-heading" className="wf-skill-title">
+                Skill / Prompt tự động định dạng chuẩn BDU
+              </h3>
             </div>
-            <div className="wf-skill-toolbar-actions">
-              <a
-                href={BDU_LOGO_WEB_PATH}
-                download="bdu-cover-logo.png"
-                className="btn btn-ghost"
-              >
-                Tải Logo chuẩn (.png)
-              </a>
-              <button type="button" className="btn btn-ghost" onClick={downloadSkill}>
-                Tải SKILL.md
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-icon wf-modal-close"
+              onClick={closeModal}
+              aria-label="Đóng hộp thoại Skill AI"
+            >
+              ✕
+            </button>
           </div>
-          <pre className="wf-skill-code" aria-label="Nội dung skill cho AI"><code>{content}</code></pre>
-        </div>
-      )}
-    </section>
+
+          <div className="wf-skill-body">
+            <div className="wf-skill-logo-note">
+              <img src={BDU_LOGO_WEB_PATH} alt="Logo chuẩn Trường Đại học Bình Dương" className="wf-skill-logo-thumb" />
+              <p>
+                <strong>Chống AI tự tạo logo giả:</strong> Prompt đã tích hợp sẵn đường dẫn logo chuẩn cục bộ và URL công khai.
+                Nếu dùng ChatGPT / Claude / Gemini bản web (sandbox chặn Internet), hãy bấm <strong>Tải Logo chuẩn (.png)</strong> rồi đính kèm cùng prompt.
+              </p>
+            </div>
+
+            <div className="wf-skill-toolbar">
+              <div className="wf-preview-filters" role="tablist" aria-label="Định dạng skill">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'prompt'}
+                  className={`wf-preview-filter${tab === 'prompt' ? ' is-active' : ''}`}
+                  onClick={() => setTab('prompt')}
+                >
+                  Prompt phổ quát (ChatGPT / Claude / Gemini)
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'skill'}
+                  className={`wf-preview-filter${tab === 'skill' ? ' is-active' : ''}`}
+                  onClick={() => setTab('skill')}
+                >
+                  Agent Skill (SKILL.md)
+                </button>
+              </div>
+
+              <div className="wf-skill-toolbar-actions">
+                <a
+                  href={BDU_LOGO_WEB_PATH}
+                  download="bdu-cover-logo.png"
+                  className="btn btn-ghost"
+                >
+                  Tải Logo chuẩn (.png)
+                </a>
+                <button type="button" className="btn btn-ghost" onClick={downloadSkill}>
+                  Tải SKILL.md
+                </button>
+                <button type="button" className="btn btn-primary" onClick={copyContent}>
+                  {copied ? '✓ Đã sao chép' : 'Sao chép Prompt'}
+                </button>
+              </div>
+            </div>
+
+            <pre className="wf-skill-code" aria-label="Nội dung skill cho AI"><code>{content}</code></pre>
+          </div>
+        </ViewportModal>
+      ) : null}
+    </>
   );
 }

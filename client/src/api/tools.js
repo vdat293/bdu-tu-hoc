@@ -10,6 +10,18 @@ export async function previewDocxStructure(token, formData, { signal } = {}) {
   return data?.preview || null;
 }
 
+export async function getFormattedDocxPreview(token, downloadUrlOrFilename, { signal } = {}) {
+  const raw = String(downloadUrlOrFilename || '').trim();
+  const filename = raw.includes('/') ? raw.split('/').pop().split('?')[0] : raw;
+  if (!filename) return null;
+  const data = await request(`/api/wordfmt/preview/${encodeURIComponent(decodeURIComponent(filename))}`, {
+    token,
+    signal,
+    defaultMessage: 'Không thể tải bản xem thực tế của file đã chuẩn hóa.'
+  });
+  return data?.preview || null;
+}
+
 export async function downloadWordFmt(token, url, { signal } = {}) {
   return request(url, { token, responseType: 'blob', signal, defaultMessage: 'Không thể tải file Word đã chuẩn hóa.' });
 }

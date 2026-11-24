@@ -9,5 +9,6 @@ import { ApiController, upload, requireVerifiedMssv } from './_shared/http-deps.
 export function registerWordFmtRoutes(router, deps = {}) {
   router.post('/wordfmt/format', requireVerifiedMssv, upload.single('document'), ApiController.formatDocx);
   router.post('/wordfmt/preview', requireVerifiedMssv, upload.single('document'), ApiController.previewDocxStructure);
+  router.get('/wordfmt/preview/:filename', requireVerifiedMssv, ApiController.previewFormattedDocx);
   router.get('/wordfmt/download/:filename', requireVerifiedMssv, ApiController.downloadFormattedDocx);
 }

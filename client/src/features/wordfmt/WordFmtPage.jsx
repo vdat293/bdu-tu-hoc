@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { downloadWordFmt, formatDocx, previewDocxStructure } from '../../api/tools.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  downloadWordFmt,
+  formatDocx,
+  previewDocxStructure
+} from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
-import StructurePreview from './StructurePreview.jsx';
+import DocxReviewWorkspace from './DocxReviewWorkspace.jsx';
 import AiSkillPanel from './AiSkillPanel.jsx';
+import { SakugaButton, SakugaProgress } from './SakugaVfx.jsx';
 import '../../styles/wordfmt-status.css';
 import '../../styles/wordfmt-preview.css';
 
@@ -20,6 +25,48 @@ const WORD_FMT_STAGES = [
 
 const SAFE_ERROR_MESSAGE = 'Không thể hoàn tất việc định dạng file. Vui lòng kiểm tra file DOCX hoặc kết nối rồi thử lại.';
 
+const INITIAL_DOC_STATE = {
+  roleOverrides: {},
+  paragraphNotes: {},
+  textEdits: {},
+  deletedItems: [],
+  insertedItems: []
+};
+
+function buildParagraphMutationsPayload(docState) {
+  if (!docState) return null;
+  const deletedSet = new Set((docState.deletedItems || []).map(String));
+  const edits = {};
+  for (const [k, val] of Object.entries(docState.textEdits || {})) {
+    const keyStr = String(k);
+    if (!deletedSet.has(keyStr) && typeof val === 'string') {
+      edits[keyStr] = val;
+    }
+  }
+  const inserts = (docState.insertedItems || [])
+    .filter((ins) => ins && !deletedSet.has(String(ins.id)))
+    .map((ins) => {
+      const idStr = String(ins.id);
+      return {
+        id: idStr,
+        afterKey: ins.afterKey ? String(ins.afterKey) : '',
+        beforeKey: ins.beforeKey ? String(ins.beforeKey) : '',
+        role: docState.roleOverrides?.[idStr] || ins.role || 'body',
+        text: Object.prototype.hasOwnProperty.call(edits, idStr)
+          ? edits[idStr]
+          : String(ins.text ?? '')
+      };
+    });
+  const deletes = (docState.deletedItems || [])
+    .map(String)
+    .filter((k) => /^\d+$/.test(k));
+
+  if (!Object.keys(edits).length && !inserts.length && !deletes.length) {
+    return null;
+  }
+  return { edits, deletes, inserts };
+}
+
 function asRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }
@@ -31,7 +78,7 @@ function asCount(value) {
 
 function reportWarnings(structure, outputNormalization) {
   const sources = [structure?.warnings, outputNormalization?.warnings];
-  return [...new Set(sources.flatMap((warnings) => Array.isArray(warnings) ? warnings : [])
+  return [...new Set(sources.flatMap((warnings) => (Array.isArray(warnings) ? warnings : []))
     .filter((warning) => typeof warning === 'string' && warning.trim()))];
 }
 
@@ -64,11 +111,13 @@ export function buildCompletionCards(result, choices) {
 
   const manualRoleOverrides = asCount(structure?.manualRoleOverrides);
   const manualNotes = asCount(structure?.manualNotes);
-  if (manualRoleOverrides || manualNotes) {
+  const manualContentEdits = asCount(structure?.manualContentEdits);
+  if (manualRoleOverrides || manualNotes || manualContentEdits) {
     cards.push({
       tone: 'info',
       title: 'Chỉnh sửa từ bản xem trước',
       description: [
+        manualContentEdits && `Đã áp dụng ${manualContentEdits} chỉnh sửa nội dung trực tiếp trên trang giấy.`,
         manualRoleOverrides && `Đã áp dụng ${manualRoleOverrides} đoạn đổi kiểu theo bạn chọn.`,
         manualNotes && `Đã chèn ${manualNotes} ghi chú dạng comment vào file Word.`
       ].filter(Boolean).join(' ')
@@ -220,27 +269,132 @@ export default function WordFmtPage() {
   const [includeCover, setIncludeCover] = useState(true);
   const [includeComments, setIncludeComments] = useState(true);
   const [includeThanks, setIncludeThanks] = useState(true);
-  // Missing captions are ambiguous in real reports: many tables are layout or
-  // use-case forms, so inserting placeholders can visibly alter the document.
   const [onlyExistingCaptions, setOnlyExistingCaptions] = useState(true);
   const [skipProposal, setSkipProposal] = useState(false);
 
   const [run, setRun] = useState(() => getToolRun('wordfmt') || { status: 'idle', result: null });
+  const [dismissedCompletedRun, setDismissedCompletedRun] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadDoneCount, setDownloadDoneCount] = useState(0);
   const [confirmUI, askConfirm] = useConfirm();
 
-  // Structure preview & manual corrections (shown in Review step after submit).
+  // Google Docs Review Workspace & Direct Word Editing state (with bounded Undo/Redo)
   const [inReview, setInReview] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [previewDirty, setPreviewDirty] = useState(false);
-  const [roleOverrides, setRoleOverrides] = useState({});
-  const [paragraphNotes, setParagraphNotes] = useState({});
+  const [editHistory, setEditHistory] = useState({
+    current: INITIAL_DOC_STATE,
+    past: [],
+    future: [],
+    lastCoalesceKey: null
+  });
   const previewRequestRef = useRef(0);
+  const insertSeqRef = useRef(0);
 
-  const loadPreview = useCallback(async (targetFile, overrides = {}) => {
+  const {
+    roleOverrides,
+    paragraphNotes,
+    textEdits,
+    deletedItems,
+    insertedItems
+  } = editHistory.current;
+  const canUndo = editHistory.past.length > 0;
+  const canRedo = editHistory.future.length > 0;
+
+  const commitEdit = useCallback((updater, coalesceKey = null) => {
+    setEditHistory((prev) => {
+      const nextDoc = updater(prev.current);
+      if (nextDoc === prev.current) return prev;
+      const shouldCoalesce = Boolean(coalesceKey && prev.lastCoalesceKey === coalesceKey && prev.past.length > 0);
+      return {
+        current: nextDoc,
+        past: shouldCoalesce ? prev.past : [...prev.past.slice(-49), prev.current],
+        future: [],
+        lastCoalesceKey: coalesceKey
+      };
+    });
+  }, []);
+
+  const coverInfo = useMemo(() => ({
+    includeCover,
+    documentType,
+    documentMode: mode,
+    institution,
+    faculty,
+    docTitle,
+    topic,
+    course,
+    instructor,
+    student,
+    studentId,
+    className,
+    location,
+    month,
+    year
+  }), [
+    includeCover, documentType, mode, institution, faculty,
+    docTitle, topic, course, instructor, student, studentId,
+    className, location, month, year
+  ]);
+
+  const appendFormattingParams = useCallback((body, docState = INITIAL_DOC_STATE) => {
+    const overridesMap = docState?.roleOverrides || {};
+    const notesMap = docState?.paragraphNotes || {};
+    const mutationsPayload = buildParagraphMutationsPayload(docState);
+
+    const frontMatter = [
+      includeCover && 'cover',
+      includeComments && 'comments',
+      includeThanks && 'thanks'
+    ].filter(Boolean).join(',');
+
+    body.append('documentType', documentType);
+    body.append('documentMode', mode);
+    body.append('instructor', instructor);
+    body.append('student', student);
+    if (studentId) body.append('studentId', studentId);
+    if (className) body.append('className', className);
+    if (topic) body.append('topic', topic);
+    if (docTitle) body.append('documentTitle', docTitle);
+    if (institution) body.append('institution', institution);
+    if (faculty) body.append('faculty', faculty);
+    if (course) body.append('course', course);
+    if (location) body.append('location', location);
+    if (month) body.append('month', month);
+    if (year) body.append('year', year);
+
+    body.append('includeCover', includeCover);
+    body.append('includeComments', includeComments);
+    body.append('includeThanks', includeThanks);
+    body.append('frontMatter', frontMatter);
+    body.append('onlyExistingCaptions', onlyExistingCaptions);
+    body.append('skipProposal', skipProposal);
+
+    if (overridesMap && Object.keys(overridesMap).length) {
+      body.append('roleOverrides', JSON.stringify(overridesMap));
+    }
+    const cleanNotes = Object.fromEntries(
+      Object.entries(notesMap || {})
+        .map(([idx, note]) => [idx, String(note).trim()])
+        .filter(([, note]) => note)
+    );
+    if (Object.keys(cleanNotes).length) {
+      body.append('paragraphNotes', JSON.stringify(cleanNotes));
+    }
+    if (mutationsPayload) {
+      body.append('paragraphMutations', JSON.stringify(mutationsPayload));
+    }
+  }, [
+    includeCover, includeComments, includeThanks, documentType, mode,
+    instructor, student, studentId, className, topic, docTitle,
+    institution, faculty, course, location, month, year,
+    onlyExistingCaptions, skipProposal
+  ]);
+
+  const loadPreview = useCallback(async (targetFile, docState = INITIAL_DOC_STATE) => {
     if (!targetFile || !auth.token) return;
     const requestId = ++previewRequestRef.current;
     setPreviewLoading(true);
@@ -248,7 +402,8 @@ export default function WordFmtPage() {
     try {
       const body = new FormData();
       body.append('document', targetFile);
-      if (Object.keys(overrides).length) body.append('roleOverrides', JSON.stringify(overrides));
+      body.append('renderDocument', 'true');
+      appendFormattingParams(body, docState);
       const next = await previewDocxStructure(auth.token, body);
       if (requestId !== previewRequestRef.current) return;
       setPreview(next);
@@ -259,41 +414,217 @@ export default function WordFmtPage() {
     } finally {
       if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }
-  }, [auth.token]);
+  }, [auth.token, appendFormattingParams]);
 
   useEffect(() => {
     previewRequestRef.current += 1;
+    insertSeqRef.current = 0;
     setInReview(false);
     setPreview(null);
+    setDownloadDoneCount(0);
     setPreviewError('');
     setPreviewDirty(false);
-    setRoleOverrides({});
-    setParagraphNotes({});
+    setEditHistory({
+      current: INITIAL_DOC_STATE,
+      past: [],
+      future: [],
+      lastCoalesceKey: null
+    });
     setPreviewLoading(false);
   }, [file]);
 
-  const changeRole = (index, role) => {
-    setRoleOverrides((current) => {
-      const next = { ...current };
-      if (role) next[index] = role; else delete next[index];
-      return next;
+  const changeRole = useCallback((index, role) => {
+    const keyStr = String(index);
+    commitEdit((cur) => {
+      const nextOverrides = { ...cur.roleOverrides };
+      if (role) nextOverrides[index] = role;
+      else {
+        delete nextOverrides[index];
+        delete nextOverrides[keyStr];
+      }
+      const nextInserts = keyStr.startsWith('ins_')
+        ? cur.insertedItems.map((ins) => (String(ins.id) === keyStr ? { ...ins, role: role || 'body' } : ins))
+        : cur.insertedItems;
+      return {
+        ...cur,
+        roleOverrides: nextOverrides,
+        insertedItems: nextInserts
+      };
     });
     setPreviewDirty(true);
-  };
+  }, [commitEdit]);
 
-  const changeNote = (index, note) => {
-    setParagraphNotes((current) => {
-      const next = { ...current };
-      if (note && note.trim()) next[index] = note; else delete next[index];
-      return next;
+  const changeNote = useCallback((index, note) => {
+    const keyStr = String(index);
+    commitEdit((cur) => {
+      const nextNotes = { ...cur.paragraphNotes };
+      if (note && note.trim()) nextNotes[index] = note;
+      else {
+        delete nextNotes[index];
+        delete nextNotes[keyStr];
+      }
+      return { ...cur, paragraphNotes: nextNotes };
+    }, `note:${keyStr}`);
+  }, [commitEdit]);
+
+  const changeText = useCallback((index, nextText) => {
+    const keyStr = String(index);
+    const val = String(nextText ?? '');
+    commitEdit((cur) => {
+      const nextEdits = { ...cur.textEdits, [keyStr]: val };
+      const nextInserts = keyStr.startsWith('ins_')
+        ? cur.insertedItems.map((ins) => (String(ins.id) === keyStr ? { ...ins, text: val } : ins))
+        : cur.insertedItems;
+      return {
+        ...cur,
+        textEdits: nextEdits,
+        insertedItems: nextInserts
+      };
+    }, `text:${keyStr}`);
+    setPreviewDirty(true);
+  }, [commitEdit]);
+
+  const revertTextEdit = useCallback((index) => {
+    const keyStr = String(index);
+    commitEdit((cur) => {
+      if (!Object.prototype.hasOwnProperty.call(cur.textEdits, keyStr)) return cur;
+      const nextEdits = { ...cur.textEdits };
+      delete nextEdits[keyStr];
+      return { ...cur, textEdits: nextEdits };
     });
-  };
+    setPreviewDirty(true);
+  }, [commitEdit]);
 
-  const resetCorrections = () => {
-    setRoleOverrides({});
-    setParagraphNotes({});
-    if (file) loadPreview(file);
-  };
+  const insertParagraph = useCallback((anchorKey, position = 'after', initialText = '', role = 'body') => {
+    const newId = `ins_${++insertSeqRef.current}`;
+    const anchorStr = anchorKey !== undefined && anchorKey !== null ? String(anchorKey) : '';
+    const entry = {
+      id: newId,
+      afterKey: position === 'after' ? anchorStr : '',
+      beforeKey: position === 'before' ? anchorStr : '',
+      text: String(initialText ?? ''),
+      role: role || 'body'
+    };
+    commitEdit((cur) => ({
+      ...cur,
+      insertedItems: [...cur.insertedItems, entry]
+    }));
+    setPreviewDirty(true);
+    return newId;
+  }, [commitEdit]);
+
+  const splitOrInsertAfter = useCallback((anchorKey, beforeText, afterText) => {
+    const newId = `ins_${++insertSeqRef.current}`;
+    const anchorStr = String(anchorKey);
+    const leftVal = String(beforeText ?? '');
+    const rightVal = String(afterText ?? '');
+    commitEdit((cur) => {
+      const nextEdits = { ...cur.textEdits, [anchorStr]: leftVal };
+      const baseInserts = anchorStr.startsWith('ins_')
+        ? cur.insertedItems.map((ins) => (String(ins.id) === anchorStr ? { ...ins, text: leftVal } : ins))
+        : cur.insertedItems;
+      return {
+        ...cur,
+        textEdits: nextEdits,
+        insertedItems: [
+          ...baseInserts,
+          { id: newId, afterKey: anchorStr, beforeKey: '', text: rightVal, role: 'body' }
+        ]
+      };
+    });
+    setPreviewDirty(true);
+    return newId;
+  }, [commitEdit]);
+
+  const deleteParagraph = useCallback((targetKey) => {
+    const keyStr = String(targetKey);
+    const wasServerRendered = Boolean(preview?.items?.some((it) => String(it.i) === keyStr));
+    commitEdit((cur) => {
+      if (keyStr.startsWith('ins_')) {
+        const targetIns = cur.insertedItems.find((ins) => String(ins.id) === keyStr);
+        const relinkedInserts = cur.insertedItems
+          .filter((ins) => String(ins.id) !== keyStr)
+          .map((ins) => {
+            if (String(ins.afterKey) === keyStr && targetIns) {
+              return { ...ins, afterKey: targetIns.afterKey || '', beforeKey: targetIns.beforeKey || '' };
+            }
+            if (String(ins.beforeKey) === keyStr && targetIns) {
+              return { ...ins, afterKey: targetIns.afterKey || '', beforeKey: targetIns.beforeKey || '' };
+            }
+            return ins;
+          });
+        const nextEdits = { ...cur.textEdits };
+        delete nextEdits[keyStr];
+        const nextOverrides = { ...cur.roleOverrides };
+        delete nextOverrides[keyStr];
+        const nextNotes = { ...cur.paragraphNotes };
+        delete nextNotes[keyStr];
+        const nextDeletes = wasServerRendered && !cur.deletedItems.includes(keyStr)
+          ? [...cur.deletedItems, keyStr]
+          : cur.deletedItems;
+        return {
+          roleOverrides: nextOverrides,
+          paragraphNotes: nextNotes,
+          textEdits: nextEdits,
+          deletedItems: nextDeletes,
+          insertedItems: relinkedInserts
+        };
+      }
+      if (cur.deletedItems.includes(keyStr)) return cur;
+      return {
+        ...cur,
+        deletedItems: [...cur.deletedItems, keyStr]
+      };
+    });
+    setPreviewDirty(true);
+  }, [commitEdit, preview]);
+
+  const undeleteParagraph = useCallback((targetKey) => {
+    const keyStr = String(targetKey);
+    commitEdit((cur) => ({
+      ...cur,
+      deletedItems: cur.deletedItems.filter((k) => String(k) !== keyStr)
+    }));
+    setPreviewDirty(true);
+  }, [commitEdit]);
+
+  const undo = useCallback(() => {
+    setEditHistory((prev) => {
+      if (!prev.past.length) return prev;
+      const previous = prev.past[prev.past.length - 1];
+      return {
+        current: previous,
+        past: prev.past.slice(0, -1),
+        future: [prev.current, ...prev.future.slice(0, 49)],
+        lastCoalesceKey: null
+      };
+    });
+    setPreviewDirty(true);
+  }, []);
+
+  const redo = useCallback(() => {
+    setEditHistory((prev) => {
+      if (!prev.future.length) return prev;
+      const [nextDoc, ...restFuture] = prev.future;
+      return {
+        current: nextDoc,
+        past: [...prev.past.slice(-49), prev.current],
+        future: restFuture,
+        lastCoalesceKey: null
+      };
+    });
+    setPreviewDirty(true);
+  }, []);
+
+  const resetCorrections = useCallback(() => {
+    setEditHistory((prev) => ({
+      current: INITIAL_DOC_STATE,
+      past: [...prev.past.slice(-49), prev.current],
+      future: [],
+      lastCoalesceKey: null
+    }));
+    if (file) loadPreview(file, INITIAL_DOC_STATE);
+  }, [file, loadPreview]);
 
   useEffect(() => {
     return subscribeToolRun('wordfmt', (next) => {
@@ -306,13 +637,29 @@ export default function WordFmtPage() {
     if (run.status === 'error') notify(SAFE_ERROR_MESSAGE, 'error');
   }, [notify, run.status]);
 
+  const isRunning = run.status === 'running';
+  const isSuccess = run.status === 'success' && dismissedCompletedRun !== run;
+  const isError = run.status === 'error';
+  const downloadUrl = isSuccess ? getSafeDownloadUrl(run.result) : null;
+
   const selectFile = (candidate) => {
     if (!candidate) return;
     if (!candidate.name.toLowerCase().endsWith('.docx')) {
       notify('Vui lòng chọn file Word định dạng .docx', 'error');
       return;
     }
+    setDismissedCompletedRun(run);
     setFile(candidate);
+  };
+
+  const fillFromStudentProfile = () => {
+    const profileName = String(auth.user?.name || '').trim();
+    const profileMssv = String(auth.user?.mssv || '').trim();
+    if (profileName) setStudent(profileName);
+    if (profileMssv) setStudentId(profileMssv);
+    if (profileName || profileMssv) {
+      notify('Đã điền tên và MSSV từ hồ sơ sinh viên của bạn.', 'info');
+    }
   };
 
   const changeDocumentType = (nextType) => {
@@ -322,6 +669,7 @@ export default function WordFmtPage() {
       setDocTitle('ĐỒ ÁN TỐT NGHIỆP');
       setIncludeCover(true);
       setIncludeComments(true);
+      setPreviewDirty(true);
       return;
     }
 
@@ -330,6 +678,15 @@ export default function WordFmtPage() {
     setDocTitle(previous?.docTitle || 'TIỂU LUẬN MÔN HỌC');
     setIncludeCover(previous?.includeCover ?? true);
     setIncludeComments(previous?.includeComments ?? true);
+    setPreviewDirty(true);
+  };
+
+  const openGoogleDocsReview = () => {
+    if (!file) return;
+    setInReview(true);
+    if (!preview || previewDirty) {
+      loadPreview(file, editHistory.current);
+    }
   };
 
   const submit = async (event) => {
@@ -368,48 +725,17 @@ export default function WordFmtPage() {
       if (!proceed) return;
     }
 
-    setInReview(true);
-    if (!preview || previewDirty) {
-      loadPreview(file, roleOverrides);
-    }
+    openGoogleDocsReview();
   };
 
   const confirmAndFormat = () => {
     if (!file || isRunning) return;
     const body = new FormData();
     body.append('document', file);
-    const frontMatter = [
-      includeCover && 'cover',
-      includeComments && 'comments',
-      includeThanks && 'thanks'
-    ].filter(Boolean).join(',');
+    appendFormattingParams(body, editHistory.current);
 
-    body.append('documentType', documentType);
-    body.append('documentMode', mode);
-    body.append('instructor', instructor);
-    body.append('student', student);
-    if (studentId) body.append('studentId', studentId);
-    if (className) body.append('className', className);
-    if (topic) body.append('topic', topic);
-    if (docTitle) body.append('documentTitle', docTitle);
-    if (institution) body.append('institution', institution);
-    if (faculty) body.append('faculty', faculty);
-    if (course) body.append('course', course);
-    if (location) body.append('location', location);
-    if (month) body.append('month', month);
-    if (year) body.append('year', year);
-
-    body.append('includeCover', includeCover);
-    body.append('includeComments', includeComments);
-    body.append('includeThanks', includeThanks);
-    body.append('frontMatter', frontMatter);
-    body.append('onlyExistingCaptions', onlyExistingCaptions);
-    body.append('skipProposal', skipProposal);
-    if (Object.keys(roleOverrides).length) body.append('roleOverrides', JSON.stringify(roleOverrides));
-    const cleanNotes = Object.fromEntries(Object.entries(paragraphNotes)
-      .map(([index, note]) => [index, String(note).trim()]).filter(([, note]) => note));
-    if (Object.keys(cleanNotes).length) body.append('paragraphNotes', JSON.stringify(cleanNotes));
-
+    setDismissedCompletedRun(null);
+    setDownloadDoneCount(0);
     setInReview(false);
     startToolRun('wordfmt', () => formatDocx(auth.token, body), {
       stageCount: WORD_FMT_STAGES.length,
@@ -417,20 +743,15 @@ export default function WordFmtPage() {
     });
   };
 
-  const isRunning = run.status === 'running';
-  const isSuccess = run.status === 'success';
-  const isError = run.status === 'error';
   const progress = Math.min(100, Math.max(0, Number.isFinite(run.progress) ? run.progress : 0));
   const stageIndex = Math.min(
     WORD_FMT_STAGES.length - 1,
     Math.max(0, Number.isFinite(run.stageIndex) ? run.stageIndex : 0)
   );
   const activeStage = WORD_FMT_STAGES[stageIndex];
-  const downloadUrl = isSuccess ? getSafeDownloadUrl(run.result) : null;
-  const completionCards = isSuccess ? buildCompletionCards(run.result, run.summaryChoices) : [];
 
   const handleDownload = async (event) => {
-    event.preventDefault();
+    event?.preventDefault?.();
     if (!downloadUrl || !auth.token || downloading) return;
     setDownloading(true);
     try {
@@ -443,6 +764,7 @@ export default function WordFmtPage() {
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      setDownloadDoneCount((n) => n + 1);
     } catch (error) {
       notify(error.message || 'Không thể tải file Word đã chuẩn hóa.', 'error');
     } finally {
@@ -450,54 +772,66 @@ export default function WordFmtPage() {
     }
   };
 
+  const currentStep = isSuccess || isRunning ? 3 : inReview ? 2 : 1;
+  const inWorkspaceMode = Boolean(inReview && file && !isRunning && !isSuccess);
+
   return (
-    <section id="tab-wordfmt" className="tab-pane active">
-      <div className="section-header-box glass-panel">
+    <section id="tab-wordfmt" className={`tab-pane active wf-studio-page${inWorkspaceMode ? ' is-workspace-open' : ''}`}>
+      {/* Studio Hero Header (compact hidden when full-screen Google Docs workspace is active) */}
+      {!inWorkspaceMode ? (
+        <div className="section-header-box glass-panel wf-studio-hero">
         <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
-        <div className="header-split">
+        <div className="header-split wf-hero-split">
           <div>
+            <div className="wf-hero-kicker-row">
+              <span className="badge-mini badge-pill-emerald">BDU WordFmt Studio</span>
+              <div className="wf-hero-stepper" aria-label="Tiến trình chuẩn hóa">
+                {isSuccess ? (
+                  <button
+                    type="button"
+                    className="wf-stepper-link is-done"
+                    onClick={() => {
+                      setDismissedCompletedRun(run);
+                      setDownloadDoneCount(0);
+                    }}
+                    title="Quay lại biểu mẫu để chuẩn hóa tài liệu khác"
+                  >
+                    01 Nhập thông tin
+                  </button>
+                ) : (
+                  <span className={currentStep === 1 ? 'is-active' : 'is-done'}>01 Nhập thông tin</span>
+                )}
+                <span aria-hidden="true">→</span>
+                <span className={currentStep === 2 ? 'is-active' : currentStep > 2 ? 'is-done' : ''}>02 Review Google Docs</span>
+                <span aria-hidden="true">→</span>
+                <span className={currentStep === 3 ? 'is-active' : ''}>03 Xuất &amp; Tải về</span>
+              </div>
+            </div>
             <h2 className="section-title">Chuẩn Hóa Văn Bản Word (BDU WordFmt)</h2>
             <p className="section-desc">
-              Tự động định dạng lề A4, font chữ, Heading H1-H4, mục lục, bảng/hình, bìa chuẩn viện HTTT/BDU
+              Định dạng tự động khổ A4, Heading 1–4, mục lục, bảng/hình, công thức OMML và xem trước trang giấy thực tế kiểu Google Docs
             </p>
           </div>
+
           <div className="wf-header-badges">
             <button
               type="button"
               className="wf-skill-trigger"
-              onClick={() => {
-                setSkillOpen(true);
-                window.setTimeout(() => {
-                  document.getElementById('wordfmt-ai-skill')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-                }, 0);
-              }}
+              onClick={() => setSkillOpen(true)}
             >
-              Skill / Prompt cho AI
+              ✨ Skill / Prompt cho AI
             </button>
-            <span className="badge-mini badge-pill-emerald">.NET 10 Engine</span>
           </div>
         </div>
       </div>
+      ) : null}
 
-      {inReview && file ? (
-        <StructurePreview
+      {/* Mode A: Google Docs Review Workspace (Pre-format interactive editing & inspection) */}
+      {inWorkspaceMode ? (
+        <DocxReviewWorkspace
+          stage="review"
           fileName={file.name}
-          coverInfo={{
-            includeCover,
-            documentType,
-            institution,
-            faculty,
-            docTitle,
-            topic,
-            course,
-            instructor,
-            student,
-            studentId,
-            className,
-            location,
-            month,
-            year
-          }}
+          coverInfo={coverInfo}
           preview={preview}
           loading={previewLoading}
           error={previewError}
@@ -505,524 +839,508 @@ export default function WordFmtPage() {
           isSubmitting={isRunning}
           overrides={roleOverrides}
           notes={paragraphNotes}
+          textEdits={textEdits}
+          deletedItems={deletedItems}
+          insertedItems={insertedItems}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
           onRoleChange={changeRole}
           onNoteChange={changeNote}
-          onRefresh={() => loadPreview(file, roleOverrides)}
+          onTextChange={changeText}
+          onSplitOrInsertAfter={splitOrInsertAfter}
+          onInsertParagraph={insertParagraph}
+          onDeleteParagraph={deleteParagraph}
+          onUndeleteParagraph={undeleteParagraph}
+          onRevertTextEdit={revertTextEdit}
+          onRefresh={() => loadPreview(file, editHistory.current)}
           onReset={resetCorrections}
           onBack={() => setInReview(false)}
           onConfirm={confirmAndFormat}
         />
-      ) : (
-        <div className="wordfmt-layout">
-        {/* Left: Upload & Config Form */}
-        <div className="wordfmt-card glass-panel">
-          <form id="form-wordfmt" onSubmit={submit}>
-            {/* Dropzone */}
-            <div className="form-group">
-              <label className="form-label">Chọn hoặc Kéo Thả File Tiểu Luận / Đồ Án (.docx):</label>
-              <div
-                id="docx-dropzone"
-                className="dropzone-box"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  selectFile(e.dataTransfer.files?.[0]);
-                }}
-                onClick={() => !file && inputRef.current?.click()}
-                style={{ cursor: file ? 'default' : 'pointer' }}
-              >
-                <input
-                  ref={inputRef}
-                  type="file"
-                  id="docx-file-input"
-                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="hidden-file-input"
-                  onChange={(e) => selectFile(e.target.files?.[0])}
-                  style={{ display: 'none' }}
-                />
-                {!file ? (
-                  <div className="dropzone-content">
-                    <h4 className="dropzone-title">Kéo & Thả file .docx vào đây</h4>
-                    <p className="dropzone-subtitle">
-                      hoặc <span className="text-blue cursor-pointer">Bấm để chọn file từ máy tính</span>
-                    </p>
-                    <span className="dropzone-hint">Dung lượng tối đa 25MB (.docx)</span>
-                  </div>
-                ) : (
-                  <div id="dropzone-file-info" className="file-info-badge">
-                    <span id="selected-file-name" className="file-name">{file.name}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      ({(file.size / 1024).toFixed(1)} KB)
-                    </span>
-                    <button
-                      type="button"
-                      id="btn-remove-file"
-                      className="btn-remove-file"
-                      title="Xóa file"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFile(null);
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
+      ) : (isRunning || isSuccess) ? (
+        /* Mode B: Focused Sakuga VFX Progress Stage & Single Download Action on Completion */
+        <div
+          id="wordfmt-status-card"
+          className={`glass-panel wf-sakuga-stage${isSuccess ? ' is-complete' : ' is-running'}`}
+          aria-live="polite"
+        >
+          <div id="wordfmt-progress-box" className="wf-sakuga-progress-shell">
+            <p className="wf-sakuga-eyebrow">
+              {isSuccess ? 'WORD_FMT · HOÀN TẤT CHUẨN HÓA' : 'WORD_FMT · ĐANG XỬ LÝ VĂN BẢN'}
+            </p>
+            <h3 id="wordfmt-progress-title" className="wf-sakuga-title">
+              {isSuccess ? 'Văn bản đã được chuẩn hóa 100%' : activeStage.inProgress}
+            </h3>
+            <p id="wordfmt-progress-desc" className="wf-sakuga-desc">
+              {isSuccess
+                ? 'Tài liệu chuẩn A4 BDU của bạn đã sẵn sàng.'
+                : activeStage.description}
+            </p>
+
+            <div className="wf-sakuga-bar-host">
+              <SakugaProgress
+                progress={progress}
+                label={activeStage.inProgress}
+                doneLabel="Hoàn tất 100% ✓"
+                isComplete={isSuccess}
+              />
             </div>
 
-            {/* Form Details */}
-            <div className="form-group">
-              <label htmlFor="wf-document-type" className="form-label">Loại tài liệu:</label>
-              <select
-                id="wf-document-type"
-                className="form-input"
-                value={documentType}
-                onChange={(e) => changeDocumentType(e.target.value)}
-              >
-                <option value="tieu_luan">Tiểu luận môn học</option>
-                <option value="do_an_tot_nghiep">Đồ án tốt nghiệp</option>
-              </select>
-                <p id="wf-document-type-hint" className="dropzone-hint" aria-live="polite">
-                  {documentType === 'do_an_tot_nghiep'
-                  ? 'Chuẩn hóa đầu đề cương, giữ nguyên khung nội dung và ký duyệt; bổ sung hai trang nhận xét theo mẫu đồ án.'
-                  : 'Định dạng tiểu luận theo cấu hình hiện tại.'}
-              </p>
-            </div>
-
-            <div className="form-row-2">
-              <div className="form-group">
-                <label htmlFor="wf-instructor" className="form-label">
-                  Giảng Viên Hướng Dẫn (GVHD): <span className="required">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="wf-instructor"
-                  className="form-input"
-                  placeholder="Nhập họ và tên GVHD (Ví dụ: ThS. Nguyễn Văn A)"
-                  value={instructor}
-                  onChange={(e) => setInstructor(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="wf-student" className="form-label">
-                  Tên Sinh Viên / Nhóm: <span className="required">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="wf-student"
-                  className="form-input"
-                  placeholder="Nhập họ tên sinh viên hoặc tên nhóm"
-                  value={student}
-                  onChange={(e) => setStudent(e.target.value)}
-                  required
-                />
-                {student.trim().split(/\s+/).filter(Boolean).length > 6 && (
-                  <p className="dropzone-hint" style={{ color: '#f59e0b', marginTop: '4px' }}>
-                    ⚠️ Tên sinh viên dài hơn 6 từ ({student.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <details className="form-group wordfmt-cover-options">
-              <summary className="form-label" style={{ cursor: 'pointer' }}>Thông tin bìa và chế độ xuất</summary>
-              <div className="form-row-2" style={{ marginTop: '12px' }}>
-                <div className="form-group">
-                  <label htmlFor="wf-institution" className="form-label">Trường:</label>
-                  <input
-                    type="text"
-                    id="wf-institution"
-                    className="form-input"
-                    value={institution}
-                    onChange={(e) => setInstitution(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="wf-faculty" className="form-label">Khoa / Viện:</label>
-                  <input
-                    type="text"
-                    id="wf-faculty"
-                    className="form-input"
-                    value={faculty}
-                    onChange={(e) => setFaculty(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="form-row-2">
-                <div className="form-group">
-                  <label htmlFor="wf-course" className="form-label">Tên môn học (nếu cần trên bìa):</label>
-                  <input
-                    type="text"
-                    id="wf-course"
-                    className="form-input"
-                    placeholder="Để trống nếu bìa không yêu cầu"
-                    value={course}
-                    onChange={(e) => setCourse(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="wf-location" className="form-label">Địa điểm:</label>
-                  <input
-                    type="text"
-                    id="wf-location"
-                    className="form-input"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="wf-document-mode" className="form-label">Chế độ tài liệu:</label>
-                <select
-                  id="wf-document-mode"
-                  className="form-input"
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value)}
-                >
-                  <option value="digital_document">Tài liệu số</option>
-                  <option value="binding_package">
-                    {documentType === 'do_an_tot_nghiep'
-                      ? 'Bản phục vụ đóng quyển (giữ hai trang bìa)'
-                      : 'Bản phục vụ đóng quyển (thêm trang trắng và bản sao bìa)'}
-                  </option>
-                </select>
-                <p id="wf-binding-hint" className="dropzone-hint">
-                  {mode === 'binding_package'
-                    ? (documentType === 'do_an_tot_nghiep'
-                      ? 'Đồ án có hai trang bìa ở cả hai chế độ xuất; không thêm trang trắng hoặc bìa trùng.'
-                      : 'Khi chọn bản đóng quyển: in một mặt trên A4, dùng bìa cứng xanh dương và tờ bìa sau cùng màu.')
-                    : 'Bản số tiêu chuẩn nộp trực tuyến qua Moodle/Email.'}
-                </p>
-              </div>
-              <div className="form-row-2">
-                <div className="form-group">
-                  <label htmlFor="wf-month" className="form-label">Tháng trên bìa:</label>
-                  <input
-                    type="text"
-                    id="wf-month"
-                    className="form-input"
-                    inputMode="numeric"
-                    placeholder={`Để trống = tháng hiện tại (${new Date().getMonth() + 1})`}
-                    value={month}
-                    onChange={(e) => setMonth(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="wf-year" className="form-label">Năm trên bìa:</label>
-                  <input
-                    type="text"
-                    id="wf-year"
-                    className="form-input"
-                    inputMode="numeric"
-                    placeholder={`Để trống = năm hiện tại (${new Date().getFullYear()})`}
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                  />
-                </div>
-              </div>
-            </details>
-
-            <div className="form-row-2">
-              <div className="form-group">
-                <label htmlFor="wf-student-id" className="form-label">Mã Số Sinh Viên (MSSV):</label>
-                <input
-                  type="text"
-                  id="wf-student-id"
-                  className="form-input"
-                  placeholder="Nhập mã số sinh viên (Ví dụ: 2405xxxx)"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="wf-class-name" className="form-label">Lớp Sinh Hoạt:</label>
-                <input
-                  type="text"
-                  id="wf-class-name"
-                  className="form-input"
-                  placeholder="Nhập mã lớp sinh hoạt (Ví dụ: 2405SE01)"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="form-row-2">
-              <div className="form-group">
-                <label htmlFor="wf-topic" className="form-label">Tên Đề Tài / Báo Cáo:</label>
-                <input
-                  type="text"
-                  id="wf-topic"
-                  className="form-input"
-                  placeholder="Ví dụ: Xây dựng hệ thống tra cứu điểm BDU"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                />
-                {topic.trim().split(/\s+/).filter(Boolean).length > 40 && (
-                  <p className="dropzone-hint" style={{ color: '#f59e0b', marginTop: '4px' }}>
-                    ⚠️ Tên đề tài dài hơn 40 từ ({topic.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
-                  </p>
-                )}
-              </div>
-              <div className="form-group">
-                <label htmlFor="wf-doc-title" className="form-label">Tiêu Đề Bìa:</label>
-                <input
-                  type="text"
-                  id="wf-doc-title"
-                  className="form-input"
-                  placeholder="TIỂU LUẬN MÔN HỌC"
-                    value={docTitle}
-                    onChange={(e) => setDocTitle(e.target.value)}
-                    readOnly={documentType === 'do_an_tot_nghiep'}
-                />
-              </div>
-            </div>
-
-            {/* Front Matter Sections Selector */}
-            <div className="form-group">
-              <label className="form-label">Tự Động Tạo Các Trang Đầu Tài Liệu (Front-Matter):</label>
-              <div className="features-checklist">
-                <label className="feature-item">
-                  <input
-                    type="checkbox"
-                    id="wf-include-cover"
-                    checked={includeCover}
-                    onChange={(e) => setIncludeCover(e.target.checked)}
-                    disabled={documentType === 'do_an_tot_nghiep'}
-                  />
-                  <span id="wf-cover-label">
-                    <strong>{documentType === 'do_an_tot_nghiep' ? 'Hai trang bìa:' : 'Trang bìa:'}</strong>{' '}
-                    {documentType === 'do_an_tot_nghiep'
-                      ? 'Bìa chính và bìa phụ; chỉ thêm bìa còn thiếu.'
-                      : 'Khung viền chuẩn BDU, đề tài, GVHD, SVTH, Lớp, MSSV'}
-                  </span>
-                </label>
-                <label className="feature-item">
-                  <input
-                    type="checkbox"
-                    id="wf-include-comments"
-                    checked={includeComments}
-                    onChange={(e) => setIncludeComments(e.target.checked)}
-                    disabled={documentType === 'do_an_tot_nghiep'}
-                  />
-                  <span id="wf-comments-label">
-                    <strong>{documentType === 'do_an_tot_nghiep' ? 'Hai trang nhận xét:' : 'Nhận xét giảng viên:'}</strong>{' '}
-                    {documentType === 'do_an_tot_nghiep'
-                      ? 'Giảng viên hướng dẫn và giảng viên phản biện, có chỗ ký tên.'
-                      : 'Trang có vùng trống để giảng viên ghi nhận xét'}
-                  </span>
-                </label>
-                <label className="feature-item">
-                  <input
-                    type="checkbox"
-                    id="wf-include-thanks"
-                    checked={includeThanks}
-                    onChange={(e) => setIncludeThanks(e.target.checked)}
-                  />
-                  <span><strong>Lời cảm ơn:</strong> Trang trình bày học thuật, không thêm khung trang trí</span>
-                </label>
-                <label className="feature-item">
-                  <input type="checkbox" checked disabled />
-                  <span><strong>Mục lục & Danh mục Bảng/Hình:</strong> Tự động tạo và cập nhật danh mục Bảng, Hình và Mục lục chuẩn BDU</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Advanced Formatting Options */}
-            <div className="form-group">
-              <label className="form-label">Tùy Chọn Định Dạng Nâng Cao:</label>
-              <div className="features-checklist">
-                <label className="feature-item">
-                  <input
-                    type="checkbox"
-                    id="wf-only-existing-captions"
-                    checked={onlyExistingCaptions}
-                    onChange={(e) => setOnlyExistingCaptions(e.target.checked)}
-                  />
-                  <span id="wf-only-existing-captions-label">
-                    <strong>Chỉ định dạng Bảng và Hình đã có sẵn:</strong> Khuyến nghị để bảo toàn cấu trúc gốc; không tự chèn caption giữ chỗ vào bảng/hình chưa có caption
-                  </span>
-                </label>
-                <label className="feature-item">
-                  <input
-                    type="checkbox"
-                    id="wf-skip-proposal"
-                    checked={skipProposal}
-                    onChange={(e) => setSkipProposal(e.target.checked)}
-                  />
-                  <span id="wf-skip-proposal-label">
-                    <strong>Bỏ qua định dạng đề cương:</strong> Xác định vùng đề cương và giữ nguyên hoàn toàn, chỉ định dạng nội dung phía sau
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              id="btn-start-wordfmt"
-              className="btn btn-primary btn-block btn-lg"
-              disabled={isRunning}
-            >
-              <span className="btn-text">{isRunning ? 'Đang chuẩn hóa…' : 'Bắt đầu chuẩn hóa văn bản'}</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Right: Result & Diagnostics */}
-        <div className="wf-status-column">
-          <div id="wordfmt-status-card" className={`glass-panel wf-status-card${isRunning ? ' wf-status-card--running' : ''}${isError ? ' wf-status-card--error' : ''}`}>
-            {!isRunning && !isSuccess && !isError && (
-              <div className="wf-status-empty">
-                <h3>Sẵn sàng định dạng văn bản</h3>
-                <p>Chọn file `.docx` và điền thông tin bên trái để bắt đầu quy trình chuẩn hóa.</p>
-              </div>
-            )}
-
-            {isRunning && (
-              <div id="wordfmt-progress-box" className="wf-run" aria-live="polite">
-                <div className="wf-run-scene" aria-hidden="true">
-                  <div className="wf-run-orbit wf-run-orbit--one"></div>
-                  <div className="wf-run-orbit wf-run-orbit--two"></div>
-                  <div className="wf-run-sheet wf-run-sheet--back"></div>
-                  <div className="wf-run-sheet wf-run-sheet--middle"></div>
-                  <div className="wf-run-sheet wf-run-sheet--front">
-                    <img className="wf-run-brand" src="/assets/images/logo-hao-quang-transparent.png" alt="" />
-                    <span className="wf-run-line wf-run-line--title"></span>
-                    <span className="wf-run-line"></span>
-                    <span className="wf-run-line wf-run-line--short"></span>
-                    <span className="wf-run-line"></span>
-                    <span className="wf-run-line wf-run-line--medium"></span>
-                    <span className="wf-run-scan"></span>
-                  </div>
-                </div>
-
-                <div className="wf-run-content">
-                  <p className="wf-run-eyebrow">WordFmt · Tiến độ ước tính</p>
-                  <h3 id="wordfmt-progress-title" className="wf-run-title">{activeStage.inProgress}</h3>
-                  <p id="wordfmt-progress-desc" className="wf-run-description">
-                    {activeStage.description}
-                  </p>
-
-                  <div className="wf-run-meter" role="progressbar" aria-label="Tiến độ chuẩn hóa (ước tính)" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}>
-                    <span id="wordfmt-progress-fill" className="wf-run-meter-fill" style={{ width: `${progress}%` }}></span>
-                  </div>
-                  <div className="wf-run-meta">
-                    <strong id="wordfmt-progress-percent">{progress}% · Tiến độ ước tính</strong>
-                    <span id="wordfmt-progress-time">Kết quả sẽ trả sau tối thiểu 10 giây</span>
-                  </div>
-                </div>
-
-                <ol className="wf-run-stages">
-                  {WORD_FMT_STAGES.map((stage, index) => (
-                    <li
-                      key={stage.title}
-                      data-stage={index}
-                      className={`${index < stageIndex ? 'wf-run-stage--complete' : ''}${index === stageIndex ? ' wf-run-stage--active' : ''}`}
-                      aria-current={index === stageIndex ? 'step' : undefined}
-                    >
-                      <span>{String(index + 1).padStart(2, '0')}</span>{stage.title}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {isSuccess && (
-              <div id="wordfmt-success-box" className="wf-status-success">
-                <div className="wf-status-success-header">
-                  <div className="wf-status-badge">ĐỊNH DẠNG HOÀN TẤT</div>
-                  <h3 className="wf-status-title">Văn bản đã được chuẩn hóa 100%!</h3>
-                  <p className="wf-status-description">Các mục dưới đây chỉ hiển thị thông tin được báo cáo từ tài liệu đầu ra.</p>
-                </div>
-
+            {isSuccess ? (
+              <div className="wf-sakuga-download-wrap">
                 {downloadUrl ? (
-                  <a
+                  <SakugaButton
                     id="btn-download-docx"
-                    href={downloadUrl}
+                    variant="primary"
+                    className="wf-sakuga-download-btn"
+                    disabled={downloading}
+                    doneTrigger={downloadDoneCount}
                     onClick={handleDownload}
-                    aria-busy={downloading}
-                    className="btn btn-success btn-block btn-lg"
-                    download
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" x2="12" y1="15" y2="3" />
-                    </svg>
-                    <span>Tải Về File DOCX Đã Chuẩn Hóa</span>
-                  </a>
+                    {downloading ? 'Đang tải…' : 'Tải Về File DOCX Đã Chuẩn Hóa'}
+                  </SakugaButton>
                 ) : (
                   <p className="wf-status-download-unavailable" role="status">
                     Tài liệu đã hoàn tất nhưng liên kết tải xuống chưa khả dụng. Vui lòng thử lại.
                   </p>
                 )}
-
-                <div id="wordfmt-completion-summary" className="wf-status-summary" aria-label="Tóm tắt kết quả">
-                  {completionCards.length ? completionCards.map((card) => (
-                    <article key={`${card.title}-${card.description}`} className={`wf-status-summary-card wf-status-summary-card--${card.tone}`}>
-                      <h4>{card.title}</h4>
-                      <p>{card.description}</p>
-                    </article>
-                  )) : (
-                    <article className="wf-status-summary-card wf-status-summary-card--muted">
-                      <h4>Tài liệu đầu ra</h4>
-                      <p>Tài liệu đã sẵn sàng để tải xuống. Báo cáo không cung cấp thêm chi tiết để hiển thị.</p>
-                    </article>
-                  )}
-                </div>
-                {file && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-block wf-status-reformat-btn"
-                    onClick={() => {
-                      setInReview(true);
-                      if (!preview) loadPreview(file, roleOverrides);
-                    }}
-                  >
-                    Mở lại bản xem trước để chỉnh sửa
-                  </button>
-                )}
               </div>
-            )}
-
-            {isError && (
-              <div id="wordfmt-error-box" className="wf-status-error" role="alert">
-                <div className="wf-status-error-icon" aria-hidden="true">!</div>
-                <div>
-                  <p className="wf-status-eyebrow">WORD_FMT · CẦN THỬ LẠI</p>
-                  <h3 className="wf-status-title">Chưa thể hoàn tất chuẩn hóa</h3>
-                  <p className="wf-status-error-description">{SAFE_ERROR_MESSAGE}</p>
-                  <p className="wf-status-error-hint">File gốc của bạn không bị thay đổi. Kiểm tra lại file DOCX hoặc kết nối rồi bấm bắt đầu để thử lại.</p>
-                </div>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
-      </div>
+      ) : (
+        /* Mode C: Clean Single-Column Input Form (opens Google Docs Workspace on submit) */
+        <div className="wf-studio-single">
+          {isError ? (
+            <div id="wordfmt-error-box" className="glass-panel wf-status-error wf-error-banner" role="alert">
+              <div className="wf-status-error-icon" aria-hidden="true">!</div>
+              <div>
+                <p className="wf-status-eyebrow">WORD_FMT · CẦN THỬ LẠI</p>
+                <h3 className="wf-status-title">Chưa thể hoàn tất chuẩn hóa</h3>
+                <p className="wf-status-error-description">{SAFE_ERROR_MESSAGE}</p>
+                <p className="wf-status-error-hint">File gốc của bạn không bị thay đổi. Kiểm tra lại file DOCX hoặc kết nối rồi bấm bắt đầu để thử lại.</p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="wordfmt-card glass-panel wf-studio-form-card">
+            <form id="form-wordfmt" onSubmit={submit}>
+              {/* Section 01: File & Document Mode */}
+              <div className="wf-form-section">
+                <div className="wf-form-section-head">
+                  <span className="wf-sec-num">01</span>
+                  <div>
+                    <h3>Tệp nguồn &amp; Loại báo cáo</h3>
+                    <p>Tải lên bản thảo `.docx` và chọn quy chuẩn trình bày của Khoa/Viện.</p>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Chọn hoặc Kéo Thả File Tiểu Luận / Đồ Án (.docx):</label>
+                  <div
+                    id="docx-dropzone"
+                    className={`dropzone-box${file ? ' has-file' : ''}`}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      selectFile(e.dataTransfer.files?.[0]);
+                    }}
+                    onClick={() => !file && inputRef.current?.click()}
+                    style={{ cursor: file ? 'default' : 'pointer' }}
+                  >
+                    <input
+                      ref={inputRef}
+                      type="file"
+                      id="docx-file-input"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden-file-input"
+                      onChange={(e) => selectFile(e.target.files?.[0])}
+                      style={{ display: 'none' }}
+                    />
+                    {!file ? (
+                      <div className="dropzone-content">
+                        <h4 className="dropzone-title">Kéo &amp; Thả file .docx vào đây</h4>
+                        <p className="dropzone-subtitle">
+                          hoặc <span className="text-blue cursor-pointer">Bấm để chọn file từ máy tính</span>
+                        </p>
+                        <span className="dropzone-hint">Dung lượng tối đa 25MB (.docx)</span>
+                      </div>
+                    ) : (
+                      <div id="dropzone-file-info" className="file-info-badge">
+                        <span id="selected-file-name" className="file-name">{file.name}</span>
+                        <span className="wf-file-size">
+                          ({(file.size / 1024).toFixed(1)} KB)
+                        </span>
+                        <button
+                          type="button"
+                          id="btn-remove-file"
+                          className="btn-remove-file"
+                          title="Xóa file"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFile(null);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label htmlFor="wf-document-type" className="form-label">Loại tài liệu:</label>
+                    <select
+                      id="wf-document-type"
+                      className="form-input"
+                      value={documentType}
+                      onChange={(e) => changeDocumentType(e.target.value)}
+                    >
+                      <option value="tieu_luan">Tiểu luận môn học</option>
+                      <option value="do_an_tot_nghiep">Đồ án tốt nghiệp</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="wf-document-mode" className="form-label">Chế độ tài liệu:</label>
+                    <select
+                      id="wf-document-mode"
+                      className="form-input"
+                      value={mode}
+                      onChange={(e) => {
+                        setMode(e.target.value);
+                        setPreviewDirty(true);
+                      }}
+                    >
+                      <option value="digital_document">Tài liệu số (Nộp Moodle/Online)</option>
+                      <option value="binding_package">
+                        {documentType === 'do_an_tot_nghiep'
+                          ? 'Bản phục vụ đóng quyển (giữ hai trang bìa)'
+                          : 'Bản phục vụ đóng quyển (2 trang bìa: bìa chính & bìa phụ)'}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <p id="wf-document-type-hint" className="dropzone-hint" aria-live="polite">
+                  {documentType === 'do_an_tot_nghiep'
+                    ? 'Chuẩn hóa đầu đề cương, giữ nguyên khung nội dung và ký duyệt; bổ sung hai trang nhận xét theo mẫu đồ án.'
+                    : 'Định dạng tiểu luận theo cấu hình hiện tại.'}
+                  {' · '}
+                  <span id="wf-binding-hint">
+                    {mode === 'binding_package'
+                      ? (documentType === 'do_an_tot_nghiep'
+                        ? 'Đồ án có hai trang bìa ở cả hai chế độ xuất.'
+                        : 'In một mặt A4, bìa cứng xanh dương.')
+                      : 'Bản số tiêu chuẩn.'}
+                  </span>
+                </p>
+              </div>
+
+              {/* Section 02: Cover Identity Metadata */}
+              <div className="wf-form-section">
+                <div className="wf-form-section-head wf-form-section-head--split">
+                  <div className="wf-form-section-head-left">
+                    <span className="wf-sec-num">02</span>
+                    <div>
+                      <h3>Thông tin định danh trên bìa</h3>
+                      <p>Điền thông tin GVHD, sinh viên và tên đề tài để dựng bìa &amp; footer tự động.</p>
+                    </div>
+                  </div>
+                  {(auth.user?.name || auth.user?.mssv) ? (
+                    <button
+                      type="button"
+                      className="wf-autofill-pill"
+                      onClick={fillFromStudentProfile}
+                    >
+                      + Điền tên &amp; MSSV của tôi
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label htmlFor="wf-instructor" className="form-label">
+                      Giảng Viên Hướng Dẫn (GVHD): <span className="required">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="wf-instructor"
+                      className="form-input"
+                      placeholder="Ví dụ: ThS. Nguyễn Văn A"
+                      value={instructor}
+                      onChange={(e) => { setInstructor(e.target.value); setPreviewDirty(true); }}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="wf-student" className="form-label">
+                      Tên Sinh Viên / Nhóm: <span className="required">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="wf-student"
+                      className="form-input"
+                      placeholder="Nhập họ tên sinh viên hoặc tên nhóm"
+                      value={student}
+                      onChange={(e) => { setStudent(e.target.value); setPreviewDirty(true); }}
+                      required
+                    />
+                    {student.trim().split(/\s+/).filter(Boolean).length > 6 ? (
+                      <p className="dropzone-hint wf-inline-warn">
+                        ⚠️ Tên sinh viên dài hơn 6 từ ({student.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label htmlFor="wf-student-id" className="form-label">Mã Số Sinh Viên (MSSV):</label>
+                    <input
+                      type="text"
+                      id="wf-student-id"
+                      className="form-input"
+                      placeholder="Ví dụ: 2405xxxx"
+                      value={studentId}
+                      onChange={(e) => { setStudentId(e.target.value); setPreviewDirty(true); }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="wf-class-name" className="form-label">Lớp Sinh Hoạt:</label>
+                    <input
+                      type="text"
+                      id="wf-class-name"
+                      className="form-input"
+                      placeholder="Ví dụ: 2405SE01"
+                      value={className}
+                      onChange={(e) => { setClassName(e.target.value); setPreviewDirty(true); }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label htmlFor="wf-topic" className="form-label">Tên Đề Tài / Báo Cáo:</label>
+                    <input
+                      type="text"
+                      id="wf-topic"
+                      className="form-input"
+                      placeholder="Ví dụ: Xây dựng hệ thống quản lý học tập"
+                      value={topic}
+                      onChange={(e) => { setTopic(e.target.value); setPreviewDirty(true); }}
+                    />
+                    {topic.trim().split(/\s+/).filter(Boolean).length > 40 ? (
+                      <p className="dropzone-hint wf-inline-warn">
+                        ⚠️ Tên đề tài dài hơn 40 từ ({topic.trim().split(/\s+/).filter(Boolean).length} từ). Có thể gây lệch bố cục trang bìa.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="wf-doc-title" className="form-label">Tiêu Đề Bìa:</label>
+                    <input
+                      type="text"
+                      id="wf-doc-title"
+                      className="form-input"
+                      placeholder="TIỂU LUẬN MÔN HỌC"
+                      value={docTitle}
+                      onChange={(e) => { setDocTitle(e.target.value); setPreviewDirty(true); }}
+                      readOnly={documentType === 'do_an_tot_nghiep'}
+                    />
+                  </div>
+                </div>
+
+                <details className="wordfmt-cover-options">
+                  <summary className="wf-details-summary">Tùy chỉnh Đơn vị đào tạo, Môn học &amp; Thời gian trên bìa</summary>
+                  <div className="wf-details-body">
+                    <div className="form-row-2">
+                      <div className="form-group">
+                        <label htmlFor="wf-institution" className="form-label">Trường:</label>
+                        <input
+                          type="text"
+                          id="wf-institution"
+                          className="form-input"
+                          value={institution}
+                          onChange={(e) => { setInstitution(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="wf-faculty" className="form-label">Khoa / Viện:</label>
+                        <input
+                          type="text"
+                          id="wf-faculty"
+                          className="form-input"
+                          value={faculty}
+                          onChange={(e) => { setFaculty(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row-2">
+                      <div className="form-group">
+                        <label htmlFor="wf-course" className="form-label">Tên môn học (nếu cần trên bìa):</label>
+                        <input
+                          type="text"
+                          id="wf-course"
+                          className="form-input"
+                          placeholder="Để trống nếu bìa không yêu cầu"
+                          value={course}
+                          onChange={(e) => { setCourse(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="wf-location" className="form-label">Địa điểm:</label>
+                        <input
+                          type="text"
+                          id="wf-location"
+                          className="form-input"
+                          value={location}
+                          onChange={(e) => { setLocation(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row-2">
+                      <div className="form-group">
+                        <label htmlFor="wf-month" className="form-label">Tháng trên bìa:</label>
+                        <input
+                          type="text"
+                          id="wf-month"
+                          className="form-input"
+                          inputMode="numeric"
+                          placeholder={`Mặc định: tháng ${new Date().getMonth() + 1}`}
+                          value={month}
+                          onChange={(e) => { setMonth(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="wf-year" className="form-label">Năm trên bìa:</label>
+                        <input
+                          type="text"
+                          id="wf-year"
+                          className="form-input"
+                          inputMode="numeric"
+                          placeholder={`Mặc định: năm ${new Date().getFullYear()}`}
+                          value={year}
+                          onChange={(e) => { setYear(e.target.value); setPreviewDirty(true); }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              {/* Section 03: Front-Matter & Advanced Options */}
+              <div className="wf-form-section">
+                <div className="wf-form-section-head">
+                  <span className="wf-sec-num">03</span>
+                  <div>
+                    <h3>Trang đầu (Front-Matter) &amp; Quy tắc nâng cao</h3>
+                    <p>Chọn thành phần tự động sinh và cách bảo toàn bảng biểu/đề cương.</p>
+                  </div>
+                </div>
+
+                <div className="features-checklist wf-checklist-grid wf-checklist-grid--2col">
+                  <label className="feature-item">
+                    <input
+                      type="checkbox"
+                      id="wf-include-cover"
+                      checked={includeCover}
+                      onChange={(e) => { setIncludeCover(e.target.checked); setPreviewDirty(true); }}
+                      disabled={documentType === 'do_an_tot_nghiep'}
+                    />
+                    <span id="wf-cover-label">
+                      <strong>{documentType === 'do_an_tot_nghiep' ? 'Hai trang bìa:' : 'Trang bìa:'}</strong>{' '}
+                      {documentType === 'do_an_tot_nghiep'
+                        ? 'Bìa chính và bìa phụ; chỉ thêm bìa còn thiếu.'
+                        : 'Khung viền chuẩn BDU, Logo, đề tài, GVHD, SVTH, Lớp, MSSV'}
+                    </span>
+                  </label>
+
+                  <label className="feature-item">
+                    <input
+                      type="checkbox"
+                      id="wf-include-comments"
+                      checked={includeComments}
+                      onChange={(e) => { setIncludeComments(e.target.checked); setPreviewDirty(true); }}
+                      disabled={documentType === 'do_an_tot_nghiep'}
+                    />
+                    <span id="wf-comments-label">
+                      <strong>{documentType === 'do_an_tot_nghiep' ? 'Hai trang nhận xét:' : 'Nhận xét giảng viên:'}</strong>{' '}
+                      {documentType === 'do_an_tot_nghiep'
+                        ? 'Giảng viên hướng dẫn và giảng viên phản biện, có chỗ ký tên.'
+                        : 'Trang 20 dòng chấm tab-leader để giảng viên ghi nhận xét'}
+                    </span>
+                  </label>
+
+                  <label className="feature-item">
+                    <input
+                      type="checkbox"
+                      id="wf-include-thanks"
+                      checked={includeThanks}
+                      onChange={(e) => { setIncludeThanks(e.target.checked); setPreviewDirty(true); }}
+                    />
+                    <span><strong>Lời cảm ơn:</strong> Đặt trước Mục lục, bảo toàn khối chữ ký bên phải</span>
+                  </label>
+
+                  <label className="feature-item">
+                    <input type="checkbox" checked disabled />
+                    <span><strong>Mục lục &amp; Danh mục Bảng/Hình:</strong> Tự động tạo và đánh số trang chuẩn BDU</span>
+                  </label>
+
+                  <label className="feature-item">
+                    <input
+                      type="checkbox"
+                      id="wf-only-existing-captions"
+                      checked={onlyExistingCaptions}
+                      onChange={(e) => { setOnlyExistingCaptions(e.target.checked); setPreviewDirty(true); }}
+                    />
+                    <span id="wf-only-existing-captions-label">
+                      <strong>Chỉ định dạng Bảng và Hình đã có sẵn:</strong> Không tự chèn caption giữ chỗ vào bảng layout
+                    </span>
+                  </label>
+
+                  <label className="feature-item">
+                    <input
+                      type="checkbox"
+                      id="wf-skip-proposal"
+                      checked={skipProposal}
+                      onChange={(e) => { setSkipProposal(e.target.checked); setPreviewDirty(true); }}
+                    />
+                    <span id="wf-skip-proposal-label">
+                      <strong>Bỏ qua định dạng đề cương:</strong> Giữ nguyên hoàn toàn vùng đề cương đầu tài liệu
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="wf-form-submit-wrap">
+                <SakugaButton
+                  type="submit"
+                  id="btn-start-wordfmt"
+                  variant="primary"
+                  className="wf-studio-submit-sakuga"
+                  disabled={isRunning}
+                >
+                  {isRunning ? 'Đang chuẩn hóa…' : 'Tiếp tục · Bắt đầu chuẩn hóa văn bản →'}
+                </SakugaButton>
+              </div>
+            </form>
+
+            <AiSkillPanel
+              info={coverInfo}
+              open={skillOpen}
+              onToggle={() => setSkillOpen((prev) => !prev)}
+              onClose={() => setSkillOpen(false)}
+              onNotify={notify}
+            />
+          </div>
+        </div>
       )}
-      <AiSkillPanel
-        info={{
-          documentType,
-          documentMode: mode,
-          docTitle,
-          institution,
-          faculty,
-          topic,
-          course,
-          instructor,
-          student,
-          studentId,
-          className,
-          location,
-          month,
-          year
-        }}
-        open={skillOpen}
-        onToggle={() => setSkillOpen((prev) => !prev)}
-        onNotify={notify}
-      />
+
       {confirmUI}
     </section>
   );

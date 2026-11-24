@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     preview,
     formatDocx: vi.fn().mockResolvedValue({ downloadUrl: '/api/wordfmt/download/test.docx' }),
     previewDocxStructure: vi.fn().mockResolvedValue(preview),
+    getFormattedDocxPreview: vi.fn().mockResolvedValue(null),
     toolRun: null
   };
 });
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../../client/src/api/tools.js', () => ({
   formatDocx: mocks.formatDocx,
   previewDocxStructure: mocks.previewDocxStructure,
+  getFormattedDocxPreview: mocks.getFormattedDocxPreview,
   downloadWordFmt: vi.fn().mockResolvedValue(new Blob(['docx']))
 }));
 vi.mock('../../client/src/app/providers.jsx', () => ({
@@ -37,7 +39,7 @@ vi.mock('../../client/src/services/tool-runs.js', () => ({
   }
 }));
 
-import WordFmtPage from '../../client/src/features/wordfmt/WordFmtPage.jsx';
+import WordFmtPage, { buildCompletionCards } from '../../client/src/features/wordfmt/WordFmtPage.jsx';
 
 afterEach(() => {
   cleanup();
@@ -140,6 +142,7 @@ describe('WordFmtPage', () => {
 
     expect(screen.getByText(/Văn bản đã được chuẩn hóa 100%/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Tải Về File DOCX/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tải Về File DOCX/i })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/liên kết tải xuống chưa khả dụng/i);
   });
 
@@ -151,44 +154,54 @@ describe('WordFmtPage', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent(/SECRET backend stderr/i);
   });
 
-  it('keeps the start control locked and reports an estimated active stage while a run is pending', () => {
+  it('shows only the focused Sakuga loading progress stage while a run is pending', () => {
     mocks.toolRun = { status: 'running', progress: 52, stageIndex: 2, stageCount: 7 };
     render(<WordFmtPage />);
 
-    expect(screen.getByRole('button', { name: /Đang chuẩn hóa/i })).toBeDisabled();
+    expect(document.querySelector('#form-wordfmt')).toBeNull();
+    expect(document.querySelector('.wf-gdoc-workspace')).toBeNull();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '52');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '100');
     expect(screen.getByText(/Đang nhận diện bảng & hình/i)).toBeInTheDocument();
-    expect(document.querySelector('.wf-run')).toBeInTheDocument();
-    expect(document.querySelectorAll('.wf-run-stages li')).toHaveLength(7);
+    expect(document.querySelector('.wf-sakuga-stage')).toBeInTheDocument();
+    expect(document.querySelectorAll('.wf-run-stages li')).toHaveLength(0);
     expect(document.querySelector('.wordfmt-progress-box')).toBeNull();
     expect(document.querySelector('.processing-stages')).toBeNull();
   });
 
-  it('shows only concise completion cards derived from known report fields', () => {
+  it('shows only the finished Sakuga bar and a single Download button on completion while keeping buildCompletionCards safe', () => {
+    const safeReport = {
+      structure: { chapterCount: 2, warnings: ['SECRET diagnostic payload'] },
+      outputNormalization: {
+        captionsRenumbered: 3,
+        compliance: { a4Portrait: true, margins: true }
+      },
+      arbitraryBackendBlob: { trace: 'SECRET raw trace' }
+    };
+    const cards = buildCompletionCards({ report: safeReport }, { includeCover: true, onlyExistingCaptions: true });
+    const cardText = cards.map((c) => `${c.title} ${c.description}`).join(' | ');
+    expect(cardText).toContain('Đã nhận diện 2 chương');
+    expect(cardText).toContain('Đã chuẩn hóa 3 chú thích Bảng/Hình');
+    expect(cardText).toContain('Báo cáo đầu ra có 1 lưu ý');
+    expect(cardText).not.toMatch(/SECRET diagnostic|SECRET raw trace|arbitraryBackendBlob/i);
+
     mocks.toolRun = {
       status: 'success',
       summaryChoices: { includeCover: true, onlyExistingCaptions: true },
       result: {
-        report: {
-          structure: { chapterCount: 2, warnings: ['SECRET diagnostic payload'] },
-          outputNormalization: {
-            captionsRenumbered: 3,
-            compliance: { a4Portrait: true, margins: true }
-          },
-          arbitraryBackendBlob: { trace: 'SECRET raw trace' }
-        }
+        downloadUrl: '/api/wordfmt/download/BDU_ChuanHoa.docx',
+        report: safeReport
       }
     };
     render(<WordFmtPage />);
 
-    const summary = screen.getByLabelText(/Tóm tắt kết quả/i);
-    expect(summary).toHaveTextContent('Đã nhận diện 2 chương');
-    expect(summary).toHaveTextContent('Đã chuẩn hóa 3 chú thích Bảng/Hình');
-    expect(summary).toHaveTextContent('Báo cáo đầu ra có 1 lưu ý');
-    expect(summary).toHaveTextContent('Tùy chọn đã gửi');
-    expect(summary).not.toHaveTextContent(/SECRET diagnostic|SECRET raw trace|arbitraryBackendBlob/i);
-    expect(screen.queryByText(/WordFmt Diagnostics/i)).not.toBeInTheDocument();
+    expect(document.querySelector('#form-wordfmt')).toBeNull();
+    expect(document.querySelector('.wf-gdoc-workspace')).toBeNull();
+    expect(screen.queryByLabelText(/Tóm tắt kết quả/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByText(/Văn bản đã được chuẩn hóa 100%/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tải Về File DOCX Đã Chuẩn Hóa/i })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/SECRET diagnostic|SECRET raw trace|arbitraryBackendBlob/i);
   });
 
   it('renders the AI skill prompt panel synced with form fields and copies to clipboard', async () => {
@@ -262,5 +275,160 @@ describe('WordFmtPage', () => {
     expect(coverPreview).toHaveTextContent(new RegExp(`Thành phố Hồ Chí Minh, tháng \\d{1,2} năm ${currentYear}`));
     expect(screen.getByText('Khối chữ ký')).toBeInTheDocument();
     expect(screen.getByText('Công thức toán')).toBeInTheDocument();
+  });
+
+  it('reflects cover metadata live on the Studio A4 desk and accepts Google Docs margin suggestions', async () => {
+    const renderedDocPreview = {
+      items: [
+        { i: 3, kind: 'p', t: 'TÓM TẮT', role: 'body', region: 'front', suspect: 'Chữ in hoa, ngắn', suggest: 'major_title' },
+        { i: 5, kind: 'p', t: 'p = 1/(1 + exp(-z))', role: 'equation', region: 'body' }
+      ],
+      paragraphCount: 8,
+      summary: { chapterCount: 1, headingCount: 1, equationCount: 1, suspectCount: 1, forcedCount: 0 },
+      document: {
+        pageCount: 2,
+        pages: [
+          {
+            pageIndex: 0,
+            pageNumber: 1,
+            pageLabel: '',
+            isCover: true,
+            isDraftCover: true,
+            borderStyle: 'twistedLines1',
+            draftCover: {
+              institution: 'TRƯỜNG ĐẠI HỌC BÌNH DƯƠNG',
+              institute: 'VIỆN TRÍ TUỆ NHÂN TẠO VÀ CHUYỂN ĐỔI SỐ',
+              faculty: 'KHOA CÔNG NGHỆ THÔNG TIN, ROBOT VÀ TRÍ TUỆ NHÂN TẠO',
+              docTitle: 'TIỂU LUẬN MÔN HỌC',
+              topic: 'XÂY DỰNG HỆ THỐNG BDU',
+              instructor: 'ThS. LÊ VĂN C',
+              student: 'SINH VIÊN TEST',
+              studentId: 'TEST0001',
+              className: '2405SE01',
+              coverDate: 'Thành phố Hồ Chí Minh, tháng 11 năm 2026'
+            },
+            blocks: []
+          },
+          {
+            pageIndex: 1,
+            pageNumber: 2,
+            pageLabel: '1',
+            isCover: false,
+            header: { columns: [{ text: 'TIỂU LUẬN MÔN HỌC', align: 'left' }, { text: 'CHƯƠNG 1', align: 'right' }], hasBorder: true },
+            footer: { columns: [{ text: 'GVHD: ThS. Lê Văn C', align: 'left' }, { text: '{PAGE}', hasPageField: true, align: 'center' }, { text: 'SVTH: Sinh viên Test', align: 'right' }], hasBorder: true },
+            blocks: [
+              { blockId: 'b1', sourceIndex: 3, kind: 'p', text: 'TÓM TẮT', role: 'body', suspect: 'Chữ in hoa, ngắn', suggest: 'major_title' },
+              {
+                blockId: 'b2',
+                sourceIndex: 5,
+                kind: 'equation',
+                text: 'p = 1/(1 + exp(-z))',
+                role: 'equation',
+                mathAst: { type: 'frac', num: { type: 'tok', kind: 'mn', text: '1' }, den: { type: 'tok', kind: 'mi', text: 'z' } }
+              },
+              {
+                blockId: 'b3',
+                kind: 'table',
+                bordered: true,
+                rows: [
+                  { isHeader: true, cells: [{ colspan: 1, rowspan: 1, blocks: [{ kind: 'p', text: 'Cột A' }] }] },
+                  { isHeader: false, cells: [{ colspan: 1, rowspan: 1, blocks: [{ kind: 'p', text: 'Giá trị 1' }] }] }
+                ]
+              }
+            ]
+          }
+        ],
+        outline: [{ id: 'o1', title: 'CHƯƠNG 1', level: 1, pageIndex: 1, pageLabel: '1' }],
+        locations: { 3: { blockId: 'b1', pageIndex: 1, pageNumber: 2, pageLabel: '1' } }
+      }
+    };
+    mocks.previewDocxStructure.mockResolvedValueOnce(renderedDocPreview);
+
+    render(<WordFmtPage />);
+
+    // Step 1 shows ONLY the clean input form (no side A4 preview card yet)
+    expect(screen.queryByLabelText(/Khung trang bìa dự kiến/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Điền tên & MSSV của tôi/i }));
+    expect(screen.getByLabelText(/Tên Sinh Viên \/ Nhóm/i)).toHaveValue('Sinh viên Test');
+    expect(screen.getByLabelText(/Mã Số Sinh Viên/i)).toHaveValue('TEST0001');
+    fireEvent.change(screen.getByLabelText(/Giảng Viên Hướng Dẫn/i), { target: { value: 'ThS. Lê Văn C' } });
+
+    const file = new File(['DOCX fixture'], 'baocao.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+    fireEvent.change(document.querySelector('#docx-file-input'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu chuẩn hóa văn bản/i }));
+
+    await waitFor(() => expect(mocks.previewDocxStructure).toHaveBeenCalled());
+    // Cover, real table & typeset stacked fraction equation rendered in Step 2 Google Docs Workspace
+    expect(await screen.findByLabelText(/Khung trang bìa dự kiến/i)).toHaveTextContent('ThS. LÊ VĂN C');
+    expect(await screen.findByText('Giá trị 1')).toBeInTheDocument();
+    expect(document.querySelector('.wf-a4-math .wf-math-frac')).toBeInTheDocument();
+
+    // Accept Google Docs suggestion card in the right margin
+    fireEvent.click(screen.getByRole('button', { name: /✓ Chấp nhận/i }));
+    expect(screen.getByLabelText(/Danh sách chỉnh sửa/i)).toHaveTextContent('H1 · Tiêu đề lớn');
+  });
+
+  it('supports direct Word-like inline text editing, adding/deleting paragraphs, Undo/Redo, and sends paragraphMutations', async () => {
+    mocks.formatDocx.mockClear();
+    mocks.previewDocxStructure.mockClear();
+    mocks.formatDocx.mockResolvedValue({ downloadUrl: '/api/wordfmt/download/test.docx' });
+    mocks.previewDocxStructure.mockResolvedValue(mocks.preview);
+
+    render(<WordFmtPage />);
+    const file = new File(['DOCX fixture'], 'soan-thao.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+    fireEvent.change(document.querySelector('#docx-file-input'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText(/Giảng Viên Hướng Dẫn/i), { target: { value: 'TS. Lê Hoàng Hiệp' } });
+    fireEvent.change(screen.getByLabelText(/Tên Sinh Viên \/ Nhóm/i), { target: { value: 'Nguyễn Vũ Đạt' } });
+    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu chuẩn hóa văn bản/i }));
+
+    await waitFor(() => expect(mocks.previewDocxStructure).toHaveBeenCalledTimes(1));
+
+    // 1. Click body paragraph #4 to open inline paper editor & edit text
+    const bodySpan = await screen.findByText('Nội dung tóm tắt đề tài.', { selector: '.wf-pv-text' });
+    fireEvent.click(bodySpan.closest('button'));
+
+    const inlineEditor = await screen.findByLabelText('Sửa nội dung đoạn trên trang giấy');
+    expect(inlineEditor).toHaveValue('Nội dung tóm tắt đề tài.');
+    fireEvent.change(inlineEditor, { target: { value: 'Nội dung tóm tắt đã chỉnh sửa trực tiếp.' } });
+
+    // 2. Insert a new paragraph directly below via the inline minibar and type into it
+    fireEvent.click(screen.getByRole('button', { name: /↵ Thêm đoạn dưới/i }));
+    const insertedEditor = await screen.findByLabelText('Sửa nội dung đoạn trên trang giấy');
+    expect(insertedEditor).toHaveValue('');
+    fireEvent.change(insertedEditor, { target: { value: 'Đoạn văn mới thêm ngay trên trang A4.' } });
+
+    // 3. Delete paragraph #9 ("CHƯƠNG 1. TỔNG QUAN") then test Undo & Redo
+    const ch1Span = screen.getByText('CHƯƠNG 1. TỔNG QUAN', { selector: '.wf-pv-text' });
+    fireEvent.click(ch1Span.closest('button'));
+    fireEvent.click(screen.getByRole('button', { name: /^🗑 Xóa$/i }));
+    expect(screen.queryByText('CHƯƠNG 1. TỔNG QUAN', { selector: '.wf-pv-text' })).not.toBeInTheDocument();
+
+    // Undo restores CHƯƠNG 1. TỔNG QUAN; Redo deletes it again
+    fireEvent.click(screen.getByRole('button', { name: /↶ Hoàn tác/i }));
+    expect(screen.getByText('CHƯƠNG 1. TỔNG QUAN', { selector: '.wf-pv-text' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle(/Làm lại thao tác/i));
+    expect(screen.queryByText('CHƯƠNG 1. TỔNG QUAN', { selector: '.wf-pv-text' })).not.toBeInTheDocument();
+
+    // 4. Confirm & verify FormData carries paragraphMutations
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận & Chuẩn hóa DOCX/i }));
+    await waitFor(() => expect(mocks.formatDocx).toHaveBeenCalledTimes(1));
+
+    const [, formData] = mocks.formatDocx.mock.calls[0];
+    const mutations = JSON.parse(formData.get('paragraphMutations'));
+    expect(mutations.edits['4']).toBe('Nội dung tóm tắt đã chỉnh sửa trực tiếp.');
+    expect(mutations.deletes).toEqual(['9']);
+    expect(mutations.inserts).toEqual([
+      {
+        id: 'ins_1',
+        afterKey: '4',
+        beforeKey: '',
+        role: 'body',
+        text: 'Đoạn văn mới thêm ngay trên trang A4.'
+      }
+    ]);
   });
 });

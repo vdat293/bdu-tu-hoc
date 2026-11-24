@@ -395,6 +395,147 @@ export function applyParagraphNotes(archive, notes = {}, author = 'BDU WordFmt')
   return added;
 }
 
+/**
+ * Applies Google Docs / Word-like content mutations (text edits, paragraph insertions,
+ * and paragraph deletions) directly to `word/document.xml` using stable original
+ * 0-based paragraph indices (and `ins_<id>` keys for chained insertions).
+ */
+export function applyParagraphMutations(
+  archive,
+  mutations = {},
+  { stampPreviewBookmarks = false } = {}
+) {
+  if (!mutations || typeof mutations !== 'object') return 0;
+  const edits = mutations.edits && typeof mutations.edits === 'object' ? mutations.edits : {};
+  const deletesSet = new Set(Array.isArray(mutations.deletes) ? mutations.deletes.map(String) : []);
+  const inserts = Array.isArray(mutations.inserts) ? mutations.inserts : [];
+  const roleOverrides = mutations.roleOverrides && typeof mutations.roleOverrides === 'object' ? mutations.roleOverrides : {};
+
+  if (!Object.keys(edits).length && !deletesSet.size && !inserts.length) return 0;
+  if (!archive.getEntry('word/document.xml')) return 0;
+
+  const $ = parse(archive.readAsText('word/document.xml'));
+  const body = $(tag('body'));
+  if (!body.length) return 0;
+
+  const originalParagraphs = body.find(tag('p')).toArray();
+  const nodeByKey = new Map(originalParagraphs.map((el, idx) => [String(idx), el]));
+
+  let nextBookmarkId = Math.max(
+    960000,
+    ...$(tag('bookmarkStart')).toArray().map((e) => Number($(e).attr('w:id')) || 0)
+  ) + 1;
+
+  let mutatedCount = 0;
+
+  const buildRunsXml = (text, templateRPrXml = '') => {
+    const lines = String(text ?? '').split(/\r?\n/);
+    const inner = lines.map((line, idx) => (
+      `${idx > 0 ? '<w:br/>' : ''}<w:t xml:space="preserve">${esc(line)}</w:t>`
+    )).join('');
+    return `<w:r>${templateRPrXml}${inner}</w:r>`;
+  };
+
+  // 1. Apply inline text edits on original paragraphs before any insertion/deletion mutates indices
+  for (const [key, rawText] of Object.entries(edits)) {
+    if (!/^\d+$/.test(key) || deletesSet.has(key)) continue;
+    const el = nodeByKey.get(key);
+    if (!el) continue;
+    const p = $(el);
+    const firstRPr = p.find(tag('r')).first().children(tag('rPr')).first();
+    const rPrXml = firstRPr.length ? xmlOf($, firstRPr[0]) : '';
+
+    // Preserve pPr, bookmarks (_WFRole_*, _WFSrc_*) and comment markers; replace text/math runs
+    p.contents().each((_, childNode) => {
+      if (childNode.type !== 'tag') {
+        $(childNode).remove();
+        return;
+      }
+      const n = childNode.name;
+      if (
+        n === 'w:pPr'
+        || n === 'w:bookmarkStart'
+        || n === 'w:bookmarkEnd'
+        || n === 'w:commentRangeStart'
+        || n === 'w:commentRangeEnd'
+      ) return;
+      if (n === 'w:r' && $(childNode).children(tag('commentReference')).length > 0) return;
+      $(childNode).remove();
+    });
+
+    const commentEnd = p.children(tag('commentRangeEnd')).first();
+    const newRunXml = buildRunsXml(rawText, rPrXml);
+    if (commentEnd.length) commentEnd.before(newRunXml);
+    else p.append(newRunXml);
+    mutatedCount++;
+  }
+
+  // 2. Apply inserted paragraphs in chronological chain order (`afterKey` can be `"18"` or `"ins_1"`)
+  for (const ins of inserts) {
+    if (!ins || typeof ins !== 'object') continue;
+    const insId = String(ins.id || '').trim();
+    if (!/^ins_[a-zA-Z0-9_-]{1,32}$/.test(insId)) continue;
+    if (deletesSet.has(insId)) continue;
+
+    const finalText = Object.prototype.hasOwnProperty.call(edits, insId)
+      ? String(edits[insId] ?? '')
+      : String(ins.text ?? '');
+    const chosenRole = roleOverrides[insId] || ins.role || 'body';
+
+    let markersXml = '';
+    if (chosenRole && chosenRole !== 'auto' && ROLE_OVERRIDE_KEYS.includes(chosenRole)) {
+      const rId = nextBookmarkId++;
+      markersXml += `<w:bookmarkStart w:id="${rId}" w:name="${ROLE_BOOKMARK_PREFIX}${chosenRole}"/><w:bookmarkEnd w:id="${rId}"/>`;
+    }
+    if (stampPreviewBookmarks) {
+      const sId = nextBookmarkId++;
+      markersXml += `<w:bookmarkStart w:id="${sId}" w:name="_WFSrc_${insId}"/><w:bookmarkEnd w:id="${sId}"/>`;
+    }
+
+    const pXml = `<w:p><w:pPr><w:pStyle w:val="WFBody"/></w:pPr>${markersXml}${buildRunsXml(finalText)}</w:p>`;
+    const insertedEl = $(pXml);
+    const afterKey = String(ins.afterKey ?? '');
+    const beforeKey = String(ins.beforeKey ?? '');
+
+    if (beforeKey && nodeByKey.has(beforeKey)) {
+      $(nodeByKey.get(beforeKey)).before(insertedEl);
+    } else if (afterKey && nodeByKey.has(afterKey)) {
+      $(nodeByKey.get(afterKey)).after(insertedEl);
+    } else {
+      const bodySectPr = child(body, 'sectPr').first();
+      if (bodySectPr.length) bodySectPr.before(insertedEl);
+      else body.append(insertedEl);
+    }
+
+    nodeByKey.set(insId, insertedEl[0]);
+    mutatedCount++;
+  }
+
+  // 3. Apply paragraph deletions safely (respecting section breaks and ECMA-376 table cell invariants)
+  for (const key of deletesSet) {
+    if (!/^\d+$/.test(key)) continue;
+    const el = nodeByKey.get(key);
+    if (!el || !el.parent) continue;
+    const p = $(el);
+    const pSectPr = child(child(p, 'pPr').first(), 'sectPr').first();
+    if (pSectPr.length) {
+      p.before(`<w:p><w:pPr>${xmlOf($, pSectPr[0])}</w:pPr></w:p>`);
+    }
+    // ECMA-376 requires every <w:tc> to contain at least one <w:p>
+    if (el.parent.name === 'w:tc' && p.siblings(tag('p')).length === 0) {
+      p.empty();
+    } else {
+      p.remove();
+    }
+    mutatedCount++;
+  }
+
+  if (mutatedCount > 0) {
+    archive.updateFile('word/document.xml', Buffer.from(xmlOf($)));
+  }
+  return mutatedCount;
+}
+
 function buildSourceStyleAlignmentMap(archive) {
   const $s = parse(archive.readAsText('word/styles.xml') || '<w:styles/>');
   return new Map($s(tag('style')).toArray().map(n => [$s(n).attr('w:styleId'), $s(n)]));
@@ -470,6 +611,53 @@ function isStandaloneEquation($, p, text, styleId, region, numbering, sourceJc =
   return viProseWords.length <= 4 && (viProseWords.length / Math.max(1, words.length)) <= 0.45;
 }
 
+function isStaticIndexEntry($, p, rawWText) {
+  if (!rawWText) return false;
+  // Case A: Paragraph contains a <w:tab/> (outside pPr) whose trailing segment is a Roman/Arabic page number
+  let sawTab = false;
+  let beforeTab = '';
+  let afterLastTab = '';
+  for (const node of p.contents().toArray()) {
+    if (node.name === 'w:pPr') continue;
+    if (node.name === 'w:tab') {
+      sawTab = true;
+      beforeTab += afterLastTab;
+      afterLastTab = '';
+      continue;
+    }
+    const $n = $(node);
+    if ($n.find(tag('tab')).length > 0) {
+      for (const sub of $n.contents().toArray()) {
+        if (sub.name === 'w:rPr') continue;
+        if (sub.name === 'w:tab') {
+          sawTab = true;
+          beforeTab += afterLastTab;
+          afterLastTab = '';
+        } else {
+          const t = $(sub).find(tag('t')).addBack(tag('t')).text();
+          if (sawTab) afterLastTab += t;
+          else beforeTab += t;
+        }
+      }
+    } else {
+      const t = $n.find(tag('t')).text();
+      if (sawTab) afterLastTab += t;
+      else beforeTab += t;
+    }
+  }
+  if (sawTab && beforeTab.trim() && /^(?:\d{1,4}|[ivxlcdm]{1,8})$/i.test(afterLastTab.trim())) {
+    return true;
+  }
+  // Case B: Manual dot/underscore leaders or multi-space gap before a trailing page number
+  if (/^(?!\s*$).+?[.…_]{2,}\s*(?:\d{1,4}|[ivxlcdm]{1,8})\s*$/iu.test(rawWText)) {
+    return true;
+  }
+  if (/^(?!\s*$).+?\s{2,}(?:\d{1,4}|[ivxlcdm]{1,8})\s*$/iu.test(rawWText)) {
+    return true;
+  }
+  return false;
+}
+
 export function analyzeDocxStructure(inputPath) {
   const archive = typeof inputPath === 'string' ? new AdmZip(inputPath) : inputPath;
   const $ = parse(archive.readAsText('word/document.xml'));
@@ -516,6 +704,12 @@ export function analyzeDocxStructure(inputPath) {
     rec.numbering = rawWText ? nextNumber(p) : {marker:'',level:0};
     if (insideTable) { rec.role = 'table'; return; }
     if (p.parents(tag('txbxContent')).length) { rec.role = 'embedded'; return; }
+    if (region === 'front' && indexPageDefinition(currentFrontKey) && isStaticIndexEntry($, p, rawWText)) {
+      rec.inIndex = true;
+      rec.role = 'index';
+      rec.indexId = `static-${currentFrontKey}`;
+      return;
+    }
     const forced = (text || rec.hasOmml) ? forcedRoleOf($, p) : null;
     const isBullet = rec.numbering.format === 'bullet';
     const isUpper = /\p{L}/u.test(rawWText) && rawWText === rawWText.toLocaleUpperCase('vi-VN');
@@ -575,7 +769,7 @@ export function analyzeDocxStructure(inputPath) {
         // Outline levels inherited from Normal are a common template mistake;
         // only direct levels or a dedicated (non-Normal) style count.
         const styleOutline = styleId && !/^(?:Normal|WFBody|WFEquation|WFSignature)$/i.test(styleId) ? rec.numbering.outline : undefined;
-        const outline = Number(val(pp, 'outlineLvl') ?? styleOutline ?? styleId.match(/^Heading(\d)$/)?.[1] - 1);
+        const outline = Number(val(pp, 'outlineLvl') ?? styleOutline ?? styleId.match(/^(?:WF)?Heading(\d)$/)?.[1] - 1);
         if (match) {
           rec.role = 'heading'; rec.level = match[1].split('.').length; rec.number = match[1]; rec.displayText = numberedText;
           inSignatureBlock = false;
@@ -675,6 +869,8 @@ function suspectHeading($, rec) {
   if (!['body', 'chapter_summary'].includes(rec.role) || rec.region === 'cover' || !rec.text) return null;
   const text = rec.text;
   if (text.length > 150 || /[.;,]$/.test(text) || rec.numbering?.format === 'bullet') return null;
+  // Static TOC lines (text + tab leader + trailing page number) are rebuilt into a TOC field, not headings.
+  if ($(rec.element).find(tag('tab')).length > 0 && /\p{L}\d{1,3}\s*$|(?:\.{3,}|\s)\d{1,3}\s*$/u.test(text)) return null;
   const key = keyOf(text).replace(/[.:]+$/, '');
   if (SIGNATURE_ROLE_KEY_RE.test(key)) return null;
   const numbered = text.match(/^(\d+(?:\.\d+){0,3})\.?\s+\S/u);
@@ -697,17 +893,29 @@ function suspectHeading($, rec) {
  * Compact, JSON-safe outline of a document for the preview editor. `i` is the
  * paragraph index accepted by applyRoleOverrides for the same input file.
  */
+function resolvePreviewItemKey($, p, fallbackIndex) {
+  const bName = p.children(tag('bookmarkStart')).toArray()
+    .map((e) => $(e).attr('w:name') || '')
+    .find((n) => n.startsWith('_WFSrc_'));
+  if (!bName) return fallbackIndex;
+  const raw = bName.slice('_WFSrc_'.length);
+  if (/^\d+$/.test(raw)) return Number(raw);
+  if (/^ins_[a-zA-Z0-9_-]{1,32}$/.test(raw)) return raw;
+  return fallbackIndex;
+}
+
 export function buildStructurePreview(analysis, { maxText = 280 } = {}) {
   const { $, records } = analysis;
   const items = [];
   const seenTables = new Set(), seenIndexes = new Set();
   for (const rec of records) {
     const p = $(rec.element);
+    const itemKey = resolvePreviewItemKey($, p, rec.index);
     if (rec.inIndex) {
       const id = rec.indexId ?? 'index';
       if (!seenIndexes.has(id)) {
         seenIndexes.add(id);
-        items.push({ i: rec.index, kind: 'index', t: 'Mục lục / danh mục tự động (sẽ được tạo lại)', role: 'index', region: rec.region });
+        items.push({ i: itemKey, kind: 'index', t: 'Mục lục / danh mục tự động (sẽ được tạo lại)', role: 'index', region: rec.region });
       }
       continue;
     }
@@ -716,20 +924,20 @@ export function buildStructurePreview(analysis, { maxText = 280 } = {}) {
       if (!table.length || seenTables.has(table[0])) continue;
       seenTables.add(table[0]);
       const cells = table.find(tag('tc')).toArray().slice(0, 4).map(c => textOf($(c)).trim()).filter(Boolean);
-      items.push({ i: rec.index, kind: 'table', t: cells.join(' | ').slice(0, maxText), rows: table.children(tag('tr')).length, role: 'table', region: rec.region });
+      items.push({ i: itemKey, kind: 'table', t: cells.join(' | ').slice(0, maxText), rows: table.children(tag('tr')).length, role: 'table', region: rec.region });
       continue;
     }
     if (rec.role === 'embedded') continue;
     if (!rec.text) {
       if (rec.hasOmml) {
-        items.push({ i: rec.index, kind: 'p', t: '[Công thức toán học]', role: PREVIEW_ROLE[rec.role] || 'equation', region: rec.region });
+        items.push({ i: itemKey, kind: 'p', t: '[Công thức toán học]', role: PREVIEW_ROLE[rec.role] || 'equation', region: rec.region });
       } else if (p.find(`${tag('drawing')},${tag('pict')},${tag('object')}`).length) {
-        items.push({ i: rec.index, kind: 'image', t: '', role: 'image', region: rec.region });
+        items.push({ i: itemKey, kind: 'image', t: '', role: 'image', region: rec.region });
       }
       continue;
     }
     const role = rec.role === 'heading' ? `heading${rec.level}` : PREVIEW_ROLE[rec.role] || 'body';
-    const item = { i: rec.index, kind: 'p', t: (rec.displayText || rec.text).slice(0, maxText), role, region: rec.region };
+    const item = { i: itemKey, kind: 'p', t: (rec.displayText || rec.text).slice(0, maxText), role, region: rec.region };
     if (rec.forced) item.forced = true;
     const suspect = suspectHeading($, rec);
     if (suspect) { item.suspect = suspect.reason; item.suggest = suspect.suggest; }
@@ -763,14 +971,17 @@ function ensureStyles(archive, profile) {
       $(tag('style')).filter((_,s)=>val($(s),'name')?.toLowerCase()===builtin).remove();
       child(add(e),'name').attr('w:val',builtin);
       let pp=child(add(e),'pPr');if(!pp.length){add(e).append('<w:pPr/>');pp=child(add(e),'pPr');}
-      pp.append(`<w:spacing w:before="0" w:after="0" w:line="288" w:lineRule="auto"/><w:ind w:left="${id==='TableofFigures'?0:(Number(id.at(-1))-1)*360}" w:right="360"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs>`);
+      pp.append(`<w:spacing w:before="0" w:after="0" w:line="288" w:lineRule="auto"/><w:ind w:left="${id==='TableofFigures'?0:(Number(id.at(-1))-1)*360}" w:right="360" w:firstLine="0"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs>`);
     }
     $(tag('style')).filter((_, s) => $(s).attr('w:styleId') === id).remove();
     if (['WFBody', 'WFCaption'].includes(id)) {
-      // Source templates sometimes give Normal an outline level; body text must
-      // never inherit it into the navigation pane or outline-based TOCs.
+      // Source templates sometimes give Normal an outline level or firstLine indent;
+      // body and caption styles must never inherit either unintentionally.
       let pp = child(add(e), 'pPr'); if (!pp.length) { add(e).append('<w:pPr/>'); pp = child(add(e), 'pPr'); }
       child(pp, 'outlineLvl').remove(); pp.append('<w:outlineLvl w:val="9"/>');
+      if (id === 'WFCaption' && !child(pp, 'ind').length) {
+        pp.prepend('<w:ind w:left="0" w:right="0" w:firstLine="0"/>');
+      }
     }
     $(tag('styles')).append(add.xml(e));
   });
@@ -1174,6 +1385,129 @@ export function ensureMissingCaptionPlaceholders($, body, records, warnings = []
   return placeholdersAdded;
 }
 
+/**
+ * Generates sequential hierarchical numbers (`X.Y.`, `X.Y.Z.`, `X.Y.Z.W.`) for
+ * unnumbered body headings (levels 2–4) so both document body and Word TOC
+ * preserve multi-level outline numbering without duplicating existing prefixes.
+ */
+function assignMissingHeadingNumbers($, records, preserved) {
+  const counters = [0, 0, 0, 0]; // [chapter, h2, h3, h4]
+  let hasActiveChapter = false;
+  let headingsAutoNumbered = 0;
+
+  for (const rec of records) {
+    if (rec.inIndex || rec.insideTable || !rec.element?.parent || preserved.has(rec.element)) continue;
+
+    if (rec.role === 'major_title') {
+      hasActiveChapter = false;
+      counters.fill(0);
+      continue;
+    }
+
+    if (rec.role === 'chapter') {
+      const chNum = Number(rec.number);
+      counters[0] = Number.isFinite(chNum) && chNum > 0 ? chNum : counters[0] + 1;
+      counters[1] = 0;
+      counters[2] = 0;
+      counters[3] = 0;
+      hasActiveChapter = true;
+      continue;
+    }
+
+    if (rec.role !== 'heading' || rec.region !== 'body' || !hasActiveChapter || rec.level < 2 || rec.level > 4) {
+      continue;
+    }
+
+    const hasWordAutoNumber = Boolean(rec.numbering?.numId && rec.numbering.numId !== '0' && rec.numbering.format !== 'bullet');
+    const existingNum = rec.number || (hasWordAutoNumber ? (rec.numbering?.marker || '').match(/(\d+(?:\.\d+){1,3})/)?.[1] || '' : '');
+
+    if (existingNum || hasWordAutoNumber) {
+      if (existingNum) {
+        const parts = existingNum.split('.').map(Number);
+        if (parts[0] === counters[0]) {
+          if (parts.length >= 2 && Number.isFinite(parts[1])) counters[1] = parts[1];
+          counters[2] = parts.length >= 3 && Number.isFinite(parts[2]) ? parts[2] : 0;
+          counters[3] = parts.length >= 4 && Number.isFinite(parts[3]) ? parts[3] : 0;
+        }
+      }
+      continue;
+    }
+
+    const baseText = (rec.text || '').trim();
+    if (!baseText) continue;
+
+    let numStr = '';
+    if (rec.level === 2) {
+      counters[1] += 1;
+      counters[2] = 0;
+      counters[3] = 0;
+      numStr = `${counters[0]}.${counters[1]}`;
+    } else if (rec.level === 3) {
+      if (counters[1] === 0) counters[1] = 1;
+      counters[2] += 1;
+      counters[3] = 0;
+      numStr = `${counters[0]}.${counters[1]}.${counters[2]}`;
+    } else {
+      if (counters[1] === 0) counters[1] = 1;
+      if (counters[2] === 0) counters[2] = 1;
+      counters[3] += 1;
+      numStr = `${counters[0]}.${counters[1]}.${counters[2]}.${counters[3]}`;
+    }
+
+    const p = $(rec.element);
+    if (rec.numbering?.numId && rec.numbering.numId !== '0') {
+      rec.numbering = { marker: '', level: 0 };
+      prop(p, 'numPr', '<w:numPr><w:numId w:val="0"/></w:numPr>');
+    }
+
+    let firstNonEmptyRun = $();
+    let seenNonEmpty = false;
+    p.find(tag('r')).each((_, e) => {
+      if (seenNonEmpty) return false;
+      if ($(e).parents('m\\:oMath').length) return;
+      const textNodes = $(e).find(tag('t')).toArray();
+      if (!textNodes.length) return;
+      const nonEmptyNode = textNodes.find(t => $(t).text().trim().length > 0);
+      if (!nonEmptyNode) {
+        if (!$(e).find(`${tag('drawing')},${tag('pict')},${tag('object')},${tag('sym')},${tag('fldChar')},${tag('commentReference')},${tag('tab')}`).length) {
+          for (const t of textNodes) $(t).text('');
+        }
+        return;
+      }
+      seenNonEmpty = true;
+      firstNonEmptyRun = $(e);
+      const firstT = $(nonEmptyNode);
+      const trimmed = firstT.text().replace(/^\s+/u, '');
+      if (trimmed !== firstT.text()) {
+        firstT.text(trimmed);
+        if (/^\s|\s$|\s{2,}/.test(trimmed)) firstT.attr('xml:space', 'preserve');
+        else firstT.removeAttr('xml:space');
+      }
+    });
+
+    const numberRun = `<w:r><w:t xml:space="preserve">${esc(numStr)}. </w:t></w:r>`;
+    if (firstNonEmptyRun.length) {
+      let insertAnchor = firstNonEmptyRun[0];
+      while (insertAnchor && insertAnchor.parent && insertAnchor.parent !== p[0]) {
+        insertAnchor = insertAnchor.parent;
+      }
+      if (insertAnchor && insertAnchor.parent === p[0]) $(insertAnchor).before(numberRun);
+      else firstNonEmptyRun.before(numberRun);
+    } else {
+      const pPr = child(p, 'pPr');
+      if (pPr.length) pPr.after(numberRun);
+      else p.prepend(numberRun);
+    }
+
+    rec.number = numStr;
+    rec.text = `${numStr}. ${baseText}`;
+    rec.displayText = rec.text;
+    headingsAutoNumbered += 1;
+  }
+
+  return headingsAutoNumbered;
+}
+
 export function formatStructuredDocx(inputPath, outputPath, options, analysis = analyzeDocxStructure(inputPath)) {
   const leadingPageBordersDetected = leadingPageBorderSections(analysis.archive);
   // The incoming border pages may be the only reliable source for these values
@@ -1263,6 +1597,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const tocCode = 'TOC \\t "WFIntroTitle,1,WFIntroHeading,2,WFPartTitle,1,WFMajorTitle,1,WFHeading1,1,WFHeading2,2,WFHeading3,3,WFHeading4,4" \\h';
   let restoredIndexes = 0;
   let bodyDirectBoldNormalized = 0;
+  const headingsAutoNumbered = assignMissingHeadingNumbers($, records, preserved);
   for (const rec of records) {
     const p = $(rec.element);
     if (rec.inIndex) {
@@ -1417,26 +1752,36 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       + coverLine(`${options.location || profile.cover?.location || 'Thành phố Hồ Chí Minh'}, tháng ${resolvedFallbackMonth} năm ${resolvedFallbackYear}`,14,70,true));
   }
   const commentLine='<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9071"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="460" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="left"/></w:pPr><w:r><w:tab/></w:r></w:p>';
+  const courseworkReviewSignatureTable = (roleLabel = 'GIẢNG VIÊN HƯỚNG DẪN') => {
+    const borders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(n => `<w:${n} w:val="nil"/>`).join('');
+    const sigRun = (textStr, { bold = false, italic = false }) =>
+      `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:b w:val="${bold ? 1 : 0}"/><w:bCs w:val="${bold ? 1 : 0}"/><w:i w:val="${italic ? 1 : 0}"/><w:iCs w:val="${italic ? 1 : 0}"/><w:color w:val="000000"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t xml:space="preserve">${esc(textStr)}</w:t></w:r>`;
+    const roleP = `<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:keepNext/><w:spacing w:before="280" w:after="80" w:line="240" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="center"/></w:pPr>${sigRun(roleLabel, { bold: true, italic: false })}</w:p>`;
+    const hintP = `<w:p><w:pPr><w:pStyle w:val="WFBody"/><w:keepNext/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="center"/></w:pPr>${sigRun('(Ký và ghi rõ họ tên)', { bold: false, italic: true })}</w:p>`;
+    return `<w:tbl><w:tblPr><w:tblW w:w="4600" w:type="dxa"/><w:jc w:val="right"/><w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="4600"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="4600" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${roleP}${hintP}</w:tc></w:tr></w:tbl>`;
+  };
   for (const [option,label] of [['comments','NHẬN XÉT CỦA GIẢNG VIÊN'],['thanks','LỜI CẢM ƠN']]) {
     if(graduation && option==='comments')continue;
     if (!requested.has(option) || records.some(r=>r.role==='front_title' && (option==='thanks'?keyOf(r.text)==='LOI CAM ON':keyOf(r.text).startsWith('NHAN XET')))) continue;
     const target=starts.find(s=>s.role==='front_title'||s.role==='intro_title'||s.role==='chapter'||s.role==='part_title');
     if (!target) continue;
-    const nodes=$(paragraph(label,'WFFrontTitle')+(option==='comments'?commentLine.repeat(24):paragraph('')));
+    const nodes=$(paragraph(label,'WFFrontTitle')+(option==='comments'?commentLine.repeat(20)+courseworkReviewSignatureTable('GIẢNG VIÊN HƯỚNG DẪN'):paragraph('')));
     $(target.node).before(nodes);
     starts.push({node:nodes[0],role:'front_title',title:label});
   }
   // Existing coursework review pages (e.g. "NHẬN XÉT CỦA GIẢNG VIÊN HƯỚNG DẪN"
-  // / "NHẬN XÉT CỦA CÁN BỘ PHẢN BIỆN") often arrive without dotted writing lines.
-  // Fill them with dotted lines before the signature block so they match BDU form layout.
+  // / "NHẬN XÉT CỦA CÁN BỘ PHẢN BIỆN") often arrive without dotted writing lines
+  // and/or without the right-aligned signature block. Populate missing parts cleanly.
   if (!graduation) {
     const allChildren = body.children().toArray();
     const startSet = new Set(starts.map(s => s.node));
     const isDivider = t => /^[-–—_.*~\s]*o[0o]o[-–—_.*~\s]*$/i.test(t);
     const isSignature = el => {
       const k = keyOf(textOf($(el)));
-      if (el.name === 'w:tbl') return /(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)|NGAY.*THANG.*NAM/.test(k);
-      return /^(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)$/.test(k) || /(?:THANH PHO|BINH DUONG|NGAY).*THANG.*NAM/.test(k);
+      if (el.name === 'w:tbl') return /(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)|KY.*HO TEN|NGAY.*THANG.*NAM/.test(k);
+      return /^(?:GIANG VIEN|CAN BO|GV)\s+(?:HUONG DAN|PHAN BIEN)$/.test(k)
+        || /KY.*HO TEN/.test(k)
+        || /(?:THANH PHO|BINH DUONG|NGAY).*THANG.*NAM/.test(k);
     };
     for (const start of starts) {
       if (start.role !== 'front_title' || !keyOf(start.title).startsWith('NHAN XET')) continue;
@@ -1448,23 +1793,31 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       const hasDottedLines = sectionNodes.some(el =>
         $(el).find(`${tag('tab')}[w\\:leader="dot"]`).length > 0 || /^[.\s…_]{5,}$/.test(textOf($(el)).trim())
       );
-      if (hasDottedLines) continue;
       let signatureNode = null;
       let hasWrittenReview = false;
       for (const el of sectionNodes) {
         const t = textOf($(el)).trim();
-        if (!signatureNode && isSignature(el)) { signatureNode = el; continue; }
+        if (isSignature(el)) {
+          if (!signatureNode) signatureNode = el;
+          continue;
+        }
         if (el.name === 'w:p' && isDivider(t)) { prop($(el), 'jc', '<w:jc w:val="center"/>'); continue; }
         if (t && !/^[.\s…_\-]+$/.test(t)) hasWrittenReview = true;
       }
-      const lineCount = hasWrittenReview ? 4 : (signatureNode ? 20 : 24);
-      const lines = $(commentLine.repeat(lineCount));
-      if (signatureNode) {
-        $(signatureNode).before(lines);
-      } else if (sectionNodes.length) {
-        $(sectionNodes.at(-1)).after(lines);
-      } else {
-        $(start.node).after(lines);
+      let lastAnchor = sectionNodes.length ? sectionNodes.at(-1) : start.node;
+      if (!hasDottedLines) {
+        const lineCount = hasWrittenReview ? 4 : 20;
+        const lines = $(commentLine.repeat(lineCount));
+        if (signatureNode) {
+          $(signatureNode).before(lines);
+        } else {
+          $(lastAnchor).after(lines);
+          lastAnchor = lines.toArray().at(-1);
+        }
+      }
+      if (!signatureNode) {
+        const roleLabel = /PHAN BIEN/.test(keyOf(start.title)) ? 'GIẢNG VIÊN PHẢN BIỆN' : 'GIẢNG VIÊN HƯỚNG DẪN';
+        $(lastAnchor).after($(courseworkReviewSignatureTable(roleLabel)));
       }
     }
   }
@@ -1589,10 +1942,9 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     copy.find(tag('p')).addBack(tag('p')).removeAttr('w14:paraId').removeAttr('w14:textId');
     let drawingId = Math.max(0,...$('wp\\:docPr').toArray().map(e=>Number($(e).attr('id'))||0));
     copy.find('wp\\:docPr').each((_,e)=>$(e).attr('id',String(++drawingId)));
-    const blank = $(paragraph(''));
-    $(starts[1].node).before(blank).before(copy);
-    starts.splice(1,0,{node:blank[0],role:'cover',title:''},{node:copy[0],role:'cover',title:''});
-    bindingPagesInserted=2;
+    $(starts[1].node).before(copy);
+    starts.splice(1,0,{node:copy[0],role:'cover',title:''});
+    bindingPagesInserted=1;
   }
   // Capture original section geometry for proposal before removing boundaries.
   const proposalStart = records.find(r => r.role === 'proposal_title');
@@ -1606,10 +1958,12 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   }
   body.find(tag('sectPr')).remove(); child(body,'sectPr').remove();
   // Old hard page breaks next to semantic starts produce blank pages when a
-  // nextPage section is added. Clear only the boundary whitespace, not content.
+  // nextPage section is added. Clear only the boundary whitespace, not content
+  // or intentional section-starter nodes such as the binding blank sheet.
+  const startNodeSet = new Set(starts.map(s => s.node));
   for (const start of starts.slice(1)) {
     let prev = $(start.node).prev();
-    while (prev.length && prev[0].name === 'w:p' && !textOf(prev).trim() && !hasMathNode(prev) && !prev.find(`${tag('drawing')},${tag('pict')},${tag('object')},${tag('tab')}`).length) {
+    while (prev.length && !startNodeSet.has(prev[0]) && prev[0].name === 'w:p' && !textOf(prev).trim() && !hasMathNode(prev) && !prev.find(`${tag('drawing')},${tag('pict')},${tag('object')},${tag('tab')}`).length) {
       const next = prev.prev(); prev.remove(); prev = next;
     }
     $(start.node).find(`${tag('br')}[w\\:type="page"]`).remove();
@@ -1635,12 +1989,13 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
     return `<w:rFonts w:ascii="${esc(headerFooterFont)}" w:hAnsi="${esc(headerFooterFont)}" w:eastAsia="${esc(headerFooterFont)}" w:cs="${esc(headerFooterFont)}"/><w:sz w:val="${szVal}"/><w:szCs w:val="${szVal}"/>`;
   };
   const hfRunProperties = hfRunPropsFor(headerFooterSizePt);
-  const emptyHfParagraph = `<w:p><w:pPr><w:rPr>${hfRunProperties}</w:rPr></w:pPr></w:p>`;
+  const emptyHfParagraph = `<w:p><w:pPr><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:rPr>${hfRunProperties}</w:rPr></w:pPr></w:p>`;
   const hfRun = (text, sizePt = headerFooterSizePt) => `<w:r><w:rPr>${hfRunPropsFor(sizePt)}</w:rPr><w:t>${esc(text)}</w:t></w:r>`;
   const hfFieldRun = content => `<w:r><w:rPr>${hfRunProperties}</w:rPr>${content}</w:r>`;
   const hfParagraph = (left, right, page = false) => {
     const cell = (width, align, content, sizePt = headerFooterSizePt, leftIndentDxa = 0, vAlign = 'bottom') => {
-      const indXml = leftIndentDxa > 0 ? `<w:ind w:left="${leftIndentDxa}" w:right="0" w:firstLine="0"/>` : '';
+      // Always override Normal style firstLine indent so header/footer table cells sit flush on the page margins.
+      const indXml = `<w:ind w:left="${leftIndentDxa}" w:right="0" w:firstLine="0"/>`;
       return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:vAlign w:val="${vAlign}"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>${indXml}<w:jc w:val="${align}"/><w:rPr>${hfRunPropsFor(sizePt)}</w:rPr></w:pPr>${content}</w:p></w:tc>`;
     };
     if (page) {
@@ -1649,12 +2004,12 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       const rightFit = fitSingleLineCellText(right, widths[2], headerFooterSizePt, 11, 8);
       const pageField = hfFieldRun('<w:fldChar w:fldCharType="begin"/>') + hfFieldRun('<w:instrText xml:space="preserve"> PAGE </w:instrText>') + hfFieldRun('<w:fldChar w:fldCharType="separate"/>') + hfRun('1') + hfFieldRun('<w:fldChar w:fldCharType="end"/>');
       const cellMar = '<w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>';
-      return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, leftFit.sizePt), leftFit.sizePt, 0, 'top')}${cell(widths[1], 'center', pageField, headerFooterSizePt, 0, 'top')}${cell(widths[2], 'right', hfRun(right, rightFit.sizePt), rightFit.sizePt, rightFit.leftIndentDxa, 'top')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
+      return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, leftFit.sizePt), leftFit.sizePt, 0, 'top')}${cell(widths[1], 'center', pageField, headerFooterSizePt, 0, 'top')}${cell(widths[2], 'right', hfRun(right, rightFit.sizePt), rightFit.sizePt, rightFit.leftIndentDxa, 'top')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/></w:pPr></w:p>`;
     }
     const layout = computeHeaderLayout(left, right, headerFooterSizePt, 9071);
     const { widths } = layout;
     const cellMar = `<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="${layout.bottomPaddingDxa}" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>`;
-    return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:bottom w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, layout.leftSizePt), layout.leftSizePt, 0, 'bottom')}${cell(widths[1], 'right', hfRun(right, layout.rightSizePt), layout.rightSizePt, layout.rightLeftIndentDxa, 'bottom')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="${layout.afterBorderSpacerDxa}" w:lineRule="exact"/></w:pPr></w:p>`;
+    return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:bottom w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, layout.leftSizePt), layout.leftSizePt, 0, 'bottom')}${cell(widths[1], 'right', hfRun(right, layout.rightSizePt), layout.rightSizePt, layout.rightLeftIndentDxa, 'bottom')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="${layout.afterBorderSpacerDxa}" w:lineRule="exact"/><w:ind w:left="0" w:right="0" w:firstLine="0"/></w:pPr></w:p>`;
   };
   let bodyStarted = false;
   const firstNumberedSection = starts.findIndex(s => s.role !== 'cover');
@@ -1766,7 +2121,7 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
       outputNormalization:{ headersNormalized:starts.length, sectionsNormalized:starts.length, indexesRebuilt:restoredIndexes,
         indexPagesRebuilt, leadingPageBordersDetected, borderedLeadingCoverPagesReplaced, tableFontSizePt:13,
         headerFooterFont, headerFooterSizePt,
-        equationsFormatted, signaturesFormatted,
+        equationsFormatted, signaturesFormatted, headingsAutoNumbered,
         enDashesReplaced:dashReplacements, hyperlinksRemoved:hyperlinks.stats.hyperlinksRemoved, frontMatterReordered, bindingPagesInserted,
         compliance:{ a4Portrait,margins,bodySpacing:archive.readAsText('word/styles.xml').includes('w:before="120" w:after="0" w:line="288"'),
           listsPreserved:archive.readAsText('word/numbering.xml')===originalNumbering,

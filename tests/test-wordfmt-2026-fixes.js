@@ -156,6 +156,16 @@ try {
   assert.equal($cw(cwSections[2]).find('w\\:pgNumType').attr('w:fmt'), 'lowerRoman');
   assert.equal($cw(cwSections[2]).find('w\\:pgNumType').attr('w:start'), undefined, 'Lời cảm ơn continues lowerRoman count (ii)');
 
+  // Verify existing NHẬN XÉT CỦA GIẢNG VIÊN receives 20 dotted lines + right-aligned signature block
+  const cwCommentTitle = $cw('w\\:p').filter((_, el) => $cw(el).find('w\\:t').text().trim() === 'NHẬN XÉT CỦA GIẢNG VIÊN');
+  const cwCommentScope = cwCommentTitle.nextUntil('w\\:p:has(w\\:sectPr)');
+  assert.equal(cwCommentScope.find('w\\:tab[w\\:leader="dot"]').length, 20, 'Existing coursework review page receives 20 dotted lines');
+  const cwCommentSig = cwCommentScope.filter('w\\:tbl').first();
+  assert.equal(cwCommentSig.length, 1, 'Existing coursework review page receives missing right-aligned signature table');
+  assert.equal(cwCommentSig.find('w\\:tblPr w\\:jc').attr('w:val'), 'right');
+  assert.ok(cwCommentSig.text().includes('GIẢNG VIÊN HƯỚNG DẪN'));
+  assert.ok(cwCommentSig.text().includes('(Ký và ghi rõ họ tên)'));
+
   // Requirement 5: Lời cảm ơn signature block stays right-aligned, bold role, spaced cleanly
   const sigRoleP = $cw('w\\:p').filter((_, el) => $cw(el).text().trim() === 'SINH VIÊN THỰC HIỆN');
   const sigNameP = $cw('w\\:p').filter((_, el) => $cw(el).text().trim() === 'Nguyễn Vũ Đạt');
@@ -223,6 +233,9 @@ try {
   });
   const $cw2 = load(new AdmZip(outCourseworkAgain).readAsText('word/document.xml'), { xml: true });
   assert.equal($cw2('m\\:oMathPara').length, $cw('m\\:oMathPara').length, 'OMML equations are idempotent on repeated formatting');
+  const cw2CommentScope = $cw2('w\\:p').filter((_, el) => $cw2(el).find('w\\:t').text().trim() === 'NHẬN XÉT CỦA GIẢNG VIÊN').nextUntil('w\\:p:has(w\\:sectPr)');
+  assert.equal(cw2CommentScope.find('w\\:tab[w\\:leader="dot"]').length, 20, '2nd run preserves 20 dotted lines');
+  assert.equal(cw2CommentScope.filter('w\\:tbl').length, 1, '2nd run does not duplicate review signature table');
   assert.equal(resAgain.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
 
   // ---------------------------------------------------------------------------
@@ -352,7 +365,244 @@ try {
   assert.match(ch2HdrXml, /<w:sz w:val="26"\/><w:szCs w:val="26"\/>[\s\S]*TIỂU LUẬN MÔN HỌC/, 'Left header cell stays 13pt');
   assert.match(ch2HdrXml, /<w:sz w:val="2[1-4]"\/><w:szCs w:val="2[1-4]"\/>[\s\S]*CHƯƠNG 2\. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH/, 'Right header cell auto-scales to 11-12pt so MÔ HÌNH never wraps');
 
-  console.log('✅ All 7 BDU WordFmt 2026 formatting fixes verified 100%!');
+  // ---------------------------------------------------------------------------
+  // 8. Binding Package Cover Borders + First-Line Indent Isolation from Normal
+  //    Source Normal has <w:ind w:firstLine="408"/> -> headers, footers, TOC1-4,
+  //    TableofFigures must explicitly set w:firstLine="0", and Cover 1 + Cover 2
+  //    must both keep twistedLines1 borders while the middle blank sheet stays borderless.
+  // ---------------------------------------------------------------------------
+  const indentedZip = new AdmZip();
+  indentedZip.addFile(
+    'word/document.xml',
+    Buffer.from(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:m="${M}"><w:body>${
+        [
+          p('LỜI CẢM ƠN'),
+          p('Em xin chân thành cảm ơn.'),
+          p('TÓM TẮT'),
+          p('Tóm tắt nghiên cứu.'),
+          p('MỤC LỤC'),
+          p('CHƯƠNG 1. GIỚI THIỆU'),
+          p('Nội dung chương 1.'),
+          p('Hình 1.1: Sơ đồ minh họa'),
+          p('Bảng 1.1: Bảng số liệu')
+        ].join('')
+      }<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:left="1701" w:right="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`
+    )
+  );
+  indentedZip.addFile(
+    'word/styles.xml',
+    Buffer.from(
+      `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:ind w:firstLine="408"/></w:pPr></w:style></w:styles>`
+    )
+  );
+  indentedZip.addFile('word/numbering.xml', Buffer.from(`<w:numbering xmlns:w="${W}"/>`));
+  indentedZip.addFile('word/_rels/document.xml.rels', Buffer.from('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'));
+  indentedZip.addFile('[Content_Types].xml', Buffer.from('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'));
+  const indentedSrc = path.join(temp, 'indented-normal-binding.docx');
+  const indentedOut = path.join(temp, 'out-indented-normal-binding.docx');
+  indentedZip.writeZip(indentedSrc);
+
+  const bindingOut = formatStructuredDocx(indentedSrc, indentedOut, {
+    profile: tieuLuanProfile,
+    documentType: 'tieu_luan',
+    documentMode: 'binding_package',
+    frontMatter: 'cover,comments,thanks',
+    instructor: 'TS. Lê Hoàng Hiệp',
+    student: 'Nguyễn Vũ Đạt',
+    studentId: '24050126',
+    className: '27TH03',
+    topic: 'DỰ ĐOÁN PHÂN LOẠI CHẤT LƯỢNG BẰNG THUẬT TOÁN HỒI QUY'
+  });
+  assert.equal(bindingOut.report.outputNormalization.bindingPagesInserted, 1);
+  assert.equal(bindingOut.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
+
+  const zipBind = new AdmZip(indentedOut);
+  const $bindDoc = load(zipBind.readAsText('word/document.xml'), { xml: true });
+  const bindSections = $bindDoc('w\\:sectPr').toArray();
+  assert.ok(bindSections.length >= 4);
+  // Section 0 = Cover 1 (bordered + titlePg), Section 1 = Cover 2 (bordered + titlePg, no blank sheet between), Section 2 = NHẬN XÉT CỦA GIẢNG VIÊN
+  assert.equal($bindDoc(bindSections[0]).find('w\\:pgBorders w\\:top').attr('w:val'), 'twistedLines1', 'Cover 1 keeps twistedLines1 border in binding_package mode');
+  assert.ok($bindDoc(bindSections[0]).find('w\\:titlePg').length > 0, 'Cover 1 carries titlePg');
+  assert.equal($bindDoc(bindSections[1]).find('w\\:pgBorders w\\:top').attr('w:val'), 'twistedLines1', 'Cover 2 immediately follows Cover 1 with twistedLines1 border (no blank sheet)');
+  assert.ok($bindDoc(bindSections[1]).find('w\\:titlePg').length > 0, 'Cover 2 carries titlePg');
+  assert.equal($bindDoc(bindSections[2]).find('w\\:pgBorders').length, 0, 'Section 2 (Nhận xét) has no cover border');
+  assert.equal($bindDoc(bindSections[2]).find('w\\:pgNumType').attr('w:fmt'), 'lowerRoman');
+  assert.equal($bindDoc(bindSections[2]).find('w\\:pgNumType').attr('w:start'), '1', 'lowerRoman starts on Nhận xét right after Cover 2');
+  assert.equal($bindDoc('w\\:pgBorders w\\:top[w\\:val="twistedLines1"]').length, 2, 'Exactly 2 bordered covers exist');
+
+  // NHẬN XÉT CỦA GIẢNG VIÊN includes 20 dotted lines + right-aligned borderless signature table
+  const bindCommentScope = $bindDoc('w\\:p').filter((_, el) => $bindDoc(el).find('w\\:t').text().trim() === 'NHẬN XÉT CỦA GIẢNG VIÊN').nextUntil('w\\:p:has(w\\:sectPr)');
+  assert.equal(bindCommentScope.find('w\\:tab[w\\:leader="dot"]').length, 20, 'Nhận xét includes 20 dotted lines');
+  const bindSigTbl = bindCommentScope.filter('w\\:tbl').first();
+  assert.equal(bindSigTbl.length, 1, 'Nhận xét includes right-aligned signature table');
+  assert.equal(bindSigTbl.find('w\\:tblPr w\\:jc').attr('w:val'), 'right');
+  assert.equal(bindSigTbl.find('w\\:tblBorders w\\:top').attr('w:val'), 'nil');
+  assert.ok(bindSigTbl.find('w\\:b[w\\:val="1"]').length >= 1 && bindSigTbl.text().includes('GIẢNG VIÊN HƯỚNG DẪN'));
+  assert.ok(bindSigTbl.find('w\\:i[w\\:val="1"]').length >= 1 && bindSigTbl.text().includes('(Ký và ghi rõ họ tên)'));
+  bindSigTbl.find('w\\:p').each((_, pEl) => {
+    assert.equal($bindDoc(pEl).children('w\\:pPr').children('w\\:ind').attr('w:firstLine'), '0', 'Signature paragraph zeros w:firstLine');
+  });
+
+  // Every paragraph in every generated Header & Footer part explicitly resets firstLine="0"
+  const hfEntries = zipBind.getEntries().filter(e => /^word\/wfStructure(?:Header|Footer)\d+\.xml$/.test(e.entryName));
+  assert.ok(hfEntries.length >= 6);
+  for (const entry of hfEntries) {
+    const $hf = load(entry.getData().toString('utf8'), { xml: true });
+    const paras = $hf('w\\:p').toArray();
+    assert.ok(paras.length >= 1, `${entry.entryName} contains paragraphs`);
+    for (const para of paras) {
+      const ind = $hf(para).children('w\\:pPr').children('w\\:ind').first();
+      assert.equal(ind.attr('w:firstLine'), '0', `${entry.entryName} paragraph explicitly zeros w:firstLine against Normal`);
+    }
+  }
+
+  // TOC1-4 and TableofFigures styles explicitly set w:firstLine="0"
+  const $bindStyles = load(zipBind.readAsText('word/styles.xml'), { xml: true });
+  for (const sid of ['TOC1', 'TOC2', 'TOC3', 'TOC4', 'TableofFigures']) {
+    const stInd = $bindStyles(`w\\:style[w\\:styleId="${sid}"] w\\:pPr w\\:ind`).first();
+    assert.equal(stInd.attr('w:firstLine'), '0', `${sid} style explicitly zeros w:firstLine`);
+  }
+
+  // 2nd binding_package pass stays idempotent: still 2 bordered covers, 0 blank pages, 20 lines, 1 signature table
+  const indentedOut2 = path.join(temp, 'out-indented-normal-binding-2.docx');
+  const bindingOut2 = formatStructuredDocx(indentedOut, indentedOut2, {
+    profile: tieuLuanProfile,
+    documentType: 'tieu_luan',
+    documentMode: 'binding_package',
+    frontMatter: 'cover,comments,thanks',
+    instructor: 'TS. Lê Hoàng Hiệp',
+    student: 'Nguyễn Vũ Đạt',
+    studentId: '24050126',
+    className: '27TH03',
+    topic: 'DỰ ĐOÁN PHÂN LOẠI CHẤT LƯỢNG BẰNG THUẬT TOÁN HỒI QUY'
+  });
+  assert.equal(bindingOut2.report.outputNormalization.bindingPagesInserted, 1);
+  assert.equal(bindingOut2.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
+  const $bindDoc2 = load(new AdmZip(indentedOut2).readAsText('word/document.xml'), { xml: true });
+  assert.equal($bindDoc2('w\\:pgBorders w\\:top[w\\:val="twistedLines1"]').length, 2, '2nd run keeps exactly 2 bordered covers');
+  assert.equal($bindDoc2('w\\:sectPr').length, bindSections.length, '2nd run keeps identical section count');
+  const bindCommentScope2 = $bindDoc2('w\\:p').filter((_, el) => $bindDoc2(el).find('w\\:t').text().trim() === 'NHẬN XÉT CỦA GIẢNG VIÊN').nextUntil('w\\:p:has(w\\:sectPr)');
+  assert.equal(bindCommentScope2.find('w\\:tab[w\\:leader="dot"]').length, 20);
+  assert.equal(bindCommentScope2.filter('w\\:tbl').length, 1);
+
+  // ---------------------------------------------------------------------------
+  // 9. Automatic Hierarchical Numbering for Unnumbered Heading 2, 3 (3.1.1)
+  //    and Heading 4 (3.1.1.1), plus 2nd-run idempotency
+  // ---------------------------------------------------------------------------
+  const autoNumZip = new AdmZip();
+  autoNumZip.addFile(
+    'word/document.xml',
+    Buffer.from(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:m="${M}"><w:body>${
+        [
+          p('MỤC LỤC'),
+          p('CHƯƠNG 3. THỰC HIỆN HỆ THỐNG', 'Heading1'),
+          p('3.1. Mô tả mã chương trình', 'Heading2'),
+          p('Ngôn ngữ lập trình', 'Heading3'),
+          p('Cài đặt môi trường', 'Heading4'),
+          p('Cấu trúc thư mục', 'Heading4'),
+          p('Các mô-đun trong thư mục src', 'Heading3'),
+          p('Thư mục dữ liệu', 'Heading4'),
+          p('Hướng dẫn chạy chương trình', 'Heading2'),
+          p('Chi tiết tham số', 'Heading4'),
+          p('3.4. So sánh phương pháp', 'Heading2'),
+          p('Sai số dự báo GPA', 'Heading3'),
+          p('Kết quả minh họa', 'Heading3')
+        ].join('')
+      }<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:left="1701" w:right="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`
+    )
+  );
+  autoNumZip.addFile(
+    'word/styles.xml',
+    Buffer.from(
+      `<w:styles xmlns:w="${W}">`
+      + `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:pPr><w:outlineLvl w:val="2"/></w:pPr></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Heading4"><w:name w:val="heading 4"/><w:pPr><w:outlineLvl w:val="3"/></w:pPr></w:style>`
+      + `</w:styles>`
+    )
+  );
+  autoNumZip.addFile('word/numbering.xml', Buffer.from(`<w:numbering xmlns:w="${W}"/>`));
+  autoNumZip.addFile('word/_rels/document.xml.rels', Buffer.from('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'));
+  autoNumZip.addFile('[Content_Types].xml', Buffer.from('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'));
+  const autoNumSrc = path.join(temp, 'auto-num-headings.docx');
+  const autoNumOut = path.join(temp, 'out-auto-num-headings.docx');
+  const autoNumOut2 = path.join(temp, 'out-auto-num-headings-2.docx');
+  autoNumZip.writeZip(autoNumSrc);
+
+  const autoNumRes = formatStructuredDocx(autoNumSrc, autoNumOut, {
+    profile: tieuLuanProfile,
+    documentType: 'tieu_luan',
+    frontMatter: '',
+    instructor: 'TS. Lê Hoàng Hiệp',
+    student: 'Nguyễn Vũ Đạt',
+    studentId: '24050126',
+    className: '27TH03',
+    topic: 'ĐỀ TÀI KIỂM TRA ĐÁNH SỐ TIÊU ĐỀ'
+  });
+
+  assert.equal(autoNumRes.report.outputNormalization.headingsAutoNumbered, 9);
+  assert.equal(autoNumRes.report.outputNormalization.compliance.headingIndentation, true);
+  assert.equal(autoNumRes.report.outputNormalization.compliance.listsPreserved, true);
+  assert.equal(autoNumRes.report.outputNormalization.compliance.wordprocessingPropertyOrder, true);
+
+  const autoZip = new AdmZip(autoNumOut);
+  const autoDocXml = autoZip.readAsText('word/document.xml');
+  assert.match(autoDocXml, /WFHeading4,4/, 'TOC field covers Heading 4');
+
+  const autoAnalyzed = analyzeDocxStructure(autoNumOut);
+  const actualHeadings = autoAnalyzed.records
+    .filter(r => r.role === 'heading')
+    .map(r => ({ level: r.level, number: r.number, text: r.text, styleId: r.styleId }));
+  assert.deepEqual(actualHeadings, [
+    { level: 2, number: '3.1', text: '3.1. Mô tả mã chương trình', styleId: 'WFHeading2' },
+    { level: 3, number: '3.1.1', text: '3.1.1. Ngôn ngữ lập trình', styleId: 'WFHeading3' },
+    { level: 4, number: '3.1.1.1', text: '3.1.1.1. Cài đặt môi trường', styleId: 'WFHeading4' },
+    { level: 4, number: '3.1.1.2', text: '3.1.1.2. Cấu trúc thư mục', styleId: 'WFHeading4' },
+    { level: 3, number: '3.1.2', text: '3.1.2. Các mô-đun trong thư mục src', styleId: 'WFHeading3' },
+    { level: 4, number: '3.1.2.1', text: '3.1.2.1. Thư mục dữ liệu', styleId: 'WFHeading4' },
+    { level: 2, number: '3.2', text: '3.2. Hướng dẫn chạy chương trình', styleId: 'WFHeading2' },
+    { level: 4, number: '3.2.1.1', text: '3.2.1.1. Chi tiết tham số', styleId: 'WFHeading4' },
+    { level: 2, number: '3.4', text: '3.4. So sánh phương pháp', styleId: 'WFHeading2' },
+    { level: 3, number: '3.4.1', text: '3.4.1. Sai số dự báo GPA', styleId: 'WFHeading3' },
+    { level: 3, number: '3.4.2', text: '3.4.2. Kết quả minh họa', styleId: 'WFHeading3' }
+  ]);
+
+  const $auto = autoAnalyzed.$;
+  const wf3 = autoAnalyzed.records.filter(r => r.role === 'heading' && r.level === 3);
+  const wf4 = autoAnalyzed.records.filter(r => r.role === 'heading' && r.level === 4);
+  for (const rec of wf3) {
+    const ind = $auto(rec.element).find('w\\:ind').first();
+    assert.equal(Number(ind.attr('w:left')) - Number(ind.attr('w:hanging')), 720, `Heading3 "${rec.number}" sits at 1.27cm (720 dxa)`);
+  }
+  for (const rec of wf4) {
+    const ind = $auto(rec.element).find('w\\:ind').first();
+    assert.equal(Number(ind.attr('w:left')) - Number(ind.attr('w:hanging')), 1440, `Heading4 "${rec.number}" sits at 2.54cm (1440 dxa)`);
+  }
+
+  // Second formatting run must be 100% idempotent with zero duplicate prefixes
+  const autoNumRes2 = formatStructuredDocx(autoNumOut, autoNumOut2, {
+    profile: tieuLuanProfile,
+    documentType: 'tieu_luan',
+    frontMatter: '',
+    instructor: 'TS. Lê Hoàng Hiệp',
+    student: 'Nguyễn Vũ Đạt',
+    studentId: '24050126',
+    className: '27TH03',
+    topic: 'ĐỀ TÀI KIỂM TRA ĐÁNH SỐ TIÊU ĐỀ'
+  });
+  assert.equal(autoNumRes2.report.outputNormalization.headingsAutoNumbered, 0);
+  const autoAnalyzed2 = analyzeDocxStructure(autoNumOut2);
+  assert.deepEqual(
+    autoAnalyzed2.records.filter(r => r.role === 'heading').map(r => r.text),
+    actualHeadings.map(h => h.text),
+    'Second formatting run produces identical heading titles without 3.1.1. 3.1.1.'
+  );
+
+  console.log('✅ All 9 BDU WordFmt 2026 formatting fixes verified 100%!');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
