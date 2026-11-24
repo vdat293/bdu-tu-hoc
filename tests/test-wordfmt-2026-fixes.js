@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
-import { analyzeDocxStructure, buildStructurePreview, formatStructuredDocx } from '../src/utils/docx-structure.js';
+import { analyzeDocxStructure, buildStructurePreview, formatStructuredDocx, computeHeaderLayout } from '../src/utils/docx-structure.js';
 import { computeBalancedCenteredWrap, getCurrentMonthYear } from '../src/utils/docx-graduation-cover.js';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'wordfmt-2026-fixes-'));
@@ -297,7 +297,62 @@ try {
   assert.equal($grad(gradSections[7]).find('w\\:pgNumType').attr('w:fmt'), 'decimal');
   assert.equal($grad(gradSections[7]).find('w\\:pgNumType').attr('w:start'), '1', 'Chapter 1 resets to decimal 1');
 
-  console.log('✅ All 6 BDU WordFmt 2026 formatting fixes verified 100%!');
+  // ---------------------------------------------------------------------------
+  // 7. Long Chapter Header Optimization: compact left column, auto-scaled right
+  //    size (13pt -> 11-12pt) to fit 1 line, vAlign="bottom", and 6pt clearance
+  // ---------------------------------------------------------------------------
+  const shortHdrLayout = computeHeaderLayout('TIỂU LUẬN MÔN HỌC', 'CHƯƠNG 1. GIỚI THIỆU TỔNG QUAN', 13, 9071);
+  assert.equal(shortHdrLayout.widths[0] + shortHdrLayout.widths[1], 9071);
+  assert.ok(shortHdrLayout.widths[0] < 2850, `Left column compacts tightly (${shortHdrLayout.widths[0]} dxa < 3000)`);
+  assert.equal(shortHdrLayout.leftSizePt, 13);
+  assert.equal(shortHdrLayout.rightSizePt, 13);
+  assert.equal(shortHdrLayout.rightFitsSingleLine, true);
+
+  const ch2HdrLayout = computeHeaderLayout(
+    'TIỂU LUẬN MÔN HỌC',
+    'CHƯƠNG 2. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH',
+    13,
+    9071
+  );
+  assert.equal(ch2HdrLayout.leftSizePt, 13, 'Left label stays 13pt');
+  assert.ok(ch2HdrLayout.rightSizePt >= 11 && ch2HdrLayout.rightSizePt <= 12, `Long chapter right label scales cleanly (${ch2HdrLayout.rightSizePt}pt)`);
+  assert.equal(ch2HdrLayout.rightFitsSingleLine, true, 'CHƯƠNG 2. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH fits on 1 single line');
+
+  const longHdrSrc = fixture(
+    'long-header-ch2',
+    [
+      p('LỜI CẢM ƠN'),
+      p('Em xin chân thành cảm ơn.'),
+      p('MỤC LỤC'),
+      p('CHƯƠNG 1. GIỚI THIỆU TỔNG QUAN'),
+      p('Nội dung chương 1.'),
+      p('CHƯƠNG 2. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH'),
+      p('Nội dung chương 2.')
+    ].join('')
+  );
+  const outLongHdr = path.join(temp, 'out-long-header.docx');
+  formatStructuredDocx(longHdrSrc, outLongHdr, {
+    profile: tieuLuanProfile,
+    documentType: 'tieu_luan',
+    instructor: 'TS. Lê Hoàng Hiệp',
+    student: 'Nguyễn Vũ Đạt',
+    studentId: '24050001',
+    className: '24TH01',
+    topic: 'DỰ ĐOÁN PHÂN LOẠI CHẤT LƯỢNG BẰNG THUẬT TOÁN HỒI QUY'
+  });
+  const zipLongHdr = new AdmZip(outLongHdr);
+  const longHdrXmls = zipLongHdr.getEntries()
+    .filter(e => /^word\/wfStructureHeader\d+\.xml$/.test(e.entryName))
+    .map(e => e.getData().toString('utf8'));
+  const ch2HdrXml = longHdrXmls.find(xml => xml.includes('CHƯƠNG 2. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH'));
+  assert.ok(ch2HdrXml, 'Header XML for Chapter 2 exists');
+  assert.match(ch2HdrXml, /<w:vAlign w:val="bottom"\/>/, 'Header cells align at bottom baseline');
+  assert.match(ch2HdrXml, /<w:bottom w:w="60" w:type="dxa"\/>/, 'Header cells include 3pt bottom padding above border');
+  assert.match(ch2HdrXml, /<w:spacing w:before="0" w:after="0" w:line="120" w:lineRule="exact"\/>/, 'Header includes 6pt (120 dxa) buffer below border so tables never touch it');
+  assert.match(ch2HdrXml, /<w:sz w:val="26"\/><w:szCs w:val="26"\/>[\s\S]*TIỂU LUẬN MÔN HỌC/, 'Left header cell stays 13pt');
+  assert.match(ch2HdrXml, /<w:sz w:val="2[1-4]"\/><w:szCs w:val="2[1-4]"\/>[\s\S]*CHƯƠNG 2\. PHÂN TÍCH BÀI TOÁN VÀ XÂY DỰNG MÔ HÌNH/, 'Right header cell auto-scales to 11-12pt so MÔ HÌNH never wraps');
+
+  console.log('✅ All 7 BDU WordFmt 2026 formatting fixes verified 100%!');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

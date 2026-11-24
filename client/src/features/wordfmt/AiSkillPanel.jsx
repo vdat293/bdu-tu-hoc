@@ -155,7 +155,7 @@ ${isGrad ? `(${proposalStep}) Đề cương (nếu tài liệu nguồn có sẵn
 - Các trang mở đầu chương & Tài liệu tham khảo: VẪN HIỂN THỊ HEADER & FOOTER bình thường (không ẩn header ở trang đầu chương).
 - Phần đầu (không tính trang bìa; bắt đầu đếm ngầm từ trang đầu tiên ngay sau Bìa → Lời cảm ơn → Mục lục → hết Tóm tắt): số trang La Mã thường (i, ii, iii, iv… — lowerRoman, đặt w:start="1" ở section đầu tiên ngay sau bìa và nối tiếp liên tục; ví dụ nếu sau bìa có 3 trang Đề cương/Nhận xét thì Lời cảm ơn ở trang thứ 4 sẽ hiển thị số "iv").
 - Phần thân (từ CHƯƠNG 1 → hết Phụ lục): số trang Ả Rập (1, 2, 3… — decimal), RESET về 1 đúng một lần duy nhất tại CHƯƠNG 1.
-- Header (Times New Roman 13pt thường, bảng 2 cột cố định 3000 + 6071 = 9071 dxa, chỉ kẻ viền dưới #808080 sz=4): Trái = "${docTitle}", Phải = Tên phần / Tên chương hiện tại.
+- Header (Times New Roman 13pt thường, bảng 2 cột cố định rộng 9071 dxa với cột trái co vừa khít "${docTitle}" ~2700 dxa và cột phải ~6370 dxa căn đáy ô vAlign="bottom"; nếu tên chương dài >40 ký tự thì tự động hạ nhẹ cỡ chữ vế phải về 11–12pt để nằm gọn trên 1 dòng; chỉ kẻ viền dưới #808080 sz=4 kèm padding đáy 3pt và đoạn đệm 6pt dưới viền để không dính sát bảng biểu đầu trang): Trái = "${docTitle}", Phải = Tên phần / Tên chương hiện tại.
 - Footer (Times New Roman 13pt thường, bảng 3 cột cố định 4000 + 1071 + 4000 = 9071 dxa, chỉ kẻ viền trên #808080 sz=4): Trái = "GVHD: ${info.instructor?.trim() || '<Tên GVHD>'}", Giữa = field {PAGE} thật, Phải = "SVTH: ${info.student?.trim() || '<Tên SV>'}".
 
 5. BẢNG BIỂU, HÌNH ẢNH & CHÚ THÍCH

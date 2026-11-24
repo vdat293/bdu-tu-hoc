@@ -28,6 +28,123 @@ const keyOf = s => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const cm = n => Math.round(n * 1440 / 2.54);
 
+const REGULAR_CHAR_EM = {
+  I: 0.333, J: 0.389,
+  F: 0.556, L: 0.556, P: 0.556, S: 0.556,
+  B: 0.611, E: 0.611, T: 0.611, Z: 0.611,
+  C: 0.667, R: 0.667,
+  A: 0.722, D: 0.722, G: 0.722, H: 0.722, K: 0.722, N: 0.722, O: 0.722,
+  Q: 0.722, U: 0.722, V: 0.722, X: 0.722, Y: 0.722,
+  M: 0.889, W: 0.944,
+  i: 0.278, j: 0.278, l: 0.278,
+  f: 0.333, r: 0.333, t: 0.333,
+  s: 0.389,
+  a: 0.444, c: 0.444, e: 0.444, z: 0.444,
+  b: 0.500, d: 0.500, g: 0.500, h: 0.500, k: 0.500, n: 0.500, o: 0.500,
+  p: 0.500, q: 0.500, u: 0.500, v: 0.500, x: 0.500, y: 0.500,
+  w: 0.722, m: 0.778,
+  ' ': 0.250, '.': 0.278, ',': 0.278, ':': 0.278, ';': 0.278, "'": 0.278,
+  '!': 0.333, '?': 0.444, '-': 0.333, '/': 0.278, '(': 0.333, ')': 0.333,
+  '[': 0.333, ']': 0.333, '"': 0.408, '&': 0.778, '%': 0.833
+};
+
+export function estimateRegularTextWidthPt(textStr, sizePt) {
+  const raw = String(textStr || '').trim().replace(/\s+/g, ' ');
+  let em = 0;
+  for (const ch of raw) {
+    const hasHorn = /[ƠƯơư]/u.test(ch);
+    const base = ch === 'Đ' ? 'D' : ch === 'đ' ? 'd' : ch.normalize('NFD').replace(/\p{M}/gu, '');
+    const chEm = REGULAR_CHAR_EM[base] ?? (/\d/.test(base) ? 0.500 : (base === base.toUpperCase() ? 0.722 : 0.500));
+    em += chEm + (hasHorn ? 0.045 : 0);
+  }
+  return em * sizePt;
+}
+
+function wrapGreedyRegular(words, sizePt, limitPt) {
+  const spacePt = 0.25 * sizePt;
+  const lines = [];
+  let curWords = [];
+  let curWidth = 0;
+  for (const word of words) {
+    const wPt = estimateRegularTextWidthPt(word, sizePt);
+    const nextWidth = curWords.length ? curWidth + spacePt + wPt : wPt;
+    if (curWords.length && nextWidth > limitPt) {
+      lines.push({ words: curWords, widthPt: curWidth });
+      curWords = [word];
+      curWidth = wPt;
+    } else {
+      curWords.push(word);
+      curWidth = nextWidth;
+    }
+  }
+  if (curWords.length) lines.push({ words: curWords, widthPt: curWidth });
+  return lines;
+}
+
+function computeRightCellAntiOrphanIndentDxa(textStr, sizePt, cellWidthDxa) {
+  const words = String(textStr || '').trim().split(/\s+/).filter(Boolean);
+  const fullWidthPt = cellWidthDxa / 20;
+  const effectiveMaxPt = Math.max(120, fullWidthPt - 8);
+  if (words.length < 4) return 0;
+  const initialLines = wrapGreedyRegular(words, sizePt, effectiveMaxPt);
+  if (initialLines.length <= 1) return 0;
+  const lastLine = initialLines.at(-1);
+  const prevLine = initialLines.at(-2);
+  const isOrphan = lastLine.words.length === 1
+    || (lastLine.words.length === 2 && words.length >= 7 && lastLine.widthPt < effectiveMaxPt * 0.22 && prevLine.widthPt > effectiveMaxPt * 0.78);
+  if (!isOrphan) return 0;
+  const minTargetWords = words.length >= 6 ? 3 : 2;
+  let fallbackIndent = 0;
+  for (let limitPt = Math.floor(effectiveMaxPt - 6); limitPt >= Math.floor(effectiveMaxPt * 0.58); limitPt -= 4) {
+    const candidate = wrapGreedyRegular(words, sizePt, limitPt);
+    if (candidate.length > initialLines.length) break;
+    const candLast = candidate.at(-1);
+    if (candLast.words.length >= 2 && !fallbackIndent) {
+      fallbackIndent = Math.max(0, Math.round((fullWidthPt - limitPt) * 20));
+    }
+    if (candLast.words.length >= minTargetWords || candLast.widthPt >= limitPt * 0.30) {
+      return Math.max(0, Math.round((fullWidthPt - limitPt) * 20));
+    }
+  }
+  return fallbackIndent;
+}
+
+function fitSingleLineCellText(textStr, cellWidthDxa, baseSizePt = 13, minSizePt = 10.5, safetyMarginPt = 8) {
+  const clean = String(textStr || '').trim();
+  if (!clean) return { sizePt: baseSizePt, leftIndentDxa: 0, fitsSingleLine: true };
+  const safeWidthPt = Math.max(40, (cellWidthDxa / 20) - safetyMarginPt);
+  const effectiveMin = Math.min(baseSizePt, minSizePt);
+  for (let sz = baseSizePt; sz >= effectiveMin - 1e-6; sz -= 0.5) {
+    const candidatePt = Math.round(sz * 2) / 2;
+    if (estimateRegularTextWidthPt(clean, candidatePt) <= safeWidthPt) {
+      return { sizePt: candidatePt, leftIndentDxa: 0, fitsSingleLine: true };
+    }
+  }
+  const multiLineSizePt = Math.min(baseSizePt, Math.max(11, effectiveMin));
+  return {
+    sizePt: multiLineSizePt,
+    leftIndentDxa: computeRightCellAntiOrphanIndentDxa(clean, multiLineSizePt, cellWidthDxa),
+    fitsSingleLine: false
+  };
+}
+
+export function computeHeaderLayout(leftText, rightText, baseSizePt = 13, totalWidthDxa = 9071) {
+  const rawLeftDxa = Math.ceil(estimateRegularTextWidthPt(leftText, baseSizePt) * 20);
+  const leftWidth = Math.min(3400, Math.max(1900, rawLeftDxa + 120));
+  const rightWidth = totalWidthDxa - leftWidth;
+  const leftFit = fitSingleLineCellText(leftText, leftWidth, baseSizePt, 11, 6);
+  const rightFit = fitSingleLineCellText(rightText, rightWidth, baseSizePt, 10.5, 8);
+  return {
+    widths: [leftWidth, rightWidth],
+    leftSizePt: leftFit.sizePt,
+    rightSizePt: rightFit.sizePt,
+    rightLeftIndentDxa: rightFit.leftIndentDxa,
+    rightFitsSingleLine: rightFit.fitsSingleLine,
+    bottomPaddingDxa: 60,
+    afterBorderSpacerDxa: 120
+  };
+}
+
 function leadingPageBorderSections(archive, maxSections = 3) {
   const documentXml = archive.readAsText('word/document.xml');
   const sections = [...documentXml.matchAll(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/g)].map(match => match[0]);
@@ -1513,16 +1630,31 @@ export function formatStructuredDocx(inputPath, outputPath, options, analysis = 
   const headerFooterSizePt = Number.isFinite(configuredHeaderFooterSize) && configuredHeaderFooterSize > 0
     ? configuredHeaderFooterSize
     : 13;
-  const headerFooterSizeHalfPoints = Math.round(headerFooterSizePt * 2);
-  const hfRunProperties = `<w:rFonts w:ascii="${esc(headerFooterFont)}" w:hAnsi="${esc(headerFooterFont)}" w:eastAsia="${esc(headerFooterFont)}" w:cs="${esc(headerFooterFont)}"/><w:sz w:val="${headerFooterSizeHalfPoints}"/><w:szCs w:val="${headerFooterSizeHalfPoints}"/>`;
+  const hfRunPropsFor = (sizePt = headerFooterSizePt) => {
+    const szVal = Math.round(sizePt * 2);
+    return `<w:rFonts w:ascii="${esc(headerFooterFont)}" w:hAnsi="${esc(headerFooterFont)}" w:eastAsia="${esc(headerFooterFont)}" w:cs="${esc(headerFooterFont)}"/><w:sz w:val="${szVal}"/><w:szCs w:val="${szVal}"/>`;
+  };
+  const hfRunProperties = hfRunPropsFor(headerFooterSizePt);
   const emptyHfParagraph = `<w:p><w:pPr><w:rPr>${hfRunProperties}</w:rPr></w:pPr></w:p>`;
-  const hfRun = text => `<w:r><w:rPr>${hfRunProperties}</w:rPr><w:t>${esc(text)}</w:t></w:r>`;
+  const hfRun = (text, sizePt = headerFooterSizePt) => `<w:r><w:rPr>${hfRunPropsFor(sizePt)}</w:rPr><w:t>${esc(text)}</w:t></w:r>`;
   const hfFieldRun = content => `<w:r><w:rPr>${hfRunProperties}</w:rPr>${content}</w:r>`;
   const hfParagraph = (left, right, page = false) => {
-    const cell = (width,align,content) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="${align}"/><w:rPr>${hfRunProperties}</w:rPr></w:pPr>${content}</w:p></w:tc>`;
-    const pageField = hfFieldRun('<w:fldChar w:fldCharType="begin"/>')+hfFieldRun('<w:instrText xml:space="preserve"> PAGE </w:instrText>')+hfFieldRun('<w:fldChar w:fldCharType="separate"/>')+hfRun('1')+hfFieldRun('<w:fldChar w:fldCharType="end"/>');
-    const widths = page ? [4000,1071,4000] : [3000,6071];
-    return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:${page?'top':'bottom'} w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0],'left',hfRun(left))}${page?cell(widths[1],'center',pageField):''}${cell(widths.at(-1),'right',hfRun(right))}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
+    const cell = (width, align, content, sizePt = headerFooterSizePt, leftIndentDxa = 0, vAlign = 'bottom') => {
+      const indXml = leftIndentDxa > 0 ? `<w:ind w:left="${leftIndentDxa}" w:right="0" w:firstLine="0"/>` : '';
+      return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:vAlign w:val="${vAlign}"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>${indXml}<w:jc w:val="${align}"/><w:rPr>${hfRunPropsFor(sizePt)}</w:rPr></w:pPr>${content}</w:p></w:tc>`;
+    };
+    if (page) {
+      const widths = [4150, 771, 4150];
+      const leftFit = fitSingleLineCellText(left, widths[0], headerFooterSizePt, 11, 8);
+      const rightFit = fitSingleLineCellText(right, widths[2], headerFooterSizePt, 11, 8);
+      const pageField = hfFieldRun('<w:fldChar w:fldCharType="begin"/>') + hfFieldRun('<w:instrText xml:space="preserve"> PAGE </w:instrText>') + hfFieldRun('<w:fldChar w:fldCharType="separate"/>') + hfRun('1') + hfFieldRun('<w:fldChar w:fldCharType="end"/>');
+      const cellMar = '<w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>';
+      return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, leftFit.sizePt), leftFit.sizePt, 0, 'top')}${cell(widths[1], 'center', pageField, headerFooterSizePt, 0, 'top')}${cell(widths[2], 'right', hfRun(right, rightFit.sizePt), rightFit.sizePt, rightFit.leftIndentDxa, 'top')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
+    }
+    const layout = computeHeaderLayout(left, right, headerFooterSizePt, 9071);
+    const { widths } = layout;
+    const cellMar = `<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="${layout.bottomPaddingDxa}" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>`;
+    return `<w:tbl><w:tblPr><w:tblW w:w="9071" w:type="dxa"/><w:tblBorders><w:bottom w:val="single" w:sz="4" w:color="808080"/></w:tblBorders><w:tblLayout w:type="fixed"/>${cellMar}</w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid><w:tr>${cell(widths[0], 'left', hfRun(left, layout.leftSizePt), layout.leftSizePt, 0, 'bottom')}${cell(widths[1], 'right', hfRun(right, layout.rightSizePt), layout.rightSizePt, layout.rightLeftIndentDxa, 'bottom')}</w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="${layout.afterBorderSpacerDxa}" w:lineRule="exact"/></w:pPr></w:p>`;
   };
   let bodyStarted = false;
   const firstNumberedSection = starts.findIndex(s => s.role !== 'cover');
