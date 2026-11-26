@@ -3,13 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { searchTtcdsStudents } from '../../api/ttcds.js';
 import { useAuth } from '../../app/providers.jsx';
-import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
-import '../clubs/clubs.css';
+import './styles/student-lookup.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 const SEARCH_MIN_LENGTH = 2;
 const MSSV_MIN_DIGITS = 4;
 const SEARCH_DEBOUNCE_MS = 300;
+const SAMPLES = ['nguyen', 'tran', '24050126'];
 
 export function searchMinLength(query) {
   const value = String(query ?? '').trim();
@@ -45,7 +45,6 @@ export default function TtcdsLookupPage() {
   const caps = useTtcdsCapabilities();
   const canAccess = Boolean(caps.data?.can_access);
 
-  // Quay lại từ hồ sơ sinh viên: khôi phục từ khoá đã tra cứu.
   const restoredQuery = typeof location.state?.query === 'string' ? location.state.query : '';
   const [query, setQuery] = useState(restoredQuery);
   const [debounced, setDebounced] = useState(restoredQuery.trim());
@@ -80,37 +79,51 @@ export default function TtcdsLookupPage() {
 
   if (caps.isLoading) {
     return (
-      <section className="club-directory-grid" aria-label="Đang tải tra cứu sinh viên">
-        {[1, 2, 3].map((item) => <ClubCardSkeleton key={item} label="Đang tải tra cứu sinh viên" />)}
+      <section className="slk-root slk-root--narrow" aria-label="Đang tải tra cứu sinh viên">
+        <div className="slk-surface">
+          <div className="slk-list">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="slk-skeleton-row" aria-hidden="true">
+                <span className="slk-skeleton slk-skeleton--avatar" />
+                <span className="slk-skeleton-lines">
+                  <span className="slk-skeleton slk-skeleton--name" />
+                  <span className="slk-skeleton slk-skeleton--meta" />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
     );
   }
+
   if (caps.isSuccess && !canAccess) return <TtcdsForbiddenNotice />;
+
   if (caps.isError) {
     return (
-      <div className="club-empty" role="alert">
-        <h2>Chưa thể tải tra cứu sinh viên</h2>
-        <p>{caps.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
-        <button type="button" className="btn btn-secondary" onClick={() => caps.refetch()}>Thử lại</button>
-      </div>
+      <section className="slk-root slk-root--narrow">
+        <div className="slk-state" role="alert">
+          <h2>Chưa thể tải tra cứu sinh viên</h2>
+          <p>{caps.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
+          <button type="button" className="slk-btn" onClick={() => caps.refetch()}>Thử lại</button>
+        </div>
+      </section>
     );
   }
 
   return (
-    <section id="tab-ttcds-lookup" className="tab-pane club-experience ttcds-lookup">
-      <header className="club-directory-hero ttcds-lookup__hero">
-        <div className="club-directory-hero__copy">
-          <h1>Tra cứu sinh viên</h1>
-          <p>Tìm sinh viên theo tên hoặc MSSV để xem hồ sơ và kết quả học tập.</p>
-        </div>
+    <section id="tab-ttcds-lookup" className="slk-root slk-root--narrow">
+      <header className="slk-header">
+        <h1>Tra cứu sinh viên</h1>
+        <p>Tìm sinh viên theo họ tên hoặc MSSV để xem hồ sơ, chuyên cần, thời khóa biểu và bảng điểm.</p>
       </header>
 
-      <div className="card glass-panel ttcds-panel ttcds-lookup__panel">
-        <div className="ttcds-lookup__search">
-          <label className="ttcds-lookup__label" htmlFor="ttcds-lookup-search">Tìm sinh viên</label>
-          <div className="ttcds-lookup__field">
-            <span className="ttcds-lookup__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <div className="slk-surface">
+        <div className="slk-search-block">
+          <label className="slk-search-label" htmlFor="ttcds-lookup-search">Tìm sinh viên</label>
+          <div className="slk-search-field">
+            <span className="slk-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-3.4-3.4" />
               </svg>
@@ -118,7 +131,7 @@ export default function TtcdsLookupPage() {
             <input
               id="ttcds-lookup-search"
               ref={inputRef}
-              className="ttcds-lookup__input"
+              className="slk-search-input"
               type="text"
               role="combobox"
               aria-expanded={!idle}
@@ -133,7 +146,7 @@ export default function TtcdsLookupPage() {
             {query !== '' && (
               <button
                 type="button"
-                className="ttcds-lookup__clear"
+                className="slk-search-clear"
                 aria-label="Xóa nội dung tìm kiếm"
                 onClick={() => {
                   setQuery('');
@@ -146,16 +159,17 @@ export default function TtcdsLookupPage() {
               </button>
             )}
           </div>
-          <div className="ttcds-lookup__meta">
-            <span className="ttcds-lookup__helper">Tên từ 2 ký tự · MSSV từ 4 số</span>
+
+          <div className="slk-search-meta">
+            <span>Tên từ 2 ký tự · MSSV từ 4 chữ số</span>
             {!trimmed && (
-              <span className="ttcds-lookup__samples">
+              <span className="slk-samples">
                 <span>Thử:</span>
-                {['nguyen', 'tran', '24050126'].map((sample) => (
+                {SAMPLES.map((sample) => (
                   <button
                     key={sample}
                     type="button"
-                    className="ttcds-lookup__sample"
+                    className="slk-sample-chip"
                     onClick={() => setQuery(sample)}
                   >
                     {sample}
@@ -167,49 +181,47 @@ export default function TtcdsLookupPage() {
         </div>
 
         {partialQuery && (
-          <p className="ttcds-lookup__notice" role="status">
+          <p className="slk-notice" role="status">
             Nhập thêm {minLength - trimmed.length} ký tự để bắt đầu tra cứu.
           </p>
         )}
 
         {!idle && (
-          <div className="ttcds-lookup__results">
-            <div className="ttcds-lookup__results-head">
+          <div className="slk-results">
+            <div className="slk-results-head">
               <h2>Kết quả tra cứu</h2>
               {!loading && !searchQuery.isError && results.length > 0 && (
-                <span className="ttcds-lookup__count">{results.length} sinh viên</span>
+                <span className="slk-count-pill">{results.length} sinh viên</span>
               )}
             </div>
-            <ul id="ttcds-lookup-results" role="listbox" aria-label="Kết quả tra cứu sinh viên" className="ttcds-lookup__list">
+
+            <ul id="ttcds-lookup-results" role="listbox" aria-label="Kết quả tra cứu sinh viên" className="slk-list">
               {loading && [0, 1, 2].map((row) => (
-                <li key={row} className="ttcds-lookup__skeleton-row" aria-hidden="true">
-                  <span className="ttcds-lookup__skeleton ttcds-lookup__skeleton--avatar" />
-                  <span className="ttcds-lookup__skeleton-lines">
-                    <span className="ttcds-lookup__skeleton ttcds-lookup__skeleton--name" />
-                    <span className="ttcds-lookup__skeleton ttcds-lookup__skeleton--meta" />
+                <li key={row} className="slk-skeleton-row" aria-hidden="true">
+                  <span className="slk-skeleton slk-skeleton--avatar" />
+                  <span className="slk-skeleton-lines">
+                    <span className="slk-skeleton slk-skeleton--name" />
+                    <span className="slk-skeleton slk-skeleton--meta" />
                   </span>
                 </li>
               ))}
+
               {!loading && searchQuery.isError && (
-                <li className="ttcds-lookup__state">
-                  <span className="ttcds-lookup__state-icon" aria-hidden="true">!</span>
-                  <span role="alert">{searchQuery.error?.message || 'Không thể tìm kiếm sinh viên.'}</span>
+                <li className="slk-state">
+                  <strong role="alert">{searchQuery.error?.message || 'Không thể tìm kiếm sinh viên.'}</strong>
+                  <button type="button" className="slk-btn" onClick={() => searchQuery.refetch()}>Thử lại</button>
                 </li>
               )}
+
               {showEmpty && (
-                <li className="ttcds-lookup__state">
-                  <span className="ttcds-lookup__state-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="m20 20-3.4-3.4" />
-                    </svg>
-                  </span>
+                <li className="slk-state">
                   <strong>Không tìm thấy sinh viên phù hợp</strong>
-                  <span>Thử tên ngắn hơn hoặc kiểm tra lại MSSV.</span>
+                  <span>Thử từ khóa ngắn hơn hoặc kiểm tra lại MSSV.</span>
                 </li>
               )}
+
               {!loading && results.map((student) => (
-                <li key={student.mssv} role="option" aria-selected="false" className="ttcds-lookup__option">
+                <li key={student.mssv} role="option" aria-selected="false" className="slk-option">
                   <button
                     type="button"
                     tabIndex={0}
@@ -221,16 +233,18 @@ export default function TtcdsLookupPage() {
                       }
                     })}
                   >
-                    <span className="ttcds-lookup__avatar" aria-hidden="true">{(student.name || '?').trim().charAt(0).toUpperCase()}</span>
-                    <span className="ttcds-lookup__text">
-                      <span className="ttcds-lookup__name">{student.name}</span>
-                      <span className="ttcds-lookup__line">
-                        <span className="ttcds-lookup__mssv">{student.mssv}</span>
+                    <span className="slk-avatar" aria-hidden="true">
+                      {(student.name || '?').trim().charAt(0).toUpperCase()}
+                    </span>
+                    <span className="slk-option__copy">
+                      <span className="slk-option__name">{student.name}</span>
+                      <span className="slk-option__meta">
+                        <span className="slk-mssv">{student.mssv}</span>
                         <span aria-hidden="true">·</span>
                         <span>{student.className}</span>
                       </span>
                     </span>
-                    <span className="ttcds-lookup__go" aria-hidden="true">
+                    <span className="slk-option__arrow" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M5 12h14M13 6l6 6-6 6" />
                       </svg>

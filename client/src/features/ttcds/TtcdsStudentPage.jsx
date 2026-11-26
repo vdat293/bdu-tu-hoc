@@ -3,8 +3,27 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { getTtcdsAttendance, getTtcdsStudent } from '../../api/ttcds.js';
 import { useAuth } from '../../app/providers.jsx';
-import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
-import '../clubs/clubs.css';
+import './styles/student-lookup.css';
+import {
+  addDaysStr,
+  attendanceClass,
+  attendanceRate,
+  fmtDayMonth,
+  gioBatDau,
+  gioKetThuc,
+  gpaSeries,
+  groupJournalByWeek,
+  isoDow,
+  latestJournalTerm,
+  mondayKey,
+  parseDay,
+  shortGroupLabel,
+  termCaption,
+  termShortLabel,
+  THU_COLS,
+  THU_NAMES,
+  weekRangeLabel
+} from './ttcdsCharts.js';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 const TABS = [
@@ -14,12 +33,6 @@ const TABS = [
   { id: 'su-kien', label: 'Sự kiện' }
 ];
 
-/**
- * Đích của link "quay lại" ở trang hồ sơ sinh viên.
- * - Mở từ Tra cứu / Nhóm sinh viên: dùng `state.from` + nhãn do nơi điều hướng gửi kèm,
- *   nên back về đúng trang vừa rời đi thay vì luôn nhảy về "Sinh viên của tôi".
- * - Mở trực tiếp, refresh hoặc deep link: rơi về danh sách "Sinh viên của tôi".
- */
 export function resolveStudentBackTarget(state) {
   const from = typeof state?.from === 'string' && state.from.startsWith('/') && !state.from.startsWith('//')
     ? state.from
@@ -35,33 +48,11 @@ function fmt(value, digits = 2) {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
 }
 
-import {
-  addDaysStr,
-  attendanceClass,
-  attendanceRate,
-  fmtDayMonth,
-  gioBatDau,
-  gioKetThuc,
-  GIO_TIET,
-  gpaSeries,
-  groupJournalByWeek,
-  isoDow,
-  latestJournalTerm,
-  mondayKey,
-  parseDay,
-  shortGroupLabel,
-  termCaption,
-  termShortLabel,
-  THU_COLS,
-  THU_NAMES,
-  weekRangeLabel
-} from './ttcdsCharts.js';
-
 function TermCaption({ source }) {
   const lines = termCaption(source);
   return (
     <>
-      {lines.map((line) => <span key={line} className="ttcds-stat__meta">{line}</span>)}
+      {lines.map((line) => <span key={line} className="slk-cell-meta">{line}</span>)}
     </>
   );
 }
@@ -70,16 +61,12 @@ function TermCell({ source }) {
   const [line, code] = termCaption(source);
   return (
     <>
-      <span className="ttcds-term-main">{line}</span>
-      {code && <span className="ttcds-term-code">{code}</span>}
+      <span className="slk-term-main">{line}</span>
+      {code && <span className="slk-term-code">{code}</span>}
     </>
   );
 }
 
-/**
- * Kỳ mới nhất của SV cho ô "Học kỳ đang học" trong thẻ hồ sơ: bản ghi cuối
- * (mới nhất) của điểm danh → GPA → rèn luyện → TKB → bảng điểm → sự kiện.
- */
 function latestTermSource(detail) {
   const pick = (items) => (Array.isArray(items) && items.length > 0 ? items[items.length - 1] : null);
   return (
@@ -92,11 +79,6 @@ function latestTermSource(detail) {
   );
 }
 
-/**
- * Thẻ hồ sơ SV kiểu Dashboard: một khối có viền, bên trong là lưới các ô con
- * CÓ VIỀN (Lớp / Khoa / Niên khóa / Học kỳ đang học / Trạng thái) — mỗi ô gồm
- * nhãn nhỏ + giá trị lớn + caption mờ. Thiếu dữ liệu → '—'.
- */
 function ProfileCard({ profile, mssv, termSource }) {
   const [termLine, termCode] = termCaption(termSource);
   const cells = [
@@ -106,21 +88,304 @@ function ProfileCard({ profile, mssv, termSource }) {
     { label: 'Học kỳ đang học', value: termLine, meta: termCode || null },
     { label: 'Trạng thái', value: profile.hien_dien ?? 'Đang học', meta: null }
   ];
+
   return (
-    <div className="profile-hero-card glass-panel ttcds-panel">
-      <h2>{profile.ten_day_du || '—'} <span className="club-muted">{profile.mssv || mssv}</span></h2>
-      <div className="ttcds-cell-grid">
+    <header className="slk-profile-card">
+      <div className="slk-profile-head">
+        <h1>{profile.ten_day_du || '—'}</h1>
+        <span className="slk-mssv">{profile.mssv || mssv}</span>
+      </div>
+      <div className="slk-profile-grid">
         {cells.map((cell) => (
-          <div key={cell.label} className="ttcds-cell">
-            <span className="ttcds-cell__label">{cell.label}</span>
-            <span className="ttcds-cell__value">{cell.value}</span>
-            {cell.meta && <span className="ttcds-cell__meta">{cell.meta}</span>}
+          <div key={cell.label} className="slk-profile-cell">
+            <span className="slk-cell-label">{cell.label}</span>
+            <span className="slk-cell-value">{cell.value}</span>
+            {cell.meta && <span className="slk-cell-meta">{cell.meta}</span>}
           </div>
         ))}
+      </div>
+    </header>
+  );
+}
+
+/* --- Chart.js helpers --- */
+
+function chartTheme() {
+  const isDark = typeof document !== 'undefined' && document.body.classList.contains('theme-dark');
+  return {
+    text: isDark ? '#cbd5e1' : '#334155',
+    grid: isDark ? 'rgba(148, 163, 184, 0.14)' : 'rgba(15, 23, 42, 0.08)',
+    border: isDark ? '#334155' : '#cbd5e1',
+    primary: isDark ? '#60a5fa' : '#1d4ed8',
+    primaryFill: isDark ? 'rgba(96, 165, 250, 0.14)' : 'rgba(29, 78, 216, 0.08)',
+    accent: isDark ? '#34d399' : '#0f766e',
+    accentFill: isDark ? 'rgba(52, 211, 153, 0.14)' : 'rgba(15, 118, 110, 0.08)',
+    bar: isDark ? 'rgba(96, 165, 250, 0.38)' : 'rgba(29, 78, 216, 0.22)',
+    barBorder: isDark ? '#60a5fa' : '#1d4ed8'
+  };
+}
+
+const valueLabelPlugin = {
+  id: 'ttcdsValueLabels',
+  afterDatasetsDraw(chart, _args, opts) {
+    const { ctx } = chart;
+    const format = opts?.format || ((v) => String(v));
+    const only = opts?.onlyDataset;
+    const maxLabels = Number(opts?.maxLabels) || 0;
+    ctx.save();
+    ctx.font = '600 10.5px "JetBrains Mono", Manrope, sans-serif';
+    ctx.textAlign = 'center';
+    chart.data.datasets.forEach((dataset, di) => {
+      if (only !== undefined && di !== only) return;
+      const labelled = dataset.data.filter((v) => v !== null && v !== undefined);
+      if (maxLabels > 0 && labelled.length > maxLabels) return;
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((point, pi) => {
+        const v = dataset.data[pi];
+        if (v === null || v === undefined) return;
+        ctx.fillStyle = dataset.borderColor || '#1d4ed8';
+        ctx.fillText(format(v), point.x, point.y - 9);
+      });
+    });
+    ctx.restore();
+  }
+};
+
+function useChartCanvas(draw, deps) {
+  const ref = useRef(null);
+  const [themeRev, setThemeRev] = useState(0);
+
+  useEffect(() => {
+    const Observer = typeof window !== 'undefined' ? window.MutationObserver : undefined;
+    if (!Observer || !document?.body) return undefined;
+    const observer = new Observer(() => setThemeRev((rev) => rev + 1));
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let chart;
+    let cancelled = false;
+    const canvas = ref.current;
+    if (!canvas) return undefined;
+    let ctx = null;
+    try {
+      ctx = canvas.getContext('2d');
+    } catch {
+      ctx = null;
+    }
+    if (!ctx) return undefined;
+    import('chart.js/auto').then(({ default: Chart }) => {
+      if (cancelled || !ref.current) return;
+      chart = draw(Chart, ref.current);
+    });
+    return () => {
+      cancelled = true;
+      if (chart) chart.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, themeRev]);
+  return ref;
+}
+
+function GpaLineCard({ terms, series }) {
+  const rows = Array.isArray(terms) ? terms : [];
+  const data = series && Array.isArray(series.values) ? series : gpaSeries(rows);
+  const valid = data.values.filter((v) => v !== null);
+  const ref = useChartCanvas((Chart, canvas) => {
+    const theme = chartTheme();
+    return new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: rows.map((t) => termShortLabel(t)),
+        datasets: [{
+          label: `GPA tích lũy (${data.scale})`,
+          data: data.values,
+          borderColor: theme.primary,
+          backgroundColor: theme.primaryFill,
+          borderWidth: 2,
+          tension: 0.18,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: theme.primary,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 } } },
+          y: { border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 } } }
+        },
+        plugins: {
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '600' } } },
+          ttcdsValueLabels: { format: (v) => Number(v).toFixed(2) }
+        }
+      },
+      plugins: [valueLabelPlugin]
+    });
+  }, [terms]);
+
+  return (
+    <div className="slk-surface">
+      <div className="slk-surface-head">
+        <h2>Điểm trung bình tích lũy</h2>
+        <p className="slk-surface-sub">{data.scale === 'thang 4' ? 'Thang 4' : 'Thang 10'} · qua các học kỳ</p>
+      </div>
+      {valid.length === 0 ? (
+        <p className="slk-chart-note">Chưa có dữ liệu GPA</p>
+      ) : (
+        <div className="slk-chart-wrap"><canvas ref={ref} id="ttcdsGpaLine" aria-label="Biểu đồ GPA tích lũy" /></div>
+      )}
+    </div>
+  );
+}
+
+function AttendanceWeekCard({ journal }) {
+  const term = latestJournalTerm(journal);
+  const scoped = term === null
+    ? []
+    : (Array.isArray(journal) ? journal : []).filter((r) => Number(r?.nkhk) === term);
+  const weeks = groupJournalByWeek(scoped).filter((w) => w.rate !== null);
+  const [termLine] = term === null ? [] : termCaption({ nkhk: term });
+
+  const ref = useChartCanvas((Chart, canvas) => {
+    const theme = chartTheme();
+    return new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: weeks.map((w) => `Tuần ${w.index}`),
+        datasets: [{
+          label: 'Tỷ lệ chuyên cần',
+          data: weeks.map((w) => Number(w.rate.toFixed(2))),
+          borderColor: theme.accent,
+          backgroundColor: theme.accentFill,
+          borderWidth: 2,
+          tension: 0.18,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: theme.accent,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 }, maxTicksLimit: 12 } },
+          y: { min: 0, max: 100, border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 }, callback: (v) => `${v}%` } }
+        },
+        plugins: {
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '600' } } },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                const w = weeks[items[0]?.dataIndex];
+                return w ? `Tuần ${w.index} (${weekRangeLabel(w.key)}) · ${w.present}/${w.total} buổi` : '';
+              },
+              label: (item) => ` ${item.parsed.y}% có mặt`
+            }
+          },
+          ttcdsValueLabels: { format: (v) => `${v}`, maxLabels: 12 }
+        }
+      },
+      plugins: [valueLabelPlugin]
+    });
+  }, [journal]);
+
+  return (
+    <div className="slk-surface">
+      <div className="slk-surface-head">
+        <h2>Tỷ lệ chuyên cần theo tuần</h2>
+        <p className="slk-surface-sub">{termLine ? `${termLine} · ` : ''}Tuần chưa đủ dữ liệu sẽ bỏ trống</p>
+      </div>
+      {weeks.length === 0 ? (
+        <p className="slk-chart-note">Chưa có dữ liệu điểm danh theo tuần</p>
+      ) : (
+        <div className="slk-chart-wrap"><canvas ref={ref} id="ttcdsAttendanceWeek" aria-label="Biểu đồ chuyên cần theo tuần" /></div>
+      )}
+    </div>
+  );
+}
+
+function AttendanceTermCard({ gpa, series, attendance }) {
+  const terms = Array.isArray(gpa) ? gpa : [];
+  const line = series && Array.isArray(series.values) ? series : gpaSeries(terms);
+  const byNkhk = new Map((Array.isArray(attendance) ? attendance : []).map((r) => [String(r?.nkhk), r]));
+
+  const ref = useChartCanvas((Chart, canvas) => {
+    const theme = chartTheme();
+    return new Chart(canvas, {
+      data: {
+        labels: terms.map((t) => termShortLabel(t)),
+        datasets: [
+          {
+            type: 'bar',
+            label: 'Tỷ lệ chuyên cần',
+            data: terms.map((t) => {
+              const rate = attendanceRate(byNkhk.get(String(t?.nkhk)));
+              return rate === null ? null : Number(rate.toFixed(2));
+            }),
+            backgroundColor: theme.bar,
+            borderColor: theme.barBorder,
+            borderWidth: 1,
+            borderRadius: 6,
+            maxBarThickness: 52,
+            yAxisID: 'yRate'
+          },
+          {
+            type: 'line',
+            label: `Điểm TB tích lũy (${line.scale})`,
+            data: line.values,
+            borderColor: theme.primary,
+            borderWidth: 2,
+            tension: 0.18,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: theme.primary,
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 1.5,
+            yAxisID: 'yGpa'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 } } },
+          yRate: { type: 'linear', position: 'left', min: 0, max: 100, border: { color: theme.border }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10.5 }, callback: (v) => `${v}%` } },
+          yGpa: { type: 'linear', position: 'right', border: { color: theme.border }, grid: { display: false }, ticks: { color: theme.primary, font: { family: 'JetBrains Mono, monospace', size: 10.5, weight: '600' } } }
+        },
+        plugins: {
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '600' } } },
+          ttcdsValueLabels: { onlyDataset: 1, format: (v) => Number(v).toFixed(2), maxLabels: 12 }
+        }
+      },
+      plugins: [valueLabelPlugin]
+    });
+  }, [gpa, series, attendance]);
+
+  if (terms.length === 0) return null;
+  return (
+    <div className="slk-surface slk-chart-card--wide">
+      <div className="slk-surface-head">
+        <h2>Chuyên cần &amp; điểm trung bình theo học kỳ</h2>
+        <p className="slk-surface-sub">Cột: tỷ lệ chuyên cần · Đường: điểm TB tích lũy</p>
+      </div>
+      <div className="slk-chart-wrap">
+        <canvas ref={ref} id="ttcdsTermCombo" aria-label="Biểu đồ chuyên cần và điểm trung bình theo học kỳ" />
       </div>
     </div>
   );
 }
+
+/* --- Tabs --- */
 
 function OverviewTab({ detail, attendance }) {
   const data = useMemo(() => (detail && typeof detail === 'object' ? detail : {}), [detail]);
@@ -128,10 +393,7 @@ function OverviewTab({ detail, attendance }) {
   const attendanceRows = useMemo(() => (Array.isArray(data.diem_danh) ? data.diem_danh : []), [data]);
   const renLuyen = useMemo(() => (Array.isArray(data.ren_luyen) ? data.ren_luyen : []), [data]);
   const events = useMemo(() => (Array.isArray(data.su_kien) ? data.su_kien : []), [data]);
-  const journal = useMemo(
-    () => (Array.isArray(attendance?.nhat_ky) ? attendance.nhat_ky : []),
-    [attendance]
-  );
+  const journal = useMemo(() => (Array.isArray(attendance?.nhat_ky) ? attendance.nhat_ky : []), [attendance]);
   const series = useMemo(() => gpaSeries(gpa), [gpa]);
 
   const lastGpa = gpa[gpa.length - 1];
@@ -168,23 +430,24 @@ function OverviewTab({ detail, attendance }) {
 
   return (
     <>
-      <div className="card glass-panel ttcds-panel ttcds-student-overview">
-        <div className="ttcds-panel-head">
+      <div className="slk-surface">
+        <div className="slk-surface-head">
           <h2>Tổng quan kỳ gần nhất</h2>
-          <p className="ttcds-panel-sub">Số liệu mới nhất, rèn luyện có thể trễ một nhịp</p>
+          <p className="slk-surface-sub">Số liệu mới nhất, điểm rèn luyện có thể cập nhật trễ một nhịp</p>
         </div>
-        <div className="ttcds-stats">
+        <div className="slk-stat-grid">
           {tiles.map((tile) => (
-            <div key={tile.label} className="ttcds-stat" data-testid="ttcds-stat">
-              <span className="ttcds-stat__label">{tile.label}</span>
-              <span className="ttcds-stat__value">{tile.value}</span>
-              {tile.detail && <span className="ttcds-stat__meta">{tile.detail}</span>}
-              {tile.term ? <TermCaption source={tile.term} /> : <span className="ttcds-stat__meta">—</span>}
+            <div key={tile.label} className="slk-stat-card" data-testid="ttcds-stat">
+              <span className="slk-cell-label">{tile.label}</span>
+              <span className="slk-stat-value">{tile.value}</span>
+              {tile.detail && <span className="slk-cell-meta">{tile.detail}</span>}
+              {tile.term ? <TermCaption source={tile.term} /> : <span className="slk-cell-meta">—</span>}
             </div>
           ))}
         </div>
       </div>
-      <div className="ttcds-chart-grid">
+
+      <div className="slk-chart-grid">
         <GpaLineCard terms={gpa} series={series} />
         <AttendanceWeekCard journal={journal} />
         <AttendanceTermCard gpa={gpa} series={series} attendance={attendanceRows} />
@@ -193,333 +456,103 @@ function OverviewTab({ detail, attendance }) {
   );
 }
 
-/* --- Biểu đồ Tổng quan (chart.js, cùng pattern GpaTrendChart) --- */
-
-function chartTheme() {
-  const isDark = typeof document !== 'undefined' && document.body.classList.contains('theme-dark');
-  return {
-    isDark,
-    text: isDark ? '#cbd5e1' : '#111111',
-    grid: isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)',
-    border: isDark ? '#e4e4e7' : '#111111',
-    primary: isDark ? '#3b82f6' : '#1d4ed8',
-    primaryFill: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
-    accent: isDark ? '#fde047' : '#d97706',
-    accentFill: isDark ? 'rgba(253, 224, 71, 0.16)' : 'rgba(250, 204, 21, 0.2)',
-    red: isDark ? '#fb7185' : '#1d4ed8',
-    blue: isDark ? '#3b82f6' : '#facc15'
-  };
-}
-
-// Nhãn số trên từng chấm (kiểu Dashboard) — plugin inline, không thêm dep.
-const valueLabelPlugin = {
-  id: 'ttcdsValueLabels',
-  afterDatasetsDraw(chart, args, opts) {
-    const { ctx } = chart;
-    const format = opts?.format || ((v) => String(v));
-    const only = opts?.onlyDataset;
-    // Đông điểm thì bỏ nhãn, đọc bằng tooltip — tránh chữ đè nhau.
-    const maxLabels = Number(opts?.maxLabels) || 0;
-    ctx.save();
-    ctx.font = '700 10.5px "JetBrains Mono", Manrope, sans-serif';
-    ctx.textAlign = 'center';
-    chart.data.datasets.forEach((dataset, di) => {
-      if (only !== undefined && di !== only) return;
-      const labelled = dataset.data.filter((v) => v !== null && v !== undefined);
-      if (maxLabels > 0 && labelled.length > maxLabels) return;
-      const meta = chart.getDatasetMeta(di);
-      meta.data.forEach((point, pi) => {
-        const v = dataset.data[pi];
-        if (v === null || v === undefined) return;
-        ctx.fillStyle = dataset.borderColor || '#1d4ed8';
-        ctx.fillText(format(v), point.x, point.y - 9);
-      });
-    });
-    ctx.restore();
+function WeekGrid({ sessions, monday, attendance }) {
+  const byCell = new Map();
+  for (const item of sessions) {
+    const dow = isoDow(item);
+    const tiet = Number(item?.tiet_bat_dau);
+    if (!dow || !Number.isInteger(tiet) || tiet < 1 || tiet > 14) continue;
+    const key = `${dow}-${tiet}`;
+    if (!byCell.has(key)) byCell.set(key, []);
+    byCell.get(key).push(item);
   }
-};
+  const occupied = new Set();
 
-function useChartCanvas(draw, deps) {
-  const ref = useRef(null);
-  const [themeRev, setThemeRev] = useState(0);
-
-  useEffect(() => {
-    const Observer = typeof window !== 'undefined' ? window.MutationObserver : undefined;
-    if (!Observer || !document?.body) return undefined;
-    const observer = new Observer(() => {
-      setThemeRev((rev) => rev + 1);
-    });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    let chart;
-    let cancelled = false;
-    const canvas = ref.current;
-    if (!canvas) return undefined;
-    let ctx = null;
-    try {
-      ctx = canvas.getContext('2d');
-    } catch {
-      ctx = null;
-    }
-    // jsdom/test: chỉ render canvas, không dựng Chart.
-    if (!ctx) return undefined;
-    import('chart.js/auto').then(({ default: Chart }) => {
-      if (cancelled || !ref.current) return;
-      chart = draw(Chart, ref.current);
-    });
-    return () => {
-      cancelled = true;
-      if (chart) chart.destroy();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, themeRev]);
-  return ref;
-}
-
-function GpaLineCard({ terms, series }) {
-  const rows = Array.isArray(terms) ? terms : [];
-  const data = series && Array.isArray(series.values) ? series : gpaSeries(rows);
-  const valid = data.values.filter((v) => v !== null);
-  const ref = useChartCanvas((Chart, canvas) => {
-    const theme = chartTheme();
-    return new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: rows.map((t) => termShortLabel(t)),
-        datasets: [{
-          label: `GPA tích lũy (${data.scale})`,
-          data: data.values,
-          borderColor: theme.primary,
-          backgroundColor: theme.primaryFill,
-          borderWidth: 2.5,
-          tension: 0,
-          fill: true,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          pointBackgroundColor: theme.primary,
-          pointBorderColor: theme.border,
-          pointBorderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } },
-          y: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } }
-        },
-        plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
-          ttcdsValueLabels: { format: (v) => Number(v).toFixed(2) }
-        }
-      },
-      plugins: [valueLabelPlugin]
-    });
-  }, [terms]);
   return (
-    <div className="card glass-panel ttcds-panel ttcds-chart-card">
-      <div className="ttcds-panel-head">
-        <h2>Điểm trung bình tích lũy</h2>
-        <p className="ttcds-panel-sub">{data.scale === 'thang 4' ? 'Thang 4' : 'Thang 10'} · qua các học kỳ</p>
-      </div>
-      {valid.length === 0 ? (
-        <p className="ttcds-chart-note">Chưa có dữ liệu GPA</p>
-      ) : (
-        <div className="ttcds-chart-wrap"><canvas ref={ref} id="ttcdsGpaLine" aria-label="Biểu đồ GPA tích lũy" /></div>
-      )}
+    <div className="slk-tkb-scroll">
+      <table className="slk-tkb-grid">
+        <colgroup>
+          <col className="slk-c-tiet" />
+          <col className="slk-c-gio" />
+          {THU_COLS.map((n) => <col key={n} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col" className="slk-tiet">Tiết</th>
+            <th scope="col" className="slk-gio">Giờ</th>
+            {THU_COLS.map((n, i) => (
+              <th scope="col" key={n}>
+                {THU_NAMES[n]}
+                <span className="slk-day-date">({fmtDayMonth(addDaysStr(monday, i))})</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 14 }, (_, i) => i + 1).map((tiet) => (
+            <tr key={tiet}>
+              <td className="slk-tiet">Tiết {tiet}</td>
+              <td className="slk-gio">{gioBatDau(tiet)}</td>
+              {THU_COLS.map((dow) => {
+                const key = `${dow}-${tiet}`;
+                if (occupied.has(key)) return null;
+                const cell = byCell.get(key);
+                if (!cell || cell.length === 0) return <td key={dow} />;
+                const soTiet = Math.max(...cell.map((b) => Number(b?.so_tiet) || 1), 1);
+                const rowSpan = Math.min(soTiet, 14 - tiet + 1);
+                const compact = rowSpan === 1;
+                for (let j = 1; j < rowSpan; j++) occupied.add(`${dow}-${tiet + j}`);
+                return (
+                  <td key={dow} rowSpan={rowSpan} className="slk-slot">
+                    {cell.map((item, index) => {
+                      const cc = item?.ma_mon_hoc ? attendance.get(String(item.ma_mon_hoc)) : undefined;
+                      const pct = cc && Number(cc.so_buoi) > 0 ? (100 * Number(cc.di_hoc)) / Number(cc.so_buoi) : null;
+                      const name = item?.ten_mon || item?.ten_mon_hoc || item?.ma_mon_hoc || '—';
+                      return (
+                        <div className="slk-course" key={`${item?.ma_nhom}-${index}`}>
+                          <div className="slk-course__name">
+                            {name} <span className="slk-course__code">({item?.ma_mon_hoc || '—'})</span>
+                          </div>
+                          {!compact && <div className="slk-course__line">Nhóm: {shortGroupLabel(item?.ma_nhom)}</div>}
+                          {!compact && (item?.phong || item?.ma_phong) && (
+                            <div className="slk-course__line">Phòng: {item.phong || item.ma_phong}</div>
+                          )}
+                          {!compact && (item?.giang_vien || item?.ten_giang_vien) && (
+                            <div className="slk-course__line">GV: {item.giang_vien || item.ten_giang_vien}</div>
+                          )}
+                          <div className="slk-course__time">
+                            {gioBatDau(tiet)} → {gioKetThuc(tiet, soTiet)}
+                          </div>
+                          {pct !== null && (
+                            <div className="slk-course__cc">
+                              Có mặt{' '}
+                              <span className={attendanceClass(pct)}>
+                                {cc.di_hoc}/{cc.so_buoi} buổi · {Math.round(pct)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
-
-function AttendanceWeekCard({ journal }) {
-  // Chỉ vẽ kỳ mới nhất có nhật ký — trộn nhiều kỳ vào một trục tuần là sai
-  // ngữ nghĩa (tuần đánh số lại từ đầu mỗi kỳ).
-  const term = latestJournalTerm(journal);
-  const scoped = term === null
-    ? []
-    : (Array.isArray(journal) ? journal : []).filter((r) => Number(r?.nkhk) === term);
-  const weeks = groupJournalByWeek(scoped).filter((w) => w.rate !== null);
-  const [termLine] = term === null ? [] : termCaption({ nkhk: term });
-  const ref = useChartCanvas((Chart, canvas) => {
-    const theme = chartTheme();
-    return new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: weeks.map((w) => `Tuần ${w.index}`),
-        datasets: [{
-          label: 'Tỷ lệ chuyên cần',
-          data: weeks.map((w) => Number(w.rate.toFixed(2))),
-          borderColor: theme.accent,
-          backgroundColor: theme.accentFill,
-          borderWidth: 2.5,
-          tension: 0,
-          fill: true,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          pointBackgroundColor: theme.accent,
-          pointBorderColor: theme.border,
-          pointBorderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, maxTicksLimit: 12 } },
-          y: {
-            min: 0,
-            max: 100,
-            border: { color: theme.border, width: 2 },
-            grid: { color: theme.grid },
-            ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, callback: (v) => `${v}%` }
-          }
-        },
-        plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
-          tooltip: {
-            callbacks: {
-              title: (items) => {
-                const w = weeks[items[0]?.dataIndex];
-                return w ? `Tuần ${w.index} (${weekRangeLabel(w.key)}) · ${w.present}/${w.total} buổi` : '';
-              },
-              label: (item) => ` ${item.parsed.y}% có mặt`
-            }
-          },
-          ttcdsValueLabels: { format: (v) => `${v}`, maxLabels: 12 }
-        }
-      },
-      plugins: [valueLabelPlugin]
-    });
-  }, [journal]);
-  return (
-    <div className="card glass-panel ttcds-panel ttcds-chart-card">
-      <div className="ttcds-panel-head">
-        <h2>Tỷ lệ chuyên cần theo tuần</h2>
-        <p className="ttcds-panel-sub">{termLine ? `${termLine} · ` : ''}Tuần chưa đủ dữ liệu thì bỏ trống</p>
-      </div>
-      {weeks.length === 0 ? (
-        <p className="ttcds-chart-note">Chưa có dữ liệu điểm danh theo tuần</p>
-      ) : (
-        <div className="ttcds-chart-wrap"><canvas ref={ref} id="ttcdsAttendanceWeek" aria-label="Biểu đồ chuyên cần theo tuần" /></div>
-      )}
-    </div>
-  );
-}
-
-// Combo cột + đường theo học kỳ (kiểu Dashboard): cột % chuyên cần,
-// đường GPA tích lũy — chỉ dùng mảng tổng hợp đã có, không gọi thêm API.
-function AttendanceTermCard({ gpa, series, attendance }) {
-  const terms = Array.isArray(gpa) ? gpa : [];
-  const line = series && Array.isArray(series.values) ? series : gpaSeries(terms);
-  const byNkhk = new Map((Array.isArray(attendance) ? attendance : []).map((r) => [String(r?.nkhk), r]));
-  const ref = useChartCanvas((Chart, canvas) => {
-    const theme = chartTheme();
-    return new Chart(canvas, {
-      data: {
-        labels: terms.map((t) => termShortLabel(t)),
-        datasets: [
-          {
-            type: 'bar',
-            label: 'Tỷ lệ chuyên cần',
-            data: terms.map((t) => {
-              const rate = attendanceRate(byNkhk.get(String(t?.nkhk)));
-              return rate === null ? null : Number(rate.toFixed(2));
-            }),
-            backgroundColor: theme.blue,
-            borderColor: theme.border,
-            borderWidth: 2,
-            borderRadius: 4,
-            maxBarThickness: 56,
-            yAxisID: 'yRate'
-          },
-          {
-            type: 'line',
-            label: `Điểm TB tích lũy (${line.scale})`,
-            data: line.values,
-            borderColor: theme.primary,
-            borderWidth: 2.5,
-            tension: 0,
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            pointBackgroundColor: theme.primary,
-            pointBorderColor: theme.border,
-            pointBorderWidth: 2,
-            yAxisID: 'yGpa'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } },
-          yRate: {
-            type: 'linear',
-            position: 'left',
-            min: 0,
-            max: 100,
-            border: { color: theme.border, width: 2 },
-            grid: { color: theme.grid },
-            ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, callback: (v) => `${v}%` }
-          },
-          yGpa: {
-            type: 'linear',
-            position: 'right',
-            border: { color: theme.border, width: 2 },
-            grid: { display: false },
-            ticks: { color: theme.primary, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '700' } }
-          }
-        },
-        plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
-          ttcdsValueLabels: { onlyDataset: 1, format: (v) => Number(v).toFixed(2), maxLabels: 12 }
-        }
-      },
-      plugins: [valueLabelPlugin]
-    });
-  }, [gpa, series, attendance]);
-  if (terms.length === 0) return null;
-  return (
-    <div className="card glass-panel ttcds-panel ttcds-chart-card ttcds-chart-card--wide">
-      <div className="ttcds-panel-head">
-        <h2>Chuyên cần &amp; điểm trung bình theo học kỳ</h2>
-        <p className="ttcds-panel-sub">Cột: tỷ lệ chuyên cần · Đường: điểm TB tích lũy</p>
-      </div>
-      <div className="ttcds-chart-wrap"><canvas ref={ref} id="ttcdsTermCombo" aria-label="Biểu đồ chuyên cần và điểm trung bình theo học kỳ" /></div>
-    </div>
-  );
-}
-
-function groupRows(items, termKey) {
-  const map = new Map();
-  for (const item of items) {
-    const term = termKey(item);
-    if (!map.has(term)) map.set(term, []);
-    map.get(term).push(item);
-  }
-  return [...map.entries()];
-}
-
-// --- Tab Thời khóa biểu: lưới tuần kiểu Dashboard ---
 
 function TimetableTab({ detail }) {
-  const sessions = useMemo(
-    () => (Array.isArray(detail?.thoi_khoa_bieu) ? detail.thoi_khoa_bieu : []),
-    [detail]
-  );
-  const perSubject = useMemo(
-    () => (Array.isArray(detail?.diem_danh_mon) ? detail.diem_danh_mon : []),
-    [detail]
-  );
+  const sessions = useMemo(() => (Array.isArray(detail?.thoi_khoa_bieu) ? detail.thoi_khoa_bieu : []), [detail]);
+  const perSubject = useMemo(() => (Array.isArray(detail?.diem_danh_mon) ? detail.diem_danh_mon : []), [detail]);
 
   const dsKy = useMemo(
     () => [...new Set(sessions.map((s) => Number(s?.nkhk)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b),
     [sessions]
   );
-  // Học kỳ mặc định là kỳ mới nhất; lựa chọn sai thì rơi về mặc định.
   const [ky, setKy] = useState(null);
   const nkhkChon = ky !== null && dsKy.includes(ky) ? ky : dsKy[dsKy.length - 1] ?? null;
 
@@ -547,12 +580,12 @@ function TimetableTab({ detail }) {
     })()),
     [sessions, nkhkChon, tuanChon]
   );
-  // Buổi không có tiết bắt đầu không vào lưới — liệt kê riêng bên dưới.
+
   const buoiCaNgay = useMemo(
     () => sessions.filter((s) => Number(s?.nkhk) === nkhkChon && !Number(s?.tiet_bat_dau)),
     [sessions, nkhkChon]
   );
-  // Chuyên cần gộp theo môn của kỳ đang xem để in ngay trong ô môn.
+
   const ccTheoMon = useMemo(() => {
     const map = new Map();
     for (const row of perSubject) {
@@ -563,30 +596,38 @@ function TimetableTab({ detail }) {
     return map;
   }, [perSubject, nkhkChon]);
 
-  if (sessions.length === 0) return <p>Chưa có dữ liệu</p>;
+  if (sessions.length === 0) return <div className="slk-state"><p>Chưa có dữ liệu thời khóa biểu.</p></div>;
+
   const [termLine, termCode] = termCaption({ nkhk: nkhkChon });
   return (
-    <div className="card glass-panel ttcds-panel">
-      <div className="ttcds-panel-head">
+    <div className="slk-surface">
+      <div className="slk-surface-head">
         <h2>Thời khóa biểu</h2>
-        <p className="ttcds-panel-sub">Lưới theo tuần · Cột Thứ 2 – Chủ nhật, hàng Tiết 1 – 14</p>
+        <p className="slk-surface-sub">Lưới theo tuần · Thứ 2 – Chủ nhật, Tiết 1 – 14</p>
       </div>
-      <div className="tkb-loc">
-        <div>
+
+      <div className="slk-tkb-filters">
+        <div className="slk-filter-group">
           <label htmlFor="tkb-hoc-ky">Học kỳ</label>
-          <select id="tkb-hoc-ky" className="form-select" value={nkhkChon ?? ''} onChange={(e) => setKy(Number(e.target.value))}>
+          <select
+            id="tkb-hoc-ky"
+            className="slk-select"
+            value={nkhkChon ?? ''}
+            onChange={(event) => setKy(Number(event.target.value))}
+          >
             {dsKy.map((k) => {
               const [line, code] = termCaption({ nkhk: k });
               return <option key={k} value={k}>{code ? `${line} (${code})` : line}</option>;
             })}
           </select>
         </div>
-        <div className="tkb-tuan">
+
+        <div className="slk-filter-group">
           <label htmlFor="tkb-tuan">Tuần</label>
-          <div className="tkb-chon-tuan">
+          <div className="slk-week-picker">
             <button
               type="button"
-              className="tkb-mui-ten"
+              className="slk-week-nav"
               aria-label="Tuần trước"
               title="Tuần trước"
               disabled={iTuan <= 0}
@@ -596,10 +637,10 @@ function TimetableTab({ detail }) {
             </button>
             <select
               id="tkb-tuan"
-              className="form-select"
+              className="slk-select"
               value={tuanChon ?? ''}
               disabled={dsTuan.length === 0}
-              onChange={(e) => setTuan(e.target.value)}
+              onChange={(event) => setTuan(event.target.value)}
             >
               {dsTuan.map((t, i) => (
                 <option key={t} value={t}>
@@ -609,7 +650,7 @@ function TimetableTab({ detail }) {
             </select>
             <button
               type="button"
-              className="tkb-mui-ten"
+              className="slk-week-nav"
               aria-label="Tuần sau"
               title="Tuần sau"
               disabled={iTuan < 0 || iTuan >= dsTuan.length - 1}
@@ -622,143 +663,76 @@ function TimetableTab({ detail }) {
       </div>
 
       {buoiTuan.length === 0 ? (
-        <p className="tkb-note">Tuần này chưa có lịch học{termLine && termLine !== '—' ? ` · ${termLine}${termCode ? ` ${termCode}` : ''}` : ''}</p>
+        <p className="slk-surface-sub">
+          Tuần này chưa có lịch học{termLine && termLine !== '—' ? ` · ${termLine}${termCode ? ` ${termCode}` : ''}` : ''}
+        </p>
       ) : (
         <WeekGrid sessions={buoiTuan} monday={tuanChon} attendance={ccTheoMon} />
       )}
 
       {buoiCaNgay.length > 0 && (
         <>
-          <h3 className="ttcds-day-head">Buổi không xếp theo tiết</h3>
-          <p className="tkb-note">{buoiCaNgay.map((b) => b?.ten_mon || b?.ten_mon_hoc || b?.ma_mon_hoc).filter(Boolean).join(' · ')}</p>
+          <h3 className="slk-subhead">Buổi không xếp theo tiết</h3>
+          <p className="slk-surface-sub">
+            {buoiCaNgay.map((b) => b?.ten_mon || b?.ten_mon_hoc || b?.ma_mon_hoc).filter(Boolean).join(' · ')}
+          </p>
         </>
       )}
     </div>
   );
 }
 
-// Lưới tiết × thứ của đúng một tuần. Môn dài `so_tiet` tiết thì nhảy ô
-// (rowSpan), tối đa tới hàng cuối của lưới.
-function WeekGrid({ sessions, monday, attendance }) {
-  const byCell = new Map();
-  for (const item of sessions) {
-    const dow = isoDow(item);
-    const tiet = Number(item?.tiet_bat_dau);
-    if (!dow || !Number.isInteger(tiet) || tiet < 1 || tiet > 14) continue;
-    const key = `${dow}-${tiet}`;
-    if (!byCell.has(key)) byCell.set(key, []);
-    byCell.get(key).push(item);
+function groupRows(items, termKey) {
+  const map = new Map();
+  for (const item of items) {
+    const term = termKey(item);
+    if (!map.has(term)) map.set(term, []);
+    map.get(term).push(item);
   }
-  const occupied = new Set();
-  return (
-    <div className="tkb-cuon">
-      <table className="tkb-luoi">
-        <colgroup>
-          <col className="tkb-c-tiet" />
-          <col className="tkb-c-gio" />
-          {THU_COLS.map((n) => <col key={n} className="tkb-c-ngay" />)}
-        </colgroup>
-        <thead>
-          <tr>
-            <th className="tkb-tiet">Tiết</th>
-            <th className="tkb-gio">Giờ</th>
-            {THU_COLS.map((n, i) => (
-              <th key={n} className="tkb-cot-ngay">
-                {THU_NAMES[n]}
-                <span className="ngay">({fmtDayMonth(addDaysStr(monday, i))})</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: 14 }, (_, i) => i + 1).map((tiet) => (
-            <tr key={tiet}>
-              <td className="tkb-tiet">Tiết {tiet}</td>
-              <td className="tkb-gio">{gioBatDau(tiet)}</td>
-              {THU_COLS.map((dow) => {
-                const key = `${dow}-${tiet}`;
-                if (occupied.has(key)) return null;
-                const cell = byCell.get(key);
-                if (!cell || cell.length === 0) return <td key={dow} className="tkb-trong" />;
-                const soTiet = Math.max(...cell.map((b) => Number(b?.so_tiet) || 1), 1);
-                const rowSpan = Math.min(soTiet, 14 - tiet + 1);
-                const compact = rowSpan === 1;
-                for (let j = 1; j < rowSpan; j++) occupied.add(`${dow}-${tiet + j}`);
-                return (
-                  <td key={dow} rowSpan={rowSpan} className="tkb-o">
-                    {cell.map((item, index) => {
-                      const cc = item?.ma_mon_hoc ? attendance.get(String(item.ma_mon_hoc)) : undefined;
-                      const pct = cc && Number(cc.so_buoi) > 0 ? (100 * Number(cc.di_hoc)) / Number(cc.so_buoi) : null;
-                      const name = item?.ten_mon || item?.ten_mon_hoc || item?.ma_mon_hoc || '—';
-                      return (
-                        <div className="tkb-mon" key={`${item?.ma_nhom}-${index}`}>
-                          <div className="ten">
-                            {name} <span className="ma">({item?.ma_mon_hoc || '—'})</span>
-                          </div>
-                          {!compact && <div className="ct">Nhóm: {shortGroupLabel(item?.ma_nhom)}</div>}
-                          {!compact && (item?.phong || item?.ma_phong) && (
-                            <div className="ct">Phòng: {item.phong || item.ma_phong}</div>
-                          )}
-                          {!compact && (item?.giang_vien || item?.ten_giang_vien) && (
-                            <div className="ct">GV: {item.giang_vien || item.ten_giang_vien}</div>
-                          )}
-                          <div className="ct gio">
-                            <span className="icon-gio" aria-hidden="true">◷</span>{' '}
-                            {gioBatDau(tiet)} → {gioKetThuc(tiet, soTiet)}
-                          </div>
-                          {pct !== null && (
-                            <div className="ct cc">
-                              Có mặt{' '}
-                              <span className={attendanceClass(pct)}>
-                                {cc.di_hoc}/{cc.so_buoi} buổi · {Math.round(pct)}%
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return [...map.entries()];
 }
 
 function GradesTab({ detail }) {
   const grades = Array.isArray(detail?.bang_diem) ? detail.bang_diem : [];
   const byTerm = groupRows(grades, (row) => row?.nkhk ?? '?');
-  if (grades.length === 0) return <p>Chưa có dữ liệu</p>;
+  if (grades.length === 0) return <div className="slk-state"><p>Chưa có dữ liệu bảng điểm.</p></div>;
+
   return (
     <>
       {byTerm.map(([nkhk, rows]) => {
         const [termLine, termCode] = termCaption(rows[0] ?? { nkhk });
         return (
-          <div className="card glass-panel ttcds-panel" key={nkhk}>
-            <div className="ttcds-panel-head">
+          <div className="slk-surface" key={nkhk}>
+            <div className="slk-surface-head">
               <h2>{termLine}</h2>
-              <p className="ttcds-panel-sub">{termCode ? `${termCode} · ` : ''}{rows.length} môn</p>
+              <p className="slk-surface-sub">{termCode ? `${termCode} · ` : ''}{rows.length} môn</p>
             </div>
             <div className="table-scroll">
-              <table className="ttcds-groups-table ttcds-grades-table">
-              <thead><tr><th scope="col">Mã môn</th><th scope="col">Tên môn</th><th scope="col" style={{ textAlign: 'right' }}>Tín chỉ</th><th scope="col" style={{ textAlign: 'right' }}>Điểm</th><th scope="col" style={{ textAlign: 'right' }}>Thang 4</th><th scope="col">Chữ</th></tr></thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={`${row.ma_mon_hoc}-${index}`}>
-                    <td>{row.ma_mon_hoc ?? '—'}</td>
-                    <td>{row.ten_mon ?? '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{row.so_tin_chi ?? '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{row.diem ?? '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{row.diem_he_4 ?? '—'}</td>
-                    <td>{row.diem_chu ?? '—'}</td>
+              <table className="slk-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Mã môn</th>
+                    <th scope="col">Tên môn</th>
+                    <th scope="col" className="is-num">Tín chỉ</th>
+                    <th scope="col" className="is-num">Điểm</th>
+                    <th scope="col" className="is-num">Thang 4</th>
+                    <th scope="col">Chữ</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={`${row.ma_mon_hoc}-${index}`}>
+                      <td className="is-code">{row.ma_mon_hoc ?? '—'}</td>
+                      <td>{row.ten_mon ?? '—'}</td>
+                      <td className="is-num">{row.so_tin_chi ?? '—'}</td>
+                      <td className="is-num">{row.diem ?? '—'}</td>
+                      <td className="is-num">{row.diem_he_4 ?? '—'}</td>
+                      <td className="is-code">{row.diem_chu ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         );
       })}
@@ -768,20 +742,28 @@ function GradesTab({ detail }) {
 
 function EventsTab({ detail }) {
   const events = Array.isArray(detail?.su_kien) ? detail.su_kien : [];
-  if (events.length === 0) return <p>Chưa tham gia sự kiện nào</p>;
+  if (events.length === 0) return <div className="slk-state"><p>Chưa tham gia sự kiện nào.</p></div>;
+
   return (
-    <div className="card glass-panel ttcds-panel">
-      <div className="ttcds-panel-head">
+    <div className="slk-surface">
+      <div className="slk-surface-head">
         <h2>Sự kiện · {events.length} sự kiện đã tham gia</h2>
-        <p className="ttcds-panel-sub">Hoạt động đã ghi nhận theo từng học kỳ</p>
+        <p className="slk-surface-sub">Hoạt động đã ghi nhận theo từng học kỳ</p>
       </div>
       <div className="table-scroll">
-        <table className="ttcds-groups-table">
-          <thead><tr><th scope="col">Ngày</th><th scope="col">Sự kiện</th><th scope="col">Loại</th><th scope="col">Học kỳ</th></tr></thead>
+        <table className="slk-table">
+          <thead>
+            <tr>
+              <th scope="col">Ngày</th>
+              <th scope="col">Sự kiện</th>
+              <th scope="col">Loại</th>
+              <th scope="col">Học kỳ</th>
+            </tr>
+          </thead>
           <tbody>
             {events.map((event, index) => (
               <tr key={`${event.ten_su_kien}-${index}`}>
-                <td>{event.ngay ?? '—'}</td>
+                <td className="is-code">{event.ngay ?? '—'}</td>
                 <td>{event.ten_su_kien ?? '—'}</td>
                 <td>{event.loai ?? event.the_loai ?? '—'}</td>
                 <td><TermCell source={event} /></td>
@@ -807,8 +789,6 @@ export default function TtcdsStudentPage() {
     tabRefs.current[id]?.focus();
   };
 
-  // WAI-ARIA APG: tablist điều hướng bằng ←/→/Home/End + roving tabindex, để chỉ
-  // tab đang chọn nằm trong tab-order còn các tab khác nhường phím cho panel.
   const onTablistKeyDown = (event) => {
     const currentIndex = TABS.findIndex((entry) => entry.id === tab);
     let nextIndex = null;
@@ -831,8 +811,6 @@ export default function TtcdsStudentPage() {
     retry: false
   });
 
-  // Nhật ký điểm danh từng buổi cho chart tuần — 404 (chưa có dữ liệu) thì
-  // ẩn chart, các tile tổng hợp vẫn hiện bình thường.
   const attendanceJournal = useQuery({
     queryKey: ['ttcds-attendance', String(mssv ?? '').toUpperCase()],
     queryFn: ({ signal }) => getTtcdsAttendance(auth.token, mssv, { signal, all: true }),
@@ -842,30 +820,54 @@ export default function TtcdsStudentPage() {
 
   if (caps.isLoading || (detail.isLoading && canAccess)) {
     return (
-      <section className="club-directory-grid" aria-label="Đang tải chi tiết sinh viên">
-        {[1, 2].map((item) => <ClubCardSkeleton key={item} />)}
+      <section className="slk-root" aria-label="Đang tải chi tiết sinh viên">
+        <div className="slk-surface">
+          <div className="slk-list">
+            {[0, 1].map((row) => (
+              <div key={row} className="slk-skeleton-row" aria-hidden="true">
+                <span className="slk-skeleton slk-skeleton--avatar" />
+                <span className="slk-skeleton-lines">
+                  <span className="slk-skeleton slk-skeleton--name" />
+                  <span className="slk-skeleton slk-skeleton--meta" />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
     );
   }
+
   if (caps.isSuccess && !canAccess) return <TtcdsForbiddenNotice />;
 
   if (detail.isError) {
-    // Lỗi không được là ngõ cụt: luôn giữ link quay lại danh sách và h1 cho trang.
-    // 404 là lỗi vĩnh viễn nên "Thử lại" vô nghĩa → đổi hành động thành về danh sách.
-    const notFound = detail.error?.status === 404;
+    const status = detail.error?.status;
+    const isNotFound = status === 404;
+    const isForbidden = status === 403;
+    const heading = isNotFound
+      ? 'Không tìm thấy sinh viên'
+      : isForbidden
+        ? 'Không có quyền xem sinh viên này'
+        : 'Chưa thể tải thông tin sinh viên';
+    const description = isNotFound
+      ? 'Không có sinh viên với mã này trong hệ thống.'
+      : detail.error?.message || 'Vui lòng thử lại sau ít phút.';
+
     return (
-      <section id="tab-ttcds-student" className="tab-pane club-experience">
-        <p><Link to={back.to} state={back.state}>← {back.label}</Link></p>
-        <div className="club-empty" role="alert">
-          <h1>{notFound ? 'Không tìm thấy sinh viên' : 'Chưa thể tải thông tin sinh viên'}</h1>
-          <p>{notFound ? 'Không có sinh viên với mã này trong hệ thống.' : (detail.error?.message || 'Vui lòng thử lại sau ít phút.')}</p>
-          {notFound ? (
-            <Link className="btn btn-secondary" to={back.to} state={back.state}>
-              {back.to === '/mystudent' ? 'Về danh sách' : `Về ${back.label.toLowerCase()}`}
-            </Link>
-          ) : (
-            <button type="button" className="btn btn-secondary" onClick={() => detail.refetch()}>Thử lại</button>
-          )}
+      <section id="tab-ttcds-student" className="slk-root">
+        <Link className="slk-back" to={back.to} state={back.state}>← {back.label}</Link>
+        <div className="slk-state" role="alert">
+          <h1>{heading}</h1>
+          <p>{description}</p>
+          <div className="slk-state__actions">
+            {(isNotFound || isForbidden) ? (
+              <Link className="slk-btn" to={back.to} state={back.state}>
+                {back.to === '/mystudent' ? 'Về danh sách' : `Về ${back.label.toLowerCase()}`}
+              </Link>
+            ) : (
+              <button type="button" className="slk-btn" onClick={() => detail.refetch()}>Thử lại</button>
+            )}
+          </div>
         </div>
       </section>
     );
@@ -875,11 +877,12 @@ export default function TtcdsStudentPage() {
   const profile = data.ho_so || {};
 
   return (
-    <section id="tab-ttcds-student" className="tab-pane club-experience">
-      <p><Link to={back.to} state={back.state}>← {back.label}</Link></p>
+    <section id="tab-ttcds-student" className="slk-root">
+      <Link className="slk-back" to={back.to} state={back.state}>← {back.label}</Link>
+
       <ProfileCard profile={profile} mssv={mssv} termSource={latestTermSource(data)} />
 
-      <div className="club-tabs" role="tablist" aria-label="Chi tiết sinh viên" onKeyDown={onTablistKeyDown}>
+      <div className="slk-tabs" role="tablist" aria-label="Chi tiết sinh viên" onKeyDown={onTablistKeyDown}>
         {TABS.map((entry) => (
           <button
             key={entry.id}
@@ -897,7 +900,7 @@ export default function TtcdsStudentPage() {
         ))}
       </div>
 
-      <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={0}>
+      <div id={`panel-${tab}`} className="slk-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={0}>
         {tab === 'tong-quan' && <OverviewTab detail={data} attendance={attendanceJournal.data || null} />}
         {tab === 'tkb' && <TimetableTab detail={data} />}
         {tab === 'bang-diem' && <GradesTab detail={data} />}

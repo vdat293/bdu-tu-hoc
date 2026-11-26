@@ -209,17 +209,21 @@ describe('TTCDS frontend', () => {
     expect(screen.getByRole('button', { name: 'Xóa sinh viên Nguyễn Văn A' })).toBeInTheDocument();
   });
 
-  it('renders the latest snapshot as four ttcds stat tiles without legacy classes', async () => {
+  it('renders the latest snapshot as four stat tiles inside .slk-root without legacy classes', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
     expect(await screen.findByText('Tổng quan kỳ gần nhất')).toBeInTheDocument();
-    expect(document.querySelector('.profile-hero-card')).not.toBeNull();
-    // Task 6 "phân ô": chip .hero-tags cũ thành lưới ô con có viền.
-    expect(document.querySelector('.profile-hero-card .hero-tags')).toBeNull();
-    expect(document.querySelector('.profile-hero-card .ttcds-cell-grid')).not.toBeNull();
-    expect(document.querySelectorAll('.profile-hero-card .ttcds-cell').length).toBe(5);
+    const root = document.querySelector('#tab-ttcds-student');
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('slk-root');
+    expect(root).not.toHaveClass('tab-pane');
+    expect(root).not.toHaveClass('club-experience');
+    expect(root.querySelector('.profile-hero-card')).toBeNull();
+    expect(root.querySelector('.glass-panel')).toBeNull();
+    expect(root.querySelector('.card')).toBeNull();
+    expect(root.querySelectorAll('.slk-profile-cell').length).toBe(5);
     expect(screen.getByText('Lớp')).toBeInTheDocument();
     expect(screen.getByText('Khoa')).toBeInTheDocument();
     expect(screen.getByText('Niên khóa')).toBeInTheDocument();
@@ -228,13 +232,8 @@ describe('TTCDS frontend', () => {
     expect(screen.getByText('K29A')).toBeInTheDocument();
     expect(screen.getByText('CNTT')).toBeInTheDocument();
     expect(screen.getByText('Đang học')).toBeInTheDocument();
-    expect(document.querySelector('.ttcds-student-overview.ttcds-panel')).not.toBeNull();
     expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
-    // Lớp riêng của TTCDS thay cho .stats-grid/.stat-card legacy (tránh rule nth-child loang màu).
-    expect(document.querySelectorAll('.ttcds-stat').length).toBe(4);
     expect(document.querySelectorAll('[data-testid="ttcds-stat"]').length).toBe(4);
-    expect(document.querySelector('.ttcds-student-overview .stats-grid')).toBeNull();
-    expect(document.querySelector('.ttcds-student-overview .stat-card')).toBeNull();
     const panel = within(screen.getByRole('tabpanel'));
     expect(panel.getByText('ĐTB tích lũy')).toBeInTheDocument();
     expect(panel.getByText('3.20')).toBeInTheDocument();
@@ -247,7 +246,6 @@ describe('TTCDS frontend', () => {
     expect(panel.getByText('1')).toBeInTheDocument();
     expect(screen.queryByRole('term')).not.toBeInTheDocument();
     expect(screen.queryByRole('definition')).not.toBeInTheDocument();
-    // No per-term history tables in the overview tab anymore.
     expect(screen.queryByText('Điểm theo học kỳ')).not.toBeInTheDocument();
     expect(screen.queryByText('Điểm danh theo học kỳ')).not.toBeInTheDocument();
     expect(screen.queryByText('Điểm rèn luyện')).not.toBeInTheDocument();
@@ -267,7 +265,6 @@ describe('TTCDS frontend', () => {
 
     await screen.findByText('Tổng quan kỳ gần nhất');
     const panel = within(screen.getByRole('tabpanel'));
-    // Cả 4 ô cùng định dạng: dòng 1 "Học kỳ 2 · 2025-2026", dòng 2 "mã 25262".
     expect(panel.getAllByText('Học kỳ 2 · 2025-2026').length).toBe(4);
     expect(panel.getAllByText('mã 25262').length).toBe(4);
   });
@@ -285,7 +282,7 @@ describe('TTCDS frontend', () => {
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
     await screen.findByText('Học kỳ đang học');
-    const card = document.querySelector('.profile-hero-card');
+    const card = document.querySelector('.slk-profile-card');
     expect(card).not.toBeNull();
     expect(within(card).getByText('Học kỳ 2 · 2025-2026')).toBeInTheDocument();
     expect(within(card).getByText('mã 25262')).toBeInTheDocument();
@@ -304,28 +301,28 @@ describe('TTCDS frontend', () => {
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
     await screen.findByText('Học kỳ đang học');
-    const card = document.querySelector('.profile-hero-card');
+    const card = document.querySelector('.slk-profile-card');
     expect(card).not.toBeNull();
     expect(within(card).getAllByText('—').length).toBeGreaterThanOrEqual(4);
     expect(within(card).getByText('Đang học')).toBeInTheDocument();
   });
 
-  it('wraps every student tab block in its own bordered ttcds-panel', async () => {
+  it('wraps every student tab block in a clean slk-surface panel', async () => {
     mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
     mocks.getTtcdsStudent.mockResolvedValue(detailFixture);
     renderAt('/ttcds/students/24050126', '/ttcds/students/:mssv', <TtcdsStudentPage />);
 
     await screen.findByText('Tổng quan kỳ gần nhất');
-    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+    expect(screen.getByRole('tabpanel').querySelector('.slk-surface')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Thời khóa biểu' }));
-    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+    expect(screen.getByRole('tabpanel').querySelector('.slk-surface')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Bảng điểm chi tiết' }));
-    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+    expect(screen.getByRole('tabpanel').querySelector('.slk-surface')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Sự kiện' }));
-    expect(screen.getByRole('tabpanel').querySelector('.ttcds-panel')).not.toBeNull();
+    expect(screen.getByRole('tabpanel').querySelector('.slk-surface')).not.toBeNull();
   });
 
   it('gives the group list table its own bordered panel', async () => {
@@ -608,6 +605,50 @@ describe('TTCDS frontend', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Chưa thể tải thông tin sinh viên' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '← Sinh viên của tôi' })).toHaveAttribute('href', '/mystudent');
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+  });
+
+  it('turns a 403 student load into a permission notice with back link and no retry', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    const forbidden = new Error('Sinh viên nằm ngoài phạm vi quản lý của bạn.');
+    forbidden.status = 403;
+    mocks.getTtcdsStudent.mockRejectedValue(forbidden);
+    renderAt(
+      { pathname: '/ttcds/students/24050999', state: { from: '/ttcds/lookup', fromLabel: 'Tra cứu sinh viên' } },
+      '/ttcds/students/:mssv',
+      <TtcdsStudentPage />
+    );
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Không có quyền xem sinh viên này' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Tra cứu sinh viên' })).toHaveAttribute('href', '/ttcds/lookup');
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
+  });
+
+  it('renders lookup inside .slk-root without legacy bleed and enforces 4-digit MSSV threshold', async () => {
+    mocks.getTtcdsCapabilities.mockResolvedValue({ can_access: true, level: 'view' });
+    mocks.searchTtcdsStudents.mockResolvedValue({
+      ket_qua: [{ mssv: '24050126', ten_day_du: 'Nguyễn Văn A', ma_lop: 'K29A' }]
+    });
+    renderAt('/ttcds/lookup', '/ttcds/lookup', <TtcdsLookupPage />);
+
+    const input = await screen.findByRole('combobox');
+    const root = document.querySelector('#tab-ttcds-lookup');
+    expect(root).toHaveClass('slk-root');
+    expect(root).not.toHaveClass('tab-pane');
+    expect(root).not.toHaveClass('club-experience');
+    expect(root.querySelector('.glass-panel')).toBeNull();
+    expect(root.querySelector('.card')).toBeNull();
+
+    fireEvent.change(input, { target: { value: '240' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Nhập thêm 1 ký tự');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mocks.searchTtcdsStudents).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: '2405' } });
+    await waitFor(() => expect(mocks.searchTtcdsStudents).toHaveBeenCalledWith(
+      'test-token',
+      '2405',
+      expect.objectContaining({ limit: 20, all: true })
+    ), { timeout: 2000 });
   });
 
   it('service page has no admin section anymore', async () => {
