@@ -1,0 +1,303 @@
+/* ==========================================================================
+   BDU IMPACT VFX SYSTEM — Cel-Art Anime + Neo-Brutalism Light & Dark
+   ========================================================================== */
+
+canvas.bdu-vfx-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 2147483000;
+}
+
+.bdu-impact-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.bdu-impact-wrap--block {
+  display: flex;
+  width: 100%;
+}
+
+canvas.bdu-vfx-back-canvas {
+  position: absolute;
+  left: -160px;
+  top: -160px;
+  width: calc(100% + 320px);
+  height: calc(100% + 320px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Base defaults via :where() keep specificity zero so .btn / .btn-primary / .enroll-primary win cleanly */
+:where(.bdu-impact-btn) {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 26px;
+  border: 2.5px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bdu-primary, #1d4ed8);
+  color: #ffffff;
+  font-family: var(--font-display, var(--font-main, system-ui, sans-serif));
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.2;
+  box-shadow: var(--nb-shadow-md, 4px 4px 0 #111111);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  will-change: transform;
+  transition: box-shadow 0.12s ease, background-color 0.06s ease, color 0.06s ease;
+}
+
+.bdu-impact-btn {
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+}
+
+:where(.bdu-impact-btn[data-tone='success']) {
+  background: var(--color-emerald, #10b981);
+  color: #052e16;
+}
+
+:where(.bdu-impact-btn[data-tone='danger']) {
+  background: var(--color-rose, #ef4444);
+  color: #ffffff;
+}
+
+:where(.bdu-impact-btn[data-tone='secondary']) {
+  background: var(--bdu-secondary, #facc15);
+  color: #111111;
+}
+
+/* The anime 1-frame impact invert (no :not(:disabled) so async submit buttons still flash crisply) */
+.bdu-impact-btn--invert {
+  background: var(--text-main, #111111) !important;
+  color: var(--bg-card, #ffffff) !important;
+  border-color: var(--bdu-secondary, #facc15) !important;
+  box-shadow: none !important;
+}
+
+.bdu-impact-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.bdu-impact-btn__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bdu-impact-btn__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--bdu-ok, 0) * 22px);
+  height: 18px;
+  margin-left: calc(var(--bdu-ok, 0) * 6px);
+  overflow: visible;
+  color: var(--bdu-secondary, #facc15);
+  transform: scale(var(--bdu-ok, 0));
+}
+
+.bdu-impact-btn__check svg {
+  width: 22px;
+  height: 18px;
+  overflow: visible;
+}
+
+/* ==========================================================================
+   Tier 1: ImpactProgress (Cel-Glass Bar + Storm Cloud Overlay)
+   ========================================================================== */
+
+.bdu-impact-progress {
+  width: min(440px, 86vw);
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.bdu-impact-progress__stage {
+  position: relative;
+  isolation: isolate;
+  padding-top: 66px;
+  overflow: visible;
+}
+
+.bdu-impact-progress__bar {
+  position: relative;
+  z-index: 1;
+  height: 36px;
+  border: 3.5px solid var(--border-color, #111111);
+  border-radius: 18px;
+  background: var(--bg-card, #ffffff);
+  box-shadow: var(--nb-shadow-md, 4px 4px 0 #111111);
+  overflow: hidden;
+}
+
+.bdu-impact-progress__fill {
+  position: relative;
+  display: block;
+  height: 100%;
+  background: var(--bdu-primary, #1d4ed8);
+}
+
+/* Cel-glass specular highlights inside the bar */
+.bdu-impact-progress__fill::before,
+.bdu-impact-progress__fill::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 20px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #ffffff;
+  opacity: 0.92;
+  transform: skewX(-28deg);
+}
+
+.bdu-impact-progress__fill::after {
+  left: 36px;
+  width: 6px;
+}
+
+.bdu-impact-progress.is-complete .bdu-impact-progress__fill {
+  background: var(--color-emerald, #10b981);
+}
+
+.bdu-impact-progress__meta {
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+}
+
+.bdu-impact-progress__badge {
+  display: inline-block;
+  padding: 4px 14px 5px;
+  border: 2.5px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-main, #111111);
+  box-shadow: 5px 5px 0 var(--bdu-primary, #1d4ed8);
+  transform: skewX(-10deg);
+  font-family: var(--font-display, var(--font-main, system-ui, sans-serif));
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.bdu-impact-progress.is-complete .bdu-impact-progress__badge {
+  background: var(--bdu-secondary, #facc15);
+  color: #111111;
+  box-shadow: 5px 5px 0 var(--nb-shadow-color, #111111);
+}
+
+/* ==========================================================================
+   Tier 2: Micro-Impact Marker (Spring squash runs via BduVfxBridge)
+   ========================================================================== */
+
+.bdu-vfx-micro-pop {
+  will-change: transform;
+}
+
+/* ==========================================================================
+   Tier 2: Kinetic Neo-Brutalist Loader
+   ========================================================================== */
+
+.bdu-kinetic-loader,
+.bdu-kinetic-loader.spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  animation: none;
+  flex: 0 0 auto;
+}
+
+.bdu-kinetic-cube {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: 2px;
+  background: var(--bdu-primary, #1d4ed8);
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+  animation: bduKineticBounce 0.72s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.bdu-kinetic-cube--2 {
+  background: var(--bdu-secondary, #facc15);
+  animation-delay: 0.12s;
+}
+
+.bdu-kinetic-cube--3 {
+  background: var(--color-emerald, #10b981);
+  animation-delay: 0.24s;
+}
+
+.bdu-kinetic-loader.button-spinner .bdu-kinetic-cube,
+.inline-loading .bdu-kinetic-loader .bdu-kinetic-cube {
+  width: 7px;
+  height: 7px;
+  border-width: 1.5px;
+  box-shadow: 1px 1px 0 var(--nb-shadow-color, #111111);
+}
+
+@keyframes bduKineticBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  35% {
+    transform: translateY(-6px) scale(0.92, 1.12);
+  }
+  70% {
+    transform: translateY(1px) scale(1.08, 0.9);
+  }
+}
+
+/* ==========================================================================
+   Reduced Motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .bdu-impact-btn,
+  .bdu-kinetic-cube {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .bdu-impact-btn.is-done {
+    --bdu-ok: 1;
+  }
+}
+
+html[data-vfx="off"] .bdu-impact-btn,
+html[data-vfx="off"] .bdu-kinetic-cube {
+  animation: none !important;
+  transition: none !important;
+}
+
+html[data-vfx="off"] .bdu-impact-btn.is-done {
+  --bdu-ok: 1;
+}

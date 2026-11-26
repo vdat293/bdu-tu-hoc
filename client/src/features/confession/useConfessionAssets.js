@@ -45,15 +45,22 @@ export function useConfessionAssetsReady({ frame, photoUrl } = {}) {
         return undefined;
       }
       images.push(image);
-      const settle = () => {
+      let settled = false;
+      const settle = (shouldDecode = true) => {
+        if (settled) return;
+        settled = true;
         image.onload = null;
         image.onerror = null;
-        finish();
+        if (shouldDecode) {
+          Promise.resolve(image.decode()).then(finish, finish);
+        } else {
+          finish();
+        }
       };
-      image.onload = settle;
-      image.onerror = settle;
+      image.onload = () => settle(true);
+      image.onerror = () => settle(false);
       image.src = url;
-      if (image.complete) settle();
+      if (image.complete) settle(image.naturalWidth > 0);
     }
 
     return () => {

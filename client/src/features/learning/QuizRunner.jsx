@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 import './quiz.css';
 
 export function shuffleArray(items) {
@@ -536,14 +537,15 @@ export default function QuizRunner({
                 <button type="button" className="btn btn-secondary" onClick={cancelConfirm}>
                   Tiếp tục làm
                 </button>
-                <button
+                <ImpactButton
                   type="button"
+                  tone="primary"
                   className="btn btn-primary"
                   onClick={finalize}
                   disabled={finishing || checking}
                 >
                   Nộp bài
-                </button>
+                </ImpactButton>
               </div>
             </section>
           )}
@@ -552,14 +554,15 @@ export default function QuizRunner({
           <footer className="quiz-runner-actions">
             {feedback ? (
               unansweredCount === 0 ? (
-                <button
+                <ImpactButton
                   type="button"
+                  tone="primary"
                   className="btn btn-primary"
                   onClick={requestFinish}
                   disabled={finishing || showConfirm}
                 >
                   {finishing ? 'Đang nộp...' : 'Xem kết quả'}
-                </button>
+                </ImpactButton>
               ) : (
                 <button
                   type="button"

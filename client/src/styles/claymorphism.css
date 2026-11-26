@@ -1,0 +1,1028 @@
+/* ==========================================================================
+   BDU TỰ HỌC — CORE CLAYMORPHISM DESIGN SYSTEM (LIGHT + DARK)
+   Scoped strictly under html[data-ui-style="claymorphism"] so Neo-Brutalism
+   remains completely untouched and lazy feature chunks are cleanly overridden.
+   Visual DNA inherited from .clay-pb-scope (practice-bank.css).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   LAYER 1: TOKENS, CANVAS & SCROLLBAR
+   -------------------------------------------------------------------------- */
+html[data-ui-style="claymorphism"],
+html[data-ui-style="claymorphism"] body.theme-light {
+  --clay-canvas: linear-gradient(145deg, #edf2ff 0%, #f6f2ff 52%, #ebfaf5 100%);
+  --clay-surface: #ffffff;
+  --clay-surface-soft: #f5f8ff;
+  --clay-surface-pill: #eef3ff;
+  --clay-well: #e7eefc;
+  --clay-ink: #18213a;
+  --clay-muted: #52607d;
+  --clay-dim: #6b7a99;
+  --clay-accent: #2563eb;
+  --clay-accent-strong: #1d4ed8;
+  --clay-accent-gradient: linear-gradient(135deg, #4f86ff 0%, #6366f1 100%);
+  --clay-mint-gradient: linear-gradient(135deg, #2dd4bf 0%, #10b981 100%);
+  --clay-coral-gradient: linear-gradient(135deg, #fb7185 0%, #ef4444 100%);
+  --clay-amber-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --clay-border: rgba(255, 255, 255, 0.85);
+  --clay-divider: rgba(126, 142, 198, 0.22);
+  --clay-shadow:
+    0 18px 34px -10px rgba(95, 112, 175, 0.22),
+    0 6px 14px -4px rgba(95, 112, 175, 0.12),
+    inset 0 4px 8px rgba(255, 255, 255, 0.96),
+    inset 0 -6px 12px rgba(142, 158, 214, 0.26);
+  --clay-shadow-sm:
+    0 10px 20px -6px rgba(95, 112, 175, 0.18),
+    0 3px 8px -2px rgba(95, 112, 175, 0.1),
+    inset 0 3px 6px rgba(255, 255, 255, 0.95),
+    inset 0 -4px 8px rgba(142, 158, 214, 0.22);
+  --clay-shadow-xs:
+    0 6px 14px -4px rgba(95, 112, 175, 0.16),
+    inset 0 2px 4px rgba(255, 255, 255, 0.92),
+    inset 0 -3px 6px rgba(142, 158, 214, 0.18);
+  --clay-shadow-btn:
+    0 10px 20px -6px rgba(79, 108, 204, 0.3),
+    inset 0 3px 6px rgba(255, 255, 255, 0.42),
+    inset 0 -4px 8px rgba(18, 36, 94, 0.22);
+  --clay-shadow-well:
+    inset 0 4px 10px rgba(126, 142, 198, 0.24),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.92);
+
+  /* Remap legacy design tokens */
+  --bg-app: #edf2ff;
+  --bg-sidebar: rgba(255, 255, 255, 0.78);
+  --bg-card: var(--clay-surface);
+  --bg-card-hover: var(--clay-surface-soft);
+  --bg-surface-alt: var(--clay-surface-soft);
+  --surface-solid: var(--clay-surface);
+  --card-bg: var(--clay-surface);
+  --nb-ink: var(--clay-ink);
+  --nb-shadow-color: rgba(95, 112, 175, 0.22);
+  --border-color: var(--clay-border);
+  --border-subtle: var(--clay-divider);
+  --nb-border: 1px;
+  --nb-border-strong: 1px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 26px;
+  --nb-shadow-xs: var(--clay-shadow-xs);
+  --nb-shadow-sm: var(--clay-shadow-sm);
+  --nb-shadow-md: var(--clay-shadow-sm);
+  --nb-shadow-lg: var(--clay-shadow);
+  --glass-bg: var(--clay-surface);
+  --glass-border: var(--clay-border);
+  --glass-shadow: var(--clay-shadow-sm);
+  --text-main: var(--clay-ink);
+  --text-muted: var(--clay-muted);
+  --text-dim: var(--clay-dim);
+  --bdu-primary: var(--clay-accent);
+  --bdu-accent: #4f86ff;
+  --bdu-light: #4f86ff;
+}
+
+html[data-ui-style="claymorphism"] body.theme-dark {
+  --clay-canvas: linear-gradient(145deg, #131b30 0%, #191f3b 54%, #112230 100%);
+  --clay-surface: #202a46;
+  --clay-surface-soft: #263254;
+  --clay-surface-pill: #2a375c;
+  --clay-well: #172038;
+  --clay-ink: #f3f6ff;
+  --clay-muted: #b0bedc;
+  --clay-dim: #8596bc;
+  --clay-accent: #60a5fa;
+  --clay-accent-strong: #3b82f6;
+  --clay-accent-gradient: linear-gradient(135deg, #60a5fa 0%, #6366f1 100%);
+  --clay-mint-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  --clay-coral-gradient: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
+  --clay-amber-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --clay-border: rgba(255, 255, 255, 0.09);
+  --clay-divider: rgba(148, 163, 184, 0.16);
+  --clay-shadow:
+    0 20px 38px -10px rgba(4, 7, 18, 0.65),
+    0 6px 14px -4px rgba(4, 7, 18, 0.44),
+    inset 0 2px 6px rgba(255, 255, 255, 0.14),
+    inset 0 -7px 14px rgba(5, 8, 20, 0.68);
+  --clay-shadow-sm:
+    0 10px 22px -6px rgba(4, 7, 18, 0.52),
+    inset 0 2px 5px rgba(255, 255, 255, 0.12),
+    inset 0 -4px 8px rgba(5, 8, 20, 0.56);
+  --clay-shadow-xs:
+    0 6px 14px -4px rgba(4, 7, 18, 0.44),
+    inset 0 2px 4px rgba(255, 255, 255, 0.1),
+    inset 0 -3px 6px rgba(5, 8, 20, 0.46);
+  --clay-shadow-btn:
+    0 10px 20px -6px rgba(4, 7, 18, 0.55),
+    inset 0 3px 6px rgba(255, 255, 255, 0.25),
+    inset 0 -4px 8px rgba(5, 8, 20, 0.42);
+  --clay-shadow-well:
+    inset 0 4px 10px rgba(4, 7, 18, 0.62),
+    inset 0 -2px 6px rgba(255, 255, 255, 0.08);
+
+  --bg-app: #131b30;
+  --bg-sidebar: rgba(24, 33, 58, 0.9);
+  --bg-card: var(--clay-surface);
+  --bg-card-hover: var(--clay-surface-soft);
+  --bg-surface-alt: var(--clay-surface-soft);
+  --surface-solid: var(--clay-surface);
+  --card-bg: var(--clay-surface);
+  --nb-ink: var(--clay-ink);
+  --nb-shadow-color: rgba(4, 7, 18, 0.52);
+  --border-color: var(--clay-border);
+  --border-subtle: var(--clay-divider);
+  --nb-border: 1px;
+  --nb-border-strong: 1px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 26px;
+  --nb-shadow-xs: var(--clay-shadow-xs);
+  --nb-shadow-sm: var(--clay-shadow-sm);
+  --nb-shadow-md: var(--clay-shadow-sm);
+  --nb-shadow-lg: var(--clay-shadow);
+  --glass-bg: var(--clay-surface);
+  --glass-border: var(--clay-border);
+  --glass-shadow: var(--clay-shadow-sm);
+  --text-main: var(--clay-ink);
+  --text-muted: var(--clay-muted);
+  --text-dim: var(--clay-dim);
+  --bdu-primary: var(--clay-accent);
+  --bdu-accent: #60a5fa;
+  --bdu-light: #60a5fa;
+}
+
+html[data-ui-style="claymorphism"] body {
+  background: var(--clay-canvas);
+  background-attachment: fixed;
+  color: var(--clay-ink);
+}
+
+html[data-ui-style="claymorphism"] body::before {
+  display: none;
+}
+
+html[data-ui-style="claymorphism"] ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(79, 134, 255, 0.55);
+}
+
+/* --------------------------------------------------------------------------
+   LAYER 2: APP SHELL, CARDS, BUTTONS, INPUTS, TABLES, MODALS & OVERLAYS
+   -------------------------------------------------------------------------- */
+html[data-ui-style="claymorphism"] .sidebar {
+  border-right: 1px solid var(--clay-divider);
+  background: var(--bg-sidebar);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 8px 0 28px -12px rgba(70, 90, 155, 0.16);
+}
+
+html[data-ui-style="claymorphism"] body.theme-dark .sidebar {
+  box-shadow: 8px 0 28px -10px rgba(4, 7, 18, 0.5);
+}
+
+html[data-ui-style="claymorphism"] .sidebar-header {
+  border-bottom: 1px solid var(--clay-divider);
+}
+
+html[data-ui-style="claymorphism"] .brand-logo {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .sidebar .nav-item {
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--clay-muted);
+  transition: transform 0.14s ease, background-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+html[data-ui-style="claymorphism"] .sidebar .nav-item:hover {
+  background: var(--clay-surface);
+  border-color: var(--clay-border);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow-xs);
+  transform: translateY(-1px);
+}
+
+html[data-ui-style="claymorphism"] .sidebar .nav-item.active,
+html[data-ui-style="claymorphism"] .sidebar .nav-item.active:hover,
+html[data-ui-style="claymorphism"] body.theme-light .sidebar .nav-item.active,
+html[data-ui-style="claymorphism"] body.theme-light .sidebar .nav-item.active:hover,
+html[data-ui-style="claymorphism"] body.theme-dark .sidebar .nav-item.active,
+html[data-ui-style="claymorphism"] body.theme-dark .sidebar .nav-item.active:hover {
+  background: var(--clay-accent-gradient);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .badge-mini {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .sidebar-footer {
+  border-top: 1px solid var(--clay-divider);
+  background: transparent;
+}
+
+html[data-ui-style="claymorphism"] .user-profile-pill {
+  padding: 6px 8px;
+  border-radius: 14px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+html[data-ui-style="claymorphism"] .user-profile-pill:hover {
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .avatar-circle {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+  background: var(--clay-accent-gradient);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .topbar {
+  border-bottom: 1px solid var(--clay-divider);
+  background: var(--bg-sidebar);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px -12px rgba(70, 90, 155, 0.15);
+}
+
+html[data-ui-style="claymorphism"] body.theme-dark .topbar {
+  box-shadow: 0 10px 26px -10px rgba(4, 7, 18, 0.45);
+}
+
+html[data-ui-style="claymorphism"] .topbar::after {
+  bottom: -2px;
+  height: 2px;
+  background: var(--clay-accent-gradient);
+}
+
+html[data-ui-style="claymorphism"] .system-status-pill {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .topbar-search-trigger {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-well);
+  color: var(--clay-muted);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .topbar-search-trigger kbd {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-surface);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .topbar-btn,
+html[data-ui-style="claymorphism"] .btn-icon,
+html[data-ui-style="claymorphism"] .btn-action-sm,
+html[data-ui-style="claymorphism"] .btn-logout {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  background: var(--clay-surface);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow-xs);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+
+html[data-ui-style="claymorphism"] .topbar-btn:hover,
+html[data-ui-style="claymorphism"] .btn-icon:hover,
+html[data-ui-style="claymorphism"] .btn-action-sm:hover,
+html[data-ui-style="claymorphism"] .btn-logout:hover {
+  background: var(--clay-surface-pill);
+  color: var(--clay-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .topbar-btn:active,
+html[data-ui-style="claymorphism"] .btn-icon:active,
+html[data-ui-style="claymorphism"] .btn-action-sm:active,
+html[data-ui-style="claymorphism"] .btn-logout:active {
+  transform: translateY(1px);
+  box-shadow: var(--clay-shadow-well);
+}
+
+/* Shared cards & panels */
+html[data-ui-style="claymorphism"] .glass-panel,
+html[data-ui-style="claymorphism"] .card,
+html[data-ui-style="claymorphism"] .section-header-box,
+html[data-ui-style="claymorphism"] .stat-card,
+html[data-ui-style="claymorphism"] .chart-card,
+html[data-ui-style="claymorphism"] .profile-hero-card,
+html[data-ui-style="claymorphism"] .sub-bento-card,
+html[data-ui-style="claymorphism"] .bento-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 24px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .topbar.glass-panel,
+html[data-ui-style="claymorphism"] .sidebar.glass-panel {
+  border-radius: 0;
+}
+
+html[data-ui-style="claymorphism"] .stat-icon,
+html[data-ui-style="claymorphism"] .empty-monogram {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* Clay buttons */
+html[data-ui-style="claymorphism"] .btn,
+html[data-ui-style="claymorphism"] .bdu-impact-btn {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  box-shadow: var(--clay-shadow-xs);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+html[data-ui-style="claymorphism"] .btn:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .bdu-impact-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .btn:active:not(:disabled),
+html[data-ui-style="claymorphism"] .bdu-impact-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .btn-primary,
+html[data-ui-style="claymorphism"] .bdu-impact-btn.btn-primary,
+html[data-ui-style="claymorphism"] .bdu-impact-btn[data-tone="primary"] {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--clay-accent-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .btn-primary:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .bdu-impact-btn.btn-primary:hover:not(:disabled) {
+  background: var(--clay-accent-gradient);
+  filter: brightness(1.04);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .btn-success,
+html[data-ui-style="claymorphism"] .bdu-impact-btn[data-tone="success"] {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--clay-mint-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .btn-danger,
+html[data-ui-style="claymorphism"] .bdu-impact-btn[data-tone="danger"] {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--clay-coral-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .btn-secondary,
+html[data-ui-style="claymorphism"] .btn-ghost,
+html[data-ui-style="claymorphism"] .bdu-impact-btn[data-tone="secondary"] {
+  border: 1px solid var(--clay-border);
+  background: var(--clay-surface-pill);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .btn-secondary:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .btn-ghost:hover:not(:disabled) {
+  background: var(--clay-surface);
+  color: var(--clay-accent);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .bdu-impact-btn--invert {
+  background: var(--clay-accent-gradient) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: var(--clay-shadow-btn) !important;
+}
+
+/* Recessed Clay form controls */
+html[data-ui-style="claymorphism"] .form-input,
+html[data-ui-style="claymorphism"] .form-textarea,
+html[data-ui-style="claymorphism"] .custom-select,
+html[data-ui-style="claymorphism"] .form-select,
+html[data-ui-style="claymorphism"] .schedule-dropdown,
+html[data-ui-style="claymorphism"] .club-search-field__control {
+  border: 1px solid var(--clay-divider);
+  border-radius: 14px;
+  background: var(--clay-well);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .form-input:focus,
+html[data-ui-style="claymorphism"] .form-textarea:focus,
+html[data-ui-style="claymorphism"] .custom-select:focus,
+html[data-ui-style="claymorphism"] .form-select:focus,
+html[data-ui-style="claymorphism"] .schedule-dropdown:focus,
+html[data-ui-style="claymorphism"] .club-search-field__control:focus-within {
+  border-color: var(--clay-accent);
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-well), 0 0 0 3px rgba(79, 134, 255, 0.18);
+}
+
+/* Tables & Skeletons */
+html[data-ui-style="claymorphism"] .table-responsive {
+  border: 1px solid var(--clay-border);
+  border-radius: 20px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+  overflow-x: auto;
+}
+
+html[data-ui-style="claymorphism"] table th {
+  background: var(--clay-surface-soft);
+  border-bottom: 1px solid var(--clay-divider);
+}
+
+html[data-ui-style="claymorphism"] table td {
+  border-bottom: 1px solid var(--clay-divider);
+}
+
+html[data-ui-style="claymorphism"] .skeleton-block {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  background: var(--clay-well);
+}
+
+/* Modals, Popovers, Toasts, Banners, VFX Progress & Loader */
+html[data-ui-style="claymorphism"] .modal-backdrop,
+html[data-ui-style="claymorphism"] .palette-backdrop,
+html[data-ui-style="claymorphism"] .confirm-backdrop,
+html[data-ui-style="claymorphism"] .reminder-modal-backdrop {
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+html[data-ui-style="claymorphism"] .modal-dialog,
+html[data-ui-style="claymorphism"] .command-palette,
+html[data-ui-style="claymorphism"] .palette-backdrop > .command-palette,
+html[data-ui-style="claymorphism"] .confirm-panel,
+html[data-ui-style="claymorphism"] .notif-panel,
+html[data-ui-style="claymorphism"] .reminder-modal,
+html[data-ui-style="claymorphism"] .user-menu-panel,
+html[data-ui-style="claymorphism"] .avatar-manager-dialog,
+html[data-ui-style="claymorphism"] .avatar-crop-dialog,
+html[data-ui-style="claymorphism"] .identity-title-dialog,
+html[data-ui-style="claymorphism"] .frame-picker-modal-window,
+html[data-ui-style="claymorphism"] .fb-composer-dialog {
+  border: 1px solid var(--clay-border);
+  border-radius: 24px;
+  background: var(--clay-surface);
+  color: var(--clay-ink);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .modal-header,
+html[data-ui-style="claymorphism"] .notif-panel-header,
+html[data-ui-style="claymorphism"] .notif-panel-footer,
+html[data-ui-style="claymorphism"] .reminder-modal-header,
+html[data-ui-style="claymorphism"] .user-menu-header,
+html[data-ui-style="claymorphism"] .user-menu-section,
+html[data-ui-style="claymorphism"] .user-menu-footer,
+html[data-ui-style="claymorphism"] .identity-title-dialog-header,
+html[data-ui-style="claymorphism"] .identity-title-dialog-footer,
+html[data-ui-style="claymorphism"] .frame-picker-header,
+html[data-ui-style="claymorphism"] .frame-picker-footer {
+  border-color: var(--clay-divider);
+  background: var(--clay-surface-soft);
+}
+
+html[data-ui-style="claymorphism"] .modal-close-btn,
+html[data-ui-style="claymorphism"] .identity-dialog-close,
+html[data-ui-style="claymorphism"] .avatar-manager-close,
+html[data-ui-style="claymorphism"] .avatar-crop-close {
+  border: 1px solid var(--clay-border);
+  border-radius: 12px;
+  background: var(--clay-surface-pill);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .notif-bell-badge {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .notif-avatar,
+html[data-ui-style="claymorphism"] .user-menu-avatar-lg,
+html[data-ui-style="claymorphism"] .reminder-status-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .notif-item,
+html[data-ui-style="claymorphism"] .user-menu-item,
+html[data-ui-style="claymorphism"] .user-menu-logout,
+html[data-ui-style="claymorphism"] .user-menu-copy,
+html[data-ui-style="claymorphism"] .user-menu-kbd,
+html[data-ui-style="claymorphism"] .notif-reminder-btn,
+html[data-ui-style="claymorphism"] .reminder-block,
+html[data-ui-style="claymorphism"] .reminder-status-card,
+html[data-ui-style="claymorphism"] .reminder-code,
+html[data-ui-style="claymorphism"] .reminder-cmd {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .user-menu-item-icon {
+  border: 1px solid var(--clay-border);
+  border-radius: 10px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .toast {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-left-width: 1px;
+  border-radius: 18px;
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .update-banner {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .bdu-impact-progress__bar {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-well);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .bdu-impact-progress__fill {
+  border-radius: 999px;
+  background: var(--clay-accent-gradient);
+}
+
+html[data-ui-style="claymorphism"] .bdu-impact-progress__badge {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+  transform: none;
+}
+
+html[data-ui-style="claymorphism"] .bdu-kinetic-cube {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* --------------------------------------------------------------------------
+   LAYER 3: FULL-PORTAL FEATURE OVERRIDES
+   -------------------------------------------------------------------------- */
+
+/* GPA, Grade Share, Info, Schedule, Leaderboard, Survey, Enrollment, Training */
+html[data-ui-style="claymorphism"] .tag,
+html[data-ui-style="claymorphism"] .tag-role,
+html[data-ui-style="claymorphism"] .tag-active,
+html[data-ui-style="claymorphism"] .live-sync-badge,
+html[data-ui-style="claymorphism"] .student-status-badge,
+html[data-ui-style="claymorphism"] .mssv-badge,
+html[data-ui-style="claymorphism"] .sch-room-pill,
+html[data-ui-style="claymorphism"] .survey-list-kicker,
+html[data-ui-style="claymorphism"] .leaderboard-eyebrow,
+html[data-ui-style="claymorphism"] .leaderboard-current-rank .badge,
+html[data-ui-style="claymorphism"] .enroll-chip {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .hero-avatar {
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 20px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .leaderboard-segments button {
+  border: 1px solid transparent;
+  border-radius: 14px;
+}
+
+html[data-ui-style="claymorphism"] .leaderboard-segments button.active,
+html[data-ui-style="claymorphism"] .enroll-chip.is-active {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .leaderboard-current-rank {
+  border: 1px solid var(--clay-border);
+  border-top: 1px solid var(--clay-divider);
+  border-radius: 0 0 22px 22px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .gpa-flex-btn,
+html[data-ui-style="claymorphism"] .share-tier-pill-btn {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .dgrl-page .dgrl-role-row,
+html[data-ui-style="claymorphism"] .dgrl-page .dgrl-notice,
+html[data-ui-style="claymorphism"] .dgrl-page .dgrl-score-item,
+html[data-ui-style="claymorphism"] .dgrl-page .dgrl-group-row {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] #tab-schedule .schedule-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] #tab-schedule .schedule-card--next {
+  border-color: var(--clay-accent);
+  box-shadow: var(--clay-shadow), 0 0 0 2px rgba(79, 134, 255, 0.25);
+}
+
+html[data-ui-style="claymorphism"] #tab-schedule .schedule-card--ongoing {
+  border-color: var(--color-emerald);
+  box-shadow: var(--clay-shadow), 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+
+html[data-ui-style="claymorphism"] #tab-schedule .sch-status-chip,
+html[data-ui-style="claymorphism"] .schedule-badge,
+html[data-ui-style="claymorphism"] .leaderboard-rank-badge {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .survey-card,
+html[data-ui-style="claymorphism"] .bento-item,
+html[data-ui-style="claymorphism"] .survey-course-row {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .survey-load-button,
+html[data-ui-style="claymorphism"] .survey-score-pill span,
+html[data-ui-style="claymorphism"] .english-submit-option,
+html[data-ui-style="claymorphism"] .english-warning {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .terminal-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+/* English Moodle Page */
+html[data-ui-style="claymorphism"] .english-course-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .english-course-card.is-selected {
+  border: 1px solid rgba(16, 185, 129, 0.55);
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow), 0 0 0 2px rgba(16, 185, 129, 0.24);
+}
+
+html[data-ui-style="claymorphism"] .english-course-tag,
+html[data-ui-style="claymorphism"] .english-course-pct,
+html[data-ui-style="claymorphism"] .english-connected-badge,
+html[data-ui-style="claymorphism"] .english-connect-status,
+html[data-ui-style="claymorphism"] .english-queue-banner {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+  transform: none;
+}
+
+html[data-ui-style="claymorphism"] .english-queue-banner {
+  border-radius: 18px;
+}
+
+html[data-ui-style="claymorphism"] .english-course-progress {
+  border: 1px solid var(--clay-divider);
+  border-radius: 999px;
+  background: var(--clay-well);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .english-course-progress-fill {
+  border-radius: 999px;
+}
+
+html[data-ui-style="claymorphism"] .english-course-select-btn {
+  border-radius: 14px;
+}
+
+/* Confession & Identity Dialogs */
+html[data-ui-style="claymorphism"] #tab-confession .forum-hero-banner,
+html[data-ui-style="claymorphism"] #tab-confession .fbc-post,
+html[data-ui-style="claymorphism"] #tab-confession .forum-filter-bar,
+html[data-ui-style="claymorphism"] .frame-option-card,
+html[data-ui-style="claymorphism"] .identity-title-option {
+  border: 1px solid var(--clay-border);
+  border-radius: 20px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] #tab-confession .forum-filter-pill {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* Clubs & TTCDS (clubs.css) */
+html[data-ui-style="claymorphism"] .club-card,
+html[data-ui-style="claymorphism"] .club-panel,
+html[data-ui-style="claymorphism"] .club-post,
+html[data-ui-style="claymorphism"] .club-doc,
+html[data-ui-style="claymorphism"] .club-modal,
+html[data-ui-style="claymorphism"] .ttcds-cell,
+html[data-ui-style="claymorphism"] .ttcds-stat,
+html[data-ui-style="claymorphism"] .ttcds-panel,
+html[data-ui-style="claymorphism"] .club-experience .profile-hero-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .club-card:hover,
+html[data-ui-style="claymorphism"] .club-doc:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .club-doc-stats {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .club-segmented .is-active,
+html[data-ui-style="claymorphism"] .club-tabs button[aria-selected="true"],
+html[data-ui-style="claymorphism"] .club-composer__modes .is-active {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  background: var(--clay-accent-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .club-avatar--hero {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* Vocab (vocab.css) */
+html[data-ui-style="claymorphism"] .vocab-card,
+html[data-ui-style="claymorphism"] .vocab-panel,
+html[data-ui-style="claymorphism"] .vocab-mode,
+html[data-ui-style="claymorphism"] .vocab-set-card,
+html[data-ui-style="claymorphism"] .vg-topbar,
+html[data-ui-style="claymorphism"] .vg-card,
+html[data-ui-style="claymorphism"] .fc-face {
+  border: 1px solid var(--clay-border);
+  border-radius: 24px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .vocab-card:hover,
+html[data-ui-style="claymorphism"] .vocab-mode:hover,
+html[data-ui-style="claymorphism"] .vocab-set-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .vocab-choice,
+html[data-ui-style="claymorphism"] .qz-option,
+html[data-ui-style="claymorphism"] .mt-chip,
+html[data-ui-style="claymorphism"] .vg-action,
+html[data-ui-style="claymorphism"] .vg-btn-ghost,
+html[data-ui-style="claymorphism"] .vg-btn-check,
+html[data-ui-style="claymorphism"] .fc-nav,
+html[data-ui-style="claymorphism"] .fc-act,
+html[data-ui-style="claymorphism"] .ty-btn {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .vocab-choice:hover,
+html[data-ui-style="claymorphism"] .qz-option:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .mt-chip:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .vg-btn-check:hover:not(:disabled),
+html[data-ui-style="claymorphism"] .fc-act:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .vocab-count-badge,
+html[data-ui-style="claymorphism"] .vocab-count-pill,
+html[data-ui-style="claymorphism"] .vocab-mode-icon,
+html[data-ui-style="claymorphism"] .vocab-mode-points,
+html[data-ui-style="claymorphism"] .vocab-set-index,
+html[data-ui-style="claymorphism"] .vocab-set-play,
+html[data-ui-style="claymorphism"] .vg-round,
+html[data-ui-style="claymorphism"] .vg-coin,
+html[data-ui-style="claymorphism"] .qz-num {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .vocab-mode-points {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fde047;
+}
+
+/* Grammar (grammar.css) */
+html[data-ui-style="claymorphism"] .gr-path-card,
+html[data-ui-style="claymorphism"] .gr-panel,
+html[data-ui-style="claymorphism"] .gr-lesson,
+html[data-ui-style="claymorphism"] .gr-theory,
+html[data-ui-style="claymorphism"] .gr-rule,
+html[data-ui-style="claymorphism"] .gr-topbar,
+html[data-ui-style="claymorphism"] .gr-card,
+html[data-ui-style="claymorphism"] .gr-resume-modal,
+html[data-ui-style="claymorphism"] .gr-feedback {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .gr-path-card:hover,
+html[data-ui-style="claymorphism"] .gr-lessons .gr-lesson:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-ui-style="claymorphism"] .gr-option,
+html[data-ui-style="claymorphism"] .gr-chip,
+html[data-ui-style="claymorphism"] .gr-action,
+html[data-ui-style="claymorphism"] .gr-start-btn,
+html[data-ui-style="claymorphism"] .gr-hint-btn {
+  border: 1px solid var(--clay-border);
+  border-radius: 16px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .gr-section-count,
+html[data-ui-style="claymorphism"] .gr-path-badge,
+html[data-ui-style="claymorphism"] .gr-option-letter {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 10px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* Learning, Quiz & Guides (excluding .clay-pb-scope which is already Claymorphism) */
+html[data-ui-style="claymorphism"] .quiz-runner,
+html[data-ui-style="claymorphism"] .quiz-test,
+html[data-ui-style="claymorphism"] .quiz-set-part-row,
+html[data-ui-style="claymorphism"] .guide-index,
+html[data-ui-style="claymorphism"] .guide-index-item,
+html[data-ui-style="claymorphism"] .guide-step-card,
+html[data-ui-style="claymorphism"] .guide-workdir,
+html[data-ui-style="claymorphism"] .guide-block-note,
+html[data-ui-style="claymorphism"] .guide-step-expect,
+html[data-ui-style="claymorphism"] .guide-step-errors,
+html[data-ui-style="claymorphism"] .modal-dialog.guide-cloudshell-dialog {
+  border: 1px solid var(--clay-border);
+  border-radius: 20px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] .quiz-test-timer,
+html[data-ui-style="claymorphism"] .quiz-test-palette-btn,
+html[data-ui-style="claymorphism"] .guide-step-done {
+  border: 1px solid var(--clay-border);
+  border-radius: 12px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+/* WordFmt Chrome — intentionally leaves .wf-gdoc-page white A4 paper untouched */
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-studio-form-card,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-gdoc-subbar,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-vfx-stage,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-status-summary-card,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-error-banner,
+html[data-ui-style="claymorphism"] .wf-skill-modal {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-stepper-link,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-skill-trigger,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-autofill-pill,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-mode-segmented,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-seg-btn,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-tool-btn,
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-toolbar-select {
+  border: 1px solid var(--clay-border);
+  border-radius: 12px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] #tab-wordfmt .wf-skill-trigger {
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+/* Settings Page (/setting) in Claymorphism */
+html[data-ui-style="claymorphism"] .settings-eyebrow,
+html[data-ui-style="claymorphism"] .settings-tag,
+html[data-ui-style="claymorphism"] .settings-status-badge {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .settings-style-card,
+html[data-ui-style="claymorphism"] .settings-reminder-box,
+html[data-ui-style="claymorphism"] .settings-switch-row,
+html[data-ui-style="claymorphism"] .settings-guide-tip {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .settings-style-card.is-selected {
+  border-color: var(--clay-accent);
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm), 0 0 0 2px rgba(79, 134, 255, 0.25);
+}
+
+html[data-ui-style="claymorphism"] .settings-seg-btn {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  background: var(--clay-well);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .settings-seg-btn.is-active {
+  background: var(--clay-accent-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+html[data-ui-style="claymorphism"] .settings-switch {
+  border: 1px solid var(--clay-border);
+  background: var(--clay-well);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] .settings-switch.is-on {
+  background: var(--clay-mint-gradient);
+}
+
+html[data-ui-style="claymorphism"] .settings-switch-thumb {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: var(--clay-shadow-xs);
+}

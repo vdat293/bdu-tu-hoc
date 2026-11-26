@@ -87,7 +87,29 @@ export default function StudentJourneyDrawer({
   const summary = data?.summary || {};
   const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
   const transitions = Array.isArray(data?.transitions) ? data.transitions : [];
-  const toolUsage = Array.isArray(data?.toolUsage) ? data.toolUsage : [];
+  const rawToolUsage = Array.isArray(data?.toolUsage) ? data.toolUsage : [];
+  const STATUS_RANK = { used: 3, tried: 2, viewed: 1 };
+  const toolUsage = Array.from(
+    rawToolUsage.reduce((acc, item) => {
+      const key = String(item?.toolLabel || item?.toolId || '').trim();
+      if (!key) return acc;
+      const existing = acc.get(key);
+      if (!existing) {
+        acc.set(key, { ...item, executionCount: safeNumber(item.executionCount) });
+        return acc;
+      }
+      const nextStatus = (STATUS_RANK[item?.status] || 0) > (STATUS_RANK[existing.status] || 0)
+        ? item.status
+        : existing.status;
+      acc.set(key, {
+        ...existing,
+        status: nextStatus,
+        executionCount: existing.executionCount + safeNumber(item?.executionCount),
+        lastActionLabel: item?.lastActionLabel || existing.lastActionLabel
+      });
+      return acc;
+    }, new Map()).values()
+  );
   const truncated = Boolean(data?.truncated);
   const displayName = student?.fullName || 'Sinh viên BDU';
 

@@ -1,37 +1,70 @@
-/* Motion riêng cho clubs: KHÔNG sửa style toàn cục khác. */
+/* Motion riêng cho clubs (Neo-Brutalism): KHÔNG sửa style toàn cục khác. */
 
-.club-tab-enter { animation: club-tab-enter 200ms ease-out; }
+.club-tab-enter { animation: club-tab-enter 160ms ease-out; }
 
 @keyframes club-tab-enter {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.club-shimmer { position: relative; overflow: hidden; border-radius: 6px; background: var(--bg-card-hover, #f1f5f9); min-height: 14px; }
-.club-shimmer::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
-  animation: club-shimmer 1.4s ease-out infinite;
+.club-shimmer {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  min-height: 14px;
 }
+
+.club-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 18%,
+    rgba(255, 255, 255, 0.72) 45%,
+    rgba(255, 255, 255, 0.92) 52%,
+    rgba(255, 255, 255, 0.45) 60%,
+    transparent 82%
+  );
+  transform: translateX(-100%);
+  animation: club-shimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+body.theme-dark .club-shimmer::after {
+  background: linear-gradient(
+    105deg,
+    transparent 18%,
+    rgba(147, 197, 253, 0.14) 45%,
+    rgba(255, 255, 255, 0.22) 52%,
+    rgba(147, 197, 253, 0.1) 60%,
+    transparent 82%
+  );
+}
+
 @keyframes club-shimmer {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
 }
-.club-shimmer--avatar { width: 38px; height: 38px; border-radius: 8px; }
+
+.club-shimmer--avatar { width: 38px; height: 38px; border-radius: var(--radius-sm, 4px); }
 .club-shimmer--line { height: 14px; }
 .club-shimmer--heading { width: 55%; height: 18px; }
 .club-shimmer--wide { width: 90%; }
 .club-shimmer--short { width: 40%; }
 .club-skeleton-card { pointer-events: none; }
 
-.club-modal-anim { animation: club-modal-pop 180ms ease-out; transform-origin: center; }
+.club-modal-anim { animation: club-modal-pop 140ms ease-out; transform-origin: center; }
 @keyframes club-modal-pop {
-  from { opacity: 0; transform: scale(.96) translateY(6px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: translate(-2px, 4px); }
+  to { opacity: 1; transform: translate(0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .club-tab-enter, .club-modal-anim, .club-shimmer::after { animation: none; }
+  .club-shimmer::after { display: none; }
   .club-experience *, .club-experience *::before, .club-experience *::after { transition: none !important; }
 }
 

@@ -12,6 +12,7 @@ import {
 } from '../../api/community.js';
 import { getIdentityFrames, updateMyEquippedFrame, updateMyIdentityPresentation } from '../../api/identity.js';
 import { useAuth, useRealtimeRoom, useRealtimeStatus, useToasts } from '../../app/providers.jsx';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 import ConfessionPageSkeleton, { ForumPostSkeletonList } from './ConfessionPageSkeleton.jsx';
 import { useConfessionAssetsReady } from './useConfessionAssets.js';
 import {
@@ -2034,9 +2035,10 @@ export default function ConfessionPage() {
           </div>
 
           <div className="fb-modal-footer">
-            <button
+            <ImpactButton
               type="button"
               id="btn-submit-cfs"
+              tone="primary"
               className="btn btn-primary fb-submit-post-btn"
               onClick={() => {
                 if (!draft.content.trim() && createImages.images.length === 0) {
@@ -2048,7 +2050,7 @@ export default function ConfessionPage() {
               disabled={create.isPending || (!draft.content.trim() && createImages.images.length === 0)}
             >
               {create.isPending ? 'Đang đăng...' : 'Đăng'}
-            </button>
+            </ImpactButton>
           </div>
         </ViewportModal>
       )}
@@ -2163,15 +2165,16 @@ export default function ConfessionPage() {
           </div>
 
           <div className="fb-modal-footer">
-            <button
+            <ImpactButton
               type="button"
               id="btn-submit-cfs-edit"
+              tone="primary"
               className="btn btn-primary fb-submit-post-btn"
               onClick={submitEditPost}
               disabled={update.isPending || (!editDraft.content.trim() && existingEditImages.length === 0 && editImages.images.length === 0)}
             >
               {update.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </button>
+            </ImpactButton>
           </div>
         </ViewportModal>
       )}

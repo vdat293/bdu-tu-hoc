@@ -10,14 +10,14 @@
   flex-direction: column;
   justify-content: space-between;
   min-height: 224px;
-  border-radius: 18px;
+  border-radius: var(--radius-md, 6px);
   padding: 20px 22px 16px;
   color: #f8fafc;
   background-color: #120b04;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 16px 36px -14px rgba(15, 23, 42, 0.58);
+  border: 3px solid var(--border-color, #111111);
+  box-shadow: 6px 6px 0 var(--nb-shadow-color, #111111);
   isolation: isolate;
-  font-family: var(--font-sans, 'Be Vietnam Pro', system-ui, -apple-system, sans-serif);
+  font-family: var(--font-main, system-ui, -apple-system, sans-serif);
 }
 
 .grade-share-card.is-compact {
@@ -362,14 +362,12 @@
   display: inline-flex;
   align-items: center;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 11.5px;
-  font-weight: 600;
-  color: rgba(248, 250, 252, 0.95);
-  background: rgba(8, 12, 22, 0.62);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-weight: 700;
+  color: #f8fafc;
+  background: rgba(8, 12, 22, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.34);
 }
 
 .gsc-chip-sem {
@@ -430,13 +428,11 @@
   align-items: flex-end;
   text-align: right;
   padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(8, 11, 19, 0.68);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(8, 11, 19, 0.86);
+  border: 2px solid rgba(255, 255, 255, 0.32);
   min-width: 114px;
-  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.65);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.72);
 }
 
 .gsc-score-crest {
@@ -583,32 +579,34 @@
 }
 
 .share-tier-pill-btn {
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 5px 11px;
+  border-radius: var(--radius-sm, 4px);
   font-size: 11.5px;
-  font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
+  font-weight: 700;
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bg-surface-alt, #f4efe0);
+  color: var(--text-main, #111111);
   cursor: pointer;
-  transition: all 0.18s ease;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 
 .share-tier-pill-btn:hover {
-  color: var(--text-main);
-  border-color: rgba(255, 255, 255, 0.28);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--nb-shadow-color, #111111);
 }
 
 .share-tier-pill-btn.is-active {
-  background: rgba(251, 191, 36, 0.16);
-  border-color: rgba(251, 191, 36, 0.55);
-  color: #fde68a;
+  background: var(--bdu-secondary, #facc15);
+  border-color: var(--border-color, #111111);
+  color: #111111;
 }
 
 .share-tier-preview-note {
   margin: 0;
   font-size: 11.5px;
-  color: #fbbf24;
+  font-weight: 700;
+  color: var(--warning, #d97706);
 }
 
 .share-grade-field {
@@ -619,7 +617,7 @@
 
 .share-grade-label {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-main);
 }
 
@@ -627,9 +625,9 @@
   width: 100%;
   min-height: 84px;
   padding: 11px 13px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.14));
-  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+  border-radius: var(--radius-sm, 4px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bg-card, #ffffff);
   color: var(--text-main);
   font-family: inherit;
   font-size: 14px;
@@ -638,9 +636,9 @@
 }
 
 .share-grade-textarea:focus {
-  outline: none;
-  border-color: var(--accent, #38bdf8);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+  outline: 2px solid var(--bdu-primary, #1d4ed8);
+  outline-offset: 2px;
+  border-color: var(--bdu-primary, #1d4ed8);
 }
 
 .share-grade-anon-row {
@@ -648,18 +646,19 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  border: 2px solid var(--border-color, #111111);
   cursor: pointer;
   font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
 .share-grade-anon-row input {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent, #38bdf8);
+  accent-color: var(--bdu-primary, #1d4ed8);
 }
 
 .share-grade-hint {
@@ -672,15 +671,220 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
-  color: #ffffff;
-  border: none;
-  box-shadow: 0 6px 16px -6px rgba(234, 88, 12, 0.55);
+  background: var(--bdu-secondary, #facc15);
+  color: #111111;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  font-weight: 800;
+  box-shadow: 3px 3px 0 var(--nb-shadow-color, #111111);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .gpa-flex-btn:hover:not(:disabled) {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--nb-shadow-color, #111111);
+}
+
+.gpa-flex-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--nb-shadow-color, #111111);
+}
+
+/* ---------- /grade-card-gallery Showcase Page ---------- */
+.gsc-showcase-page {
+  min-height: 100vh;
+  background: var(--bg-app, #fffdf5);
+  color: var(--text-main, #111111);
+  padding: 36px 24px 72px;
+  font-family: var(--font-main, system-ui, sans-serif);
+}
+
+body.theme-dark .gsc-showcase-page {
+  background: var(--bg-app, #111318);
+  color: var(--text-main, #f8fafc);
+}
+
+.gsc-showcase-wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+}
+
+.gsc-showcase-header {
+  margin-bottom: 28px;
+  padding: 20px 24px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-md, 6px);
+  background: var(--bg-card, #ffffff);
+  box-shadow: 4px 4px 0 var(--nb-shadow-color, #111111);
+}
+
+.gsc-showcase-header-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gsc-gallery-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  color: var(--text-main, #111111);
+  font-family: var(--font-display, var(--font-main));
+  font-size: 12.5px;
+  font-weight: 800;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.gsc-gallery-theme-btn:hover {
+  background: var(--nb-yellow, #facc15);
+  color: #111111;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--nb-shadow-color, #111111);
+}
+
+.gsc-showcase-eyebrow {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bdu-secondary, #facc15);
+  color: #111111;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gsc-showcase-title {
+  margin: 10px 0 8px;
+  font-family: var(--font-display, var(--font-main));
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: 800;
+  color: var(--text-main, #111111);
+}
+
+.gsc-showcase-lead {
+  margin: 0;
+  color: var(--text-dim, #3f3f46);
+  font-size: 14.5px;
+}
+
+.gsc-showcase-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 22px;
+  margin-bottom: 44px;
+}
+
+.gsc-showcase-tier-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gsc-showcase-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  font-size: 12.5px;
+  color: var(--text-dim, #3f3f46);
+  line-height: 1.45;
+}
+
+.gsc-showcase-note strong {
+  color: var(--text-main, #111111);
+}
+
+.gsc-showcase-section-h2 {
+  font-family: var(--font-display, var(--font-main));
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 16px;
+  color: var(--text-main, #111111);
+}
+
+.gsc-showcase-cfs-card {
+  background: var(--bg-card, #ffffff);
+  color: var(--text-main, #111111);
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-md, 6px);
+  padding: 16px 18px;
+  box-shadow: 4px 4px 0 var(--nb-shadow-color, #111111);
+}
+
+.gsc-showcase-cfs-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gsc-showcase-cfs-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm, 4px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bdu-primary, #1d4ed8);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display, var(--font-main));
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+}
+
+.gsc-showcase-cfs-author {
+  font-weight: 800;
+  font-size: 14.5px;
+  color: var(--text-main, #111111);
+}
+
+.gsc-showcase-cfs-meta {
+  font-size: 12px;
+  color: var(--text-muted, #52525b);
+}
+
+.gsc-showcase-cfs-copy {
+  margin: 0 0 12px;
+  font-size: 14.5px;
+  color: var(--text-main, #111111);
+}
+
+.gsc-showcase-macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 18px;
+}
+
+.gsc-showcase-macro-card {
+  margin: 0;
+  border-radius: var(--radius-md, 6px);
+  overflow: hidden;
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bg-card, #ffffff);
+  box-shadow: 4px 4px 0 var(--nb-shadow-color, #111111);
+}
+
+.gsc-showcase-macro-card figcaption {
+  padding: 10px 14px;
+  border-top: 2px solid var(--border-color, #111111);
+  background: var(--bg-surface-alt, #f4efe0);
+  font-family: var(--font-display, var(--font-main));
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main, #111111);
 }
 
 .gpa-flex-btn:disabled {
@@ -699,7 +903,21 @@
 @media (max-width: 540px) {
   .grade-share-card {
     min-height: 210px;
-    padding: 16px 16px 14px;
+    padding: 18px 20px 14px;
+  }
+
+  .grade-share-card.is-compact {
+    padding: 18px 20px 14px;
+  }
+
+  .gsc-top {
+    padding-right: 16px;
+    gap: 6px;
+  }
+
+  .gsc-emblem-title {
+    font-size: 10px;
+    letter-spacing: 0.02em;
   }
 
   .gsc-course {

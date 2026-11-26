@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { goToReturnTo, isInternalReturnTo } from './session.js';
 import { trackAction } from '../../services/telemetry.js';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -155,10 +156,10 @@ export default function LoginPage() {
           </label>
         </div>
 
-        <button type="submit" id="btn-login" className="btn btn-primary btn-block" disabled={busy}>
+        <ImpactButton type="submit" id="btn-login" tone="primary" className="btn btn-primary btn-block" disabled={busy}>
           {busy && <span className="btn-spinner" aria-hidden="true" />}
           <span className="btn-text">{busy ? 'Đang đăng nhập…' : 'Đăng nhập'}</span>
-        </button>
+        </ImpactButton>
       </form>
 
       <div className="login-footer">

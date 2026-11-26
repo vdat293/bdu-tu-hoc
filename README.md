@@ -306,15 +306,7 @@ R2_PUBLIC_BASE_URL=           # bỏ trống -> phục vụ qua /media/r2/<key>
   `MEDIA_CLEANUP_INTERVAL_MINUTES`.
 * Avatar do sinh viên tự upload ở trang Confession hoặc ngay tại hero trang GPA
   (hai kênh dùng chung một API và đồng bộ với nhau); admin-tool chỉ còn tra cứu
-  và gỡ ảnh vi phạm. Ảnh cũ trong `data/avatars` migrate bằng:
-
-```bash
-node scripts/migrate-avatars-to-r2.js          # xem trước
-node scripts/migrate-avatars-to-r2.js --apply  # upload + cập nhật DB
-```
-
-Sau khi migrate xong và kiểm tra ảnh hiển thị đúng, có thể xoá volume
-`data/avatars` cũ.
+  và gỡ ảnh vi phạm.
 
 ### Site Giải trí độc lập
 
@@ -475,7 +467,7 @@ Chạy lại đúng chuỗi CI ở máy local:
 npm run ci   # = lint:frontend && test:frontend && test:node && build:client
 ```
 
-Lưu ý: `scripts/run-command.mjs` cố ý **fail-closed trên Windows** (chỉ hỗ trợ POSIX process-group cleanup), nên CI chạy trên `ubuntu-latest`. Nếu muốn chạy `scripts/verify-controller-split.mjs` hoặc `scripts/verify-route-order.mjs` thì hai script này chạy được ở mọi OS.
+Lưu ý: `scripts/run-command.mjs` cố ý **fail-closed trên Windows** (chỉ hỗ trợ POSIX process-group cleanup), nên CI chạy trên `ubuntu-latest`.
 
 CI **không** deploy. Deploy thực hiện thủ công trên VPS (xem mục dưới).
 

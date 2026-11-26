@@ -8,6 +8,7 @@ import {
 } from '../../api/tools.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import { trackAction } from '../../services/telemetry.js';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 
 const MUC5_PENALTY_CODE = '5.5';
 const MUC5_PENALTY_DIEM = -10;
@@ -481,7 +482,7 @@ export default function TrainingScorePage() {
             </span>
             <div className="dgrl-dlg-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setConfirmOpen(false)}>Huỷ</button>
-              <button type="button" className="btn btn-primary" onClick={submit}>Xác nhận lưu</button>
+              <ImpactButton type="button" tone="primary" className="btn btn-primary" onClick={submit}>Xác nhận lưu</ImpactButton>
             </div>
           </div>
         </ViewportModal>

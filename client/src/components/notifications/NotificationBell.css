@@ -9,17 +9,19 @@
 
 .notif-bell-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
+  top: -6px;
+  right: -6px;
+  min-width: 19px;
+  height: 19px;
   padding: 0 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: #e11d48;
+  border-radius: var(--radius-sm, 4px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--danger, #ef4444);
   color: #fff;
+  font-family: var(--font-mono, monospace);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -30,12 +32,15 @@
   top: calc(100% + 10px);
   right: 0;
   z-index: 1200;
-  width: min(360px, calc(100vw - 24px));
+  width: min(360px, calc(100vw - 296px));
   max-height: min(480px, calc(100vh - 140px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--radius-md, 6px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bg-card, #ffffff);
+  box-shadow: 5px 5px 0 var(--nb-shadow-color, #111111);
 }
 
 .notif-panel-header {
@@ -44,19 +49,22 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color, #111111);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .notif-panel-header strong {
+  font-family: var(--font-display, var(--font-main));
   font-size: 15px;
+  font-weight: 800;
 }
 
 .notif-mark-all {
   border: 0;
   background: transparent;
-  color: var(--bdu-light, #2563eb);
+  color: var(--bdu-primary, #1d4ed8);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -76,7 +84,7 @@
   padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .notif-empty {
@@ -93,8 +101,8 @@
   gap: 10px;
   width: 100%;
   padding: 10px;
-  border: 0;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -102,7 +110,8 @@
 }
 
 .notif-item:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--bg-surface-alt, #f4efe0);
+  border-color: var(--border-color, #111111);
 }
 
 .notif-avatar {
@@ -112,11 +121,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #2f7cf6, #1877f2);
+  border-radius: var(--radius-sm, 4px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--bdu-primary, #1d4ed8);
   color: #fff;
+  font-family: var(--font-display, var(--font-main));
   font-size: 13px;
   font-weight: 800;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
 }
 
 .notif-copy {
@@ -149,41 +161,54 @@
 
 .notif-time {
   font-size: 12px;
-  color: var(--bdu-light, #2563eb);
+  color: var(--bdu-primary, #1d4ed8);
+  font-weight: 700;
 }
 
 .notif-item:not(.is-unread) .notif-time {
   color: var(--text-muted);
+  font-weight: 500;
 }
 
 .notif-dot {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 9px;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
   margin-top: 6px;
-  border-radius: 50%;
-  background: #1877f2;
+  border-radius: 2px;
+  border: 1px solid var(--border-color, #111111);
+  background: var(--bdu-secondary, #facc15);
 }
 
 .notif-panel-footer {
   padding: 10px;
-  border-top: 1px solid var(--border-color);
+  border-top: 2px solid var(--border-color, #111111);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .notif-reminder-btn {
   width: 100%;
   padding: 10px 12px;
-  border: 1px dashed var(--bdu-light, #2563eb);
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--bdu-light, #2563eb);
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bdu-secondary, #facc15);
+  color: #111111;
+  font-family: var(--font-display, var(--font-main));
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .notif-reminder-btn:hover {
-  background: rgba(37, 99, 235, 0.16);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--nb-shadow-color, #111111);
+}
+
+.notif-reminder-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--nb-shadow-color, #111111);
 }
 
 /* Modal nhận thông báo lịch học — render qua portal ra body nên luôn full viewport */
@@ -195,7 +220,7 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(17, 17, 17, 0.65);
 }
 
 .reminder-modal {
@@ -204,9 +229,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 14px;
-  background: var(--bg-main, #fff);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-md, 6px);
+  border: 3px solid var(--border-color, #111111);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-main, #111111);
+  box-shadow: 6px 6px 0 var(--nb-shadow-color, #111111);
 }
 
 .reminder-modal-header {
@@ -214,7 +241,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color, #111111);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .reminder-modal-body {
@@ -250,20 +278,24 @@
 
 .reminder-block {
   padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .reminder-block-warn {
-  border-color: rgba(217, 119, 6, 0.5);
-  background: rgba(217, 119, 6, 0.08);
+  border-color: var(--border-color, #111111);
+  background: var(--nb-tint-yellow, rgba(250, 204, 21, 0.22));
+  box-shadow: 3px 3px 0 var(--warning, #f59e0b);
 }
 
 .reminder-block-title {
+  font-family: var(--font-display, var(--font-main));
   font-size: 13px;
+  font-weight: 800;
 }
 
 .reminder-code-row {
@@ -275,33 +307,38 @@
 
 .reminder-code {
   padding: 8px 14px;
-  border: 1px solid var(--bdu-light, #2563eb);
-  border-radius: 8px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
   background: #fff;
-  color: #111;
+  color: #111111;
+  font-family: var(--font-mono, monospace);
   font-size: 18px;
   font-weight: 900;
   letter-spacing: 2px;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
 }
 
 .reminder-cmd {
   display: inline-block;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.06);
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-main, #111111);
+  font-family: var(--font-mono, monospace);
   font-size: 13px;
 }
 
 .reminder-ok {
   margin: 0;
   font-size: 13px;
-  color: #16a34a;
-  font-weight: 700;
+  color: var(--success, #10b981);
+  font-weight: 800;
 }
 
 .reminder-danger {
-  color: #e11d48;
+  color: var(--danger, #ef4444);
 }
 
 .reminder-status-card {
@@ -309,9 +346,10 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(22, 163, 74, 0.1);
-  border: 1px solid rgba(22, 163, 74, 0.35);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  border: 2px solid var(--border-color, #111111);
+  box-shadow: 3px 3px 0 var(--success, #10b981);
 }
 
 .reminder-status-avatar {
@@ -321,9 +359,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #16a34a, #059669);
-  color: #fff;
+  border-radius: var(--radius-sm, 4px);
+  border: 2px solid var(--border-color, #111111);
+  background: var(--success, #10b981);
+  color: #111111;
   font-size: 18px;
   font-weight: 800;
 }
@@ -377,12 +416,12 @@
 
 /* Điểm nhảy từ chuông: viền xanh tạm thời quanh bài viết được dẫn tới. */
 .fbc-post.is-highlighted {
-  outline: 2px solid #1877f2;
+  outline: 3px solid var(--bdu-primary, #1d4ed8);
   outline-offset: 2px;
-  transition: outline-color 0.4s ease;
+  transition: outline-color 0.25s ease;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 992px) {
   .notif-bell-btn {
     width: 44px;
     height: 44px;

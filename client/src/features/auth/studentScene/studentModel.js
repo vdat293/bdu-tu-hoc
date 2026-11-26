@@ -4,38 +4,37 @@
 // import three ở top-level: hàm nhận `THREE` từ ngoài để three chỉ được nạp
 // động trong StudentScene, không lọt vào bundle chính.
 //
-// Bảng màu bám ảnh tham chiếu (áo khoác gió đỏ–trắng, chữ BDU vàng) và bảng màu
-// sẵn có của trang: đỏ BDU #8c1515, mận #7a3141, cam #dc624f, vàng #e4bf43.
+// Bảng màu Neo-Brutalism Học thuật BDU (áo khoác xanh dương BDU #1d4ed8, chữ vàng #facc15).
 
 export const PALETTE = {
-  jacketBase: '#fbfaf8',
-  jacketRed: '#ab2126',
-  jacketRedDark: '#8c1515',
-  sleeveRed: '#b0272c',
-  gold: '#e0b23c',
-  zipper: '#cdc7c2',
+  jacketBase: '#fffdf5',
+  jacketRed: '#1d4ed8',
+  jacketRedDark: '#1e40af',
+  sleeveRed: '#2563eb',
+  gold: '#facc15',
+  zipper: '#e2e8f0',
   hairTop: '#eceef5',
   hairLight: '#f9fafd',
   hairUnder: '#d3d7e2',
   skin: '#f2d2ba',
-  eyeRim: '#2f272b',
+  eyeRim: '#111111',
   eyeWhite: '#fbf9f7',
-  eyeIris: '#c93a34',
+  eyeIris: '#1d4ed8',
   eyeShine: '#ffffff',
-  trouser: '#333a52',
-  shoe: '#f9f7f4',
-  backpack: '#7f3346',
-  backpackPocket: '#652735',
-  strap: '#4a2f36',
-  bookA: '#dc624f',
-  bookB: '#e4bf43',
-  bookC: '#8c1515',
-  pages: '#fdfbf7',
-  deskTop: '#b5824c',
-  deskLeg: '#8a5f36',
-  stool: '#7a3141',
-  stoolLeg: '#3a2b2b',
-  shadow: '#33242a'
+  trouser: '#1e293b',
+  shoe: '#fffdf5',
+  backpack: '#1e3a8a',
+  backpackPocket: '#172554',
+  strap: '#111111',
+  bookA: '#1d4ed8',
+  bookB: '#facc15',
+  bookC: '#10b981',
+  pages: '#fffdf5',
+  deskTop: '#d97706',
+  deskLeg: '#92400e',
+  stool: '#1e293b',
+  stoolLeg: '#111111',
+  shadow: '#111111'
 };
 
 const CHEST_W = 0.4;

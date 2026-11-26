@@ -11,8 +11,7 @@ import {
 } from '../../api/tools.js';
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { trackAction } from '../../services/telemetry.js';
-import './sakuga-button.js';
-import './sakuga-progress.js';
+import { ImpactButton, ImpactProgress, hasLiveCanvas } from '../../lib/bdu-vfx/index.js';
 
 export default function EnglishPage() {
   const auth = useAuth();
@@ -39,9 +38,10 @@ export default function EnglishPage() {
 
   const terminalEndRef = useRef(null);
   const cleanupStreamRef = useRef(null);
-  const sakugaBtnRef = useRef(null);
-  const sakugaProgressRef = useRef(null);
+  const connectBtnRef = useRef(null);
+  const connectProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
+  const completeResolverRef = useRef(null);
 
   const updateForm = (key) => (e) => {
     setLoginError('');
@@ -98,7 +98,7 @@ export default function EnglishPage() {
       return;
     }
 
-    const progEl = sakugaProgressRef.current;
+    const progEl = connectProgressRef.current;
     let progressGoal = 0.08;
     let tickCount = 0;
     if (progEl) {
@@ -110,7 +110,7 @@ export default function EnglishPage() {
       tickCount += 1;
       const step = (0.995 - progressGoal) * (0.14 + 0.04 * Math.sin(tickCount * 0.7));
       progressGoal = Math.min(0.995, progressGoal + Math.max(0.015, step));
-      sakugaProgressRef.current?.set?.(progressGoal);
+      connectProgressRef.current?.set?.(progressGoal);
     }, 100);
 
     return () => {
@@ -126,12 +126,11 @@ export default function EnglishPage() {
       clearInterval(progressTimerRef.current);
       progressTimerRef.current = null;
     }
-    const progEl = sakugaProgressRef.current;
+    const progEl = connectProgressRef.current;
     if (!progEl) return;
 
-    const isRealBrowser =
-      typeof window !== 'undefined' && typeof window.Path2D !== 'undefined' && !window.SakugaFX?.calm;
-    if (!isRealBrowser) {
+    const live = hasLiveCanvas();
+    if (!live) {
       progEl.set?.(0.995, true);
       return;
     }
@@ -234,8 +233,8 @@ export default function EnglishPage() {
       return;
     }
 
-    if (sakugaBtnRef.current && (!sakugaBtnRef.current.lastImpactAt || performance.now() - sakugaBtnRef.current.lastImpactAt > 150)) {
-      sakugaBtnRef.current.impact?.();
+    if (connectBtnRef.current && (connectBtnRef.current.lastImpactAt === null || performance.now() - connectBtnRef.current.lastImpactAt > 150)) {
+      connectBtnRef.current.impact?.();
     }
 
     setLoginError('');
@@ -257,22 +256,21 @@ export default function EnglishPage() {
       // Luôn cho thanh chạy tới 99% trước khi nhảy lên 100% khi đúng TK/MK
       await reachNinetyNinePercent();
 
-      sakugaBtnRef.current?.done?.();
-      const progEl = sakugaProgressRef.current;
+      connectBtnRef.current?.done?.();
+      const progEl = connectProgressRef.current;
       if (progEl) {
-        const isRealBrowser =
-          typeof window !== 'undefined' && typeof window.Path2D !== 'undefined' && !window.SakugaFX?.calm;
-        progEl.set?.(1, !isRealBrowser);
-        if (isRealBrowser) {
+        const live = hasLiveCanvas();
+        progEl.set?.(1, !live);
+        if (live) {
           await new Promise((resolve) => {
             let settled = false;
             const finish = () => {
               if (settled) return;
               settled = true;
+              completeResolverRef.current = null;
               resolve();
             };
-            const onDone = () => setTimeout(finish, 600);
-            progEl.addEventListener?.('sakuga:done', onDone, { once: true });
+            completeResolverRef.current = () => setTimeout(finish, 600);
             setTimeout(finish, 850);
           });
         }
@@ -533,10 +531,10 @@ export default function EnglishPage() {
               >
                 🎓
               </div>
-              <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px', color: 'var(--text-main, #fff)' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '8px', color: 'var(--text-main)' }}>
                 Duyệt Khóa Học & Bài Tập Moodle
               </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted, #94a3b8)', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                 Nhập tài khoản và mật khẩu Moodle để quét tất cả các khóa học cùng mức độ hoàn thành (% Progress).
               </p>
             </div>
@@ -548,12 +546,12 @@ export default function EnglishPage() {
                 style={{
                   marginBottom: '16px',
                   padding: '12px 14px',
-                  borderRadius: '10px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
-                  color: '#fca5a5',
+                  borderRadius: '4px',
+                  background: 'var(--nb-tint-rose, rgba(239, 68, 68, 0.14))',
+                  border: '2px solid var(--color-rose, #ef4444)',
+                  color: 'var(--color-rose, #ef4444)',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   lineHeight: '1.45'
                 }}
               >
@@ -597,14 +595,16 @@ export default function EnglishPage() {
               <button type="submit" tabIndex={-1} aria-hidden="true" style={{ display: 'none' }} />
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <sakuga-button
-                  ref={sakugaBtnRef}
+                <ImpactButton
+                  ref={connectBtnRef}
                   id="btn-english-connect"
                   type="submit"
-                  disabled={busy || undefined}
+                  tone="primary"
+                  className="btn btn-primary"
+                  disabled={busy}
                 >
                   {busy ? '⏳ Đang kết nối Moodle…' : '🚀 Duyệt khóa học'}
-                </sakuga-button>
+                </ImpactButton>
               </div>
             </form>
 
@@ -613,7 +613,7 @@ export default function EnglishPage() {
             </div>
           </div>
 
-          {/* Thanh Sakuga Progress nổi sắc nét ở chính giữa phía trên khối div đã bị làm mờ */}
+          {/* Thanh BDU Impact Progress nổi sắc nét ở chính giữa phía trên khối div đã bị làm mờ */}
           {busy && (
             <div
               id="english-connect-progress-wrap"
@@ -630,67 +630,52 @@ export default function EnglishPage() {
             >
               <div
                 id="english-connect-status"
+                className="english-connect-status"
                 role="status"
                 aria-live="polite"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 18px',
-                  border: '2.5px solid var(--sk-ink, #1d1a4a)',
-                  borderRadius: '16px',
-                  background: 'var(--sk-card, #ffffff)',
-                  color: 'var(--sk-ink, #1d1a4a)',
-                  boxShadow: '4px 4px 0 var(--sk-fill, #ff5fa8)',
-                  transform: 'skewX(-8deg)',
-                  font: 'italic 800 15px/1.2 "Avenir Next", "Nunito", -apple-system, "Segoe UI", sans-serif',
-                  letterSpacing: '-0.01em',
-                  marginBottom: '10px',
-                  userSelect: 'none',
-                  zIndex: 25
-                }}
               >
                 <span>Đang đăng nhập, chờ tí</span>
                 <span
-                  className="sakuga-dot sakuga-dot-1"
+                  className="bdu-vfx-dot bdu-vfx-dot-1"
                   style={{
                     display: 'inline-block',
                     marginLeft: '2px',
-                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animation: 'bduVfxDotBounce 1.2s infinite ease-in-out both',
                     animationDelay: '0s'
                   }}
                 >
                   .
                 </span>
                 <span
-                  className="sakuga-dot sakuga-dot-2"
+                  className="bdu-vfx-dot bdu-vfx-dot-2"
                   style={{
                     display: 'inline-block',
                     marginLeft: '2px',
-                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animation: 'bduVfxDotBounce 1.2s infinite ease-in-out both',
                     animationDelay: '0.18s'
                   }}
                 >
                   .
                 </span>
                 <span
-                  className="sakuga-dot sakuga-dot-3"
+                  className="bdu-vfx-dot bdu-vfx-dot-3"
                   style={{
                     display: 'inline-block',
                     marginLeft: '2px',
-                    animation: 'sakugaDotBounce 1.2s infinite ease-in-out both',
+                    animation: 'bduVfxDotBounce 1.2s infinite ease-in-out both',
                     animationDelay: '0.36s'
                   }}
                 >
                   .
                 </span>
               </div>
-              <sakuga-progress
-                ref={sakugaProgressRef}
+              <ImpactProgress
+                ref={connectProgressRef}
                 id="english-connect-progress"
                 label="Đang đăng nhập, chờ tí…"
-                done-label="100% ✓"
-                style={{ '--sk-progress-width': '320px', margin: '0 auto' }}
+                doneLabel="100% ✓"
+                onComplete={() => completeResolverRef.current?.()}
+                style={{ width: 'min(320px, 86vw)', margin: '0 auto' }}
               />
             </div>
           )}
@@ -700,35 +685,22 @@ export default function EnglishPage() {
         <div className="english-dashboard-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Top Session Bar */}
           <div
-            className="glass-panel"
+            className="glass-panel english-connected-bar"
             style={{
               padding: '16px 24px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              borderRadius: '12px',
               flexWrap: 'wrap',
               gap: '12px'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  color: '#10b981',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+              <span className="english-connected-badge">
+                <span className="english-connected-dot"></span>
                 Đã kết nối: {session.username}
               </span>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted, #94a3b8)' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                 Tổng cộng <strong>{courses.length}</strong> khóa học đã đăng ký
               </span>
             </div>
@@ -739,8 +711,9 @@ export default function EnglishPage() {
                   type="button"
                   className="btn btn-primary btn-sm"
                   style={{
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    fontWeight: '700',
+                    background: 'var(--color-emerald, #10b981)',
+                    color: '#111111',
+                    fontWeight: '800',
                     padding: '8px 14px'
                   }}
                   onClick={() => handleAutoFinishCourse(true)}
@@ -768,7 +741,7 @@ export default function EnglishPage() {
           </div>
 
           {/* Section: Danh sách Khóa học & Tiến độ */}
-          <div className="glass-panel" style={{ padding: '24px', borderRadius: '16px' }}>
+          <div className="glass-panel" style={{ padding: '24px', borderRadius: 'var(--radius-md)' }}>
             <div
               style={{
                 display: 'flex',
@@ -780,10 +753,10 @@ export default function EnglishPage() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: 'var(--text-main, #fff)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
                   📚 Danh Sách Khóa Học & Mức Độ Hoàn Thành
                 </h3>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted, #94a3b8)', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
                   Chọn một khóa học bên dưới để duyệt chi tiết từng bài tập hoặc kích hoạt tự động hoàn thành khóa
                 </p>
               </div>
@@ -792,21 +765,21 @@ export default function EnglishPage() {
                 type="text"
                 placeholder="🔍 Tìm kiếm khóa học..."
                 className="form-input"
-                style={{ width: '240px', padding: '8px 14px', fontSize: '13px', borderRadius: '8px' }}
+                style={{ width: '240px', padding: '8px 14px', fontSize: '13px', borderRadius: '4px' }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
             {filteredCourses.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted, #94a3b8)' }}>
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
                 Không tìm thấy khóa học nào khớp với tìm kiếm.
               </div>
             ) : (
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
                   gap: '16px'
                 }}
               >
@@ -817,58 +790,26 @@ export default function EnglishPage() {
                   const isMed = progressVal >= 30 && progressVal < 80;
 
                   const badgeBg = isHigh
-                    ? 'rgba(16, 185, 129, 0.2)'
+                    ? 'var(--nb-tint-emerald, rgba(16, 185, 129, 0.18))'
                     : isMed
-                    ? 'rgba(245, 158, 11, 0.2)'
-                    : 'rgba(239, 68, 68, 0.15)';
-                  const badgeColor = isHigh ? '#10b981' : isMed ? '#f59e0b' : '#ef4444';
-                  const progressColor = isHigh ? '#10b981' : isMed ? '#f59e0b' : '#ef4444';
+                    ? 'var(--nb-tint-yellow, rgba(250, 204, 21, 0.22))'
+                    : 'var(--nb-tint-rose, rgba(239, 68, 68, 0.16))';
+                  const badgeColor = isHigh ? 'var(--color-emerald, #10b981)' : isMed ? 'var(--color-amber, #f59e0b)' : 'var(--color-rose, #ef4444)';
+                  const progressColor = isHigh ? 'var(--color-emerald, #10b981)' : isMed ? 'var(--color-amber, #f59e0b)' : 'var(--color-rose, #ef4444)';
 
                   return (
                     <div
                       key={c.id}
-                      style={{
-                        padding: '18px',
-                        borderRadius: '12px',
-                        background: isSelected
-                          ? 'rgba(16, 185, 129, 0.08)'
-                          : 'rgba(255, 255, 255, 0.03)',
-                        border: isSelected
-                          ? '2px solid #10b981'
-                          : '1px solid rgba(255, 255, 255, 0.08)',
-                        transition: 'all 0.2s ease',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between'
-                      }}
+                      className={`english-course-card${isSelected ? ' is-selected' : ''}`}
                     >
                       <div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '8px'
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: '600',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              background: 'rgba(255, 255, 255, 0.1)',
-                              color: 'var(--text-muted, #cbd5e1)'
-                            }}
-                          >
+                        <div className="english-course-card-head">
+                          <span className="english-course-tag">
                             {c.category || `ID: ${c.id}`}
                           </span>
                           <span
+                            className="english-course-pct"
                             style={{
-                              fontSize: '13px',
-                              fontWeight: '700',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
                               background: badgeBg,
                               color: badgeColor
                             }}
@@ -877,51 +818,26 @@ export default function EnglishPage() {
                           </span>
                         </div>
 
-                        <h4
-                          style={{
-                            fontSize: '15px',
-                            fontWeight: '600',
-                            margin: '8px 0 12px 0',
-                            color: 'var(--text-main, #fff)',
-                            lineHeight: '1.4'
-                          }}
-                        >
+                        <h4 className="english-course-title">
                           {c.fullname}
                         </h4>
                       </div>
 
                       <div>
                         {/* Progress bar */}
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '8px',
-                            borderRadius: '4px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            overflow: 'hidden',
-                            marginBottom: '14px'
-                          }}
-                        >
+                        <div className="english-course-progress">
                           <div
+                            className="english-course-progress-fill"
                             style={{
                               width: `${Math.min(100, Math.max(0, progressVal))}%`,
-                              height: '100%',
-                              borderRadius: '4px',
-                              background: progressColor,
-                              transition: 'width 0.4s ease'
+                              background: progressColor
                             }}
                           />
                         </div>
 
                         <button
                           type="button"
-                          className={`btn btn-block ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                          style={{
-                            padding: '8px',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            borderRadius: '8px'
-                          }}
+                          className={`btn btn-block english-course-select-btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
                           onClick={() => selectCourse(session.sessionId, c)}
                         >
                           {isSelected ? '✓ Đang chọn khóa này' : '📌 Chọn khóa học này'}
@@ -938,10 +854,10 @@ export default function EnglishPage() {
           {selectedCourse && (
             <div className="english-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               {/* Card Xử lý bài tập */}
-              <div className="english-card glass-panel" style={{ padding: '24px', borderRadius: '16px' }}>
+              <div className="english-card glass-panel" style={{ padding: '24px', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ marginBottom: '16px' }}>
-                  <span style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>KHÓA HỌC ĐÃ CHỌN</span>
-                  <h3 style={{ fontSize: '17px', fontWeight: '700', margin: '4px 0 0 0', color: '#fff' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--color-emerald, #10b981)', fontWeight: '800' }}>KHÓA HỌC ĐÃ CHỌN</span>
+                  <h3 style={{ fontSize: '17px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--text-main)' }}>
                     {selectedCourse.fullname}
                   </h3>
                 </div>
@@ -1018,12 +934,12 @@ export default function EnglishPage() {
                     <>
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className="btn btn-primary english-action-btn"
                         style={{
                           padding: '12px',
-                          fontWeight: '700',
-                          borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                          fontWeight: '800',
+                          background: 'var(--color-emerald, #10b981)',
+                          color: '#111111'
                         }}
                         disabled={busy || loadingActivities}
                         onClick={() => handleAutoFinishCourse(false)}
@@ -1033,12 +949,11 @@ export default function EnglishPage() {
 
                       <button
                         type="button"
-                        className="btn btn-secondary"
+                        className="btn btn-secondary english-action-btn"
                         style={{
                           padding: '10px',
                           fontSize: '13px',
-                          fontWeight: '600',
-                          borderRadius: '8px'
+                          fontWeight: '700'
                         }}
                         disabled={!selectedActivity || busy || loadingActivities}
                         onClick={handleStartSingleQuiz}
@@ -1056,12 +971,12 @@ export default function EnglishPage() {
                   ) : (
                     <button
                       type="button"
-                      className="btn btn-danger"
+                      className="btn btn-danger english-action-btn"
                       style={{
                         padding: '12px',
-                        fontWeight: '700',
-                        borderRadius: '8px',
-                        background: '#ef4444'
+                        fontWeight: '800',
+                        background: 'var(--color-rose, #ef4444)',
+                        color: '#ffffff'
                       }}
                       onClick={handleStopExercise}
                     >
@@ -1073,22 +988,7 @@ export default function EnglishPage() {
 
               {/* Queue Status Banner if in waiting queue */}
               {queueInfo.queued && (
-                <div
-                  style={{
-                    marginBottom: '16px',
-                    padding: '14px 18px',
-                    borderRadius: '12px',
-                    background: 'rgba(245, 158, 11, 0.15)',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    color: '#fbbf24',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)'
-                  }}
-                >
+                <div className="english-queue-banner">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '20px' }}>⏳</span>
                     <span>
@@ -1100,7 +1000,7 @@ export default function EnglishPage() {
               )}
 
               {/* Terminal Log Card */}
-              <div className="terminal-card glass-panel english-terminal-card" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+              <div className="terminal-card glass-panel english-terminal-card" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                 <div className="terminal-header">
                   <div className="terminal-dots">
                     <span className="dot dot-red"></span>

@@ -8,7 +8,7 @@ import A4PageSheet, {
   isEditableParagraph,
   synthesizePagesFromItems
 } from './A4PageSheet.jsx';
-import { SakugaButton } from './SakugaVfx.jsx';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 
 const ZOOM_STEPS = [0.55, 0.65, 0.75, 0.85, 1, 1.15, 1.3];
 
@@ -439,16 +439,16 @@ export default function DocxReviewWorkspace({
                   Bỏ chỉnh sửa
                 </button>
               ) : null}
-              <SakugaButton
+              <ImpactButton
                 type="button"
                 id="btn-confirm-wordfmt"
-                variant="primary"
-                className="wf-sakuga-topbar-btn"
+                tone="primary"
+                className="btn btn-primary wf-vfx-topbar-btn"
                 onClick={onConfirm}
                 disabled={loading || isSubmitting || !preview}
               >
                 {isSubmitting ? 'Đang chuẩn hóa…' : 'Xác nhận & Chuẩn hóa DOCX'}
-              </SakugaButton>
+              </ImpactButton>
             </>
           ) : (
             <>

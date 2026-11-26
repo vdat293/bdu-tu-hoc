@@ -121,7 +121,7 @@ export default function VocabThemePage() {
                 >
                   <div className="vocab-set-card-top">
                     <span className="vocab-set-index">#{index + 1}</span>
-                    <span className="vocab-set-pct" style={{ color: pct > 0 ? '#16a34a' : '#94a3b8' }}>{pct}%</span>
+                    <span className="vocab-set-pct" style={{ color: pct > 0 ? 'var(--color-emerald, #10b981)' : 'var(--text-muted)' }}>{pct}%</span>
                   </div>
                   <strong className="vocab-set-name">{s.name}</strong>
                   <span className="vocab-set-count">{known}/{total} từ</span>

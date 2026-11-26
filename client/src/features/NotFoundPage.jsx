@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useAppearanceOverride, useOptionalAppearance } from '../app/appearance.jsx';
 import './NotFoundPage.css';
 
 /* Manh mối nằm trong lớp "found" — chỉ tấm kính lúp mới soi ra được. */
@@ -181,19 +182,30 @@ export default function NotFoundPage() {
   const pageRef = useRef(null);
   const lensRef = useRef(null);
   const canvasRef = useRef(null);
+  const appearance = useOptionalAppearance();
 
-  /* Trang 404 đứng ngoài AppLayout: tự đặt nền sáng vì đây là skin riêng. */
+  useAppearanceOverride({ theme: 'light', surface: 'brutalism' });
+
+  /* Trang 404 đứng ngoài AppLayout: tự đặt nền sáng vì đây là skin riêng.
+     Khi nằm trong AppearanceProvider, override ở trên sẽ tự khôi phục theme/uiStyle cũ khi rời trang. */
   useEffect(() => {
+    document.title = 'Không tìm thấy trang · BDU Tự Học';
+    if (appearance) return undefined;
+    const prevTheme = document.documentElement.dataset.theme;
+    const hadDark = document.body.classList.contains('theme-dark');
     document.documentElement.dataset.theme = 'light';
     document.body.classList.remove('theme-dark');
     document.body.classList.add('theme-light');
-    document.title = 'Không tìm thấy trang · BDU Tự Học';
     return () => {
-      document.documentElement.dataset.theme = 'light';
-      document.body.classList.remove('theme-light', 'theme-dark');
-      document.body.classList.add('theme-light');
+      if (prevTheme) {
+        document.documentElement.dataset.theme = prevTheme;
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+      document.body.classList.toggle('theme-dark', hadDark);
+      document.body.classList.toggle('theme-light', !hadDark);
     };
-  }, []);
+  }, [appearance]);
 
   /* Nền flow: vẽ ở 1/4 độ phân giải rồi để trình duyệt phóng mượt lên. */
   useEffect(() => {

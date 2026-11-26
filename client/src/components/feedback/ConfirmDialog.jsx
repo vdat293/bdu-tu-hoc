@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 import './ConfirmDialog.css';
 
 // Popup xác nhận trong app, thay window.confirm/alert của trình duyệt.
@@ -48,14 +49,15 @@ export function useConfirm() {
           <button type="button" className="btn btn-secondary" onClick={() => close(false)}>
             {request.cancelText}
           </button>
-          <button
+          <ImpactButton
             type="button"
+            tone={request.danger ? 'danger' : 'primary'}
             className={request.danger ? 'btn btn-danger' : 'btn btn-primary'}
             onClick={() => close(true)}
             autoFocus
           >
             {request.confirmText}
-          </button>
+          </ImpactButton>
         </div>
       </section>
     </div>,

@@ -1,0 +1,437 @@
+/* ==========================================================================
+   AUTH LOGIN — UNIFIED NEUMORPHISM DESIGN SYSTEM (LIGHT + DARK)
+   Scoped strictly to html[data-ui-style="neumorphism"] so it stays completely
+   independent of the inner portal style (Neo-Brutalism / Claymorphism).
+   ========================================================================== */
+
+html[data-ui-style="neumorphism"] {
+  --neu-bg: #e4eaf3;
+  --neu-panel: #e4eaf3;
+  --neu-surface: #e4eaf3;
+  --neu-well: #dce4f0;
+  --neu-shadow-dark: rgba(163, 177, 198, 0.58);
+  --neu-shadow-light: rgba(255, 255, 255, 0.92);
+  --neu-edge: rgba(255, 255, 255, 0.58);
+  --neu-divider: rgba(132, 148, 176, 0.24);
+  --neu-ink: #1c273b;
+  --neu-muted: #52607a;
+  --neu-dim: #6b7a99;
+  --neu-accent: #2563eb;
+  --neu-accent-strong: #1d4ed8;
+  --neu-error-bg: #f6e4e8;
+  --neu-error-ink: #991b1b;
+  --neu-error-ring: rgba(239, 68, 68, 0.42);
+
+  --neu-raised-lg:
+    14px 14px 30px var(--neu-shadow-dark),
+    -14px -14px 30px var(--neu-shadow-light);
+  --neu-raised-md:
+    7px 7px 15px var(--neu-shadow-dark),
+    -7px -7px 15px var(--neu-shadow-light);
+  --neu-raised-sm:
+    4px 4px 10px var(--neu-shadow-dark),
+    -4px -4px 10px var(--neu-shadow-light);
+  --neu-inset:
+    inset 5px 5px 10px var(--neu-shadow-dark),
+    inset -5px -5px 10px var(--neu-shadow-light);
+  --neu-inset-sm:
+    inset 3px 3px 6px var(--neu-shadow-dark),
+    inset -3px -3px 6px var(--neu-shadow-light);
+}
+
+html[data-ui-style="neumorphism"][data-theme="dark"],
+html[data-ui-style="neumorphism"] body.theme-dark {
+  --neu-bg: #1e2430;
+  --neu-panel: #1e2430;
+  --neu-surface: #1e2430;
+  --neu-well: #181d27;
+  --neu-shadow-dark: rgba(8, 11, 17, 0.78);
+  --neu-shadow-light: rgba(54, 65, 88, 0.32);
+  --neu-edge: rgba(255, 255, 255, 0.06);
+  --neu-divider: rgba(148, 163, 184, 0.16);
+  --neu-ink: #edf2ff;
+  --neu-muted: #9aa7c2;
+  --neu-dim: #7b89a6;
+  --neu-accent: #4f86ff;
+  --neu-accent-strong: #3b82f6;
+  --neu-error-bg: #2c1c24;
+  --neu-error-ink: #fecdd3;
+  --neu-error-ring: rgba(251, 113, 133, 0.45);
+  --neu-raised-lg:
+    14px 14px 30px var(--neu-shadow-dark),
+    -14px -14px 30px var(--neu-shadow-light);
+  --neu-raised-md:
+    7px 7px 15px var(--neu-shadow-dark),
+    -7px -7px 15px var(--neu-shadow-light);
+  --neu-raised-sm:
+    4px 4px 10px var(--neu-shadow-dark),
+    -4px -4px 10px var(--neu-shadow-light);
+  --neu-inset:
+    inset 5px 5px 10px var(--neu-shadow-dark),
+    inset -5px -5px 10px var(--neu-shadow-light);
+  --neu-inset-sm:
+    inset 3px 3px 6px var(--neu-shadow-dark),
+    inset -3px -3px 6px var(--neu-shadow-light);
+}
+
+html[data-ui-style="neumorphism"] body {
+  background-color: var(--neu-bg);
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] body::before {
+  display: none;
+}
+
+html[data-ui-style="neumorphism"] .login-wrapper {
+  background-color: var(--neu-bg);
+  background-image: radial-gradient(circle at 18% 18%, rgba(59, 130, 246, 0.08), transparent 48%),
+    radial-gradient(circle at 82% 84%, rgba(99, 102, 241, 0.07), transparent 46%);
+  background-size: auto;
+}
+
+html[data-ui-style="neumorphism"] body.theme-dark .login-wrapper {
+  background-color: var(--neu-bg);
+  background-image: radial-gradient(circle at 18% 18%, rgba(59, 130, 246, 0.12), transparent 48%),
+    radial-gradient(circle at 82% 84%, rgba(99, 102, 241, 0.1), transparent 46%);
+}
+
+html[data-ui-style="neumorphism"] .auth-shell {
+  border: 1px solid var(--neu-edge);
+  border-radius: 32px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-lg);
+}
+
+html[data-ui-style="neumorphism"] .login-theme-toggle-btn {
+  border: 1px solid var(--neu-edge);
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: var(--neu-surface);
+  color: var(--neu-ink);
+  box-shadow: var(--neu-raised-sm);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+html[data-ui-style="neumorphism"] .login-theme-toggle-btn:hover {
+  background: var(--neu-surface);
+  color: var(--neu-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--neu-raised-md);
+}
+
+html[data-ui-style="neumorphism"] .login-theme-toggle-btn:active {
+  transform: translateY(0);
+  box-shadow: var(--neu-inset-sm);
+}
+
+html[data-ui-style="neumorphism"] .login-context {
+  background: var(--neu-panel);
+  color: var(--neu-ink);
+  border-right: 1px solid var(--neu-divider);
+  box-shadow: inset -1px 0 0 var(--neu-edge);
+}
+
+html[data-ui-style="neumorphism"] body.theme-dark .login-context {
+  background: var(--neu-panel);
+}
+
+html[data-ui-style="neumorphism"] .scene-brand {
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] .scene-brand-mark {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--neu-edge);
+  border-radius: 14px;
+  background: var(--neu-surface);
+  color: var(--neu-ink);
+  box-shadow: var(--neu-raised-sm);
+}
+
+html[data-ui-style="neumorphism"] .character-stage {
+  border: 1px solid var(--neu-edge);
+  border-radius: 26px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-inset);
+  overflow: hidden;
+  margin: 16px auto;
+}
+
+html[data-ui-style="neumorphism"] .character {
+  border-color: rgba(17, 24, 39, 0.72);
+  box-shadow: 0 8px 18px -6px rgba(15, 23, 42, 0.25);
+}
+
+html[data-ui-style="neumorphism"] .scene-kicker {
+  border: 1px solid var(--neu-edge);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: var(--neu-surface);
+  color: var(--neu-accent);
+  box-shadow: var(--neu-raised-sm);
+}
+
+html[data-ui-style="neumorphism"] .scene-copy h2 {
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] .scene-copy > p:last-child {
+  color: var(--neu-muted);
+}
+
+html[data-ui-style="neumorphism"] .login-card,
+html[data-ui-style="neumorphism"] .login-card.glass-panel {
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent;
+  color: var(--neu-ink);
+  box-shadow: none !important;
+}
+
+html[data-ui-style="neumorphism"] .login-card::before {
+  display: none;
+}
+
+html[data-ui-style="neumorphism"] .university-badge {
+  margin-bottom: 22px;
+}
+
+html[data-ui-style="neumorphism"] .university-wordmark {
+  display: block;
+  width: min(225px, 100%);
+  height: auto;
+  border: 0;
+  object-fit: contain;
+}
+
+html[data-ui-style="neumorphism"] body.theme-dark .university-wordmark {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: brightness(1.16) drop-shadow(0 2px 10px rgba(0, 0, 0, 0.45));
+}
+
+html[data-ui-style="neumorphism"] .university-badge .badge-tag {
+  color: var(--neu-accent);
+}
+
+html[data-ui-style="neumorphism"] .login-title {
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] .login-subtitle {
+  color: var(--neu-muted);
+}
+
+html[data-ui-style="neumorphism"] .login-card .form-label {
+  color: var(--neu-muted);
+}
+
+html[data-ui-style="neumorphism"] .login-input-box {
+  min-height: 52px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-inset);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+html[data-ui-style="neumorphism"] .login-input-box:focus-within {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-inset), 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+html[data-ui-style="neumorphism"] .login-input-box.has-error {
+  border-color: var(--neu-error-ring);
+  box-shadow: var(--neu-inset), 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+html[data-ui-style="neumorphism"] .login-input-icon {
+  color: var(--neu-dim);
+}
+
+html[data-ui-style="neumorphism"] .login-input-box:focus-within .login-input-icon {
+  color: var(--neu-accent);
+}
+
+html[data-ui-style="neumorphism"] .login-input-box.has-value .login-input-icon {
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] .login-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  color: var(--neu-ink);
+}
+
+html[data-ui-style="neumorphism"] .login-input::placeholder {
+  color: var(--neu-dim);
+}
+
+html[data-ui-style="neumorphism"] .login-error {
+  border: 1px solid var(--neu-error-ring);
+  border-radius: 16px;
+  background: var(--neu-error-bg);
+  color: var(--neu-error-ink);
+  box-shadow: var(--neu-raised-sm);
+}
+
+html[data-ui-style="neumorphism"] body.theme-dark .login-error {
+  border-color: var(--neu-error-ring);
+  background: var(--neu-error-bg);
+  color: var(--neu-error-ink);
+  box-shadow: var(--neu-raised-sm);
+}
+
+html[data-ui-style="neumorphism"] .login-card .checkbox-label {
+  color: var(--neu-muted);
+}
+
+html[data-ui-style="neumorphism"] .login-card .checkbox-label input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 7px;
+  border: 1px solid var(--neu-edge);
+  background: var(--neu-well);
+  box-shadow: var(--neu-inset-sm);
+  cursor: pointer;
+  transition: background 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+html[data-ui-style="neumorphism"] .login-card .checkbox-label input:checked {
+  background-color: var(--neu-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5 6.5 11.5 12.5 4.8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 13px 13px;
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: var(--neu-raised-sm);
+}
+
+html[data-ui-style="neumorphism"] .login-card .checkbox-label input:focus-visible {
+  outline: 2px solid var(--neu-accent);
+  outline-offset: 2px;
+}
+
+html[data-ui-style="neumorphism"] .login-card .btn-primary,
+html[data-ui-style="neumorphism"] .bdu-impact-btn.btn-primary {
+  min-height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--neu-accent) 0%, var(--neu-accent-strong) 100%);
+  color: #ffffff;
+  box-shadow:
+    6px 6px 14px var(--neu-shadow-dark),
+    -4px -4px 12px var(--neu-shadow-light),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+
+html[data-ui-style="neumorphism"] .login-card .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3b82f6 0%, var(--neu-accent) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    8px 8px 18px var(--neu-shadow-dark),
+    -6px -6px 16px var(--neu-shadow-light),
+    inset 0 1px 2px rgba(255, 255, 255, 0.35);
+}
+
+html[data-ui-style="neumorphism"] .login-card .btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 3px 3px 8px rgba(15, 23, 42, 0.36),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.16);
+}
+
+html[data-ui-style="neumorphism"] .bdu-impact-btn--invert {
+  background: linear-gradient(135deg, var(--neu-accent) 0%, var(--neu-accent-strong) 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+
+html[data-ui-style="neumorphism"] .login-footer {
+  border-top: 1px solid var(--neu-divider);
+}
+
+html[data-ui-style="neumorphism"] .login-note {
+  color: var(--neu-muted);
+}
+
+html[data-ui-style="neumorphism"] .toast {
+  border: 1px solid var(--neu-edge);
+  border-radius: 16px;
+  box-shadow: var(--neu-raised-md);
+}
+
+@media (max-width: 900px) {
+  html[data-ui-style="neumorphism"] .login-context {
+    display: none !important;
+  }
+
+  html[data-ui-style="neumorphism"] .login-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 20px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  html[data-ui-style="neumorphism"] .auth-shell {
+    grid-template-columns: 1fr;
+    width: min(440px, 100%);
+    min-height: 0;
+    border-radius: 28px;
+  }
+
+  html[data-ui-style="neumorphism"] .login-theme-toggle-btn {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    margin: 0;
+  }
+
+  html[data-ui-style="neumorphism"] .login-card {
+    padding: 36px 26px 28px;
+  }
+
+  html[data-ui-style="neumorphism"] .university-badge {
+    margin-bottom: 20px;
+    padding-right: 88px;
+  }
+
+  html[data-ui-style="neumorphism"] .university-wordmark {
+    width: min(195px, 100%);
+    height: auto;
+  }
+
+  html[data-ui-style="neumorphism"] .university-badge .badge-tag {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  html[data-ui-style="neumorphism"] .auth-shell {
+    border-radius: 24px;
+  }
+
+  html[data-ui-style="neumorphism"] .login-card {
+    padding: 32px 20px 24px;
+  }
+
+  html[data-ui-style="neumorphism"] .login-title {
+    font-size: 1.62rem;
+  }
+}

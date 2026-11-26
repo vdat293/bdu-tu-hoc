@@ -19,13 +19,13 @@ vi.mock('../../client/src/api/tools.js', () => ({
   createEventStream: vi.fn(() => () => {})
 }));
 
-describe('EnglishPage Sakuga VFX button & progress', () => {
+describe('EnglishPage BDU Impact VFX button & progress', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('blurs the login form, shows sakuga-progress overlay running to 99%, then hits 100% on valid Moodle response', async () => {
+  it('blurs the login form, shows ImpactProgress overlay running to 99%, then hits 100% on valid Moodle response', async () => {
     let resolveLogin;
     loginEnglish.mockImplementation(
       () =>
@@ -37,31 +37,32 @@ describe('EnglishPage Sakuga VFX button & progress', () => {
 
     const { container } = render(<EnglishPage />);
 
-    const sakugaBtn = container.querySelector('sakuga-button#btn-english-connect');
-    expect(sakugaBtn).toBeTruthy();
-    expect(sakugaBtn.textContent).toContain('Duyệt khóa học');
+    const connectBtn = container.querySelector('button#btn-english-connect[data-vfx="impact"]');
+    expect(connectBtn).toBeTruthy();
+    expect(connectBtn.textContent).toContain('Duyệt khóa học');
 
-    // Trước khi bấm: không hiển thị thanh sakuga-progress
-    expect(container.querySelector('sakuga-progress#english-connect-progress')).toBeNull();
+    // Trước khi bấm: không hiển thị thanh ImpactProgress
+    expect(container.querySelector('#english-connect-progress')).toBeNull();
 
-    // Nhập tài khoản + mật khẩu rồi bấm nút sakuga-button
+    // Nhập tài khoản + mật khẩu rồi bấm nút ImpactButton
     fireEvent.change(screen.getByLabelText(/Tài khoản Moodle/i), { target: { value: '24050126' } });
     fireEvent.change(screen.getByLabelText(/Mật khẩu Moodle/i), { target: { value: 'secret123' } });
-    fireEvent.click(sakugaBtn);
+    fireEvent.click(connectBtn);
 
-    // Khi đang chờ phản hồi từ bdu.vn247.org: làm mờ form, khóa cuộn và hiện overlay sakuga-progress
+    // Khi đang chờ phản hồi từ bdu.vn247.org: làm mờ form, khóa cuộn và hiện overlay ImpactProgress
     await waitFor(() => {
       const formContent = container.querySelector('#english-login-form-content');
       expect(formContent.style.filter).toContain('blur');
       expect(document.body.style.overflow).toBe('hidden');
-      const progressEl = container.querySelector('sakuga-progress#english-connect-progress');
+      const progressEl = container.querySelector('#english-connect-progress[role="progressbar"]');
       expect(progressEl).toBeTruthy();
-      expect(progressEl.value).toBeGreaterThan(0);
-      expect(progressEl.value).toBeLessThanOrEqual(0.995);
+      const val = Number(progressEl.getAttribute('aria-valuenow'));
+      expect(val).toBeGreaterThan(0);
+      expect(val).toBeLessThanOrEqual(99);
       const statusEl = container.querySelector('#english-connect-status');
       expect(statusEl).toBeTruthy();
       expect(statusEl.textContent).toContain('Đang đăng nhập, chờ tí');
-      expect(container.querySelectorAll('.sakuga-dot').length).toBe(3);
+      expect(container.querySelectorAll('.bdu-vfx-dot').length).toBe(3);
       expect(screen.queryByText(/Đang phản hồi từ bdu\.vn247\.org/i)).toBeNull();
     });
 
@@ -90,15 +91,15 @@ describe('EnglishPage Sakuga VFX button & progress', () => {
     );
 
     const { container } = render(<EnglishPage />);
-    const sakugaBtn = container.querySelector('sakuga-button#btn-english-connect');
+    const connectBtn = container.querySelector('button#btn-english-connect[data-vfx="impact"]');
 
     fireEvent.change(screen.getByLabelText(/Tài khoản Moodle/i), { target: { value: '24050126' } });
     fireEvent.change(screen.getByLabelText(/Mật khẩu Moodle/i), { target: { value: 'wrongpass' } });
-    fireEvent.click(sakugaBtn);
+    fireEvent.click(connectBtn);
 
     let progressEl;
     await waitFor(() => {
-      progressEl = container.querySelector('sakuga-progress#english-connect-progress');
+      progressEl = container.querySelector('#english-connect-progress[role="progressbar"]');
       expect(progressEl).toBeTruthy();
     });
 
@@ -106,13 +107,14 @@ describe('EnglishPage Sakuga VFX button & progress', () => {
 
     await waitFor(() => {
       // Đã tắt overlay loading và hiện thông báo lỗi ngay trên form
-      expect(container.querySelector('sakuga-progress#english-connect-progress')).toBeNull();
+      expect(container.querySelector('#english-connect-progress')).toBeNull();
       const errBanner = container.querySelector('#english-login-error');
       expect(errBanner).toBeTruthy();
       expect(errBanner.textContent).toContain('Sai tài khoản hoặc mật khẩu Moodle');
     });
 
-    // Thanh tiến trình chỉ dừng ở mốc 99% (0.995), không nhảy lên 100% (1)
-    expect(progressEl.value).toBeCloseTo(0.995, 2);
+    // Thanh tiến trình chỉ dừng ở mốc 99%, không nhảy lên 100%
+    expect(Number(progressEl.getAttribute('aria-valuenow'))).toBe(99);
+    expect(progressEl.className).not.toContain('is-complete');
   });
 });

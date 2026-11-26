@@ -43,9 +43,9 @@
   padding: 4px 0;
   border: 0;
   background: transparent;
-  color: var(--primary, #6366f1);
+  color: var(--bdu-primary, #1d4ed8);
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   text-align: left;
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -58,8 +58,11 @@
   max-height: calc(100dvh - 40px);
   overflow: auto;
   padding: clamp(18px, 4vw, 28px);
-  background: var(--bg-app, #fff);
-  color: var(--text-main, #202537);
+  border: 3px solid var(--border-color, #111111);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 6px 6px 0 var(--nb-shadow-color, #111111);
+  background: var(--bg-card, #fff);
+  color: var(--text-main, #111111);
 }
 
 .guide-cloudshell-dialog img {
@@ -68,7 +71,8 @@
   height: min(40dvh, 360px);
   object-fit: cover;
   object-position: bottom;
-  border-radius: 10px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
 }
 
 .guide-cloudshell-error-caption {
@@ -139,13 +143,14 @@
 
 .guide-where-badge {
   align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm, 4px);
+  font-family: var(--font-mono, monospace);
   font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-main, inherit);
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.16));
-  border: 1px solid var(--border-color, var(--border, #ddd));
+  font-weight: 800;
+  color: #111111;
+  background: var(--bdu-secondary, #facc15);
+  border: 2px solid var(--border-color, #111111);
   white-space: nowrap;
 }
 
@@ -154,15 +159,18 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 12px;
+  padding: 18px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-md, 6px);
   background: var(--bg-card, transparent);
+  box-shadow: var(--nb-shadow-md, 4px 4px 0 #111111);
 }
 
 .guide-index-title {
   margin: 0;
+  font-family: var(--font-display, var(--font-main));
   font-size: 1.3rem;
+  font-weight: 800;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -179,7 +187,7 @@
   list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .guide-index-item {
@@ -187,9 +195,10 @@
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 12px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  box-shadow: 3px 3px 0 var(--nb-shadow-color, #111111);
 }
 
 .guide-index-item-text {
@@ -257,10 +266,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 12px;
+  padding: 18px;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-md, 6px);
   background: var(--bg-card, transparent);
+  box-shadow: var(--nb-shadow-md, 4px 4px 0 #111111);
 }
 
 .guide-step-stage {
@@ -300,10 +310,10 @@ body.theme-dark .guide-step-stage {
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 10px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
-  font-weight: 600;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
+  font-weight: 700;
   cursor: pointer;
   overflow-wrap: anywhere;
 }
@@ -312,7 +322,7 @@ body.theme-dark .guide-step-stage {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
-  accent-color: #15803d;
+  accent-color: var(--color-emerald, #10b981);
 }
 
 /* Ô lưu thư mục làm việc (Task 6: lưu 1 lần, dùng cho mọi block localDirectory) */
@@ -321,9 +331,9 @@ body.theme-dark .guide-step-stage {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 10px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .guide-workdir-label {
@@ -470,19 +480,19 @@ body.theme-dark .guide-step-stage {
 /* Blocks */
 .guide-block-note {
   padding: 12px 14px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-left: 4px solid #15803d;
-  border-radius: 10px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  border: 2px solid var(--border-color, #111111);
+  border-left: 5px solid var(--color-emerald, #10b981);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .guide-block-note.is-info {
-  border-left-color: #2563eb;
+  border-left-color: var(--bdu-primary, #1d4ed8);
 }
 
 .guide-block-note.is-warn {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, 0.08);
+  border-left-color: var(--color-amber, #f59e0b);
+  background: var(--nb-tint-yellow, rgba(250, 204, 21, 0.2));
 }
 
 .guide-block-note-title {
@@ -509,9 +519,9 @@ body.theme-dark .guide-step-stage {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 10px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
 }
 
 .guide-step-explain h3,
@@ -540,9 +550,9 @@ body.theme-dark .guide-step-stage {
 }
 
 .guide-step-errors {
-  border: 1px solid var(--border-color, var(--border, #ddd));
-  border-radius: 10px;
-  background: var(--bg-card-hover, rgba(127, 127, 127, 0.06));
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-surface-alt, #f4efe0);
   overflow: hidden;
 }
 

@@ -155,8 +155,10 @@ export default function InfoPage() {
     <section id="tab-profile" className="tab-pane active">
       <div className="section-header-box glass-panel">
         <img className="brand-watermark" src="/assets/images/logo-bdu-eng.png" alt="" aria-hidden="true" />
-        <h2 className="section-title">Lý Lịch & Hồ Sơ Sinh Viên</h2>
-        <p className="section-desc">Thông tin học vụ cá nhân được đồng bộ từ cổng quản lý sinh viên BDU</p>
+        <div>
+          <h2 className="section-title">Lý Lịch & Hồ Sơ Sinh Viên</h2>
+          <p className="section-desc">Thông tin học vụ cá nhân được đồng bộ từ cổng quản lý sinh viên BDU</p>
+        </div>
       </div>
 
       <div className="bdu-profile-bento-grid">

@@ -1,5 +1,15 @@
 export function Spinner({ label = 'Đang tải…', className = '' }) {
-  return <span className={`spinner ${className}`} aria-hidden="true" />;
+  return (
+    <span
+      className={`spinner bdu-kinetic-loader${className ? ` ${className}` : ''}`}
+      aria-hidden="true"
+      title={label}
+    >
+      <span className="bdu-kinetic-cube bdu-kinetic-cube--1" />
+      <span className="bdu-kinetic-cube bdu-kinetic-cube--2" />
+      <span className="bdu-kinetic-cube bdu-kinetic-cube--3" />
+    </span>
+  );
 }
 
 export function SkeletonBlock({ className = '' }) {
@@ -7,11 +17,11 @@ export function SkeletonBlock({ className = '' }) {
 }
 
 export function PageSpinner({ label = 'Đang tải dữ liệu…' }) {
-  return <div className="page-loading" role="status" aria-live="polite" aria-busy="true"><Spinner /><span>{label}</span></div>;
+  return <div className="page-loading" role="status" aria-live="polite" aria-busy="true"><Spinner label={label} /><span>{label}</span></div>;
 }
 
 export function InlineSpinner({ label = 'Đang tải…' }) {
-  return <span className="inline-loading" role="status" aria-live="polite" aria-busy="true"><Spinner />{label}</span>;
+  return <span className="inline-loading" role="status" aria-live="polite" aria-busy="true"><Spinner label={label} />{label}</span>;
 }
 
 export function ButtonSpinner() { return <Spinner className="button-spinner" label="Đang xử lý…" />; }

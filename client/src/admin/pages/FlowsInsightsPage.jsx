@@ -89,8 +89,12 @@ export default function FlowsInsightsPage({ timeRange, refreshMs, theme }) {
   const cohortCapNote = cohortData ? cappedRangeText(cohortData, timeRange, 'dải ngày sẽ kéo dài vô độ') : '';
 
   const isDark = theme === 'dark';
-  const textColor = isDark ? '#94A3B8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)';
+  const textColor = isDark ? '#CBD5E1' : '#111111';
+  const gridColor = isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)';
+  const axisBorder = isDark ? '#E4E4E7' : '#111111';
+  const blueColor = isDark ? '#3B82F6' : '#1D4ED8';
+  const greenColor = isDark ? '#34D399' : '#10B981';
+  const amberColor = isDark ? '#FDE047' : '#D97706';
 
   const cohortChart = useMemo(() => ({
     labels: dayBuckets.map((b) => formatCohortDay(b?.date)),
@@ -98,45 +102,48 @@ export default function FlowsInsightsPage({ timeRange, refreshMs, theme }) {
       {
         label: 'Hoạt động',
         data: dayBuckets.map((b) => safeNumber(b?.active)),
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+        borderColor: blueColor,
+        backgroundColor: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
+        borderWidth: 2.5,
         fill: true,
-        tension: 0.35,
-        pointRadius: 2
+        tension: 0,
+        pointRadius: 3
       },
       {
         label: 'Hoạt động lần đầu trong kỳ',
         data: dayBuckets.map((b) => safeNumber(b?.new)),
-        borderColor: '#15803D',
+        borderColor: greenColor,
         backgroundColor: 'transparent',
+        borderWidth: 2,
         borderDash: [4, 4],
-        tension: 0.35,
-        pointRadius: 2
+        tension: 0,
+        pointRadius: 3
       },
       {
         label: 'Quay lại',
         data: dayBuckets.map((b) => safeNumber(b?.returning)),
-        borderColor: '#D97706',
+        borderColor: amberColor,
         backgroundColor: 'transparent',
-        tension: 0.35,
-        pointRadius: 2
+        borderWidth: 2,
+        tension: 0,
+        pointRadius: 3
       }
     ]
-  }), [dayBuckets]);
+  }), [dayBuckets, isDark, blueColor, greenColor, amberColor]);
 
   const cohortOptions = useMemo(() => ({
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
         position: 'top',
-        labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 11 } }
+        labels: { color: textColor, font: { family: 'Manrope, sans-serif', size: 11, weight: '700' } }
       }
     },
     scales: {
-      x: { ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
-      y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } }
+      x: { border: { color: axisBorder, width: 2 }, ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+      y: { beginAtZero: true, border: { color: axisBorder, width: 2 }, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } }
     }
-  }), [textColor, gridColor]);
+  }), [textColor, gridColor, axisBorder]);
 
   // Devices
   const devData = devicesQuery.data;

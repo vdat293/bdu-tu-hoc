@@ -1,7 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function GpaTrendChart({ semesters }) {
   const canvasRef = useRef(null);
+  const [themeRev, setThemeRev] = useState(0);
+
+  useEffect(() => {
+    const Observer = typeof window !== 'undefined' ? window.MutationObserver : undefined;
+    if (!Observer || !document.body) return undefined;
+    const observer = new Observer(() => {
+      setThemeRev((rev) => rev + 1);
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let chart;
@@ -13,8 +24,13 @@ export default function GpaTrendChart({ semesters }) {
       if (cancelled || !canvasRef.current) return;
 
       const isDark = document.body.classList.contains('theme-dark');
-      const textColor = isDark ? '#c0b8ae' : '#625f59';
-      const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(79, 70, 61, 0.09)';
+      const textColor = isDark ? '#cbd5e1' : '#111111';
+      const gridColor = isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)';
+      const borderColor = isDark ? '#e4e4e7' : '#111111';
+      const line10 = isDark ? '#3b82f6' : '#1d4ed8';
+      const fill10 = isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)';
+      const line4 = isDark ? '#fde047' : '#d97706';
+      const fill4 = isDark ? 'rgba(253, 224, 71, 0.14)' : 'rgba(250, 204, 21, 0.16)';
 
       const chrono = [...semesters].reverse();
       const labels = chrono.map((s) => {
@@ -33,24 +49,32 @@ export default function GpaTrendChart({ semesters }) {
             {
               label: 'GPA HK (Thang 10)',
               data: gpa10Values,
-              borderColor: '#8c1515',
-              backgroundColor: 'rgba(140, 21, 21, 0.08)',
-              tension: 0.35,
+              borderColor: line10,
+              backgroundColor: fill10,
+              borderWidth: 2.5,
+              tension: 0,
               fill: true,
               yAxisID: 'y10',
-              pointRadius: 4,
-              pointHoverRadius: 6
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointBackgroundColor: line10,
+              pointBorderColor: borderColor,
+              pointBorderWidth: 2
             },
             {
               label: 'GPA HK (Thang 4)',
               data: gpa4Values,
-              borderColor: '#9a6700',
-              backgroundColor: 'rgba(154, 103, 0, 0.06)',
-              tension: 0.35,
+              borderColor: line4,
+              backgroundColor: fill4,
+              borderWidth: 2.5,
+              tension: 0,
               fill: true,
               yAxisID: 'y4',
-              pointRadius: 4,
-              pointHoverRadius: 6
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointBackgroundColor: line4,
+              pointBorderColor: borderColor,
+              pointBorderWidth: 2
             }
           ]
         },
@@ -59,15 +83,17 @@ export default function GpaTrendChart({ semesters }) {
           maintainAspectRatio: false,
           scales: {
             x: {
+              border: { color: borderColor, width: 2 },
               grid: { color: gridColor },
-              ticks: { color: textColor, font: { size: 10 } }
+              ticks: { color: textColor, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } }
             },
             y10: {
               type: 'linear',
               position: 'left',
               min: 0,
               max: 10,
-              ticks: { color: '#8c1515' },
+              border: { color: borderColor, width: 2 },
+              ticks: { color: line10, font: { family: 'JetBrains Mono, monospace', size: 11, weight: '700' } },
               grid: { color: gridColor }
             },
             y4: {
@@ -75,7 +101,8 @@ export default function GpaTrendChart({ semesters }) {
               position: 'right',
               min: 0,
               max: 4,
-              ticks: { color: '#9a6700' },
+              border: { color: borderColor, width: 2 },
+              ticks: { color: line4, font: { family: 'JetBrains Mono, monospace', size: 11, weight: '700' } },
               grid: { display: false }
             }
           },
@@ -83,8 +110,16 @@ export default function GpaTrendChart({ semesters }) {
             legend: {
               labels: {
                 color: textColor,
-                font: { family: 'Manrope', weight: '600' }
+                font: { family: 'Manrope, sans-serif', weight: '700' }
               }
+            },
+            tooltip: {
+              backgroundColor: isDark ? '#141820' : '#ffffff',
+              titleColor: isDark ? '#f8fafc' : '#111111',
+              bodyColor: isDark ? '#cbd5e1' : '#3f3f46',
+              borderColor,
+              borderWidth: 2,
+              cornerRadius: 4
             }
           }
         }
@@ -95,7 +130,7 @@ export default function GpaTrendChart({ semesters }) {
       cancelled = true;
       chart?.destroy();
     };
-  }, [semesters]);
+  }, [semesters, themeRev]);
 
   return <canvas ref={canvasRef} id="gpaTrendChart" />;
 }

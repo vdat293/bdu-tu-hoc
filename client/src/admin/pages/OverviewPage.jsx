@@ -95,10 +95,15 @@ export default function OverviewPage({
   const errorRate = safeNumber(overview?.errorRate);
   const p95Ms = qualityQuery.data?.overall?.p95Ms ?? overview?.avgResponseTime ?? 0;
 
-  // Chart config
+  // Chart config (Neo-Brutalism)
   const isDark = theme === 'dark';
-  const textColor = isDark ? '#94A3B8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)';
+  const textColor = isDark ? '#CBD5E1' : '#111111';
+  const gridColor = isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)';
+  const axisBorder = isDark ? '#E4E4E7' : '#111111';
+  const blueColor = isDark ? '#3B82F6' : '#1D4ED8';
+  const greenColor = isDark ? '#34D399' : '#10B981';
+  const amberColor = isDark ? '#FDE047' : '#D97706';
+  const dangerColor = isDark ? '#FB7185' : '#EF4444';
 
   const interactionChartConfig = useMemo(() => {
     const rows = Array.isArray(summary?.timeline) ? summary.timeline : [];
@@ -115,29 +120,32 @@ export default function OverviewPage({
           {
             label: 'Xem trang',
             data: rows.map((r) => safeNumber(r.pageViews)),
-            borderColor: '#2563EB',
-            backgroundColor: 'rgba(37, 99, 235, 0.12)',
+            borderColor: blueColor,
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.35,
-            pointRadius: rows.length > 24 ? 2 : 3
+            tension: 0,
+            pointRadius: rows.length > 24 ? 3 : 4
           },
           {
             label: 'Bấm nút & Thao tác',
             data: rows.map((r) => safeNumber(r.clicks) + safeNumber(r.actions)),
-            borderColor: '#15803D',
-            backgroundColor: 'rgba(21, 128, 61, 0.08)',
+            borderColor: greenColor,
+            backgroundColor: isDark ? 'rgba(52, 211, 153, 0.14)' : 'rgba(16, 185, 129, 0.1)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.35,
-            pointRadius: rows.length > 24 ? 2 : 3
+            tension: 0,
+            pointRadius: rows.length > 24 ? 3 : 4
           },
           {
             label: 'Người dùng',
             data: rows.map((r) => safeNumber(r.activeUsers)),
-            borderColor: '#D97706',
+            borderColor: amberColor,
             borderDash: [4, 4],
+            borderWidth: 2,
             backgroundColor: 'transparent',
-            tension: 0.25,
-            pointRadius: 2
+            tension: 0,
+            pointRadius: 3
           }
         ]
       },
@@ -146,16 +154,16 @@ export default function OverviewPage({
         plugins: {
           legend: {
             position: 'top',
-            labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12 } }
+            labels: { color: textColor, font: { family: 'Manrope, sans-serif', size: 12, weight: '700' } }
           }
         },
         scales: {
-          x: { ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
-          y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } }
+          x: { border: { color: axisBorder, width: 2 }, ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+          y: { beginAtZero: true, border: { color: axisBorder, width: 2 }, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } }
         }
       }
     };
-  }, [summary?.timeline, textColor, gridColor]);
+  }, [summary?.timeline, textColor, gridColor, axisBorder, blueColor, greenColor, amberColor, isDark]);
 
   const httpChartConfig = useMemo(() => {
     const rows = Array.isArray(timelineQuery.data) ? timelineQuery.data : [];
@@ -172,32 +180,35 @@ export default function OverviewPage({
           {
             label: 'Tổng HTTP Request',
             data: rows.map((i) => safeNumber(i.total)),
-            borderColor: '#3B82F6',
-            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+            borderColor: blueColor,
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.35,
+            tension: 0,
             yAxisID: 'yReq',
-            pointRadius: rows.length > 24 ? 2 : 3
+            pointRadius: rows.length > 24 ? 3 : 4
           },
           {
             label: 'Lỗi (4xx/5xx)',
             data: rows.map((i) => safeNumber(i.error)),
-            borderColor: '#DC2626',
-            backgroundColor: 'rgba(220, 38, 38, 0.12)',
+            borderColor: dangerColor,
+            backgroundColor: isDark ? 'rgba(251, 113, 133, 0.16)' : 'rgba(239, 68, 68, 0.12)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.35,
+            tension: 0,
             yAxisID: 'yReq',
-            pointRadius: rows.length > 24 ? 2 : 3
+            pointRadius: rows.length > 24 ? 3 : 4
           },
           {
             label: 'Độ trễ TB (ms)',
             data: rows.map((i) => safeNumber(i.avgLatency)),
-            borderColor: '#15803D',
+            borderColor: greenColor,
             borderDash: [3, 3],
+            borderWidth: 2,
             backgroundColor: 'transparent',
-            tension: 0.2,
+            tension: 0,
             yAxisID: 'yLat',
-            pointRadius: 2
+            pointRadius: 3
           }
         ]
       },
@@ -206,17 +217,17 @@ export default function OverviewPage({
         plugins: {
           legend: {
             position: 'top',
-            labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12 } }
+            labels: { color: textColor, font: { family: 'Manrope, sans-serif', size: 12, weight: '700' } }
           }
         },
         scales: {
-          x: { ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
-          yReq: { position: 'left', beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } },
-          yLat: { position: 'right', beginAtZero: true, ticks: { color: textColor, callback: (v) => `${v}ms` }, grid: { drawOnChartArea: false } }
+          x: { border: { color: axisBorder, width: 2 }, ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+          yReq: { position: 'left', beginAtZero: true, border: { color: axisBorder, width: 2 }, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } },
+          yLat: { position: 'right', beginAtZero: true, border: { color: axisBorder, width: 2 }, ticks: { color: textColor, callback: (v) => `${v}ms` }, grid: { drawOnChartArea: false } }
         }
       }
     };
-  }, [timelineQuery.data, textColor, gridColor]);
+  }, [timelineQuery.data, textColor, gridColor, axisBorder, blueColor, dangerColor, greenColor, isDark]);
 
   // Top features: prefer interaction engagement if available, else fallback to HTTP insights/features
   const uiFeatures = Array.isArray(flowsQuery.data?.featureEngagement)

@@ -105,7 +105,7 @@ export default function VocabThemesPage() {
                 key={m.id}
                 type="button"
                 className="vocab-mode"
-                style={{ background: `linear-gradient(140deg, ${m.color}, ${m.color}cc)` }}
+                style={{ background: m.color }}
                 onClick={() => { setPendingMode(m.id); setScopeOpen(true); }}
                 aria-label={`Ôn tập bằng ${m.title}`}
               >
@@ -118,7 +118,7 @@ export default function VocabThemesPage() {
             <button
               type="button"
               className="vocab-mode"
-              style={{ background: 'linear-gradient(140deg, #e11d48, #e11d48cc)' }}
+              style={{ background: '#e11d48' }}
               onClick={() => { setPendingMode('typing'); setScopeOpen(true); }}
               aria-label="Ôn tập từ vựng"
             >

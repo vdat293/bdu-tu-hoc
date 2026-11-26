@@ -1,12 +1,18 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { navigation, findRouteMeta, filterNavigation } from '../app/navigation.js';
+import { useAppearance } from '../app/appearance.jsx';
 import { useAuth } from '../app/providers.jsx';
+import { getMyIdentityPresentation } from '../api/identity.js';
 import { useTtcdsCapabilities } from '../features/ttcds/useTtcdsCapabilities.jsx';
 import MaintenanceGate from '../app/MaintenanceGate.jsx';
 import NotificationBell from '../components/notifications/NotificationBell.jsx';
+import UserMenuPopover from '../components/layout/UserMenuPopover.jsx';
+import UiOnboardingTour from '../components/layout/UiOnboardingTour.jsx';
+import { AvatarContent } from '../components/identity/Identity.jsx';
 import { loadConfessionPage, prefetchConfession } from '../app/confession-preload.js';
+import { isChunkLoadError, reloadForStaleChunk } from '../app/chunk-recovery.js';
 import { trackAction } from '../services/telemetry.js';
 
 const navGroupsFor = (items) => [
@@ -28,10 +34,9 @@ const badges = {
   '/mystudent': ['TTCDS', 'badge-pill-emerald']
 };
 
-function getInitials(name) {
-  const parts = String(name || 'SV').trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
-}
+const EXTRA_PALETTE_ITEMS = [
+  { path: '/setting', label: 'Cài đặt', icon: '⚙', keywords: 'cài đặt setting giao diện claymorphism neo-brutalism avatar khung danh hiệu vfx' }
+];
 
 function CommandPalette({ open, onClose, itemsProp }) {
   const navigate = useNavigate();
@@ -47,7 +52,8 @@ function CommandPalette({ open, onClose, itemsProp }) {
 
   if (!open) return null;
 
-  const items = (itemsProp || navigation).filter((item) =>
+  const allItems = [...(itemsProp || navigation), ...EXTRA_PALETTE_ITEMS];
+  const items = allItems.filter((item) =>
     `${item.label} ${item.keywords}`.toLocaleLowerCase('vi-VN').includes(query.toLocaleLowerCase('vi-VN'))
   );
 
@@ -94,13 +100,25 @@ class AppErrorBoundary extends Component {
   static getDerivedStateFromError(error) {
     return { error };
   }
+  componentDidCatch(error) {
+    if (isChunkLoadError(error)) {
+      reloadForStaleChunk();
+    }
+  }
   render() {
     if (this.state.error) {
+      const stale = isChunkLoadError(this.state.error);
       return (
         <div className="card glass-panel" style={{ padding: '30px', margin: '30px auto', maxWidth: '600px', textAlign: 'center' }}>
-          <h2 style={{ color: 'var(--color-rose)', marginBottom: '10px' }}>Trang gặp lỗi</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>{this.state.error.message || 'Có lỗi không xác định.'}</p>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+          <h2 style={{ color: 'var(--color-rose)', marginBottom: '10px' }}>
+            {stale ? 'Ứng dụng vừa được cập nhật' : 'Trang gặp lỗi'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
+            {stale
+              ? 'Tab đang dùng phiên bản cũ. Hãy tải lại trang để nhận bản giao diện và tính năng mới nhất.'
+              : (this.state.error.message || 'Có lỗi không xác định.')}
+          </p>
+          <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
             Tải lại trang
           </button>
         </div>
@@ -118,9 +136,17 @@ export default function AppLayout() {
   const mainRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('bdu_theme') || 'light');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [settingsClickTick, setSettingsClickTick] = useState(0);
+  const { theme, toggleTheme: toggleAppearanceTheme } = useAppearance();
   const meta = useMemo(() => findRouteMeta(location.pathname), [location.pathname]);
   const capsQuery = useTtcdsCapabilities();
+  const presentationQuery = useQuery({
+    queryKey: ['identity-presentation', auth.user?.mssv],
+    queryFn: ({ signal }) => getMyIdentityPresentation(auth.token, { signal }),
+    enabled: auth.status === 'authenticated' && Boolean(auth.token),
+    staleTime: 5 * 60 * 1000
+  });
   const visibleNavigation = useMemo(() => filterNavigation(navigation, capsQuery.data), [capsQuery.data]);
   const navGroups = useMemo(() => navGroupsFor(visibleNavigation), [visibleNavigation]);
 
@@ -149,13 +175,6 @@ export default function AppLayout() {
   }, [auth.status]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.body.classList.remove('theme-light', 'theme-dark');
-    document.body.classList.add(`theme-${theme}`);
-    localStorage.setItem('bdu_theme', theme);
-  }, [theme]);
-
-  useEffect(() => {
     document.title = `${meta.title} · BDU Tự Học`;
     mainRef.current?.focus({ preventScroll: true });
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
@@ -178,15 +197,12 @@ export default function AppLayout() {
   }, []);
 
   const toggleTheme = () => {
-    setTheme((current) => {
-      const next = current === 'dark' ? 'light' : 'dark';
-      trackAction('theme_toggle', { label: next === 'dark' ? 'Bật giao diện tối' : 'Bật giao diện sáng' });
-      return next;
-    });
+    const next = theme === 'dark' ? 'light' : 'dark';
+    trackAction('theme_toggle', { label: next === 'dark' ? 'Bật giao diện tối' : 'Bật giao diện sáng' });
+    toggleAppearanceTheme();
   };
 
   const displayName = auth.user?.name || 'Sinh viên';
-  const shortName = displayName.split(/\s+/).slice(-2).join(' ');
 
   return (
     <div className="app-layout">
@@ -245,29 +261,44 @@ export default function AppLayout() {
         <div className="sidebar-footer">
           <div className="user-profile-pill" onClick={() => navigate('/info')} style={{ cursor: 'pointer' }}>
             <div id="user-avatar" className="avatar-circle">
-              {getInitials(displayName)}
+              <AvatarContent user={auth.user} presentation={presentationQuery.data} />
             </div>
             <div className="user-details">
               <span id="nav-user-name" className="user-fullname">{displayName}</span>
               <span id="nav-user-mssv" className="user-mssv-text">MSSV: {auth.user?.mssv || '---'}</span>
             </div>
           </div>
-          <button
-            id="btn-logout"
-            className="btn-logout"
-            onClick={() => {
-              trackAction('auth_logout', { label: 'Đăng xuất tài khoản', featureId: 'portal' });
-              auth.logout({ message: 'Đã đăng xuất tài khoản.' });
-            }}
-            title="Đăng xuất"
-            aria-label="Đăng xuất"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" x2="9" y1="12" y2="12" />
-            </svg>
-          </button>
+          <div className="sidebar-footer-actions">
+            <button
+              type="button"
+              id="btn-sidebar-settings"
+              className="btn-icon btn-sidebar-settings"
+              onClick={() => navigate('/setting')}
+              title="Cài đặt"
+              aria-label="Cài đặt"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+              </svg>
+            </button>
+            <button
+              id="btn-logout"
+              className="btn-logout"
+              onClick={() => {
+                trackAction('auth_logout', { label: 'Đăng xuất tài khoản', featureId: 'portal' });
+                auth.logout({ message: 'Đã đăng xuất tài khoản.' });
+              }}
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" x2="9" y1="12" y2="12" />
+              </svg>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -310,14 +341,14 @@ export default function AppLayout() {
 
             {auth.status === 'authenticated' && <NotificationBell />}
 
-            <button
-              type="button"
-              className="btn btn-primary topbar-user-btn"
-              onClick={() => navigate('/info')}
-              title="Xem thông tin sinh viên"
-            >
-              Xin chào, {shortName}!
-            </button>
+            {auth.status === 'authenticated' && (
+              <UserMenuPopover
+                onOpenPalette={() => setPaletteOpen(true)}
+                open={userMenuOpen}
+                onOpenChange={setUserMenuOpen}
+                onSettingsNavigate={() => setSettingsClickTick((n) => n + 1)}
+              />
+            )}
 
             <button
               id="btn-theme-toggle"
@@ -357,6 +388,13 @@ export default function AppLayout() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} itemsProp={visibleNavigation} />
+      {auth.status === 'authenticated' && (
+        <UiOnboardingTour
+          menuOpen={userMenuOpen}
+          onSetMenuOpen={setUserMenuOpen}
+          settingsClickTick={settingsClickTick}
+        />
+      )}
     </div>
   );
 }

@@ -68,10 +68,13 @@ describe('WordFmtPage', () => {
     fireEvent.change(screen.getByLabelText(/Tiêu Đề Bìa/i), { target: { value: 'BÁO CÁO KIỂM THỬ' } });
     fireEvent.click(screen.getByLabelText(/Lời cảm ơn/i));
 
-    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu chuẩn hóa văn bản/i }));
+    const startBtn = screen.getByRole('button', { name: /Bắt đầu chuẩn hóa văn bản/i });
+    expect(startBtn).toHaveAttribute('data-vfx', 'impact');
+    fireEvent.click(startBtn);
 
     await waitFor(() => expect(mocks.previewDocxStructure).toHaveBeenCalled());
     const confirmBtn = await screen.findByRole('button', { name: /Xác nhận & Chuẩn hóa DOCX/i });
+    expect(confirmBtn).toHaveAttribute('data-vfx', 'impact');
     expect(confirmBtn).not.toBeDisabled();
     fireEvent.click(confirmBtn);
 
@@ -154,7 +157,7 @@ describe('WordFmtPage', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent(/SECRET backend stderr/i);
   });
 
-  it('shows only the focused Sakuga loading progress stage while a run is pending', () => {
+  it('shows only the focused BDU Impact VFX loading progress stage while a run is pending', () => {
     mocks.toolRun = { status: 'running', progress: 52, stageIndex: 2, stageCount: 7 };
     render(<WordFmtPage />);
 
@@ -163,13 +166,13 @@ describe('WordFmtPage', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '52');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '100');
     expect(screen.getByText(/Đang nhận diện bảng & hình/i)).toBeInTheDocument();
-    expect(document.querySelector('.wf-sakuga-stage')).toBeInTheDocument();
+    expect(document.querySelector('.wf-vfx-stage')).toBeInTheDocument();
     expect(document.querySelectorAll('.wf-run-stages li')).toHaveLength(0);
     expect(document.querySelector('.wordfmt-progress-box')).toBeNull();
     expect(document.querySelector('.processing-stages')).toBeNull();
   });
 
-  it('shows only the finished Sakuga bar and a single Download button on completion while keeping buildCompletionCards safe', () => {
+  it('shows only the finished progress bar and a single Download ImpactButton on completion while keeping buildCompletionCards safe', () => {
     const safeReport = {
       structure: { chapterCount: 2, warnings: ['SECRET diagnostic payload'] },
       outputNormalization: {
@@ -200,7 +203,9 @@ describe('WordFmtPage', () => {
     expect(screen.queryByLabelText(/Tóm tắt kết quả/i)).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
     expect(screen.getByText(/Văn bản đã được chuẩn hóa 100%/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Tải Về File DOCX Đã Chuẩn Hóa/i })).toBeInTheDocument();
+    const downloadBtn = screen.getByRole('button', { name: /Tải Về File DOCX Đã Chuẩn Hóa/i });
+    expect(downloadBtn).toBeInTheDocument();
+    expect(downloadBtn).toHaveAttribute('data-vfx', 'impact');
     expect(document.body.textContent).not.toMatch(/SECRET diagnostic|SECRET raw trace|arbitraryBackendBlob/i);
   });
 

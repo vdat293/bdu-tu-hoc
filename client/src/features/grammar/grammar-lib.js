@@ -75,11 +75,11 @@ export function difficultyColor(level) {
 }
 
 const GROUP_THEMES = {
-  violet: { key: 'violet', banner: 'linear-gradient(140deg, #7c3aed, #a855f7)', accent: '#7c3aed', soft: '#f3e8ff', text: '#6d28d9' },
-  green: { key: 'green', banner: 'linear-gradient(140deg, #059669, #22c55e)', accent: '#059669', soft: '#dcfce7', text: '#15803d' },
-  orange: { key: 'orange', banner: 'linear-gradient(140deg, #ea580c, #f97316)', accent: '#ea580c', soft: '#ffedd5', text: '#c2410c' },
-  blue: { key: 'blue', banner: 'linear-gradient(140deg, #2563eb, #3b82f6)', accent: '#2563eb', soft: '#dbeafe', text: '#1d4ed8' },
-  rose: { key: 'rose', banner: 'linear-gradient(140deg, #db2777, #ec4899)', accent: '#db2777', soft: '#fce7f3', text: '#be185d' }
+  violet: { key: 'violet', banner: '#7c3aed', accent: '#7c3aed', soft: 'var(--nb-tint-purple, #f3e8ff)', text: 'var(--color-purple, #7c3aed)' },
+  green: { key: 'green', banner: '#059669', accent: '#059669', soft: 'var(--nb-tint-emerald, #dcfce7)', text: 'var(--color-emerald, #059669)' },
+  orange: { key: 'orange', banner: '#d97706', accent: '#d97706', soft: 'var(--nb-tint-yellow, #fef3c7)', text: 'var(--color-amber, #d97706)' },
+  blue: { key: 'blue', banner: '#1d4ed8', accent: '#1d4ed8', soft: 'var(--nb-tint-blue, #dbeafe)', text: 'var(--bdu-primary, #1d4ed8)' },
+  rose: { key: 'rose', banner: '#e11d48', accent: '#e11d48', soft: 'var(--nb-tint-rose, #ffe4e6)', text: 'var(--color-rose, #e11d48)' }
 };
 
 const FALLBACK_ORDER = ['blue', 'violet', 'green', 'orange', 'rose'];

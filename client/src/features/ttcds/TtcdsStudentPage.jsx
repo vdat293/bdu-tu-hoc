@@ -198,10 +198,16 @@ function OverviewTab({ detail, attendance }) {
 function chartTheme() {
   const isDark = typeof document !== 'undefined' && document.body.classList.contains('theme-dark');
   return {
-    text: isDark ? '#c0b8ae' : '#625f59',
-    grid: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(79, 70, 61, 0.09)',
-    red: '#ad171c',
-    blue: '#029acf'
+    isDark,
+    text: isDark ? '#cbd5e1' : '#111111',
+    grid: isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)',
+    border: isDark ? '#e4e4e7' : '#111111',
+    primary: isDark ? '#3b82f6' : '#1d4ed8',
+    primaryFill: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
+    accent: isDark ? '#fde047' : '#d97706',
+    accentFill: isDark ? 'rgba(253, 224, 71, 0.16)' : 'rgba(250, 204, 21, 0.2)',
+    red: isDark ? '#fb7185' : '#1d4ed8',
+    blue: isDark ? '#3b82f6' : '#facc15'
   };
 }
 
@@ -215,7 +221,7 @@ const valueLabelPlugin = {
     // Đông điểm thì bỏ nhãn, đọc bằng tooltip — tránh chữ đè nhau.
     const maxLabels = Number(opts?.maxLabels) || 0;
     ctx.save();
-    ctx.font = '600 10.5px Manrope, sans-serif';
+    ctx.font = '700 10.5px "JetBrains Mono", Manrope, sans-serif';
     ctx.textAlign = 'center';
     chart.data.datasets.forEach((dataset, di) => {
       if (only !== undefined && di !== only) return;
@@ -225,7 +231,7 @@ const valueLabelPlugin = {
       meta.data.forEach((point, pi) => {
         const v = dataset.data[pi];
         if (v === null || v === undefined) return;
-        ctx.fillStyle = dataset.borderColor || '#ad171c';
+        ctx.fillStyle = dataset.borderColor || '#1d4ed8';
         ctx.fillText(format(v), point.x, point.y - 9);
       });
     });
@@ -235,6 +241,18 @@ const valueLabelPlugin = {
 
 function useChartCanvas(draw, deps) {
   const ref = useRef(null);
+  const [themeRev, setThemeRev] = useState(0);
+
+  useEffect(() => {
+    const Observer = typeof window !== 'undefined' ? window.MutationObserver : undefined;
+    if (!Observer || !document?.body) return undefined;
+    const observer = new Observer(() => {
+      setThemeRev((rev) => rev + 1);
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     let chart;
     let cancelled = false;
@@ -257,7 +275,7 @@ function useChartCanvas(draw, deps) {
       if (chart) chart.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, themeRev]);
   return ref;
 }
 
@@ -274,23 +292,27 @@ function GpaLineCard({ terms, series }) {
         datasets: [{
           label: `GPA tích lũy (${data.scale})`,
           data: data.values,
-          borderColor: theme.red,
-          backgroundColor: 'rgba(173, 23, 28, 0.08)',
+          borderColor: theme.primary,
+          backgroundColor: theme.primaryFill,
+          borderWidth: 2.5,
           tension: 0,
           fill: true,
-          pointRadius: 4,
-          pointHoverRadius: 6
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: theme.primary,
+          pointBorderColor: theme.border,
+          pointBorderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 } } },
-          y: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 } } }
+          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } },
+          y: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } }
         },
         plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope', weight: '600' } } },
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
           ttcdsValueLabels: { format: (v) => Number(v).toFixed(2) }
         }
       },
@@ -330,28 +352,33 @@ function AttendanceWeekCard({ journal }) {
         datasets: [{
           label: 'Tỷ lệ chuyên cần',
           data: weeks.map((w) => Number(w.rate.toFixed(2))),
-          borderColor: theme.red,
-          backgroundColor: 'rgba(173, 23, 28, 0.08)',
+          borderColor: theme.accent,
+          backgroundColor: theme.accentFill,
+          borderWidth: 2.5,
           tension: 0,
           fill: true,
-          pointRadius: 4,
-          pointHoverRadius: 6
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: theme.accent,
+          pointBorderColor: theme.border,
+          pointBorderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 }, maxTicksLimit: 12 } },
+          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, maxTicksLimit: 12 } },
           y: {
             min: 0,
             max: 100,
+            border: { color: theme.border, width: 2 },
             grid: { color: theme.grid },
-            ticks: { color: theme.text, font: { size: 10 }, callback: (v) => `${v}%` }
+            ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, callback: (v) => `${v}%` }
           }
         },
         plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope', weight: '600' } } },
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
           tooltip: {
             callbacks: {
               title: (items) => {
@@ -402,6 +429,8 @@ function AttendanceTermCard({ gpa, series, attendance }) {
               return rate === null ? null : Number(rate.toFixed(2));
             }),
             backgroundColor: theme.blue,
+            borderColor: theme.border,
+            borderWidth: 2,
             borderRadius: 4,
             maxBarThickness: 56,
             yAxisID: 'yRate'
@@ -410,10 +439,14 @@ function AttendanceTermCard({ gpa, series, attendance }) {
             type: 'line',
             label: `Điểm TB tích lũy (${line.scale})`,
             data: line.values,
-            borderColor: theme.red,
+            borderColor: theme.primary,
+            borderWidth: 2.5,
             tension: 0,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: theme.primary,
+            pointBorderColor: theme.border,
+            pointBorderWidth: 2,
             yAxisID: 'yGpa'
           }
         ]
@@ -422,24 +455,26 @@ function AttendanceTermCard({ gpa, series, attendance }) {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { grid: { color: theme.grid }, ticks: { color: theme.text, font: { size: 10 } } },
+          x: { border: { color: theme.border, width: 2 }, grid: { color: theme.grid }, ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' } } },
           yRate: {
             type: 'linear',
             position: 'left',
             min: 0,
             max: 100,
+            border: { color: theme.border, width: 2 },
             grid: { color: theme.grid },
-            ticks: { color: theme.blue, font: { size: 10 }, callback: (v) => `${v}%` }
+            ticks: { color: theme.text, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '600' }, callback: (v) => `${v}%` }
           },
           yGpa: {
             type: 'linear',
             position: 'right',
+            border: { color: theme.border, width: 2 },
             grid: { display: false },
-            ticks: { color: theme.red, font: { size: 10 } }
+            ticks: { color: theme.primary, font: { family: 'JetBrains Mono, monospace', size: 10, weight: '700' } }
           }
         },
         plugins: {
-          legend: { labels: { color: theme.text, font: { family: 'Manrope', weight: '600' } } },
+          legend: { labels: { color: theme.text, font: { family: 'Manrope, sans-serif', weight: '700' } } },
           ttcdsValueLabels: { onlyDataset: 1, format: (v) => Number(v).toFixed(2), maxLabels: 12 }
         }
       },

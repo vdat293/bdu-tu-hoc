@@ -5,6 +5,7 @@ import { getSurveyForms } from '../../api/tools.js';
 import { clearSurveyLogs, getSurveyRun, restoreSurveyRun, startSurvey, subscribeSurvey } from './runner.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
 import { trackAction } from '../../services/telemetry.js';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 
 function findGenderValue(value, depth = 0) {
   if (value && typeof value === 'object' && depth < 4) {
@@ -326,9 +327,9 @@ export default function SurveyPage() {
             </div>
           </div>
 
-          <button type="button" id="btn-start-survey" className="btn btn-primary btn-block btn-lg" onClick={start} disabled={isRunning || selectedCourses.length === 0}>
+          <ImpactButton type="button" id="btn-start-survey" tone="primary" className="btn btn-primary btn-block btn-lg" onClick={start} disabled={isRunning || selectedCourses.length === 0}>
             <span className="btn-text">{run?.status === 'starting' ? 'Đang khởi tạo khảo sát…' : isRunning ? 'Đang chạy khảo sát…' : `Bắt đầu khảo sát (${selectedCourses.length} môn)`}</span>
-          </button>
+          </ImpactButton>
           </>}
         </div>
 
@@ -381,7 +382,7 @@ export default function SurveyPage() {
               </label>;
             })}
           </div>
-          <button type="button" className="btn btn-primary btn-block" onClick={() => setShowCoursePicker(false)}>Xác nhận lựa chọn</button>
+          <ImpactButton type="button" tone="primary" className="btn btn-primary btn-block" onClick={() => setShowCoursePicker(false)}>Xác nhận lựa chọn</ImpactButton>
         </ViewportModal>
       )}
 
@@ -456,9 +457,9 @@ export default function SurveyPage() {
             <div className="survey-modal-footer-stats">
               <span>Áp dụng cho <strong>{selectedCourses.length} môn</strong> đã chọn</span>
             </div>
-            <button type="button" className="btn btn-primary" onClick={() => setShowSettingsModal(false)}>
+            <ImpactButton type="button" tone="primary" className="btn btn-primary" onClick={() => setShowSettingsModal(false)}>
               Hoàn tất & Áp dụng
-            </button>
+            </ImpactButton>
           </div>
         </ViewportModal>
       )}

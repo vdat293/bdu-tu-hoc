@@ -81,7 +81,7 @@ export default function TtcdsLookupPage() {
   if (caps.isLoading) {
     return (
       <section className="club-directory-grid" aria-label="Đang tải tra cứu sinh viên">
-        {[1, 2, 3].map((item) => <ClubCardSkeleton key={item} />)}
+        {[1, 2, 3].map((item) => <ClubCardSkeleton key={item} label="Đang tải tra cứu sinh viên" />)}
       </section>
     );
   }

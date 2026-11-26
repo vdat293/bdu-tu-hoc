@@ -9,13 +9,13 @@
 }
 
 .root {
-  --toc-surface: #fffdfa;
-  --toc-text: #292524;
-  --toc-muted: #78716c;
-  --toc-border: #e7e5e4;
-  --toc-active: #15803d;
-  --toc-highlight: #f0fdf4;
-  --toc-hover: #f5f5f4;
+  --toc-surface: var(--bg-card, #ffffff);
+  --toc-text: var(--text-main, #111111);
+  --toc-muted: var(--text-muted, #52525b);
+  --toc-border: var(--border-color, #111111);
+  --toc-active: var(--bdu-primary, #1d4ed8);
+  --toc-highlight: var(--bdu-secondary, #facc15);
+  --toc-hover: var(--bg-surface-alt, #f4efe0);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -24,24 +24,25 @@
   max-height: var(--guide-toc-available-height, calc(100dvh - 120px));
   margin: 0;
   padding: 12px;
-  border: 1px solid var(--toc-border);
-  border-radius: 12px;
+  border: 2px solid var(--toc-border);
+  border-radius: var(--radius-md, 6px);
   background: var(--toc-surface);
   color: var(--toc-text);
-  font: 400 13px/1.35 'Manrope', system-ui, -apple-system, sans-serif;
+  box-shadow: 4px 4px 0 var(--nb-shadow-color, #111111);
+  font: 500 13px/1.35 var(--font-main, 'Manrope', system-ui, sans-serif);
   text-align: left;
   letter-spacing: normal;
   overflow: hidden;
 }
 
 :global(body.theme-dark) .root {
-  --toc-surface: #211e1c;
-  --toc-text: #fafaf9;
-  --toc-muted: #a8a29e;
-  --toc-border: #44403c;
-  --toc-active: #4ade80;
-  --toc-highlight: #193426;
-  --toc-hover: #292524;
+  --toc-surface: var(--bg-card, #1a1e26);
+  --toc-text: var(--text-main, #f8fafc);
+  --toc-muted: var(--text-muted, #94a3b8);
+  --toc-border: var(--border-color, #e4e4e7);
+  --toc-active: var(--bdu-primary, #3b82f6);
+  --toc-highlight: var(--bdu-secondary, #fde047);
+  --toc-hover: var(--bg-surface-alt, #232936);
 }
 
 .root *,
@@ -68,17 +69,18 @@
 }
 
 .progressTrack {
-  height: 5px;
-  border-radius: 999px;
-  background: var(--toc-border);
+  height: 8px;
+  border: 1.5px solid var(--toc-border);
+  border-radius: 4px;
+  background: var(--bg-surface-alt, #f4efe0);
   overflow: hidden;
 }
 
 .progressFill {
   display: block;
   height: 100%;
-  border-radius: inherit;
-  background: var(--toc-active);
+  border-radius: 0;
+  background: var(--color-emerald, #10b981);
 }
 
 .lesson {
@@ -137,8 +139,8 @@
   min-height: 44px;
   margin: 0;
   padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm, 4px);
   background: transparent;
   color: var(--toc-text);
   font: inherit;
@@ -150,6 +152,7 @@
 
 .stepButton:hover {
   background: var(--toc-hover);
+  border-color: var(--toc-border);
 }
 
 .stepButton:focus-visible {
@@ -158,8 +161,14 @@
 }
 
 .stepButton[aria-current='step'] {
-  border-color: var(--toc-active);
+  border-color: var(--toc-border);
   background: var(--toc-highlight);
+  color: #111111;
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
+}
+
+.stepButton[aria-current='step'] .location {
+  color: #3f3f46;
 }
 
 .number {
@@ -168,17 +177,19 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
-  background: var(--toc-border);
+  border-radius: 4px;
+  border: 1.5px solid var(--toc-border);
+  background: var(--bg-surface-alt, #f4efe0);
   color: var(--toc-text);
+  font-family: var(--font-mono, monospace);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
 }
 
 .done .number {
-  background: var(--toc-active);
-  color: var(--toc-surface);
+  background: var(--color-emerald, #10b981);
+  color: #111111;
 }
 
 .stepText {
@@ -217,16 +228,17 @@
   align-self: flex-start;
   margin: 0;
   padding: 8px 12px;
-  border: 1px solid #a8a29e;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: 600 13px/1.35 'Manrope', system-ui, -apple-system, sans-serif;
+  border: 2px solid var(--border-color, #111111);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-main, #111111);
+  font: 800 13px/1.35 var(--font-display, 'Manrope', system-ui, sans-serif);
+  box-shadow: 2px 2px 0 var(--nb-shadow-color, #111111);
   cursor: pointer;
 }
 
 .toggle:focus-visible {
-  outline: 2px solid #15803d;
+  outline: 2px solid var(--bdu-primary, #1d4ed8);
   outline-offset: 2px;
 }
 
@@ -251,6 +263,40 @@
   }
 
   .rail .root {
-    box-shadow: 0 12px 40px rgb(0 0 0 / .2);
+    box-shadow: 6px 6px 0 var(--nb-shadow-color, #111111);
   }
+}
+
+:global(html[data-ui-style="claymorphism"]) .root {
+  border: 1px solid var(--clay-border, rgba(255, 255, 255, 0.85));
+  border-radius: 22px;
+  box-shadow: var(--clay-shadow-sm);
+}
+
+:global(html[data-ui-style="claymorphism"]) .progressTrack {
+  border: 1px solid var(--clay-divider);
+  border-radius: 999px;
+}
+
+:global(html[data-ui-style="claymorphism"]) .stepButton {
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+
+:global(html[data-ui-style="claymorphism"]) .stepButton[aria-current='step'] {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--clay-accent-gradient);
+  color: #ffffff;
+  box-shadow: var(--clay-shadow-btn);
+}
+
+:global(html[data-ui-style="claymorphism"]) .stepButton[aria-current='step'] .location {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:global(html[data-ui-style="claymorphism"]) .number,
+:global(html[data-ui-style="claymorphism"]) .toggle {
+  border: 1px solid var(--clay-border);
+  border-radius: 10px;
+  box-shadow: var(--clay-shadow-xs);
 }

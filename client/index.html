@@ -18,6 +18,24 @@
 </head>
 
 <body class="theme-light">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('bdu_theme') === 'dark' ? 'dark' : 'light';
+        var path = window.location && window.location.pathname ? window.location.pathname : '';
+        var s = /^\/login(?:\/|$)/.test(path)
+          ? 'neumorphism'
+          : (localStorage.getItem('bdu_ui_style') === 'claymorphism' ? 'claymorphism' : 'brutalism');
+        var v = localStorage.getItem('bdu_vfx_enabled') === 'false' ? 'off' : 'on';
+        var r = document.documentElement;
+        r.dataset.theme = t;
+        r.dataset.uiStyle = s;
+        r.dataset.vfx = v;
+        document.body.classList.toggle('theme-dark', t === 'dark');
+        document.body.classList.toggle('theme-light', t !== 'dark');
+      } catch (e) {}
+    })();
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>

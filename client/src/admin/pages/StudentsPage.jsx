@@ -241,24 +241,26 @@ export default function StudentsPage({ refreshMs, onOpenJourney, onFilterLogs })
                               </span>
                             )}
                           </td>
-                          <td className="student-row-actions">
-                            <button
-                              type="button"
-                              className="btn-filter-student btn-view-student-journey"
-                              onClick={() => onOpenJourney?.(s.mssv)}
-                            >
-                              <Icons.route size={14} />
-                              <span>Hành trình</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-filter-student"
-                              onClick={() => onFilterLogs?.(s.mssv)}
-                              title="Lọc nhật ký HTTP của sinh viên này"
-                            >
-                              <Icons.list size={14} />
-                              <span>Logs</span>
-                            </button>
+                          <td className="student-row-actions-cell">
+                            <div className="student-row-actions">
+                              <button
+                                type="button"
+                                className="btn-filter-student btn-view-student-journey"
+                                onClick={() => onOpenJourney?.(s.mssv)}
+                              >
+                                <Icons.route size={14} />
+                                <span>Hành trình</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-filter-student"
+                                onClick={() => onFilterLogs?.(s.mssv)}
+                                title="Lọc nhật ký HTTP của sinh viên này"
+                              >
+                                <Icons.list size={14} />
+                                <span>Logs</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

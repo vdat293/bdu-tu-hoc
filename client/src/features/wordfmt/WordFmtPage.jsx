@@ -9,7 +9,7 @@ import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { getToolRun, startToolRun, subscribeToolRun } from '../../services/tool-runs.js';
 import DocxReviewWorkspace from './DocxReviewWorkspace.jsx';
 import AiSkillPanel from './AiSkillPanel.jsx';
-import { SakugaButton, SakugaProgress } from './SakugaVfx.jsx';
+import { ImpactButton, ImpactProgress } from '../../lib/bdu-vfx/index.js';
 import { trackAction } from '../../services/telemetry.js';
 import '../../styles/wordfmt-status.css';
 import '../../styles/wordfmt-preview.css';
@@ -872,27 +872,27 @@ export default function WordFmtPage() {
           onConfirm={confirmAndFormat}
         />
       ) : (isRunning || isSuccess) ? (
-        /* Mode B: Focused Sakuga VFX Progress Stage & Single Download Action on Completion */
+        /* Mode B: Focused BDU Impact VFX Progress Stage & Single Download Action on Completion */
         <div
           id="wordfmt-status-card"
-          className={`glass-panel wf-sakuga-stage${isSuccess ? ' is-complete' : ' is-running'}`}
+          className={`glass-panel wf-vfx-stage${isSuccess ? ' is-complete' : ' is-running'}`}
           aria-live="polite"
         >
-          <div id="wordfmt-progress-box" className="wf-sakuga-progress-shell">
-            <p className="wf-sakuga-eyebrow">
+          <div id="wordfmt-progress-box" className="wf-vfx-progress-shell">
+            <p className="wf-vfx-eyebrow">
               {isSuccess ? 'WORD_FMT · HOÀN TẤT CHUẨN HÓA' : 'WORD_FMT · ĐANG XỬ LÝ VĂN BẢN'}
             </p>
-            <h3 id="wordfmt-progress-title" className="wf-sakuga-title">
+            <h3 id="wordfmt-progress-title" className="wf-vfx-title">
               {isSuccess ? 'Văn bản đã được chuẩn hóa 100%' : activeStage.inProgress}
             </h3>
-            <p id="wordfmt-progress-desc" className="wf-sakuga-desc">
+            <p id="wordfmt-progress-desc" className="wf-vfx-desc">
               {isSuccess
                 ? 'Tài liệu chuẩn A4 BDU của bạn đã sẵn sàng.'
                 : activeStage.description}
             </p>
 
-            <div className="wf-sakuga-bar-host">
-              <SakugaProgress
+            <div className="wf-vfx-bar-host">
+              <ImpactProgress
                 progress={progress}
                 label={activeStage.inProgress}
                 doneLabel="Hoàn tất 100% ✓"
@@ -901,18 +901,18 @@ export default function WordFmtPage() {
             </div>
 
             {isSuccess ? (
-              <div className="wf-sakuga-download-wrap">
+              <div className="wf-vfx-download-wrap">
                 {downloadUrl ? (
-                  <SakugaButton
+                  <ImpactButton
                     id="btn-download-docx"
-                    variant="primary"
-                    className="wf-sakuga-download-btn"
+                    tone="primary"
+                    className="btn btn-primary wf-vfx-download-btn"
                     disabled={downloading}
                     doneTrigger={downloadDoneCount}
                     onClick={handleDownload}
                   >
                     {downloading ? 'Đang tải…' : 'Tải Về File DOCX Đã Chuẩn Hóa'}
-                  </SakugaButton>
+                  </ImpactButton>
                 ) : (
                   <p className="wf-status-download-unavailable" role="status">
                     Tài liệu đã hoàn tất nhưng liên kết tải xuống chưa khả dụng. Vui lòng thử lại.
@@ -945,7 +945,7 @@ export default function WordFmtPage() {
                   <span className="wf-sec-num">01</span>
                   <div>
                     <h3>Tệp nguồn &amp; Loại báo cáo</h3>
-                    <p>Tải lên bản thảo `.docx` và chọn quy chuẩn trình bày của Khoa/Viện.</p>
+                    <p>Tải lên bản thảo <code>.docx</code> và chọn quy chuẩn trình bày của Khoa/Viện.</p>
                   </div>
                 </div>
 
@@ -1330,15 +1330,15 @@ export default function WordFmtPage() {
               </div>
 
               <div className="wf-form-submit-wrap">
-                <SakugaButton
+                <ImpactButton
                   type="submit"
                   id="btn-start-wordfmt"
-                  variant="primary"
-                  className="wf-studio-submit-sakuga"
+                  tone="primary"
+                  className="btn btn-primary wf-studio-submit-vfx"
                   disabled={isRunning}
                 >
                   {isRunning ? 'Đang chuẩn hóa…' : 'Tiếp tục · Bắt đầu chuẩn hóa văn bản →'}
-                </SakugaButton>
+                </ImpactButton>
               </div>
             </form>
 

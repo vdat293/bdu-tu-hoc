@@ -42,6 +42,7 @@ const TtcdsLookupPage = lazy(() => import('../features/ttcds/TtcdsLookupPage.jsx
 const ConfessionPage = lazy(loadConfessionPage);
 const ConfessionProfilePage = lazy(() => import('../features/confession/ConfessionProfilePage.jsx'));
 const KillerSudokuPage = lazy(() => import('../features/games/KillerSudokuPage.jsx'));
+const SettingsPage = lazy(() => import('../features/settings/SettingsPage.jsx'));
 const GradeCardShowcasePage = lazy(() => import('../components/grades/GradeCardShowcasePage.jsx'));
 const NotFoundPage = lazy(() => import('../features/NotFoundPage.jsx'));
 
@@ -54,6 +55,8 @@ export default function AppRoutes() {
       <Route index element={<Navigate to="/gpa" replace />} />
       <Route path="gpa" element={<Lazy><GpaPage /></Lazy>} />
       <Route path="info" element={<Lazy><InfoPage /></Lazy>} />
+      <Route path="setting" element={<Lazy><SettingsPage /></Lazy>} />
+      <Route path="settings" element={<Navigate to="/setting" replace />} />
       <Route path="schedule" element={<Lazy><SchedulePage /></Lazy>} />
       <Route path="leaderboard" element={<Lazy><LeaderboardPage /></Lazy>} />
       <Route path="wordfmt" element={<Lazy><WordFmtPage /></Lazy>} />

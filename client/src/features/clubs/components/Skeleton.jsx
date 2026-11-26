@@ -1,6 +1,6 @@
-export function ClubCardSkeleton() {
+export function ClubCardSkeleton({ label = 'Đang tải CLB' } = {}) {
   return (
-    <div className="club-card club-skeleton-card" aria-label="Đang tải CLB">
+    <div className="club-card club-skeleton-card" aria-label={label}>
       <div className="club-shimmer club-shimmer--avatar" />
       <div className="club-shimmer club-shimmer--line club-shimmer--heading" />
       <div className="club-shimmer club-shimmer--line club-shimmer--wide" />

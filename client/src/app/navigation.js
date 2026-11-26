@@ -29,6 +29,7 @@ export const routeMeta = Object.fromEntries(navigation.map((item) => [item.path,
 
 export function findRouteMeta(pathname) {
   const canonical = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  if (canonical === '/setting' || canonical === '/settings') return { title: 'Cài đặt' };
   if (canonical.startsWith('/learning/')) return { title: 'Không gian môn học' };
   if (canonical === '/vocab') return { title: 'Luyện từ vựng' };
   if (canonical.startsWith('/vocab/')) return { title: 'Luyện từ vựng' };

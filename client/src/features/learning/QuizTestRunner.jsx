@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { shuffleArray } from './QuizRunner.jsx';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 import './quiz.css';
 
 const AUTOSAVE_DELAY_MS = 500;
@@ -522,14 +523,15 @@ export default function QuizTestRunner({
                 <button type="button" className="btn btn-secondary" onClick={cancelConfirm}>
                   Tiếp tục làm
                 </button>
-                <button
+                <ImpactButton
                   type="button"
+                  tone="primary"
                   className="btn btn-primary"
                   onClick={finalize}
                   disabled={finishing}
                 >
                   Nộp bài
-                </button>
+                </ImpactButton>
               </div>
             </section>
           )}
@@ -552,14 +554,15 @@ export default function QuizTestRunner({
             >
               Câu tiếp
             </button>
-            <button
+            <ImpactButton
               type="button"
+              tone="primary"
               className="btn btn-primary"
               onClick={requestSubmit}
               disabled={answeredCount === 0 || finishing || showConfirm}
             >
               {finishing ? 'Đang nộp...' : 'Nộp bài'}
-            </button>
+            </ImpactButton>
             <button
               type="button"
               className="btn btn-secondary"

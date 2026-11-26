@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Chart from 'chart.js/auto';
 
 export default function ChartCanvas({
@@ -10,6 +10,17 @@ export default function ChartCanvas({
 }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
+  const [themeRev, setThemeRev] = useState(0);
+
+  useEffect(() => {
+    const Observer = typeof window !== 'undefined' ? window.MutationObserver : undefined;
+    if (!Observer || !document?.documentElement) return undefined;
+    const observer = new Observer(() => {
+      setThemeRev((rev) => rev + 1);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,7 +53,7 @@ export default function ChartCanvas({
         chartRef.current = null;
       }
     };
-  }, [type, data, options]);
+  }, [type, data, options, themeRev]);
 
   return (
     <div className="chart-wrapper" style={{ height: `${height}px` }}>

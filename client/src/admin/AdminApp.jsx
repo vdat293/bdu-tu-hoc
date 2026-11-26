@@ -86,6 +86,16 @@ export default function AdminApp() {
   }, [theme]);
 
   useEffect(() => {
+    if (
+      typeof window !== 'undefined'
+      && typeof window.scrollTo === 'function'
+      && !/jsdom/i.test(window.navigator?.userAgent || '')
+    ) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     setUnauthorizedHandler(() => {
       setAuthModal({ open: true, dismissible: false });
     });
@@ -194,7 +204,10 @@ export default function AdminApp() {
               type="button"
               className="btn-change-key"
               id="btn-open-auth-modal"
-              onClick={() => setAuthModal({ open: true, dismissible: true })}
+              onClick={() => {
+                setSidebarOpen(false);
+                setAuthModal({ open: true, dismissible: true });
+              }}
             >
               Đổi khóa
             </button>

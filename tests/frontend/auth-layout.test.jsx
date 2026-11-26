@@ -103,6 +103,8 @@ describe('AuthLayout trên /login', () => {
   afterEach(() => {
     cleanup();
     document.body.className = '';
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem('bdu_theme');
   });
 
   it('giữ blob CSS làm fallback mặc định trong môi trường không có WebGL', () => {
@@ -156,5 +158,34 @@ describe('AuthLayout trên /login', () => {
     expect(document.body.classList.contains('password-active')).toBe(false);
     // Class cũ không còn ai dùng: CSS chỉ nghe .password-active.
     expect(document.body.classList.contains('password-focused')).toBe(false);
+  });
+
+  it('cho phép chuyển Light/Dark trên /login bằng #btn-login-theme-toggle và lưu bdu_theme', async () => {
+    renderAuthRoutes();
+    const toggle = await screen.findByRole('button', { name: /Chuyển sang giao diện Tối/i });
+    expect(document.body.classList.contains('theme-light')).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('light');
+
+    fireEvent.click(toggle);
+    expect(document.body.classList.contains('theme-dark')).toBe(true);
+    expect(document.body.classList.contains('theme-light')).toBe(false);
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('bdu_theme')).toBe('dark');
+
+    fireEvent.click(screen.getByRole('button', { name: /Chuyển sang giao diện Sáng/i }));
+    expect(document.body.classList.contains('theme-light')).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('bdu_theme')).toBe('light');
+  });
+
+  it('khóa màn đăng nhập ở phong cách Neumorphism kể cả khi đã chọn Claymorphism và khôi phục lại sau khi rời trang', async () => {
+    localStorage.setItem('bdu_ui_style', 'claymorphism');
+    const { unmount } = renderAuthRoutes();
+    expect(await screen.findByLabelText('Mã Số Sinh Viên (MSSV)')).toBeInTheDocument();
+    expect(document.documentElement.dataset.uiStyle).toBe('neumorphism');
+    expect(localStorage.getItem('bdu_ui_style')).toBe('claymorphism');
+    unmount();
+    expect(localStorage.getItem('bdu_ui_style')).toBe('claymorphism');
+    localStorage.removeItem('bdu_ui_style');
   });
 });

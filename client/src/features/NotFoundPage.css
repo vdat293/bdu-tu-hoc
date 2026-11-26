@@ -19,19 +19,19 @@
   --nf-ly: 54%;
   --nf-clip-r: calc(var(--nf-lens-r) / var(--nf-zoom));
 
-  --nf-ink: #2a2622;
-  --nf-ink-soft: rgba(42, 38, 34, 0.82);
-  --nf-glow: rgba(255, 246, 222, 0.6);
-  --nf-glyph-base: rgba(255, 246, 222, 0.42);
-  --nf-glyph-found: rgba(42, 26, 40, 0.72);
-  --nf-note: rgba(42, 26, 40, 0.8);
-  --nf-note-shadow: rgba(255, 246, 222, 0.7);
-  --nf-floor-veil: rgba(42, 26, 40, 0.18);
-  --nf-floor-line: rgba(255, 246, 222, 0.3);
-  --nf-ring: #2a2622;
-  --nf-ring-inner: rgba(255, 246, 222, 0.42);
-  --nf-handle: #2a2622;
-  --nf-handle-dark: #16130f;
+  --nf-ink: #111111;
+  --nf-ink-soft: #27272a;
+  --nf-glow: rgba(255, 253, 245, 0.85);
+  --nf-glyph-base: rgba(255, 253, 245, 0.45);
+  --nf-glyph-found: rgba(17, 17, 17, 0.86);
+  --nf-note: #111111;
+  --nf-note-shadow: #111111;
+  --nf-floor-veil: rgba(17, 17, 17, 0.14);
+  --nf-floor-line: #111111;
+  --nf-ring: #111111;
+  --nf-ring-inner: #fffdf5;
+  --nf-handle: #111111;
+  --nf-handle-dark: #111111;
   --nf-check-a: rgba(42, 38, 34, 0.1);
   --nf-check-b: rgba(255, 246, 222, 0.32);
   --nf-glass-veil: linear-gradient(180deg, rgba(255, 246, 222, 0.13), rgba(255, 246, 222, 0.02));
@@ -87,12 +87,16 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 12px;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  background: #fffdf5;
+  font-family: var(--font-display, var(--font-main));
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--nf-ink);
-  text-shadow: 0 1px 18px var(--nf-glow);
-  opacity: 0.86;
+  box-shadow: 3px 3px 0 #111111;
   pointer-events: none;
 }
 
@@ -110,17 +114,6 @@
   pointer-events: none;
 }
 
-/* Màn sương kem giữ phần chữ luôn đọc được khi dải màu trôi qua. */
-.nf-copy::before {
-  content: '';
-  position: absolute;
-  inset: -4% -14% auto -14%;
-  z-index: -1;
-  height: 210%;
-  background: radial-gradient(closest-side at 50% 40%, rgba(255, 246, 222, 0.72), rgba(255, 246, 222, 0.3) 62%, rgba(255, 246, 222, 0) 100%);
-  pointer-events: none;
-}
-
 .nf-title {
   margin: 0;
   font-family: var(--font-display, var(--font-main));
@@ -129,16 +122,21 @@
   letter-spacing: -0.02em;
   line-height: 1.15;
   color: var(--nf-ink);
-  text-shadow: 0 0 30px var(--nf-glow), 0 2px 60px rgba(255, 246, 222, 0.45);
+  text-shadow: 3px 3px 0 #fffdf5;
 }
 
 .nf-desc {
+  width: fit-content;
   max-width: 44ch;
-  margin: 10px auto 0;
+  margin: 14px auto 0;
+  padding: 8px 14px;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  background: #fffdf5;
+  box-shadow: 3px 3px 0 #111111;
   font-size: clamp(0.9rem, 1.6vw, 1rem);
-  font-weight: 600;
-  color: var(--nf-ink-soft);
-  text-shadow: 0 1px 22px rgba(255, 246, 222, 0.7);
+  font-weight: 700;
+  color: var(--nf-ink);
 }
 
 .nf-cta {
@@ -147,16 +145,28 @@
   pointer-events: auto;
 }
 
-/* Nút theo đúng mực của palette Solar flare thay vì xanh BDU. */
+/* Nút Neo-Brutalism nổi bật trên nền Solar flare */
 .nf-page .nf-cta {
-  background: var(--nf-ink);
-  color: var(--nf-solar-rice);
-  box-shadow: 0 12px 30px -14px rgba(42, 26, 40, 0.8);
+  background: #facc15;
+  color: #111111;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  font-family: var(--font-display, var(--font-main));
+  font-weight: 800;
+  box-shadow: 4px 4px 0 #111111;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, color 0.12s ease;
 }
 
 .nf-page .nf-cta:hover {
-  background: #17140f;
-  box-shadow: 0 16px 34px -14px rgba(42, 26, 40, 0.85);
+  background: #1d4ed8;
+  color: #ffffff;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 #111111;
+}
+
+.nf-page .nf-cta:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #111111;
 }
 
 /* Trỏ chuột được "cầm" bởi kính lúp, chỉ ẩn khi vòng lặp đã chạy thật. */
@@ -179,7 +189,7 @@
   z-index: 1;
   height: 36%;
   background: linear-gradient(180deg, transparent, var(--nf-floor-veil));
-  border-top: 1px solid var(--nf-floor-line);
+  border-top: 2px solid var(--nf-floor-line);
   pointer-events: none;
 }
 
@@ -212,13 +222,12 @@
 
 .nf-glyph-base {
   color: var(--nf-glyph-base);
-  text-shadow: 0 0 70px rgba(255, 246, 222, 0.35);
 }
 
-/* Dưới kính chữ hiện rõ thành mực đậm, kèm quầng kem để không chìm vào dải màu. */
+/* Dưới kính chữ hiện rõ thành mực đậm kiểu Neo-Brutalism */
 .nf-glyph-found {
   color: var(--nf-glyph-found);
-  text-shadow: 0 0 30px rgba(255, 246, 222, 0.5);
+  text-shadow: 4px 4px 0 #fffdf5;
 }
 
 /* Tấm kính: cắt đúng vòng tròn quanh con trỏ rồi phóng 1.3 lần quanh chính
@@ -233,13 +242,17 @@
 
 .nf-note {
   position: absolute;
+  padding: 3px 8px;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  background: #fffdf5;
+  box-shadow: 2px 2px 0 #111111;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: clamp(0.6rem, 1.15vw, 0.8rem);
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--nf-note);
-  text-shadow: 0 1px 12px var(--nf-note-shadow), 0 0 3px var(--nf-note-shadow);
   white-space: nowrap;
   transform: translate(-50%, -50%) rotate(var(--nf-note-rotate, -3deg));
 }
@@ -269,9 +282,10 @@
   width: var(--nf-handle-len);
   height: var(--nf-handle-w);
   margin-top: calc(var(--nf-handle-w) / -2);
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--nf-handle), var(--nf-handle-dark));
-  box-shadow: 0 8px 14px -8px rgba(42, 26, 40, 0.6);
+  border: 2px solid #111111;
+  border-radius: 4px;
+  background: var(--nf-handle);
+  box-shadow: 3px 3px 0 rgba(17, 17, 17, 0.5);
   transform: rotate(var(--nf-handle-angle)) translateX(calc(var(--nf-lens-r) * 0.72));
   transform-origin: 0 50%;
 }
@@ -283,8 +297,9 @@
   right: 0;
   width: 26%;
   height: 136%;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--nf-handle-dark), color-mix(in srgb, var(--nf-handle-dark) 70%, #000));
+  border-radius: 4px;
+  border: 2px solid #111111;
+  background: #facc15;
 }
 
 .nf-lens-glass {
@@ -297,16 +312,19 @@
     var(--nf-glass-veil);
   background-position: 0 0, 6px 6px, 0 0;
   background-size: 12px 12px, 12px 12px, 100% 100%;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nf-ring) 22%, transparent);
+  box-shadow: inset 0 0 0 2px #111111;
 }
 
 .nf-lens-glass::after {
   content: '';
   position: absolute;
-  inset: 8%;
+  inset: 14%;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 24%, var(--nf-shine) 0%, transparent 40%);
-  opacity: 0.42;
+  border-top: 3px solid rgba(255, 253, 245, 0.7);
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transform: rotate(-32deg);
 }
 
 .nf-lens-ring {
@@ -315,8 +333,8 @@
   border: clamp(7px, 0.9vw, 11px) solid var(--nf-ring);
   border-radius: 50%;
   box-shadow:
-    inset 0 0 0 1px var(--nf-ring-inner),
-    0 22px 34px -20px rgba(42, 26, 40, 0.6);
+    inset 0 0 0 2px var(--nf-ring-inner),
+    4px 4px 0 rgba(17, 17, 17, 0.65);
 }
 
 @media (max-width: 720px) {

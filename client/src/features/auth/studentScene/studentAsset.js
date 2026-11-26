@@ -14,7 +14,7 @@
 export const STUDENT_MODEL_URL = '/assets/models/bdu-student.glb';
 
 // Ô atlas (cột, hàng) theo lưới 8x8 trên texture 1024px → màu mới [đầu, cuối].
-const RED_GRADIENT = ['#c62b30', '#8c1515'];
+const JACKET_GRADIENT = ['#2563eb', '#1d4ed8'];
 const WHITE_GRADIENT = ['#fbfcff', '#ccd2e0'];
 const JACKET_CELLS = ['0,2', '1,2', '0,3', '1,3'];
 const HAIR_CELLS = ['1,0', '1,1'];
@@ -54,7 +54,7 @@ export function recolorStudentAtlas(THREE, texture) {
       drawGradient(ctx, col * cellWidth, row * cellHeight, cellWidth, cellHeight, colors);
     });
   };
-  paint(JACKET_CELLS, RED_GRADIENT);
+  paint(JACKET_CELLS, JACKET_GRADIENT);
   paint(HAIR_CELLS, WHITE_GRADIENT);
   paint(LEATHER_CELLS, WHITE_GRADIENT);
 
@@ -218,7 +218,7 @@ function createBadge(THREE) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#e0b23c';
+  ctx.fillStyle = '#facc15';
   ctx.textAlign = 'center';
   ctx.font = '800 92px "Space Grotesk", "Segoe UI", Arial, sans-serif';
   ctx.fillText('BDU', canvas.width / 2, 84);

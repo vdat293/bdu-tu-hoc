@@ -110,8 +110,11 @@ export default function VpsMonitorPage({
   const freeRamPctBar = Math.max(0, 100 - usedRamPctBar - cacheRamPctBar);
 
   const isDark = theme === 'dark';
-  const textColor = isDark ? '#94A3B8' : '#475569';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)';
+  const textColor = isDark ? '#CBD5E1' : '#111111';
+  const gridColor = isDark ? 'rgba(228, 228, 231, 0.14)' : 'rgba(17, 17, 17, 0.12)';
+  const axisBorder = isDark ? '#E4E4E7' : '#111111';
+  const blueColor = isDark ? '#3B82F6' : '#1D4ED8';
+  const greenColor = isDark ? '#34D399' : '#10B981';
 
   const historyChart = useMemo(() => {
     const labels = historyRows.map((pt) => {
@@ -126,20 +129,22 @@ export default function VpsMonitorPage({
           {
             label: 'RAM đang dùng (%)',
             data: historyRows.map((p) => safeNumber(p.ramUsedPct)),
-            borderColor: '#2563EB',
-            backgroundColor: 'rgba(37, 99, 235, 0.12)',
+            borderColor: blueColor,
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(29, 78, 216, 0.12)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.3,
-            pointRadius: 2
+            tension: 0,
+            pointRadius: 3
           },
           {
             label: 'CPU (%)',
             data: historyRows.map((p) => safeNumber(p.cpuPct)),
-            borderColor: '#15803D',
-            backgroundColor: 'rgba(21, 128, 61, 0.08)',
+            borderColor: greenColor,
+            backgroundColor: isDark ? 'rgba(52, 211, 153, 0.14)' : 'rgba(16, 185, 129, 0.1)',
+            borderWidth: 2.5,
             fill: true,
-            tension: 0.3,
-            pointRadius: 2
+            tension: 0,
+            pointRadius: 3
           }
         ]
       },
@@ -148,21 +153,22 @@ export default function VpsMonitorPage({
         plugins: {
           legend: {
             position: 'top',
-            labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12 } }
+            labels: { color: textColor, font: { family: 'Manrope, sans-serif', size: 12, weight: '700' } }
           }
         },
         scales: {
-          x: { ticks: { color: textColor, maxTicksLimit: 10 }, grid: { color: gridColor } },
+          x: { border: { color: axisBorder, width: 2 }, ticks: { color: textColor, maxTicksLimit: 10 }, grid: { color: gridColor } },
           y: {
             beginAtZero: true,
             max: 100,
+            border: { color: axisBorder, width: 2 },
             ticks: { color: textColor, callback: (v) => `${v}%` },
             grid: { color: gridColor }
           }
         }
       }
     };
-  }, [historyRows, textColor, gridColor]);
+  }, [historyRows, textColor, gridColor, axisBorder, blueColor, greenColor, isDark]);
 
   const handleCopyCommand = async (cmdObj) => {
     try {

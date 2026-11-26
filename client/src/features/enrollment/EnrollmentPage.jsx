@@ -27,6 +27,7 @@ import { buildScheduleCells } from './schedule-cells.js';
 import { clearRunId, readHiddenRunId, readRunId, saveHiddenRunId, saveRunId } from './run-storage.js';
 import { DAY_OPTIONS, SESSION_OPTIONS, tkbBadges, tkbMatchesDay, tkbMatchesSession } from './tkb.js';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
+import { ImpactButton } from '../../lib/bdu-vfx/index.js';
 
 const FALLBACK_FILTERS = [
   { value: 10, label: 'Lọc theo môn học', isDefault: true },
@@ -991,10 +992,10 @@ export default function EnrollmentPage() {
                 <h2>Danh sách ưu tiên</h2>
                 <p className="enroll-sub">{selected.length ? `${grouped.length} môn · ${selected.length} lựa chọn · ${selectedCredits} TC chính` : 'Chưa chọn môn nào'}</p>
               </div>
-              <button type="button" className="enroll-primary sm" onClick={saveList} disabled={prioritySaving || selected.length === 0}>
+              <ImpactButton type="button" tone="primary" className="enroll-primary sm" onClick={saveList} disabled={prioritySaving || selected.length === 0}>
                 {prioritySaving ? 'Đang lưu…' : dirty ? 'Lưu thay đổi' : 'Đã lưu'}
                 {dirty ? <span className="enroll-dirty-dot" aria-hidden="true" /> : null}
-              </button>
+              </ImpactButton>
             </div>
             {priorityError ? <p className="enroll-error">{priorityError}</p> : null}
             {scheduleConflicts.length ? (
@@ -1133,9 +1134,9 @@ export default function EnrollmentPage() {
               </label>
 
               <div className="enroll-run-actions">
-                <button type="button" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
+                <ImpactButton type="button" tone="primary" className="enroll-primary" onClick={handleStart} disabled={!canActivate}>
                   <IconBolt /> {starting ? 'Đang khởi chạy…' : activeRun ? 'Đang chạy…' : 'Kích hoạt Auto'}
-                </button>
+                </ImpactButton>
                 {activeRun ? (
                   <button type="button" className="enroll-ghost" onClick={handleStop}><IconStop /> Dừng</button>
                 ) : (
@@ -1216,7 +1217,7 @@ export default function EnrollmentPage() {
         <div className="enroll-card">
           <div className="enroll-card-head">
             <div>
-              <h2>Mô đã đăng ký</h2>
+              <h2>Môn đã đăng ký</h2>
               <p className="enroll-sub">{registeredRows.length ? `${registeredRows.length} môn · ${registeredCredits} TC` : 'Chưa đăng ký môn nào'}</p>
             </div>
             <button type="button" className="enroll-ghost" onClick={loadRegistered} disabled={loadingRegistered}>
