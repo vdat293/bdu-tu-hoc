@@ -18,7 +18,7 @@
         "A": "Toán giải tích, Thiết kế đồ họa, và Tâm lý học hành vi",
         "B": "Phần cứng máy tính, Mạng viễn thông, và Quản trị kinh doanh",
         "C": "Kỹ thuật điện tử, Khoa học dữ liệu lớn, và Kế toán tài chính",
-        "D": "Toán học & Thống kê, Khoa học máy tính & Công nghệ thông tin, và Kiến thức chuyên ngành (Domain Knowledge)"
+        "D": "Toán học & Thống kê, Khoa học máy tính & Công nghệ thông tin, và Kiến thức chuyên ngành"
       },
       "answer": "D",
       "explanation": "Theo biểu đồ Venn kinh điển của Drew Conway, Khoa học Dữ liệu là sự giao thoa của 3 trụ cột: Toán & Thống kê, Tin học/Kỹ năng lập trình (Hacking skills/Computer Science), và Kiến thức lĩnh vực chuyên môn (Domain Knowledge)."
@@ -28,10 +28,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Trong biểu đồ Venn của Drew Conway về Khoa học Dữ liệu, phần giao thoa giữa 'Khoa học máy tính (Lập trình)' và 'Toán học & Thống kê' (thiếu Kiến thức chuyên ngành) đại diện cho lĩnh vực nào?",
       "options": {
-        "A": "Vùng nguy hiểm (Danger Zone)",
-        "B": "Phần mềm truyền thống (Traditional Software)",
-        "C": "Machine Learning (Học máy)",
-        "D": "Nghiên cứu truyền thống (Traditional Research)"
+        "A": "Vùng nguy hiểm",
+        "B": "Phần mềm truyền thống",
+        "C": "Machine Learning",
+        "D": "Nghiên cứu truyền thống"
       },
       "answer": "C",
       "explanation": "Sự kết hợp giữa kỹ năng lập trình máy tính và kiến thức toán học & thống kê chính là nền tảng cốt lõi của Machine Learning (Học máy)."
@@ -44,7 +44,7 @@
         "A": "Traditional Research",
         "B": "Deep Learning",
         "C": "Machine Learning",
-        "D": "Danger Zone (Vùng nguy hiểm)"
+        "D": "Danger Zone"
       },
       "answer": "D",
       "explanation": "Danger Zone là vùng mà người làm có kỹ năng code và hiểu bài toán kinh doanh nhưng thiếu nền tảng toán/thống kê, dễ dẫn đến việc ngộ nhận mô hình, áp dụng sai thuật toán hoặc rút ra kết luận giả tạo từ dữ liệu."
@@ -54,9 +54,9 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Vùng giao thoa giữa 'Toán học & Thống kê' và 'Kiến thức chuyên môn' (Domain Knowledge) mà thiếu kỹ năng tính toán/lập trình máy tính đại diện cho phương pháp nào?",
       "options": {
-        "A": "Trí tuệ nhân tạo (AI)",
+        "A": "Trí tuệ nhân tạo",
         "B": "Phần mềm ứng dụng",
-        "C": "Nghiên cứu truyền thống (Traditional Research)",
+        "C": "Nghiên cứu truyền thống",
         "D": "Điện toán đám mây"
       },
       "answer": "C",
@@ -95,7 +95,7 @@
       "options": {
         "A": "Khảo sát -> Phỏng vấn -> Phân tích -> Triển khai",
         "B": "Toán học -> Vật lý học -> Tin học -> Trí tuệ nhân tạo",
-        "C": "Thực nghiệm (Empirical) -> Lý thuyết (Theoretical) -> Mô phỏng điện toán (Computational) -> Khám phá dựa trên dữ liệu (Data-driven)",
+        "C": "Thực nghiệm -> Lý thuyết -> Mô phỏng điện toán -> Khám phá dựa trên dữ liệu",
         "D": "Thủ công -> Cơ giới hóa -> Tự động hóa -> Kỹ thuật số"
       },
       "answer": "C",
@@ -119,10 +119,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Tạp chí Harvard Business Review (HBR) vào năm 2012 đã gọi nghề nào là 'Nghề quyến rũ nhất thế kỷ 21' (The Sexiest Job of the 21st Century)?",
       "options": {
-        "A": "Data Scientist (Nhà khoa học dữ liệu)",
-        "B": "Cloud Architect (Kiến trúc sư đám mây)",
-        "C": "Software Engineer (Kỹ sư phần mềm)",
-        "D": "Cybersecurity Analyst (Chuyên viên an ninh mạng)"
+        "A": "Data Scientist",
+        "B": "Cloud Architect",
+        "C": "Software Engineer",
+        "D": "Cybersecurity Analyst"
       },
       "answer": "A",
       "explanation": "Tháng 10/2012, Harvard Business Review xuất bản bài báo nổi tiếng khẳng định Data Scientist là 'The Sexiest Job of the 21st Century'."
@@ -132,10 +132,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Yếu tố nào sau đây KHÔNG PHẢI là nguyên nhân chính thúc đẩy sự bùng nổ của Khoa học Dữ liệu trong thập kỷ qua?",
       "options": {
-        "A": "Sự gia tăng đột biến của năng lực phần cứng tính toán (GPU, TPU, Cloud Computing)",
-        "B": "Sự phát triển mạnh mẽ của các thuật toán học máy và mạng nơ-ron sâu (Deep Learning)",
+        "A": "Sự gia tăng đột biến của năng lực phần cứng tính toán",
+        "B": "Sự phát triển mạnh mẽ của các thuật toán học máy và mạng nơ-ron sâu",
         "C": "Sự suy giảm hoàn toàn vai trò của các thuật toán toán học truyền thống",
-        "D": "Sự bùng nổ khối lượng dữ liệu khổng lồ (Big Data) từ internet, thiết bị di động và IoT"
+        "D": "Sự bùng nổ khối lượng dữ liệu khổng lồ từ internet, thiết bị di động và IoT"
       },
       "answer": "C",
       "explanation": "Các thuật toán toán học truyền thống vẫn là nền tảng cốt lõi của KHDL chứ không hề bị suy giảm hay mất đi vai trò."
@@ -148,7 +148,7 @@
         "A": "Data -> Knowledge -> Information -> Wisdom",
         "B": "Information -> Data -> Knowledge -> Wisdom",
         "C": "Wisdom -> Knowledge -> Information -> Data",
-        "D": "Data (Dữ liệu) -> Information (Thông tin) -> Knowledge (Tri thức) -> Wisdom (Trí tuệ)"
+        "D": "Data -> Information -> Knowledge -> Wisdom"
       },
       "answer": "D",
       "explanation": "Mô hình DIKW chuẩn gồm 4 tầng từ thấp đến cao: Dữ liệu (Data), Thông tin (Information), Tri thức (Knowledge), và Trí tuệ (Wisdom)."
@@ -171,10 +171,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Trong mô hình DIKW, khi con số '39' được gắn vào ngữ cảnh 'Nhiệt độ cơ thể của bệnh nhân A là 39 độ C', nó đã chuyển hóa thành tầng nào?",
       "options": {
-        "A": "Wisdom (Trí tuệ)",
-        "B": "Data (Dữ liệu)",
-        "C": "Information (Thông tin)",
-        "D": "Knowledge (Tri thức)"
+        "A": "Wisdom",
+        "B": "Data",
+        "C": "Information",
+        "D": "Knowledge"
       },
       "answer": "C",
       "explanation": "Khi dữ liệu được đặt vào ngữ cảnh và mang lại ý nghĩa rõ ràng (trả lời cho câu hỏi Who, What, Where, When), nó trở thành Thông tin (Information)."
@@ -184,10 +184,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Nhận định 'Nhiệt độ 39 độ C kết hợp với triệu chứng ho khan và đau họng là dấu hiệu lâm sàng của nhiễm trùng đường hô hấp' thuộc tầng nào trong mô hình DIKW?",
       "options": {
-        "A": "Information (Thông tin)",
-        "B": "Noise (Nhiễu)",
-        "C": "Data (Dữ liệu)",
-        "D": "Knowledge (Tri thức)"
+        "A": "Information",
+        "B": "Noise",
+        "C": "Data",
+        "D": "Knowledge"
       },
       "answer": "D",
       "explanation": "Tri thức (Knowledge) là sự tổng hợp, liên kết các thông tin lại với nhau cùng kinh nghiệm và quy luật (trả lời cho câu hỏi How - Như thế nào)."
@@ -197,7 +197,7 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Tầng 'Wisdom' (Trí tuệ) trong mô hình DIKW thể hiện điều gì?",
       "options": {
-        "A": "Khả năng ứng dụng tri thức một cách đúng đắn, có đạo đức và tối ưu nhất để đưa ra quyết định hành động trong tương lai (trả lời Why/What is best)",
+        "A": "Khả năng ứng dụng tri thức một cách đúng đắn, có đạo đức và tối ưu nhất để đưa ra quyết định hành động trong tương lai",
         "B": "Khả năng lưu trữ hàng tỷ bản ghi trong hệ cơ sở dữ liệu phân tán",
         "C": "Khả năng chạy code Python không phát sinh lỗi cú pháp",
         "D": "Khả năng vẽ biểu đồ phân phối chuẩn"
@@ -236,10 +236,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Giai đoạn đầu tiên và mang tính chất định hướng quan trọng nhất trong quy trình CRISP-DM là gì?",
       "options": {
-        "A": "Data Preparation (Chuẩn bị dữ liệu)",
-        "B": "Deployment (Triển khai mô hình)",
-        "C": "Business Understanding (Hiểu bài toán nghiệp vụ/kinh doanh)",
-        "D": "Modeling (Xây dựng mô hình)"
+        "A": "Data Preparation",
+        "B": "Deployment",
+        "C": "Business Understanding",
+        "D": "Modeling"
       },
       "answer": "C",
       "explanation": "Business Understanding là bước đầu tiên: xác định mục tiêu kinh doanh, tiêu chí thành công và chuyển hóa bài toán thực tế thành bài toán phân tích dữ liệu."
@@ -262,10 +262,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Trong quy trình CRISP-DM, giai đoạn nào thường chiếm nhiều thời gian và công sức nhất của nhà khoa học dữ liệu (thường từ 60% đến 80%)?",
       "options": {
-        "A": "Data Preparation (Chuẩn bị và tiền xử lý dữ liệu)",
-        "B": "Evaluation (Đánh giá mô hình)",
-        "C": "Deployment (Triển khai)",
-        "D": "Business Understanding (Hiểu bài toán nghiệp vụ)"
+        "A": "Data Preparation",
+        "B": "Evaluation",
+        "C": "Deployment",
+        "D": "Business Understanding"
       },
       "answer": "A",
       "explanation": "Thực tế ngành KHDL chỉ ra rằng giai đoạn Data Preparation (làm sạch, tích hợp, biến đổi, giảm chiều dữ liệu) chiếm phần lớn thời gian (60-80% dự án)."
@@ -278,7 +278,7 @@
         "A": "Tính phi tuyến tính và lặp lại liên tục; kết quả ở bước sau có thể yêu cầu quay lại tinh chỉnh bước trước",
         "B": "Dữ liệu một khi đã nạp thì không thể sửa chữa",
         "C": "Mô hình chỉ được huấn luyện đúng một lần duy nhất",
-        "D": "Quy trình đường thẳng nghiêm ngặt dạng thác nước (Waterfall), không được phép quay lại"
+        "D": "Quy trình đường thẳng nghiêm ngặt dạng thác nước, không được phép quay lại"
       },
       "answer": "A",
       "explanation": "CRISP-DM là một quy trình lặp (iterative process). Ví dụ: từ Evaluation có thể quay lại Business Understanding, hoặc từ Modeling quay lại Data Preparation."
@@ -288,10 +288,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Trong quy trình OSEMN của Khoa học Dữ liệu, chữ cái 'S' đại diện cho bước nào?",
       "options": {
-        "A": "Scrub (Làm sạch và tiền xử lý dữ liệu)",
-        "B": "Store (Lưu trữ dữ liệu vào kho)",
-        "C": "Scale (Mở rộng quy mô hệ thống)",
-        "D": "Select (Lựa chọn thuật toán)"
+        "A": "Scrub",
+        "B": "Store",
+        "C": "Scale",
+        "D": "Select"
       },
       "answer": "A",
       "explanation": "OSEMN là viết tắt của: Obtain (Thu thập) -> Scrub (Làm sạch) -> Explore (Khám phá) -> Model (Xây dựng mô hình) -> iNterpret (Diễn giải kết quả)."
@@ -301,10 +301,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Chữ 'E' trong quy trình OSEMN đại diện cho hoạt động nào?",
       "options": {
-        "A": "Extract (Trích xuất dữ liệu)",
-        "B": "Execute (Thực thi mã nguồn)",
-        "C": "Evaluate (Đánh giá mô hình)",
-        "D": "Explore (Khám phá dữ liệu / Phân tích khám phá EDA)"
+        "A": "Extract",
+        "B": "Execute",
+        "C": "Evaluate",
+        "D": "Explore"
       },
       "answer": "D",
       "explanation": "Explore là giai đoạn phân tích khám phá dữ liệu (Exploratory Data Analysis - EDA), trực quan hóa để tìm quy luật, phân phối và giả thuyết ban đầu."
@@ -314,10 +314,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Chữ 'N' ở cuối viết tắt OSEMN là đại diện cho từ nào?",
       "options": {
-        "A": "Network (Kết nối mạng máy tính)",
-        "B": "Nullify (Xóa bỏ giá trị rỗng)",
-        "C": "iNterpret (Diễn giải và truyền đạt ý nghĩa kết quả)",
-        "D": "Normalize (Chuẩn hóa dữ liệu)"
+        "A": "Network",
+        "B": "Nullify",
+        "C": "iNterpret",
+        "D": "Normalize"
       },
       "answer": "C",
       "explanation": "Chữ N cuối cùng lấy từ iNterpret: Diễn giải ý nghĩa mô hình, chuyển hóa kết quả phân tích thành câu chuyện dữ liệu phục vụ quyết định kinh doanh."
@@ -342,7 +342,7 @@
       "options": {
         "A": "AI là tập con của Machine Learning, và Machine Learning là tập con của Deep Learning",
         "B": "Deep Learning bao trùm toàn bộ AI và Machine Learning",
-        "C": "Deep Learning là tập con của Machine Learning, và Machine Learning là tập con của Trí tuệ nhân tạo (AI)",
+        "C": "Deep Learning là tập con của Machine Learning, và Machine Learning là tập con của Trí tuệ nhân tạo",
         "D": "Ba lĩnh vực này hoàn toàn độc lập và không chứa nhau"
       },
       "answer": "C",
@@ -356,7 +356,7 @@
         "A": "Chuyên thiết kế logo và giao diện người dùng ứng dụng di động",
         "B": "Chỉ làm nhiệm vụ dán nhãn dữ liệu thủ công",
         "C": "Trực tiếp thuyết trình báo cáo chiến lược doanh thu cho Hội đồng quản trị",
-        "D": "Xây dựng và duy trì đường ống dữ liệu (Data Pipeline), cơ sở hạ tầng lưu trữ và kiến trúc dữ liệu sạch, sẵn sàng cho phân tích"
+        "D": "Xây dựng và duy trì đường ống dữ liệu, cơ sở hạ tầng lưu trữ và kiến trúc dữ liệu sạch, sẵn sàng cho phân tích"
       },
       "answer": "D",
       "explanation": "Data Engineer phụ trách hạ tầng dữ liệu: pipeline ETL/ELT, kho dữ liệu, đảm bảo dữ liệu di chuyển trơn tru, ổn định và sẵn sàng cho Data Analyst/Scientist sử dụng."
@@ -381,7 +381,7 @@
       "options": {
         "A": "Data -> Information -> Knowledge -> Wisdom",
         "B": "Predictive -> Prescriptive -> Descriptive -> Diagnostic",
-        "C": "Descriptive (Mô tả) -> Diagnostic (Chẩn đoán) -> Predictive (Dự đoán) -> Prescriptive (Đề xuất/Chỉ định)",
+        "C": "Descriptive -> Diagnostic -> Predictive -> Prescriptive",
         "D": "Diagnostic -> Descriptive -> Prescriptive -> Predictive"
       },
       "answer": "C",
@@ -392,10 +392,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Câu hỏi 'Tại sao doanh thu của công ty giảm 15% trong quý vừa qua?' thuộc cấp độ phân tích dữ liệu nào?",
       "options": {
-        "A": "Diagnostic Analytics (Phân tích chẩn đoán)",
-        "B": "Descriptive Analytics (Phân tích mô tả)",
-        "C": "Predictive Analytics (Phân tích dự đoán)",
-        "D": "Prescriptive Analytics (Phân tích đề xuất)"
+        "A": "Diagnostic Analytics",
+        "B": "Descriptive Analytics",
+        "C": "Predictive Analytics",
+        "D": "Prescriptive Analytics"
       },
       "answer": "A",
       "explanation": "Diagnostic Analytics đi tìm căn nguyên, nguyên nhân gốc rễ (Root Cause) để trả lời cho câu hỏi 'Tại sao điều đó lại xảy ra?'."
@@ -405,10 +405,10 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Câu hỏi 'Nếu tăng ngân sách quảng cáo thêm 20%, doanh số tháng tới sẽ là bao nhiêu?' thuộc cấp độ phân tích nào?",
       "options": {
-        "A": "Diagnostic Analytics (Phân tích chẩn đoán)",
-        "B": "Predictive Analytics (Phân tích dự đoán)",
-        "C": "Retrospective Analytics (Phân tích hồi cứu)",
-        "D": "Descriptive Analytics (Phân tích mô tả)"
+        "A": "Diagnostic Analytics",
+        "B": "Predictive Analytics",
+        "C": "Retrospective Analytics",
+        "D": "Descriptive Analytics"
       },
       "answer": "B",
       "explanation": "Predictive Analytics sử dụng dữ liệu lịch sử và các mô hình thống kê/học máy để dự đoán xu hướng hoặc giá trị có thể xảy ra trong tương lai."
@@ -418,7 +418,7 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Hệ thống định tuyến của Grab/Uber tự động chỉ định tài xế phù hợp nhất và gợi ý lộ trình di chuyển tối ưu theo thời gian thực thuộc cấp độ phân tích nào?",
       "options": {
-        "A": "Prescriptive Analytics (Phân tích đề xuất/chỉ định)",
+        "A": "Prescriptive Analytics",
         "B": "Exploratory Analytics",
         "C": "Diagnostic Analytics",
         "D": "Descriptive Analytics"
@@ -431,7 +431,7 @@
       "chapter": "Chương 1: Tổng quan về Khoa học Dữ liệu",
       "question": "Khai phá dữ liệu (Data Mining) đóng vai trò gì trong mối quan hệ với Khoa học Dữ liệu?",
       "options": {
-        "A": "Là quá trình phát hiện các mẫu (patterns), quy luật tiềm ẩn và thông tin hữu ích từ các tập dữ liệu lớn bằng kỹ thuật tính toán",
+        "A": "Là quá trình phát hiện các mẫu, quy luật tiềm ẩn và thông tin hữu ích từ các tập dữ liệu lớn bằng kỹ thuật tính toán",
         "B": "Là hành vi sao chép trộm dữ liệu trái phép của người khác",
         "C": "Là công việc lắp ráp các linh kiện máy chủ vật lý",
         "D": "Là việc xóa toàn bộ các bản ghi không cần thiết trong database"
@@ -459,7 +459,7 @@
       "options": {
         "A": "Mã hóa khóa công khai RSA",
         "B": "Nén tệp tin định dạng ZIP",
-        "C": "Lọc cộng tác (Collaborative Filtering) và Lọc dựa trên nội dung (Content-based Filtering)",
+        "C": "Lọc cộng tác và Lọc dựa trên nội dung",
         "D": "Kỹ thuật phân mảnh ổ cứng định kỳ"
       },
       "answer": "C",
@@ -473,7 +473,7 @@
         "A": "Đếm số lượng tiền giấy tại quầy giao dịch",
         "B": "Bảo quản két sắt chống cháy",
         "C": "Trang trí không gian phòng chờ ngân hàng",
-        "D": "Phát hiện gian lận giao dịch thẻ tín dụng (Fraud Detection) và chấm điểm tín dụng (Credit Scoring)"
+        "D": "Phát hiện gian lận giao dịch thẻ tín dụng và chấm điểm tín dụng"
       },
       "answer": "D",
       "explanation": "Phát hiện gian lận theo thời gian thực và đánh giá rủi ro cấp tín dụng là hai bài toán kinh điển của Khoa học Dữ liệu trong ngành tài chính."
@@ -525,7 +525,7 @@
         "A": "Chỉ tin tuyệt đối vào kết quả chạy ra từ thuật toán mà không cần kiểm chứng",
         "B": "Học thuộc lòng toàn bộ cú pháp của mọi ngôn ngữ lập trình",
         "C": "Khả năng gõ bàn phím tốc độ 120 từ/phút",
-        "D": "Tư duy phản biện (Critical Thinking) và khả năng đặt câu hỏi đúng về bản chất dữ liệu"
+        "D": "Tư duy phản biện và khả năng đặt câu hỏi đúng về bản chất dữ liệu"
       },
       "answer": "D",
       "explanation": "Data Scientist cần tư duy phản biện để đặt đúng câu hỏi, nghi ngờ kết quả bất thường, nhận diện thiên lệch (bias) và hiểu rõ hạn chế của dữ liệu."
@@ -588,7 +588,7 @@
       "question": "Trong quy trình KHDL, việc phân chia tập dữ liệu thành tập Huấn luyện (Train) và tập Kiểm tra (Test) nhằm mục đích gì?",
       "options": {
         "A": "Làm giảm bớt dung lượng bộ nhớ ổ cứng",
-        "B": "Đánh giá khả năng khái quát hóa (generalization) của mô hình trên dữ liệu mới chưa từng thấy",
+        "B": "Đánh giá khả năng khái quát hóa của mô hình trên dữ liệu mới chưa từng thấy",
         "C": "Để đảm bảo mô hình đạt độ chính xác 100% trên tập train",
         "D": "Để thỏa mãn số lượng file yêu cầu của hệ thống"
       },
@@ -616,7 +616,7 @@
         "A": "Hai khái niệm này hoàn toàn đồng nghĩa với nhau",
         "B": "Thống kê mô tả dùng cho dữ liệu lớn, thống kê suy diễn dùng cho dữ liệu nhỏ",
         "C": "Thống kê suy diễn chỉ sử dụng đồ thị hình tròn",
-        "D": "Thống kê mô tả tóm tắt đặc trưng của tập mẫu dữ liệu, trong khi thống kê suy diễn dùng dữ liệu mẫu để ước lượng và suy rộng ra toàn bộ tổng thể (population)"
+        "D": "Thống kê mô tả tóm tắt đặc trưng của tập mẫu dữ liệu, trong khi thống kê suy diễn dùng dữ liệu mẫu để ước lượng và suy rộng ra toàn bộ tổng thể"
       },
       "answer": "D",
       "explanation": "Descriptive Statistics chỉ mô tả dữ liệu bạn đang có (Mean, Median, Std, biểu đồ). Inferential Statistics lấy mẫu để suy đoán quy luật cho cả tổng thể lớn hơn."
@@ -640,7 +640,7 @@
       "question": "Một phân tích chỉ ra: 'Tỷ lệ người mua tã lót trẻ em vào chiều thứ Sáu thường mua kèm bia'. Đây là ví dụ kinh điển về kỹ thuật nào trong khai phá dữ liệu?",
       "options": {
         "A": "Hồi quy tuyến tính đa biến",
-        "B": "Phân tích giỏ hàng và Khai phá luật kết hợp (Association Rule Mining / Market Basket Analysis)",
+        "B": "Phân tích giỏ hàng và Khai phá luật kết hợp",
         "C": "Phân loại bằng Cây quyết định",
         "D": "Phân cụm K-Means"
       },
@@ -655,7 +655,7 @@
         "A": "Xây dựng các mô hình phức tạp nhất có thể bất kể chi phí",
         "B": "Thu thập và lưu trữ càng nhiều dữ liệu càng tốt mà không cần dùng đến",
         "C": "Thay thế hoàn toàn con người bằng máy tính trong mọi công việc",
-        "D": "Chuyển hóa dữ liệu thô thành thông tin chi tiết hữu ích (Actionable Insights) để hỗ trợ và tối ưu hóa việc ra quyết định"
+        "D": "Chuyển hóa dữ liệu thô thành thông tin chi tiết hữu ích để hỗ trợ và tối ưu hóa việc ra quyết định"
       },
       "answer": "D",
       "explanation": "Mục tiêu cao nhất của KHDL là tạo ra 'Actionable Insights' - những thông tin sâu sắc có thể hành động được, mang lại giá trị thực tế cho bài toán tổ chức."
@@ -680,7 +680,7 @@
       "options": {
         "A": "Người trực tiếp nhập dữ liệu vào máy tính",
         "B": "Dây cáp mạng kết nối cơ sở dữ liệu",
-        "C": "Bộ vi xử lý trung tâm (CPU) của máy chủ",
+        "C": "Bộ vi xử lý trung tâm của máy chủ",
         "D": "Hệ thống phần mềm cho phép người dùng định nghĩa, tạo lập, duy trì và kiểm soát quyền truy cập vào cơ sở dữ liệu"
       },
       "answer": "D",
@@ -691,7 +691,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Trong Cơ sở dữ liệu quan hệ (RDBMS), dữ liệu được tổ chức dưới dạng cấu trúc nào?",
       "options": {
-        "A": "Các bảng (Tables) hai chiều gồm các hàng (Rows/Tuples) và các cột (Columns/Attributes)",
+        "A": "Các bảng hai chiều gồm các hàng và các cột",
         "B": "Các thư mục lồng nhau trên hệ điều hành",
         "C": "Các khối văn bản tự do không theo quy tắc",
         "D": "Cấu trúc cây phân cấp một chiều"
@@ -704,7 +704,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Trong một bảng của cơ sở dữ liệu quan hệ, 'Khóa chính' (Primary Key) có vai trò gì?",
       "options": {
-        "A": "Là một hoặc một nhóm thuộc tính có giá trị duy nhất (unique) để xác định danh tính của từng bản ghi và không được phép mang giá trị rỗng (NOT NULL)",
+        "A": "Là một hoặc một nhóm thuộc tính có giá trị duy nhất để xác định danh tính của từng bản ghi và không được phép mang giá trị rỗng",
         "B": "Là cột chứa dữ liệu dung lượng lớn nhất trong bảng",
         "C": "Là cột chỉ được phép chứa các số nguyên từ 1 đến 10",
         "D": "Là mật khẩu để mở khóa bảng dữ liệu"
@@ -730,10 +730,10 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Ngôn ngữ chuẩn phổ biến nhất được sử dụng để định nghĩa, thao tác và truy vấn dữ liệu trong các hệ quản trị CSDL quan hệ là:",
       "options": {
-        "A": "SQL (Structured Query Language)",
-        "B": "XML (eXtensible Markup Language)",
-        "C": "HTML (HyperText Markup Language)",
-        "D": "JSON (JavaScript Object Notation)"
+        "A": "SQL",
+        "B": "XML",
+        "C": "HTML",
+        "D": "JSON"
       },
       "answer": "A",
       "explanation": "SQL (Structured Query Language) là ngôn ngữ truy vấn mang tính cấu trúc chuẩn hóa cho tất cả các hệ quản trị CSDL quan hệ."
@@ -743,7 +743,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Dữ liệu có cấu trúc (Structured Data) có đặc điểm nào sau đây?",
       "options": {
-        "A": "Có mô hình dữ liệu (Schema) định trước rõ ràng, kiểu dữ liệu cố định và dễ dàng lưu trữ trong các bảng SQL",
+        "A": "Có mô hình dữ liệu định trước rõ ràng, kiểu dữ liệu cố định và dễ dàng lưu trữ trong các bảng SQL",
         "B": "Bao gồm các tệp âm thanh MP3 và video MP4",
         "C": "Không thể sắp xếp hay tìm kiếm bằng toán tử logic",
         "D": "Chỉ có thể đọc được bằng mắt người mà máy tính không xử lý được"
@@ -769,10 +769,10 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Tệp định dạng JSON hoặc XML thường được phân loại là loại dữ liệu nào?",
       "options": {
-        "A": "Dữ liệu hoàn toàn phi cấu trúc (Fully Unstructured)",
+        "A": "Dữ liệu hoàn toàn phi cấu trúc",
         "B": "Dữ liệu nhị phân thuần túy",
-        "C": "Dữ liệu hoàn toàn có cấu trúc (Fully Structured)",
-        "D": "Dữ liệu bán cấu trúc (Semi-structured Data)"
+        "C": "Dữ liệu hoàn toàn có cấu trúc",
+        "D": "Dữ liệu bán cấu trúc"
       },
       "answer": "D",
       "explanation": "JSON, XML, YAML là dữ liệu bán cấu trúc (Semi-structured): không có bảng cố định nhưng có các thẻ (tags), cặp key-value giúp định hình phân cấp dữ liệu."
@@ -783,7 +783,7 @@
       "question": "Sự khác biệt cơ bản giữa cách tiếp cận 'Schema-on-write' và 'Schema-on-read' là gì?",
       "options": {
         "A": "Hai khái niệm này hoàn toàn giống nhau",
-        "B": "Schema-on-write yêu cầu xác định cấu trúc chặt chẽ trước khi ghi dữ liệu (như SQL), còn Schema-on-read lưu dữ liệu thô trước và chỉ áp đặt cấu trúc khi cần đọc/truy vấn (như Big Data/NoSQL)",
+        "B": "Schema-on-write yêu cầu xác định cấu trúc chặt chẽ trước khi ghi dữ liệu, còn Schema-on-read lưu dữ liệu thô trước và chỉ áp đặt cấu trúc khi cần đọc/truy vấn",
         "C": "Schema-on-write chỉ áp dụng cho hình ảnh",
         "D": "Schema-on-write dùng cho đọc sách, Schema-on-read dùng cho viết sách"
       },
@@ -808,10 +808,10 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Cơ sở dữ liệu MongoDB thuộc loại cơ sở dữ liệu NoSQL nào sau đây?",
       "options": {
-        "A": "Wide-Column Store (Lưu trữ theo cột rộng)",
-        "B": "Graph Database (Cơ sở dữ liệu đồ thị)",
-        "C": "Document Store (Cơ sở dữ liệu hướng tài liệu - JSON/BSON)",
-        "D": "Key-Value Store (Lưu trữ khóa - giá trị)"
+        "A": "Wide-Column Store",
+        "B": "Graph Database",
+        "C": "Document Store",
+        "D": "Key-Value Store"
       },
       "answer": "C",
       "explanation": "MongoDB lưu trữ dữ liệu dưới dạng Document (tài liệu BSON/JSON), cho phép các bản ghi trong cùng một collection có cấu trúc linh hoạt khác nhau."
@@ -823,7 +823,7 @@
       "options": {
         "A": "Document Database",
         "B": "Relational Database",
-        "C": "Key-Value Store (Lưu trữ dạng Khóa - Giá trị)",
+        "C": "Key-Value Store",
         "D": "Graph Database"
       },
       "answer": "C",
@@ -834,7 +834,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Cơ sở dữ liệu Neo4j chuyên dùng để lưu trữ và phân tích các mạng lưới mối quan hệ phức tạp (như mạng xã hội, phòng chống gian lận) thuộc loại nào?",
       "options": {
-        "A": "Graph Database (Cơ sở dữ liệu đồ thị)",
+        "A": "Graph Database",
         "B": "Relational Database",
         "C": "Columnar Store",
         "D": "Key-Value Store"
@@ -848,7 +848,7 @@
       "question": "Apache Cassandra và Apache HBase thuộc loại CSDL NoSQL nào, thường dùng cho dữ liệu lớn phân tán?",
       "options": {
         "A": "Flat File Database",
-        "B": "Wide-Column Store (CSDL họ cột / cột rộng)",
+        "B": "Wide-Column Store",
         "C": "Graph Database",
         "D": "Document Store"
       },
@@ -862,7 +862,7 @@
       "options": {
         "A": "Action, Control, Information, Data",
         "B": "Accuracy, Completeness, Integrity, Dependability",
-        "C": "Atomicity (Nguyên tử), Consistency (Nhất quán), Isolation (Cô lập), Durability (Bền vững)",
+        "C": "Atomicity, Consistency, Isolation, Durability",
         "D": "Access, Security, Index, Database"
       },
       "answer": "C",
@@ -875,7 +875,7 @@
       "options": {
         "A": "Dữ liệu phải được chia nhỏ thành các hạt nguyên tử vật lý",
         "B": "Giao dịch phải chạy trong thời gian dưới một nano giây",
-        "C": "Một giao dịch gồm nhiều thao tác phải được thực thi toàn bộ thành công, hoặc nếu có một thao tác lỗi thì phải hủy bỏ toàn bộ (All or Nothing)",
+        "C": "Một giao dịch gồm nhiều thao tác phải được thực thi toàn bộ thành công, hoặc nếu có một thao tác lỗi thì phải hủy bỏ toàn bộ",
         "D": "Chỉ có một người duy nhất được phép truy cập cơ sở dữ liệu"
       },
       "answer": "C",
@@ -913,7 +913,7 @@
       "question": "Sự khác biệt giữa 'Scale-up' (Mở rộng chiều dọc) và 'Scale-out' (Mở rộng chiều ngang) là gì?",
       "options": {
         "A": "Scale-up là tăng chiều cao tủ server, Scale-out là xếp máy chủ nằm ngang",
-        "B": "Scale-up là nâng cấp cấu hình máy chủ hiện tại (thêm CPU, RAM, ổ cứng), còn Scale-out là bổ sung thêm nhiều máy chủ mới vào cụm phân tán",
+        "B": "Scale-up là nâng cấp cấu hình máy chủ hiện tại, còn Scale-out là bổ sung thêm nhiều máy chủ mới vào cụm phân tán",
         "C": "Scale-up chỉ dành cho NoSQL, Scale-out chỉ dành cho SQL",
         "D": "Scale-up rẻ tiền hơn nhiều so với Scale-out khi dữ liệu đạt quy mô hàng Petabyte"
       },
@@ -940,7 +940,7 @@
       "options": {
         "A": "Web Hosting",
         "B": "Web Phishing",
-        "C": "Web Scraping (hoặc Web Crawling / Harvesting)",
+        "C": "Web Scraping",
         "D": "Web Designing"
       },
       "answer": "C",
@@ -978,7 +978,7 @@
       "question": "API là viết tắt của thuật ngữ nào trong khoa học máy tính?",
       "options": {
         "A": "Applied Program for Intelligence",
-        "B": "Application Programming Interface (Giao diện lập trình ứng dụng)",
+        "B": "Application Programming Interface",
         "C": "Automated Protocol for Information",
         "D": "Advanced Python Instruction"
       },
@@ -1006,7 +1006,7 @@
         "A": "DOCX",
         "B": "SWF",
         "C": "PDF",
-        "D": "JSON (JavaScript Object Notation)"
+        "D": "JSON"
       },
       "answer": "D",
       "explanation": "JSON là định dạng chuẩn được hầu hết các REST API hiện đại trả về nhờ tính nhỏ gọn, cấu trúc key-value rõ ràng và dễ parse trên mọi ngôn ngữ."
@@ -1042,10 +1042,10 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Ba đặc trưng chữ 'V' ban đầu tạo nên định nghĩa về Dữ liệu lớn (Big Data) do Doug Laney đề xuất bao gồm:",
       "options": {
-        "A": "Validity (Hiệu lực), Variable (Biến số), Virtual (Ảo hóa)",
-        "B": "Volume (Khối lượng), Velocity (Tốc độ), Variety (Sự đa dạng)",
-        "C": "Virus (Mã độc), Vulnerability (Lỗ hổng), Verification (Xác minh)",
-        "D": "Value (Giá trị), Vision (Tầm nhìn), Victory (Chiến thắng)"
+        "A": "Validity, Variable, Virtual",
+        "B": "Volume, Velocity, Variety",
+        "C": "Virus, Vulnerability, Verification",
+        "D": "Value, Vision, Victory"
       },
       "answer": "B",
       "explanation": "Mô hình 3V kinh điển của Big Data gồm: Volume (dung lượng cực lớn Terabyte/Petabyte), Velocity (tốc độ sinh dữ liệu và xử lý theo thời gian thực), và Variety (đa dạng các định dạng có/bán/phi cấu trúc)."
@@ -1056,7 +1056,7 @@
       "question": "Đặc trưng 'Velocity' (Tốc độ) trong Big Data đề cập đến khía cạnh nào?",
       "options": {
         "A": "Tốc độ quay của đĩa cứng vật lý",
-        "B": "Tốc độ dữ liệu được tạo ra liên tục và yêu cầu xử lý, phân tích theo thời gian thực (Real-time stream)",
+        "B": "Tốc độ dữ liệu được tạo ra liên tục và yêu cầu xử lý, phân tích theo thời gian thực",
         "C": "Tốc độ tải xuống của đường truyền Internet",
         "D": "Tốc độ người dùng gõ bàn phím"
       },
@@ -1068,7 +1068,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Đặc trưng 'Variety' (Đa dạng) trong Big Data có nghĩa là gì?",
       "options": {
-        "A": "Dữ liệu đến từ nhiều nguồn khác nhau với đủ dạng hình thức: có cấu trúc (bảng SQL), bán cấu trúc (JSON, log) và phi cấu trúc (video, âm thanh, tweet)",
+        "A": "Dữ liệu đến từ nhiều nguồn khác nhau với đủ dạng hình thức: có cấu trúc, bán cấu trúc và phi cấu trúc",
         "B": "Dữ liệu được viết bằng nhiều thứ tiếng khác nhau nhưng phải có cùng một font chữ",
         "C": "Dữ liệu phải có nhiều màu sắc khác nhau",
         "D": "Dữ liệu chỉ bao gồm các số nguyên dương"
@@ -1094,9 +1094,9 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Data Warehouse (Kho dữ liệu) được thiết kế chuyên biệt nhằm phục vụ mục đích nào?",
       "options": {
-        "A": "Quản lý việc bán hàng theo thời gian thực tại siêu thị (OLTP thuần túy)",
+        "A": "Quản lý việc bán hàng theo thời gian thực tại siêu thị",
         "B": "Chỉ lưu trữ các tập tin đa phương tiện như video ca nhạc",
-        "C": "Lưu trữ dữ liệu có cấu trúc đã qua xử lý, làm sạch và tích hợp từ nhiều nguồn nhằm phục vụ báo cáo phân tích và hỗ trợ ra quyết định (OLAP)",
+        "C": "Lưu trữ dữ liệu có cấu trúc đã qua xử lý, làm sạch và tích hợp từ nhiều nguồn nhằm phục vụ báo cáo phân tích và hỗ trợ ra quyết định",
         "D": "Lưu trữ tạm thời các file tải về trên máy tính cá nhân"
       },
       "answer": "C",
@@ -1109,7 +1109,7 @@
       "options": {
         "A": "Data Lake yêu cầu phải chuẩn hóa dữ liệu tuyệt đối trước khi nạp vào",
         "B": "Data Lake không cho phép lưu trữ dữ liệu dạng văn bản",
-        "C": "Data Lake lưu trữ toàn bộ dữ liệu ở dạng nguyên bản thô (raw format) bao gồm cả phi cấu trúc và bán cấu trúc với chi phí thấp theo cơ chế Schema-on-read",
+        "C": "Data Lake lưu trữ toàn bộ dữ liệu ở dạng nguyên bản thô bao gồm cả phi cấu trúc và bán cấu trúc với chi phí thấp theo cơ chế Schema-on-read",
         "D": "Data Lake chỉ chứa dữ liệu dưới dạng nước lỏng"
       },
       "answer": "C",
@@ -1120,10 +1120,10 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Quy trình truyền thống 'ETL' trong kỹ thuật dữ liệu là viết tắt của 3 bước nào?",
       "options": {
-        "A": "Enter (Nhập) - Test (Kiểm tra) - Lock (Khóa)",
-        "B": "Export (Xuất) - Transfer (Chuyển tiếp) - Link (Liên kết)",
-        "C": "Extract (Trích xuất) - Transform (Chuyển đổi/Làm sạch) - Load (Nạp vào kho)",
-        "D": "Estimate (Ước lượng) - Train (Huấn luyện) - Learn (Học)"
+        "A": "Enter - Test - Lock",
+        "B": "Export - Transfer - Link",
+        "C": "Extract - Transform - Load",
+        "D": "Estimate - Train - Learn"
       },
       "answer": "C",
       "explanation": "ETL là quy trình kinh điển: Trích xuất dữ liệu từ các hệ thống nguồn (Extract), chuyển đổi chuẩn hóa và làm sạch trên máy chủ trung gian (Transform), rồi nạp vào Data Warehouse (Load)."
@@ -1149,7 +1149,7 @@
         "A": "Xóa toàn bộ các cột chứa giá trị số",
         "B": "In toàn bộ cơ sở dữ liệu ra giấy tờ lưu trữ vật lý",
         "C": "Khóa không cho bất kỳ ai truy cập vào dữ liệu",
-        "D": "Tổ chức, tích hợp, làm giàu siêu dữ liệu (metadata), bảo tồn và đảm bảo dữ liệu luôn sẵn sàng, đáng tin cậy để tái sử dụng trong tương lai"
+        "D": "Tổ chức, tích hợp, làm giàu siêu dữ liệu, bảo tồn và đảm bảo dữ liệu luôn sẵn sàng, đáng tin cậy để tái sử dụng trong tương lai"
       },
       "answer": "D",
       "explanation": "Data Curation là quá trình quản trị vòng đời dữ liệu: duy trì chất lượng, gán metadata, bảo quản và quản lý quyền truy cập để dữ liệu có giá trị lâu dài."
@@ -1160,8 +1160,8 @@
       "question": "Siêu dữ liệu (Metadata) thường được định nghĩa đơn giản và chính xác nhất là gì?",
       "options": {
         "A": "Dữ liệu chỉ bao gồm các phương trình toán học",
-        "B": "Dữ liệu của công ty Meta (Facebook)",
-        "C": "Dữ liệu miêu tả về dữ liệu (Data about data)",
+        "B": "Dữ liệu của công ty Meta",
+        "C": "Dữ liệu miêu tả về dữ liệu",
         "D": "Tập hợp các dữ liệu bị nhiễm virus"
       },
       "answer": "C",
@@ -1173,7 +1173,7 @@
       "question": "Hệ thống OLTP (Online Transaction Processing) khác với hệ thống OLAP (Online Analytical Processing) ở điểm nào?",
       "options": {
         "A": "OLTP không bao giờ lưu trữ dữ liệu vào đĩa cứng",
-        "B": "OLTP tối ưu cho các giao dịch nhanh, thêm sửa xóa hàng ngày (như đặt hàng, rút tiền ATM); OLAP tối ưu cho truy vấn phân tích tổng hợp phức tạp trên dữ liệu lịch sử lớn",
+        "B": "OLTP tối ưu cho các giao dịch nhanh, thêm sửa xóa hàng ngày; OLAP tối ưu cho truy vấn phân tích tổng hợp phức tạp trên dữ liệu lịch sử lớn",
         "C": "Hai hệ thống này hoàn toàn có thể thay thế lẫn nhau mà không ảnh hưởng hiệu năng",
         "D": "OLTP chỉ dùng cho nghiên cứu học thuật, OLAP dùng cho bán lẻ"
       },
@@ -1186,7 +1186,7 @@
       "question": "Một công ty thu thập dữ liệu bằng cách đặt các cảm biến đo nhiệt độ, độ ẩm trên cánh đồng nông nghiệp thông minh và truyền dữ liệu định kỳ qua sóng không dây. Đây là hình thức thu thập dữ liệu từ:",
       "options": {
         "A": "Truy vấn cơ sở dữ liệu kế toán",
-        "B": "Thiết bị IoT (Internet of Things) / Cảm biến (Sensors)",
+        "B": "Thiết bị IoT / Cảm biến",
         "C": "Phát phiếu khảo sát giấy",
         "D": "Web Scraping từ trang báo điện tử"
       },
@@ -1201,7 +1201,7 @@
         "A": "Vẽ biểu đồ hình quạt bằng compa",
         "B": "Xác định phần cứng máy tính bị hỏng quạt tản nhiệt",
         "C": "Thay thế cho việc lập trình giao diện",
-        "D": "Phân tích hành vi người dùng (Clickstream Analytics) và Giám sát an ninh mạng"
+        "D": "Phân tích hành vi người dùng và Giám sát an ninh mạng"
       },
       "answer": "D",
       "explanation": "Server logs và Clickstream data cho biết lộ trình di chuyển của người dùng, thời gian dừng, lỗi phát sinh, hỗ trợ tối ưu UX/UI và phát hiện xâm nhập."
@@ -1213,7 +1213,7 @@
       "options": {
         "A": "Chi phí thuê phần mềm quá đắt đỏ",
         "B": "Tệp biểu mẫu luôn bị lỗi font chữ",
-        "C": "Thiên lệch người trả lời (Response Bias), câu trả lời thiếu trung thực hoặc bị bỏ trống nhiều câu hỏi",
+        "C": "Thiên lệch người trả lời, câu trả lời thiếu trung thực hoặc bị bỏ trống nhiều câu hỏi",
         "D": "Không thể chuyển đổi câu trả lời thành định dạng bảng"
       },
       "answer": "C",
@@ -1224,7 +1224,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Khái niệm 'Crowdsourcing' trong việc thu thập và dán nhãn dữ liệu cho các bài toán Trí tuệ nhân tạo có nghĩa là gì?",
       "options": {
-        "A": "Huy động sự tham gia đóng góp của một cộng đồng mạng đông đảo phân tán (ví dụ Amazon Mechanical Turk)",
+        "A": "Huy động sự tham gia đóng góp của một cộng đồng mạng đông đảo phân tán",
         "B": "Thuê một công ty bảo vệ dữ liệu độc quyền",
         "C": "Mua lại toàn bộ máy chủ của đối thủ cạnh tranh",
         "D": "Tự động tạo ra dữ liệu giả bằng phần mềm máy tính"
@@ -1237,7 +1237,7 @@
       "chapter": "Chương 2: Cơ sở dữ liệu và Thu thập / Biên tập Dữ liệu",
       "question": "Nguyên tắc 'Toàn vẹn thực thể' (Entity Integrity) trong cơ sở dữ liệu quan hệ quy định điều gì?",
       "options": {
-        "A": "Khóa chính (Primary Key) của mọi quan hệ không bao giờ được nhận giá trị rỗng (NULL) và phải có giá trị duy nhất",
+        "A": "Khóa chính của mọi quan hệ không bao giờ được nhận giá trị rỗng và phải có giá trị duy nhất",
         "B": "Tất cả các thuộc tính phải có kiểu số thực",
         "C": "Tên bảng phải được viết bằng chữ in hoa",
         "D": "Mọi bảng dữ liệu phải có ít nhất 100 dòng"
@@ -1251,7 +1251,7 @@
       "question": "Nguyên tắc 'Toàn vẹn tham chiếu' (Referential Integrity) trong cơ sở dữ liệu quan hệ kiểm soát mối quan hệ giữa các bảng như thế nào?",
       "options": {
         "A": "Khóa ngoại phải có tên giống hệt với khóa chính",
-        "B": "Giá trị của khóa ngoại (Foreign Key) phải luôn tồn tại trong cột khóa chính của bảng được tham chiếu, hoặc phải mang giá trị NULL",
+        "B": "Giá trị của khóa ngoại phải luôn tồn tại trong cột khóa chính của bảng được tham chiếu, hoặc phải mang giá trị NULL",
         "C": "Không cho phép bất kỳ bảng nào có khóa ngoại",
         "D": "Bảng được tham chiếu phải luôn luôn có nhiều hàng hơn bảng tham chiếu"
       },
@@ -1266,7 +1266,7 @@
         "A": "Ngăn chặn người dùng đọc dữ liệu từ máy chủ",
         "B": "Bắt buộc mọi truy vấn phải thực hiện thủ công",
         "C": "Tăng gấp đôi mức tiêu thụ điện năng của trung tâm dữ liệu",
-        "D": "Phân chia tải công việc: Master chuyên xử lý các lệnh ghi (Write), trong khi các Slave phục vụ việc đọc (Read) và sao lưu dự phòng"
+        "D": "Phân chia tải công việc: Master chuyên xử lý các lệnh ghi, trong khi các Slave phục vụ việc đọc và sao lưu dự phòng"
       },
       "answer": "D",
       "explanation": "Mô hình Master-Replica giúp scale năng lực đọc (Read) của hệ thống lên rất nhiều lần và đảm bảo khả năng sẵn sàng cao (High Availability)."
@@ -1291,7 +1291,7 @@
       "options": {
         "A": "Prediction -> Modeling -> Extraction -> Querying",
         "B": "Data Mining -> Data Collection -> Data Cleaning -> Reporting",
-        "C": "Lựa chọn dữ liệu (Selection) -> Tiền xử lý (Preprocessing) -> Chuyển đổi (Transformation) -> Khai phá dữ liệu (Data Mining) -> Đánh giá/Diễn giải (Evaluation/Interpretation)",
+        "C": "Lựa chọn dữ liệu -> Tiền xử lý -> Chuyển đổi -> Khai phá dữ liệu -> Đánh giá/Diễn giải",
         "D": "Evaluation -> Selection -> Data Mining -> Transformation"
       },
       "answer": "C",
@@ -1305,7 +1305,7 @@
         "A": "Tốc độ xử lý của thuật toán học máy sẽ bị giảm đi một nửa",
         "B": "Máy chủ sẽ tự động kích hoạt tính năng tự hủy dữ liệu",
         "C": "Không thể xuất dữ liệu ra định dạng Excel được nữa",
-        "D": "Vi phạm các quy định bảo vệ quyền riêng tư dữ liệu cá nhân (như GDPR tại châu Âu hay Nghị định 13/2023/NĐ-CP tại Việt Nam) dẫn đến các án phạt tài chính nặng nề và mất uy tín"
+        "D": "Vi phạm các quy định bảo vệ quyền riêng tư dữ liệu cá nhân dẫn đến các án phạt tài chính nặng nề và mất uy tín"
       },
       "answer": "D",
       "explanation": "Vi phạm quyền riêng tư và thu thập dữ liệu bất hợp pháp dẫn đến rủi ro pháp lý nghiêm trọng (như đạo luật GDPR, Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân) cùng sự tẩy chay từ xã hội."
@@ -1328,7 +1328,7 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Bốn tác vụ cốt lõi trong quy trình Tiền xử lý dữ liệu bao gồm những tác vụ nào?",
       "options": {
-        "A": "Làm sạch dữ liệu (Cleaning), Tích hợp dữ liệu (Integration), Biến đổi dữ liệu (Transformation), và Thu giảm dữ liệu (Reduction)",
+        "A": "Làm sạch dữ liệu, Tích hợp dữ liệu, Biến đổi dữ liệu, và Thu giảm dữ liệu",
         "B": "Lập trình hướng đối tượng, Thiết kế web, Quản trị mạng, và Bảo mật hệ thống",
         "C": "Thu thập dữ liệu, Vẽ biểu đồ, Viết báo cáo, và Triển khai mô hình",
         "D": "Gán nhãn dữ liệu, Huấn luyện mô hình, Tối ưu siêu tham số, và Kiểm thử A/B"
@@ -1381,7 +1381,7 @@
       "question": "Phương pháp xóa bỏ toàn bộ bản ghi (Listwise Deletion / Complete Case Analysis) khi có giá trị khuyết thường phù hợp nhất trong trường hợp nào?",
       "options": {
         "A": "Khi tập dữ liệu có hơn 70% số dòng bị khuyết ở hầu hết các thuộc tính",
-        "B": "Khi tỷ lệ dữ liệu bị khuyết rất nhỏ (dưới 5%) và việc thiếu là hoàn toàn ngẫu nhiên (MCAR)",
+        "B": "Khi tỷ lệ dữ liệu bị khuyết rất nhỏ và việc thiếu là hoàn toàn ngẫu nhiên",
         "C": "Khi dữ liệu bị khuyết theo cơ chế MNAR đối với biến mục tiêu quan trọng",
         "D": "Khi tập dữ liệu ban đầu chỉ có dưới 20 mẫu quan sát"
       },
@@ -1394,7 +1394,7 @@
       "question": "Kỹ thuật điền giá trị khuyết (Imputation) bằng giá trị trung bình (Mean) có nhược điểm lớn nhất là gì?",
       "options": {
         "A": "Luôn làm biến đổi dữ liệu thành dạng số nguyên không âm",
-        "B": "Rất nhạy cảm với các giá trị ngoại lai (outliers) và làm giảm phương sai tự nhiên của dữ liệu",
+        "B": "Rất nhạy cảm với các giá trị ngoại lai và làm giảm phương sai tự nhiên của dữ liệu",
         "C": "Làm tăng độ lệch chuẩn và tạo ra phân phối đa đỉnh không mong muốn",
         "D": "Không thể áp dụng được cho các biến định lượng liên tục"
       },
@@ -1406,10 +1406,10 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Đối với một biến số có phân phối bị lệch nhiều (skewed distribution) hoặc chứa nhiều giá trị ngoại lai, ta nên ưu tiên điền giá trị khuyết bằng đại lượng nào?",
       "options": {
-        "A": "Trung vị (Median)",
-        "B": "Số 0 (Zero)",
-        "C": "Trung bình cộng (Mean)",
-        "D": "Độ lệch chuẩn (Standard Deviation)"
+        "A": "Trung vị",
+        "B": "Số 0",
+        "C": "Trung bình cộng",
+        "D": "Độ lệch chuẩn"
       },
       "answer": "A",
       "explanation": "Median (trung vị) là thước đo vị trí trung tâm có tính bền vững (robust), không bị ảnh hưởng bởi các giá trị cực trị hoặc phân phối lệch."
@@ -1419,9 +1419,9 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Đối với biến định danh hoặc biến phân loại (Categorical variable), phương pháp điền giá trị khuyết thống kê đơn giản và phổ biến nhất là gì?",
       "options": {
-        "A": "Điền bằng giá trị trung bình cộng (Mean)",
-        "B": "Điền bằng trung vị hình học (Geometric Median)",
-        "C": "Điền bằng giá trị xuất hiện nhiều nhất (Yếu vị / Mode)",
+        "A": "Điền bằng giá trị trung bình cộng",
+        "B": "Điền bằng trung vị hình học",
+        "C": "Điền bằng giá trị xuất hiện nhiều nhất",
         "D": "Điền bằng giá trị phương sai của thuộc tính"
       },
       "answer": "C",
@@ -1435,7 +1435,7 @@
         "A": "Lấy giá trị của dòng ngay phía trước trong bảng cơ sở dữ liệu đè lên dòng sau",
         "B": "Điền ngẫu nhiên một giá trị bất kỳ được lấy từ phân phối chuẩn tắc",
         "C": "Tạo một cây quyết định ngẫu nhiên để dự đoán toàn bộ các cột cùng một lúc",
-        "D": "Tìm K mẫu dữ liệu có đặc trưng tương đồng nhất (khoảng cách nhỏ nhất) với mẫu bị khuyết và lấy trung bình hoặc yếu vị từ K mẫu đó"
+        "D": "Tìm K mẫu dữ liệu có đặc trưng tương đồng nhất với mẫu bị khuyết và lấy trung bình hoặc yếu vị từ K mẫu đó"
       },
       "answer": "D",
       "explanation": "KNN Imputation tính khoảng cách (như khoảng cách Euclid) giữa các quan sát để tìm ra K láng giềng gần nhất có đầy đủ thông tin, từ đó ước lượng giá trị khuyết."
@@ -1458,7 +1458,7 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Khoảng tứ phân vị (Interquartile Range - IQR) được tính bằng công thức nào?",
       "options": {
-        "A": "IQR = Q3 - Q1 (trong đó Q3 là tứ phân vị thứ ba, Q1 là tứ phân vị thứ nhất)",
+        "A": "IQR = Q3 - Q1",
         "B": "IQR = Max - Min",
         "C": "IQR = Q3 + Q1",
         "D": "IQR = (Q3 - Q1) / 2"
@@ -1510,7 +1510,7 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Hạn chế lớn nhất khi sử dụng phương pháp Z-score để phát hiện ngoại lai là gì?",
       "options": {
-        "A": "Phương pháp này giả định dữ liệu tuân theo phân phối chuẩn (hoặc gần chuẩn), và chính Mean cùng Std cũng bị méo mó bởi ngoại lai",
+        "A": "Phương pháp này giả định dữ liệu tuân theo phân phối chuẩn, và chính Mean cùng Std cũng bị méo mó bởi ngoại lai",
         "B": "Luôn xóa bỏ nhầm các điểm dữ liệu trung bình",
         "C": "Không thể tính toán được bằng các công cụ lập trình như Python hay R",
         "D": "Chỉ áp dụng được cho dữ liệu chuỗi ký tự phân loại"
@@ -1523,8 +1523,8 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Phương pháp xử lý ngoại lai bằng kỹ thuật Winsorization thực hiện điều gì?",
       "options": {
-        "A": "Biến đổi tất cả các giá trị ngoại lai thành giá trị khuyết (NaN) rồi điền Mean",
-        "B": "Thay thế các giá trị ngoại lai vượt quá ngưỡng trên/dưới bằng chính giá trị tại ngưỡng phần trăm quy định (ví dụ phân vị 1% và 99%)",
+        "A": "Biến đổi tất cả các giá trị ngoại lai thành giá trị khuyết rồi điền Mean",
+        "B": "Thay thế các giá trị ngoại lai vượt quá ngưỡng trên/dưới bằng chính giá trị tại ngưỡng phần trăm quy định",
         "C": "Xóa vĩnh viễn toàn bộ dòng dữ liệu chứa giá trị ngoại lai",
         "D": "Lấy logarit tự nhiên của toàn bộ cột dữ liệu bất kể âm hay dương"
       },
@@ -1562,10 +1562,10 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Kỹ thuật Tiêu chuẩn hóa (Standardization / Z-score Normalization) biến đổi dữ liệu để có các đặc trưng thống kê nào?",
       "options": {
-        "A": "Trung bình (Mean) = 1 và Phương sai (Variance) = 0",
-        "B": "Trung vị (Median) = 0 và Khoảng tứ phân vị (IQR) = 1",
-        "C": "Giá trị nhỏ nhất (Min) = 0 và Giá trị lớn nhất (Max) = 1",
-        "D": "Trung bình (Mean) = 0 và Độ lệch chuẩn (Standard Deviation) = 1"
+        "A": "Trung bình = 1 và Phương sai = 0",
+        "B": "Trung vị = 0 và Khoảng tứ phân vị = 1",
+        "C": "Giá trị nhỏ nhất = 0 và Giá trị lớn nhất = 1",
+        "D": "Trung bình = 0 và Độ lệch chuẩn = 1"
       },
       "answer": "D",
       "explanation": "Standardization dịch chuyển tâm dữ liệu về 0 và co giãn tỉ lệ để phương sai và độ lệch chuẩn bằng 1."
@@ -1576,9 +1576,9 @@
       "question": "Khi tập dữ liệu xuất hiện các giá trị ngoại lai cực đoan mới trong tương lai nằm ngoài khoảng Min và Max ban đầu, phương pháp chuẩn hóa nào sẽ gặp vấn đề lớn?",
       "options": {
         "A": "Log Transformation",
-        "B": "Min-Max Scaling (vì giá trị mới sẽ vượt ra ngoài khoảng [0, 1])",
+        "B": "Min-Max Scaling",
         "C": "Robust Scaler",
-        "D": "Standardization (Z-score)"
+        "D": "Standardization"
       },
       "answer": "B",
       "explanation": "Min-Max bị cố định bởi Min và Max của tập huấn luyện. Nếu dữ liệu mới nhỏ hơn Min hoặc lớn hơn Max, giá trị chuẩn hóa sẽ nằm ngoài khoảng [0, 1]."
@@ -1588,10 +1588,10 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Phương pháp chuẩn hóa RobustScaler (thường dùng trong Scikit-learn) sử dụng các đại lượng nào để co giãn dữ liệu nhằm chống chịu ngoại lai?",
       "options": {
-        "A": "Yếu vị (Mode) và Phương sai (Variance)",
-        "B": "Trung vị (Median) và Khoảng tứ phân vị (IQR)",
-        "C": "Giá trị nhỏ nhất (Min) và Giá trị lớn nhất (Max)",
-        "D": "Trung bình (Mean) và Độ lệch chuẩn (Std)"
+        "A": "Yếu vị và Phương sai",
+        "B": "Trung vị và Khoảng tứ phân vị",
+        "C": "Giá trị nhỏ nhất và Giá trị lớn nhất",
+        "D": "Trung bình và Độ lệch chuẩn"
       },
       "answer": "B",
       "explanation": "RobustScaler trừ Median và chia cho IQR, giúp quá trình chuẩn hóa không bị chi phối bởi các giá trị ngoại lai cực đoan."
@@ -1604,7 +1604,7 @@
         "A": "Chuyển đổi dữ liệu chuỗi ký tự thành số nguyên",
         "B": "Loại bỏ hoàn toàn các giá trị âm trong tập dữ liệu",
         "C": "Tăng độ phân tán của dữ liệu tập trung quanh số 0",
-        "D": "Giảm độ lệch phải (right-skewed) của phân phối và nén các giá trị quá lớn để phân phối gần với chuẩn hơn"
+        "D": "Giảm độ lệch phải của phân phối và nén các giá trị quá lớn để phân phối gần với chuẩn hơn"
       },
       "answer": "D",
       "explanation": "Log transformation hữu ích cho các biến có phân phối lệch phải mạnh (như thu nhập, giá nhà, dân số), giúp co các đuôi dài về gần trung tâm."
@@ -1615,7 +1615,7 @@
       "question": "Điều kiện bắt buộc về mặt toán học khi áp dụng biến đổi Logarit cơ bản y = log(x) lên một cột dữ liệu là gì?",
       "options": {
         "A": "Tất cả các giá trị x phải nằm trong đoạn [0, 1]",
-        "B": "Tất cả các giá trị x trong cột dữ liệu phải hoàn toàn lớn hơn 0 (x > 0)",
+        "B": "Tất cả các giá trị x trong cột dữ liệu phải hoàn toàn lớn hơn 0",
         "C": "Cột dữ liệu phải có phân phối chuẩn tắc sẵn",
         "D": "Số lượng dòng dữ liệu phải là một lũy thừa của 2"
       },
@@ -1630,7 +1630,7 @@
         "A": "Một cột số nguyên duy nhất nhận giá trị từ 1 đến K",
         "B": "Hai cột số thực nhận giá trị trong khoảng [0, 1]",
         "C": "K cột số thực đại diện cho xác suất Bayes",
-        "D": "K cột nhị phân (chỉ chứa 0 hoặc 1), trong đó mỗi dòng chỉ có duy nhất một cột mang giá trị 1"
+        "D": "K cột nhị phân, trong đó mỗi dòng chỉ có duy nhất một cột mang giá trị 1"
       },
       "answer": "D",
       "explanation": "One-Hot Encoding tạo ra K biến giả (dummy variables) nhị phân, mỗi biến đại diện cho một danh mục cụ thể."
@@ -1653,9 +1653,9 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Kỹ thuật Mã hóa nhãn (Label Encoding / Ordinal Encoding) phù hợp nhất với loại biến phân loại nào?",
       "options": {
-        "A": "Biến phân loại có thứ bậc tự nhiên (ví dụ: Trình độ học vấn: Tiểu học < THCS < THPT < Đại học)",
+        "A": "Biến phân loại có thứ bậc tự nhiên",
         "B": "Biến số thực liên tục có phân phối chuẩn",
-        "C": "Biến định danh không có thứ bậc (ví dụ: Màu sắc: Đỏ, Xanh, Vàng)",
+        "C": "Biến định danh không có thứ bậc",
         "D": "Biến văn bản dài như bài viết blog hay email"
       },
       "answer": "A",
@@ -1680,7 +1680,7 @@
       "question": "Kỹ thuật gom cụm giá trị / chia khoảng (Binning / Discretization) có tác dụng gì?",
       "options": {
         "A": "Gộp hai bảng dữ liệu có chung khóa chính lại với nhau",
-        "B": "Chuyển đổi một biến số liên tục thành các khoảng/nhóm giá trị rời rạc (ví dụ: Tuổi -> Nhóm tuổi Trẻ em, Thanh niên, Người già)",
+        "B": "Chuyển đổi một biến số liên tục thành các khoảng/nhóm giá trị rời rạc",
         "C": "Chia một bảng dữ liệu lớn thành nhiều file nhỏ để lưu trữ trên đám mây",
         "D": "Loại bỏ các ký tự đặc biệt ra khỏi chuỗi văn bản"
       },
@@ -1745,7 +1745,7 @@
       "question": "Tích hợp dữ liệu (Data Integration) trong tiền xử lý dữ liệu thường phải đối mặt với thách thức lớn nào?",
       "options": {
         "A": "Các tập tin CSV tự động bị mã hóa thành file nhị phân không đọc được",
-        "B": "Vấn đề không đồng nhất về lược đồ (Schema Heterogeneity), định dạng dữ liệu và trùng lặp thực thể từ nhiều nguồn khác nhau",
+        "B": "Vấn đề không đồng nhất về lược đồ, định dạng dữ liệu và trùng lặp thực thể từ nhiều nguồn khác nhau",
         "C": "Hệ thống tự động ngắt kết nối mạng khi tải dữ liệu",
         "D": "Số lượng dòng dữ liệu luôn bị giảm đi một nửa sau khi gộp"
       },
@@ -1760,7 +1760,7 @@
         "A": "Luôn đảm bảo độ chính xác của mô hình đạt tuyệt đối 100%",
         "B": "Tự động sinh thêm hàng triệu dòng dữ liệu mới chất lượng cao",
         "C": "Loại bỏ hoàn toàn sự cần thiết của việc thu thập nhãn dữ liệu",
-        "D": "Giảm bớt thời gian huấn luyện, giảm hiện tượng Lời nguyền số chiều (Curse of Dimensionality) và giảm nguy cơ Overfitting"
+        "D": "Giảm bớt thời gian huấn luyện, giảm hiện tượng Lời nguyền số chiều và giảm nguy cơ Overfitting"
       },
       "answer": "D",
       "explanation": "Giảm bớt số lượng đặc trưng dư thừa/nhiễu giúp tiết kiệm chi phí tính toán, trực quan hóa dữ liệu dễ hơn và hạn chế mô hình học vẹt trên nhiễu."
@@ -1770,7 +1770,7 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Phương pháp Phân tích Thành phần Chính (Principal Component Analysis - PCA) hoạt động dựa trên nguyên lý toán học nào?",
       "options": {
-        "A": "Chiếu dữ liệu sang một hệ tọa độ mới trực giao sao cho phương sai của dữ liệu trên các trục mới (các thành phần chính) là lớn nhất",
+        "A": "Chiếu dữ liệu sang một hệ tọa độ mới trực giao sao cho phương sai của dữ liệu trên các trục mới là lớn nhất",
         "B": "Xây dựng mạng nơ-ron nhiều lớp để dự đoán các biến tiềm ẩn",
         "C": "Phân chia dữ liệu thành K cụm hình cầu dựa trên khoảng cách tâm",
         "D": "Chọn ngẫu nhiên một nửa số cột của bảng dữ liệu và bỏ đi nửa còn lại"
@@ -1796,8 +1796,8 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Trong bước làm sạch dữ liệu văn bản (Text Cleaning), thao tác 'Loại bỏ Stopwords' nghĩa là gì?",
       "options": {
-        "A": "Chuyển đổi tất cả các từ về dạng nguyên thể gốc (stemming)",
-        "B": "Loại bỏ các từ ngữ cực kỳ phổ biến nhưng mang rất ít giá trị ngữ nghĩa phân loại (như 'và', 'của', 'là', 'the', 'is')",
+        "A": "Chuyển đổi tất cả các từ về dạng nguyên thể gốc",
+        "B": "Loại bỏ các từ ngữ cực kỳ phổ biến nhưng mang rất ít giá trị ngữ nghĩa phân loại",
         "C": "Xóa bỏ toàn bộ các dấu chấm, phẩy và ký tự đặc biệt",
         "D": "Ngừng chương trình ngay lập tức khi phát hiện từ chửi thề"
       },
@@ -1822,7 +1822,7 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Biểu hiện của 'Dữ liệu không nhất quán' (Data Inconsistency) trong thực tế là gì?",
       "options": {
-        "A": "Cùng một thông tin nhưng được ghi nhận dưới các định dạng, quy ước hoặc giá trị xung đột nhau giữa các bản ghi (ví dụ: 'VN', 'Việt Nam', 'Viet Nam')",
+        "A": "Cùng một thông tin nhưng được ghi nhận dưới các định dạng, quy ước hoặc giá trị xung đột nhau giữa các bản ghi",
         "B": "Cột tuổi có chứa cả số nguyên và số thực dương",
         "C": "Bảng dữ liệu chỉ chứa duy nhất một cột khóa chính",
         "D": "Tập dữ liệu có các dòng có độ dài ký tự bằng nhau tuyệt đối"
@@ -1874,8 +1874,8 @@
       "chapter": "Chương 3: Tiền xử lý Dữ liệu",
       "question": "Hiện tượng rò rỉ dữ liệu (Data Leakage) nghiêm trọng trong bước Tiền xử lý dữ liệu thường xảy ra khi nào?",
       "options": {
-        "A": "Khi các thao tác chuẩn hóa (như tính Mean, Std, Min, Max) được thực hiện trên toàn bộ tập dữ liệu trước khi chia tách Train/Test",
-        "B": "Khi tập dữ liệu kiểm thử (Test set) có số lượng dòng nhiều hơn tập huấn luyện",
+        "A": "Khi các thao tác chuẩn hóa được thực hiện trên toàn bộ tập dữ liệu trước khi chia tách Train/Test",
+        "B": "Khi tập dữ liệu kiểm thử có số lượng dòng nhiều hơn tập huấn luyện",
         "C": "Khi sử dụng thuật toán hồi quy tuyến tính thay cho mạng nơ-ron sâu",
         "D": "Khi lập trình viên lưu file dữ liệu dưới dạng đuôi .csv thay vì .xlsx"
       },
@@ -1929,7 +1929,7 @@
         "A": "Đếm số lần xuất hiện của nhãn trong toàn bộ tập dữ liệu",
         "B": "Thay thế nhãn danh mục bằng độ dài chuỗi ký tự của tên nhãn",
         "C": "Sắp xếp tên nhãn theo thứ tự bảng chữ cái rồi đánh số từ 1 đến N",
-        "D": "Thay thế mỗi nhãn danh mục bằng giá trị trung bình của biến mục tiêu (target) tương ứng với danh mục đó"
+        "D": "Thay thế mỗi nhãn danh mục bằng giá trị trung bình của biến mục tiêu tương ứng với danh mục đó"
       },
       "answer": "D",
       "explanation": "Target Encoding tính xác suất mục tiêu hoặc giá trị trung bình của y cho mỗi category, rất mạnh nhưng có nguy cơ gây overfitting cao nếu không dùng k-fold."
@@ -1940,8 +1940,8 @@
       "question": "Khi nào ta nên sử dụng phép co giãn Min-Max thay vì Tiêu chuẩn hóa Z-score?",
       "options": {
         "A": "Khi dữ liệu có phân phối chuẩn tắc rõ rệt và chứa rất nhiều ngoại lai",
-        "B": "Khi thuật toán yêu cầu giá trị đầu vào nằm chặt chẽ trong khoảng cố định (như mạng nơ-ron xử lý điểm ảnh [0, 1]) và dữ liệu không có ngoại lai cực đoan",
-        "C": "Khi bài toán cần tối ưu hóa bằng phương pháp giảm độ dốc ngẫu nhiên (SGD)",
+        "B": "Khi thuật toán yêu cầu giá trị đầu vào nằm chặt chẽ trong khoảng cố định và dữ liệu không có ngoại lai cực đoan",
+        "C": "Khi bài toán cần tối ưu hóa bằng phương pháp giảm độ dốc ngẫu nhiên",
         "D": "Khi tập dữ liệu chỉ chứa toàn các giá trị âm"
       },
       "answer": "B",
@@ -1994,7 +1994,7 @@
         "A": "Học có giám sát không cần dữ liệu đầu vào, còn học không giám sát cần rất nhiều dữ liệu",
         "B": "Học có giám sát do con người vận hành thủ công, còn học không giám sát máy tự động hoàn toàn",
         "C": "Học có giám sát chỉ dùng cho dữ liệu số, còn học không giám sát chỉ dùng cho văn bản",
-        "D": "Học có giám sát sử dụng dữ liệu huấn luyện đã được gán nhãn mục tiêu (labeled data), trong khi Học không giám sát làm việc với dữ liệu chưa được gán nhãn"
+        "D": "Học có giám sát sử dụng dữ liệu huấn luyện đã được gán nhãn mục tiêu, trong khi Học không giám sát làm việc với dữ liệu chưa được gán nhãn"
       },
       "answer": "D",
       "explanation": "Supervised Learning có biến mục tiêu y (nhãn) để hướng dẫn mô hình học mối quan hệ f(x) = y. Unsupervised Learning tự tìm cấu trúc ẩn trong X mà không có y."
@@ -2004,10 +2004,10 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Hai bài toán kinh điển nhất thuộc nhóm Học có giám sát (Supervised Learning) là gì?",
       "options": {
-        "A": "Khai phá luật kết hợp (Association Rules) và Phát hiện ngoại lai (Outlier Detection)",
-        "B": "Học tăng cường (Reinforcement Learning) và Tìm kiếm đường đi (Pathfinding)",
-        "C": "Phân cụm (Clustering) và Giảm chiều dữ liệu (Dimensionality Reduction)",
-        "D": "Hồi quy (Regression) và Phân loại (Classification)"
+        "A": "Khai phá luật kết hợp và Phát hiện ngoại lai",
+        "B": "Học tăng cường và Tìm kiếm đường đi",
+        "C": "Phân cụm và Giảm chiều dữ liệu",
+        "D": "Hồi quy và Phân loại"
       },
       "answer": "D",
       "explanation": "Hồi quy (khi biến mục tiêu là số thực liên tục) và Phân loại (khi biến mục tiêu là nhãn danh mục rời rạc) là hai trụ cột của học có giám sát."
@@ -2019,7 +2019,7 @@
       "options": {
         "A": "Dự báo nhiệt độ ngoài trời ngày mai là bao nhiêu độ C",
         "B": "Dự đoán giá bán của một căn nhà dựa trên diện tích và vị trí",
-        "C": "Xác định một email nhận được là 'Thư rác' (Spam) hay 'Hợp lệ' (Ham)",
+        "C": "Xác định một email nhận được là 'Thư rác' hay 'Hợp lệ'",
         "D": "Phân nhóm 10.000 khách hàng thành các cụm hành vi tương đồng mà không có nhãn trước"
       },
       "answer": "C",
@@ -2033,7 +2033,7 @@
         "A": "Nhận diện khuôn mặt người dùng trong ảnh thuộc danh sách nhân viên nào",
         "B": "Phân đoạn hình ảnh y tế thành các vùng mô lành và mô ung thư",
         "C": "Phát hiện giao dịch quẹt thẻ tín dụng có phải gian lận hay không",
-        "D": "Dự đoán doanh số bán hàng (bằng tiền VNĐ) của siêu thị trong quý tới"
+        "D": "Dự đoán doanh số bán hàng của siêu thị trong quý tới"
       },
       "answer": "D",
       "explanation": "Dự đoán giá trị số thực liên tục (doanh số, nhiệt độ, giá chứng khoán, tuổi thọ) là bài toán hồi quy."
@@ -2045,7 +2045,7 @@
       "options": {
         "A": "Dự báo tỷ giá ngoại tệ ngày mai theo giờ",
         "B": "Phân loại bệnh nhân tiểu đường dựa trên hồ sơ bệnh án có sẵn chẩn đoán",
-        "C": "Phân cụm khách hàng (Customer Clustering) và Phát hiện bất thường (Anomaly Detection)",
+        "C": "Phân cụm khách hàng và Phát hiện bất thường",
         "D": "Dịch tự động một văn bản từ tiếng Anh sang tiếng Việt"
       },
       "answer": "C",
@@ -2057,7 +2057,7 @@
       "question": "Học tăng cường (Reinforcement Learning) hoạt động dựa trên cơ chế nào?",
       "options": {
         "A": "Tính toán ma trận hiệp phương sai để giảm chiều dữ liệu không gian",
-        "B": "Tác tử (Agent) tương tác với môi trường (Environment) và học chính sách hành động tối ưu thông qua cơ chế Thưởng (Reward) và Phạt (Penalty)",
+        "B": "Tác tử tương tác với môi trường và học chính sách hành động tối ưu thông qua cơ chế Thưởng và Phạt",
         "C": "Học từ hàng triệu cặp câu hỏi - đáp án được con người soạn sẵn trong sách giáo khoa",
         "D": "Sắp xếp các bảng dữ liệu theo thứ tự bảng chữ cái để tăng tốc truy vấn"
       },
@@ -2069,7 +2069,7 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Phương trình hồi quy tuyến tính đơn biến (Simple Linear Regression) có dạng tổng quát là gì?",
       "options": {
-        "A": "y = w1 * x + w0 (hoặc y = ax + b)",
+        "A": "y = w1 * x + w0",
         "B": "y = log(w1 * x + w0)",
         "C": "y = 1 / (1 + e^(-x))",
         "D": "y = w1 * x^2 + w2 * x + w0"
@@ -2082,9 +2082,9 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Hàm mất mát (Loss Function) phổ biến nhất được dùng để tối ưu hóa mô hình Hồi quy tuyến tính là gì?",
       "options": {
-        "A": "Hàm mất mát Cross-Entropy (Log Loss)",
+        "A": "Hàm mất mát Cross-Entropy",
         "B": "Chỉ số Gini Impurity",
-        "C": "Sai số bình phương trung bình (Mean Squared Error - MSE)",
+        "C": "Sai số bình phương trung bình",
         "D": "Hàm Hinge Loss"
       },
       "answer": "C",
@@ -2098,7 +2098,7 @@
         "A": "Bài toán Hồi quy liên tục đa biến",
         "B": "Bài toán Nén kích thước file dữ liệu",
         "C": "Bài toán Phân cụm dữ liệu phân cấp",
-        "D": "Bài toán Phân loại (Classification), chủ yếu là phân loại nhị phân"
+        "D": "Bài toán Phân loại, chủ yếu là phân loại nhị phân"
       },
       "answer": "D",
       "explanation": "Mặc dù có chữ 'Regression' trong tên vì sử dụng hàm tuyến tính bên trong, Hồi quy Logistic sử dụng hàm Sigmoid để ánh xạ đầu ra thành xác suất [0, 1] cho bài toán phân loại."
@@ -2110,7 +2110,7 @@
       "options": {
         "A": "Tự động loại bỏ các hệ số trọng số bằng 0",
         "B": "Chuyển đổi các nhãn dạng chuỗi thành số nguyên dương",
-        "C": "Nén mọi giá trị đầu vào số thực z từ (-vô cùng, +vô cùng) về khoảng xác suất (0, 1)",
+        "C": "Nén mọi giá trị đầu vào số thực z từ âm vô cùng đến dương vô cùng về khoảng xác suất từ 0 đến 1",
         "D": "Biến đổi ma trận vuông thành ma trận nghịch đảo"
       },
       "answer": "C",
@@ -2121,8 +2121,8 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Trong bài toán phân loại nhị phân với ngưỡng quyết định mặc định là 0.5, nếu đầu ra của hàm Sigmoid là P(y=1|x) = 0.73 thì mô hình sẽ dự đoán nhãn nào?",
       "options": {
-        "A": "Nhãn 0 (vì 0.73 < 1.0)",
-        "B": "Nhãn 1 (vì 0.73 >= 0.5)",
+        "A": "Nhãn 0",
+        "B": "Nhãn 1",
         "C": "Mô hình báo lỗi dữ liệu không hợp lệ",
         "D": "Không thể xác định được vì giá trị chưa đạt 1.0"
       },
@@ -2135,7 +2135,7 @@
       "question": "Thuật toán K-Nearest Neighbors (K-NN) đưa ra dự đoán nhãn cho một điểm dữ liệu mới dựa trên nguyên tắc nào?",
       "options": {
         "A": "Tìm nghiệm tối ưu toàn cục bằng phương pháp đạo hàm bậc nhất",
-        "B": "Xác định K điểm dữ liệu gần nhất trong tập huấn luyện (theo khoảng cách) và bầu chọn theo đa số nhãn của K điểm đó",
+        "B": "Xác định K điểm dữ liệu gần nhất trong tập huấn luyện và bầu chọn theo đa số nhãn của K điểm đó",
         "C": "Phân tích cú pháp văn bản dựa trên ngữ pháp tạo sinh",
         "D": "Vẽ một siêu phẳng phân tách có lề cực đại"
       },
@@ -2147,7 +2147,7 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Nếu chọn tham số K = 1 trong thuật toán K-NN, mô hình có xu hướng gặp hiện tượng gì?",
       "options": {
-        "A": "Rất nhạy cảm với nhiễu và dễ bị Overfitting (học vẹt trên tập huấn luyện)",
+        "A": "Rất nhạy cảm với nhiễu và dễ bị Overfitting",
         "B": "Độ chính xác trên tập kiểm tra luôn đạt 100%",
         "C": "Tốc độ dự đoán đạt tức thời không phụ thuộc kích thước dữ liệu",
         "D": "Underfitting nghiêm trọng với đường biên quyết định quá phẳng"
@@ -2174,9 +2174,9 @@
       "question": "Trong thuật toán Cây quyết định (Decision Tree), khái niệm Độ hỗn loạn / Độ bất định của tập dữ liệu được đo lường bằng chỉ số nào?",
       "options": {
         "A": "Entropy",
-        "B": "Mean Squared Error (MSE)",
+        "B": "Mean Squared Error",
         "C": "Cosine Similarity",
-        "D": "Correlation Coefficient (r)"
+        "D": "Correlation Coefficient"
       },
       "answer": "A",
       "explanation": "Entropy đo mức độ hỗn loạn của thông tin. Tập dữ liệu thuần khiết (chỉ chứa 1 lớp duy nhất) có Entropy = 0; tập dữ liệu pha tạp đồng đều các lớp có Entropy cực đại."
@@ -2212,7 +2212,7 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Ưu điểm lớn nhất của mô hình Cây quyết định (Decision Tree) so với các mô hình phức tạp khác là gì?",
       "options": {
-        "A": "Khả năng diễn giải trực quan cao (White-box model), con người có thể dễ dàng hiểu các quy tắc IF-THEN mà mô hình sử dụng",
+        "A": "Khả năng diễn giải trực quan cao, con người có thể dễ dàng hiểu các quy tắc IF-THEN mà mô hình sử dụng",
         "B": "Tự động học tốt khi không cần bất kỳ mẫu dữ liệu huấn luyện nào",
         "C": "Không bao giờ bị hiện tượng Overfitting dù cây có sâu đến đâu",
         "D": "Luôn cho độ chính xác cao hơn mạng nơ-ron sâu trong mọi bài toán ảnh"
@@ -2240,7 +2240,7 @@
       "options": {
         "A": "Linear Blending",
         "B": "Stacking",
-        "C": "Bagging (Bootstrap Aggregating)",
+        "C": "Bagging",
         "D": "Boosting"
       },
       "answer": "C",
@@ -2252,7 +2252,7 @@
       "question": "Hai yếu tố 'Ngẫu nhiên' cốt lõi tạo nên sức mạnh và tính đa dạng của mô hình Random Forest là gì?",
       "options": {
         "A": "Chạy ngẫu nhiên số lần lặp và chọn ngẫu nhiên máy chủ tính toán",
-        "B": "Lấy mẫu ngẫu nhiên có hoàn lại các hàng dữ liệu (Bootstrap) và chọn ngẫu nhiên một tập con các thuộc tính (Features) khi phân nhánh",
+        "B": "Lấy mẫu ngẫu nhiên có hoàn lại các hàng dữ liệu và chọn ngẫu nhiên một tập con các thuộc tính khi phân nhánh",
         "C": "Xóa ngẫu nhiên một nửa dữ liệu và đổi ngẫu nhiên dấu của trọng số",
         "D": "Chọn ngẫu nhiên nhãn dự đoán và chọn ngẫu nhiên độ sâu của cây"
       },
@@ -2267,7 +2267,7 @@
         "A": "Tính giá trị trung bình tọa độ của tất cả các điểm thuộc mỗi lớp",
         "B": "Tìm đường cong đi qua tất cả các điểm dữ liệu trong tập huấn luyện",
         "C": "Xây dựng chuỗi quy tắc phân nhánh có độ sâu nhỏ nhất",
-        "D": "Tìm siêu phẳng (Hyperplane) phân cách giữa các lớp sao cho khoảng cách lề (Margin) giữa siêu phẳng và các điểm dữ liệu gần nhất là cực đại"
+        "D": "Tìm siêu phẳng phân cách giữa các lớp sao cho khoảng cách lề giữa siêu phẳng và các điểm dữ liệu gần nhất là cực đại"
       },
       "answer": "D",
       "explanation": "SVM tối ưu hóa việc phân tách bằng cách cực đại hóa biên (maximum margin hyperplane). Các điểm dữ liệu nằm sát biên quyết định được gọi là Support Vectors."
@@ -2277,10 +2277,10 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Trong thuật toán SVM, các điểm dữ liệu nằm sát đường biên và trực tiếp quyết định vị trí của siêu phẳng phân cách được gọi là gì?",
       "options": {
-        "A": "Các trọng số kích hoạt (Activation Weights)",
-        "B": "Các điểm ngoại lai (Outliers)",
-        "C": "Các tâm cụm (Centroids)",
-        "D": "Các vector hỗ trợ (Support Vectors)"
+        "A": "Các trọng số kích hoạt",
+        "B": "Các điểm ngoại lai",
+        "C": "Các tâm cụm",
+        "D": "Các vector hỗ trợ"
       },
       "answer": "D",
       "explanation": "Support Vectors là các mẫu dữ liệu quan trọng nhất nằm ngay trên lề. Nếu xóa các điểm khác xa lề, vị trí siêu phẳng phân cách vẫn không thay đổi."
@@ -2293,7 +2293,7 @@
         "A": "Biến bài toán phân loại có giám sát thành bài toán học tăng cường",
         "B": "Nén tập dữ liệu xuống còn 1 chiều duy nhất để tăng tốc độ tính toán",
         "C": "Tự động điền giá trị khuyết mà không làm thay đổi phân phối dữ liệu",
-        "D": "Ánh xạ ngầm dữ liệu từ không gian ban đầu (không phân tách tuyến tính được) sang không gian số chiều cao hơn nơi các lớp có thể phân tách tuyến tính"
+        "D": "Ánh xạ ngầm dữ liệu từ không gian ban đầu chưa phân tách tuyến tính được sang không gian số chiều cao hơn nơi các lớp có thể phân tách tuyến tính"
       },
       "answer": "D",
       "explanation": "Kernel Trick (như RBF, Polynomial) cho phép tính tích vô hướng trong không gian nhiều chiều mà không cần biến đổi tọa độ thực sự, giải quyết xuất sắc bài toán phi tuyến."
@@ -2305,7 +2305,7 @@
       "options": {
         "A": "Đếm số lần xuất hiện của các từ khóa trong câu văn bản",
         "B": "Nhân ma trận đầu vào với ma trận nghịch đảo của nó",
-        "C": "Tính tổng có trọng số của các đầu vào cộng với độ lệch (Bias), sau đó đưa qua một Hàm kích hoạt (Activation Function)",
+        "C": "Tính tổng có trọng số của các đầu vào cộng với độ lệch, sau đó đưa qua một Hàm kích hoạt",
         "D": "Tìm khoảng cách Euclid nhỏ nhất tới K điểm dữ liệu xung quanh"
       },
       "answer": "C",
@@ -2319,7 +2319,7 @@
         "A": "Chuyển đổi ảnh màu RGB thành ảnh xám nhị phân",
         "B": "Tự động lưu trữ các trọng số vào ổ đĩa cứng sau mỗi epoch",
         "C": "Đảm bảo tốc độ mạng Internet luôn ổn định khi truyền dữ liệu",
-        "D": "Đưa tính chất phi tuyến tính (Non-linearity) vào mạng, giúp mạng có khả năng học các mối quan hệ phức tạp thay vì chỉ là tổ hợp tuyến tính đơn giản"
+        "D": "Đưa tính chất phi tuyến tính vào mạng, giúp mạng có khả năng học các mối quan hệ phức tạp thay vì chỉ là tổ hợp tuyến tính đơn giản"
       },
       "answer": "D",
       "explanation": "Nếu không có hàm kích hoạt phi tuyến, xếp chồng bao nhiêu lớp nơ-ron thì toàn bộ mạng sâu vẫn chỉ tương đương với một phép biến đổi tuyến tính đơn lẻ."
@@ -2344,7 +2344,7 @@
       "options": {
         "A": "Khởi tạo ngẫu nhiên kích thước các lớp ẩn của mô hình",
         "B": "Truyền dữ liệu từ lớp đầu vào đến lớp đầu ra để tính giá trị dự đoán",
-        "C": "Tính đạo hàm riêng (gradient) của hàm mất mát theo từng trọng số trong mạng dựa trên quy tắc chuỗi (Chain Rule) để cập nhật trọng số",
+        "C": "Tính đạo hàm riêng của hàm mất mát theo từng trọng số trong mạng dựa trên quy tắc chuỗi để cập nhật trọng số",
         "D": "Kiểm tra tính đúng đắn của cú pháp lập trình trước khi chạy"
       },
       "answer": "C",
@@ -2370,7 +2370,7 @@
       "options": {
         "A": "Tự động chuẩn hóa dữ liệu về phân phối chuẩn tắc",
         "B": "Đo lường thời gian chạy của thuật toán trên các dòng GPU khác nhau",
-        "C": "Xác định số lượng cụm K tối ưu bằng cách tìm điểm 'khuỷu tay' nơi tổng bình phương khoảng cách nội cụm (WCSS) bắt đầu giảm chậm lại",
+        "C": "Xác định số lượng cụm K tối ưu bằng cách tìm điểm 'khuỷu tay' nơi tổng bình phương khoảng cách nội cụm bắt đầu giảm chậm lại",
         "D": "Tìm ra điểm dữ liệu ngoại lai nằm xa nhất trong tập dữ liệu"
       },
       "answer": "C",
@@ -2381,7 +2381,7 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Hiện tượng Học vẹt / Quá khớp (Overfitting) xảy ra khi nào?",
       "options": {
-        "A": "Mô hình đạt độ chính xác rất cao trên tập huấn luyện (Train) nhưng có kết quả rất kém trên tập kiểm thử (Test) chưa từng thấy",
+        "A": "Mô hình đạt độ chính xác rất cao trên tập huấn luyện nhưng có kết quả rất kém trên tập kiểm thử chưa từng thấy",
         "B": "Mô hình mất quá nhiều thời gian để nạp dữ liệu từ ổ cứng vào bộ nhớ",
         "C": "Mô hình có độ chính xác thấp trên cả tập huấn luyện lẫn tập kiểm thử",
         "D": "Mô hình phân loại nhầm giữa biến định tính và biến định lượng"
@@ -2407,8 +2407,8 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Đánh đổi giữa Độ chệch và Phương sai (Bias-Variance Tradeoff) chỉ ra rằng một mô hình có Độ chệch cao (High Bias) thường gặp vấn đề gì?",
       "options": {
-        "A": "Mô hình bị Overfitting (quá phức tạp và nhạy cảm với nhiễu)",
-        "B": "Mô hình bị Underfitting (quá đơn giản và bỏ sót các quy luật quan trọng)",
+        "A": "Mô hình bị Overfitting",
+        "B": "Mô hình bị Underfitting",
         "C": "Mô hình hoàn hảo không có bất kỳ sai số nào",
         "D": "Mô hình có phương sai cực lớn trên dữ liệu mới"
       },
@@ -2421,9 +2421,9 @@
       "question": "Kỹ thuật nào sau đây KHÔNG phải là biện pháp hiệu quả để giảm thiểu Overfitting?",
       "options": {
         "A": "Tăng thêm độ sâu tối đa của Cây quyết định lên mức vô hạn",
-        "B": "Áp dụng kỹ thuật Điều chuẩn (Regularization L1/L2)",
-        "C": "Thu thập thêm dữ liệu huấn luyện hoặc thực hiện tăng cường dữ liệu (Data Augmentation)",
-        "D": "Sử dụng kỹ thuật Dừng sớm (Early Stopping) hoặc Dropout trong mạng nơ-ron"
+        "B": "Áp dụng kỹ thuật Điều chuẩn",
+        "C": "Thu thập thêm dữ liệu huấn luyện hoặc thực hiện tăng cường dữ liệu",
+        "D": "Sử dụng kỹ thuật Dừng sớm hoặc Dropout trong mạng nơ-ron"
       },
       "answer": "A",
       "explanation": "Tăng độ sâu cây lên vô hạn sẽ khiến cây tiếp tục phân nhánh cho tới khi mỗi chiếc lá chỉ chứa 1 điểm dữ liệu, làm trầm trọng thêm hiện tượng overfitting."
@@ -2435,8 +2435,8 @@
       "options": {
         "A": "Số lượng các thuộc tính có giá trị lớn hơn 0",
         "B": "Tích của tất cả các trọng số với giá trị trung bình của dữ liệu",
-        "C": "Tổng bình phương của các trọng số nhân với hệ số điều chuẩn lambda (penalty = lambda * Sum(w_i^2))",
-        "D": "Tổng giá trị tuyệt đối của các trọng số nhân với lambda (penalty = lambda * Sum(|w_i|))"
+        "C": "Tổng bình phương của các trọng số nhân với hệ số điều chuẩn lambda",
+        "D": "Tổng giá trị tuyệt đối của các trọng số nhân với lambda"
       },
       "answer": "C",
       "explanation": "L2 Regularization phạt các trọng số có độ lớn lớn bằng cách cộng thêm lambda * ||w||_2^2, ép các trọng số co về gần 0 nhưng hiếm khi bằng 0 tuyệt đối."
@@ -2449,7 +2449,7 @@
         "A": "Luôn giữ nguyên tất cả các trọng số lớn hơn 1",
         "B": "Loại bỏ hoàn toàn sự cần thiết của hàm mất mát gốc",
         "C": "Tự động nhân đôi số lượng mẫu dữ liệu của lớp thiểu số",
-        "D": "Có khả năng triệt tiêu các trọng số của các đặc trưng không quan trọng về đúng bằng 0 (tạo ra ma trận thưa - sparsity)"
+        "D": "Có khả năng triệt tiêu các trọng số của các đặc trưng không quan trọng về đúng bằng 0"
       },
       "answer": "D",
       "explanation": "L1 phạt tổng trị tuyệt đối ||w||_1, có xu hướng ép các trọng số ít quan trọng về thẳng số 0, do đó Lasso hoạt động như một cơ chế tự động lựa chọn đặc trưng (Feature Selection)."
@@ -2475,7 +2475,7 @@
         "A": "Số lượng trường hợp thực tế là Tiêu cực và mô hình dự đoán đúng là Tiêu cực",
         "B": "Số lượng trường hợp thực tế là Tiêu cực nhưng mô hình đoán nhầm là Tích cực",
         "C": "Số lượng trường hợp thực tế là Tích cực nhưng mô hình đoán nhầm là Tiêu cực",
-        "D": "Số lượng trường hợp thực tế là Tích cực (Positive) và mô hình dự đoán chính xác là Tích cực (Positive)"
+        "D": "Số lượng trường hợp thực tế là Tích cực và mô hình dự đoán chính xác là Tích cực"
       },
       "answer": "D",
       "explanation": "TP (True Positive) là các mẫu mang nhãn Positive được mô hình dự đoán đúng là Positive."
@@ -2487,7 +2487,7 @@
       "options": {
         "A": "Dữ liệu kiểm tra bị mất kết nối trong quá trình suy luận",
         "B": "Bỏ sót: Thực tế là Tích cực nhưng mô hình lại kết luận là Tiêu cực",
-        "C": "Báo động giả: Thực tế là Tiêu cực (Negative) nhưng mô hình lại kết luận là Tích cực (Positive)",
+        "C": "Báo động giả: Thực tế là Tiêu cực nhưng mô hình lại kết luận là Tích cực",
         "D": "Mô hình dự đoán hoàn toàn chính xác cả hai lớp"
       },
       "answer": "C",
@@ -2499,7 +2499,7 @@
       "question": "Lỗi loại II (Type II Error / False Negative - FN) là gì?",
       "options": {
         "A": "Thực tế là Tiêu cực nhưng mô hình kết luận là Tích cực",
-        "B": "Bỏ sót nguy hiểm: Thực tế là Tích cực (Positive) nhưng mô hình lại kết luận là Tiêu cực (Negative)",
+        "B": "Bỏ sót nguy hiểm: Thực tế là Tích cực nhưng mô hình lại kết luận là Tiêu cực",
         "C": "Mô hình dự đoán xác suất vượt quá 100%",
         "D": "Thực tế là Tiêu cực và mô hình kết luận là Tiêu cực"
       },
@@ -2540,7 +2540,7 @@
         "A": "Trung bình cộng giữa độ nhạy và độ đặc hiệu của mô hình",
         "B": "Trong số tất cả các trường hợp thực tế là Tích cực, có bao nhiêu phần trăm được mô hình tìm thấy",
         "C": "Tỷ lệ các mẫu âm tính được dự đoán chính xác trên toàn bộ mẫu âm tính",
-        "D": "Trong số tất cả các trường hợp mà mô hình dự đoán là Tích cực (Positive), có bao nhiêu phần trăm là thực sự Tích cực: Precision = TP / (TP + FP)"
+        "D": "Trong số tất cả các trường hợp mà mô hình dự đoán là Tích cực, có bao nhiêu phần trăm thực sự là Tích cực"
       },
       "answer": "D",
       "explanation": "Precision trả lời câu hỏi: 'Khi mô hình nói một email là Spam, xác suất nó thực sự là Spam là bao nhiêu?' (tránh báo động giả)."
@@ -2551,7 +2551,7 @@
       "question": "Độ thu hồi / Độ nhạy (Recall / Sensitivity) đo lường điều gì?",
       "options": {
         "A": "Khoảng thời gian cần thiết để mô hình hoàn thành việc suy luận",
-        "B": "Trong số tất cả các trường hợp thực tế là Tích cực (Positive), có bao nhiêu phần trăm được mô hình phát hiện chính xác: Recall = TP / (TP + FN)",
+        "B": "Trong số tất cả các trường hợp thực tế là Tích cực, có bao nhiêu phần trăm được mô hình phát hiện chính xác",
         "C": "Tỷ lệ các mẫu bị mô hình dự đoán sai hoàn toàn",
         "D": "Tỷ lệ dự đoán đúng trên tổng số dự đoán tích cực của mô hình"
       },
@@ -2563,10 +2563,10 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Chỉ số F1-Score là thước đo kết hợp giữa Precision và Recall theo công thức nào?",
       "options": {
-        "A": "F1 = (Precision + Recall) / 2  (Trung bình cộng)",
+        "A": "F1 = (Precision + Recall) / 2",
         "B": "F1 = Precision * Recall",
-        "C": "F1 = sqrt(Precision * Recall)  (Trung bình hình học)",
-        "D": "F1 = 2 * (Precision * Recall) / (Precision + Recall)  (Trung bình điều hòa - Harmonic Mean)"
+        "C": "F1 = sqrt(Precision * Recall)",
+        "D": "F1 = 2 * (Precision * Recall) / (Precision + Recall)"
       },
       "answer": "D",
       "explanation": "F1-score dùng trung bình điều hòa, phạt rất nặng nếu một trong hai chỉ số Precision hoặc Recall quá thấp, giúp đánh giá công bằng trên dữ liệu mất cân bằng."
@@ -2578,8 +2578,8 @@
       "options": {
         "A": "Phương sai trên trục tung và Độ chệch trên trục hoành",
         "B": "Sai số MSE trên trục tung và Số lượng epoch trên trục hoành",
-        "C": "Tỷ lệ dương tính thật (TPR / Recall) trên trục tung và Tỷ lệ dương tính giả (FPR = 1 - Specificity) trên trục hoành",
-        "D": "Độ chính xác (Accuracy) trên trục tung và Thời gian huấn luyện trên trục hoành"
+        "C": "Tỷ lệ dương tính thật trên trục tung và Tỷ lệ dương tính giả trên trục hoành",
+        "D": "Độ chính xác trên trục tung và Thời gian huấn luyện trên trục hoành"
       },
       "answer": "C",
       "explanation": "ROC curve vẽ TPR (True Positive Rate) theo FPR (False Positive Rate) trên toàn bộ dải ngưỡng từ 0 đến 1."
@@ -2589,7 +2589,7 @@
       "chapter": "Chương 4: Mô hình Thuật toán và Học máy",
       "question": "Chỉ số diện tích dưới đường cong ROC (AUC - Area Under the ROC Curve) có giá trị bằng 0.5 thể hiện điều gì?",
       "options": {
-        "A": "Mô hình phân loại hoàn toàn ngẫu nhiên (tương đương với việc tung đồng xu may rủi)",
+        "A": "Mô hình phân loại hoàn toàn ngẫu nhiên",
         "B": "Mô hình hoàn hảo phân tách tuyệt đối 100% giữa hai lớp",
         "C": "Tập dữ liệu bị thiếu mất 50% số lượng mẫu",
         "D": "Mô hình dự đoán ngược hoàn toàn so với thực tế"
@@ -2605,7 +2605,7 @@
         "A": "Xác suất để mô hình không bị hiện tượng Overfitting",
         "B": "Độ lệch chuẩn của sai số dự đoán trên tập kiểm tra",
         "C": "Số lượng biến độc lập có hệ số hồi quy khác 0",
-        "D": "Tỷ lệ phần trăm sự biến thiên của biến phụ thuộc (y) được giải thích bởi các biến độc lập (X) trong mô hình"
+        "D": "Tỷ lệ phần trăm sự biến thiên của biến phụ thuộc được giải thích bởi các biến độc lập trong mô hình"
       },
       "answer": "D",
       "explanation": "R^2 nằm trong khoảng [0, 1] (có thể âm nếu mô hình quá tệ so với đường trung bình). R^2 = 0.85 nghĩa là 85% độ biến thiên của y được giải thích bởi mô hình."
@@ -2642,9 +2642,9 @@
       "question": "Thành phần nào sau đây KHÔNG thuộc các thành phần cơ bản của một biểu đồ chuẩn mực?",
       "options": {
         "A": "Đoạn mã nguồn Python dùng để vẽ biểu đồ",
-        "B": "Tiêu đề biểu đồ (Chart Title) giải thích nội dung hiển thị",
-        "C": "Nhãn các trục tọa độ (Axis Labels) kèm đơn vị đo lường",
-        "D": "Chú giải (Legend) giải thích ý nghĩa của các màu sắc hoặc ký hiệu"
+        "B": "Tiêu đề biểu đồ giải thích nội dung hiển thị",
+        "C": "Nhãn các trục tọa độ kèm đơn vị đo lường",
+        "D": "Chú giải giải thích ý nghĩa của các màu sắc hoặc ký hiệu"
       },
       "answer": "A",
       "explanation": "Một biểu đồ chuẩn gồm: Tiêu đề, Trục tọa độ (X/Y axis) kèm nhãn/đơn vị, Thước chia tỉ lệ (Ticks), Đường lưới (Gridlines), và Chú giải (Legend). Mã nguồn không nằm trên biểu đồ hiển thị."
@@ -2654,10 +2654,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Loại biểu đồ nào là lựa chọn tối ưu nhất khi muốn so sánh doanh thu giữa 5 chi nhánh khác nhau của một công ty trong quý vừa qua?",
       "options": {
-        "A": "Biểu đồ cột (Bar Chart)",
-        "B": "Biểu đồ đường (Line Chart)",
-        "C": "Biểu đồ nhiệt (Heatmap)",
-        "D": "Biểu đồ tán xạ (Scatter Plot)"
+        "A": "Biểu đồ cột",
+        "B": "Biểu đồ đường",
+        "C": "Biểu đồ nhiệt",
+        "D": "Biểu đồ tán xạ"
       },
       "answer": "A",
       "explanation": "Biểu đồ cột (Bar Chart) là công cụ tốt nhất để so sánh độ lớn giữa các danh mục (categorical data) rời rạc."
@@ -2667,10 +2667,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Khi muốn thể hiện xu hướng biến thiên của giá vàng thế giới liên tục qua từng ngày trong vòng 10 năm qua, loại biểu đồ nào phù hợp nhất?",
       "options": {
-        "A": "Biểu đồ radar (Radar Chart)",
-        "B": "Biểu đồ tròn (Pie Chart)",
-        "C": "Biểu đồ đường (Line Chart)",
-        "D": "Biểu đồ cột chồng (Stacked Bar Chart)"
+        "A": "Biểu đồ radar",
+        "B": "Biểu đồ tròn",
+        "C": "Biểu đồ đường",
+        "D": "Biểu đồ cột chồng"
       },
       "answer": "C",
       "explanation": "Biểu đồ đường (Line Chart) là lựa chọn chuẩn mực để biểu diễn dữ liệu chuỗi thời gian (time-series), thể hiện rõ xu hướng tăng/giảm và tính chu kỳ."
@@ -2693,7 +2693,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Biểu đồ Histogram khác với Biểu đồ cột (Bar Chart) ở điểm cốt lõi nào?",
       "options": {
-        "A": "Histogram thể hiện phân phối tần suất của một biến số liên tục qua các khoảng chia (bins), trong khi Bar Chart so sánh giữa các danh mục rời rạc",
+        "A": "Histogram thể hiện phân phối tần suất của một biến số liên tục qua các khoảng chia, trong khi Bar Chart so sánh giữa các danh mục rời rạc",
         "B": "Các cột trong Histogram luôn có khoảng cách rộng, còn Bar Chart thì các cột dính sát nhau",
         "C": "Histogram dùng cho dữ liệu thời gian, còn Bar Chart dùng cho dữ liệu không gian",
         "D": "Histogram chỉ hiển thị được màu đen trắng, còn Bar Chart hiển thị nhiều màu"
@@ -2706,10 +2706,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Để khảo sát mối quan hệ tương quan và phân bố đồng thời giữa hai biến định lượng liên tục (ví dụ: 'Số giờ học' và 'Điểm thi GPA'), loại biểu đồ nào là phù hợp nhất?",
       "options": {
-        "A": "Biểu đồ cột ngang (Horizontal Bar Chart)",
-        "B": "Biểu đồ tán xạ (Scatter Plot)",
-        "C": "Biểu đồ dạng mạng nhện (Spider Chart)",
-        "D": "Biểu đồ tròn (Pie Chart)"
+        "A": "Biểu đồ cột ngang",
+        "B": "Biểu đồ tán xạ",
+        "C": "Biểu đồ dạng mạng nhện",
+        "D": "Biểu đồ tròn"
       },
       "answer": "B",
       "explanation": "Biểu đồ tán xạ (Scatter Plot) đặt 2 biến định lượng lên 2 trục X và Y, mỗi điểm dữ liệu là một quan sát, giúp nhận biết mối tương quan tuyến tính hoặc phi tuyến."
@@ -2720,9 +2720,9 @@
       "question": "Biểu đồ hộp (Boxplot / Box-and-Whisker Plot) được xây dựng dựa trên tập hợp giá trị nào trong thống kê mô tả?",
       "options": {
         "A": "Hệ số tương quan Pearson, R-squared, P-value, T-statistic và F-statistic",
-        "B": "Trung bình (Mean), Độ lệch chuẩn (Std), Phương sai (Variance), Mode và Sai số chuẩn (SE)",
+        "B": "Trung bình, Độ lệch chuẩn, Phương sai, Mode và Sai số chuẩn",
         "C": "Điểm kiểm định Z, T-score, Chi-square, Log-loss và Entropy",
-        "D": "Tóm tắt 5 số thống kê: Giá trị nhỏ nhất (Min), Tứ phân vị thứ nhất (Q1), Trung vị (Median / Q2), Tứ phân vị thứ ba (Q3), và Giá trị lớn nhất (Max)"
+        "D": "Tóm tắt 5 số thống kê: Giá trị nhỏ nhất, Tứ phân vị thứ nhất, Trung vị, Tứ phân vị thứ ba, và Giá trị lớn nhất"
       },
       "answer": "D",
       "explanation": "Boxplot trực quan hóa 5 số thống kê của phân phối: Min (không tính outlier), Q1, Median (Q2), Q3, Max (không tính outlier), đồng thời vẽ các điểm ngoại lai riêng lẻ."
@@ -2732,10 +2732,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Đường gạch nằm ngang bên trong chiếc hộp của biểu đồ Boxplot đại diện cho chỉ số thống kê nào?",
       "options": {
-        "A": "Độ lệch chuẩn (Standard Deviation)",
-        "B": "Giá trị trung bình số học (Mean)",
-        "C": "Yếu vị (Mode)",
-        "D": "Trung vị (Median / Q2)"
+        "A": "Độ lệch chuẩn",
+        "B": "Giá trị trung bình số học",
+        "C": "Yếu vị",
+        "D": "Trung vị"
       },
       "answer": "D",
       "explanation": "Đường phân chia bên trong hộp của Boxplot luôn biểu thị giá trị Trung vị (Median / Q2) của tập dữ liệu."
@@ -2747,7 +2747,7 @@
       "options": {
         "A": "Độ biến thiên toàn phần Range = Max - Min",
         "B": "Khoảng tin cậy 95% của giá trị trung bình",
-        "C": "Khoảng tứ phân vị IQR (Interquartile Range = Q3 - Q1)",
+        "C": "Khoảng tứ phân vị IQR",
         "D": "Độ lệch chuẩn của tập dữ liệu"
       },
       "answer": "C",
@@ -2758,10 +2758,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Một điểm dữ liệu được biểu diễn dưới dạng một chấm tròn tách biệt nằm bên ngoài hai râu (whiskers) của Boxplot được gọi là gì?",
       "options": {
-        "A": "Giá trị trung bình (Mean)",
-        "B": "Giá trị khuyết thiếu (Missing value)",
-        "C": "Nhiễu tần số cao (High frequency noise)",
-        "D": "Điểm ngoại lai (Outlier)"
+        "A": "Giá trị trung bình",
+        "B": "Giá trị khuyết thiếu",
+        "C": "Nhiễu tần số cao",
+        "D": "Điểm ngoại lai"
       },
       "answer": "D",
       "explanation": "Các điểm nằm ngoài hàng rào [Q1 - 1.5*IQR, Q3 + 1.5*IQR] được hiển thị dưới dạng các chấm rời rạc bên ngoài râu của Boxplot, biểu thị các điểm ngoại lai."
@@ -2771,7 +2771,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Biểu đồ nhiệt (Heatmap) thường được ứng dụng phổ biến nhất trong phân tích dữ liệu đa biến nhằm mục đích gì?",
       "options": {
-        "A": "Trực quan hóa ma trận hệ số tương quan (Correlation Matrix) giữa các cặp biến thông qua các gam màu sắc khác nhau",
+        "A": "Trực quan hóa ma trận hệ số tương quan giữa các cặp biến thông qua các gam màu sắc khác nhau",
         "B": "Phát hiện xem mô hình học máy đang chạy trên CPU hay GPU",
         "C": "So sánh sự biến thiên của biến phân loại theo chuỗi thời gian",
         "D": "Đo lường nhiệt độ vật lý của hệ thống máy chủ xử lý dữ liệu"
@@ -2889,7 +2889,7 @@
       "question": "Hàm `sns.pairplot(df)` trong Seaborn thực hiện tác vụ trực quan hóa nào?",
       "options": {
         "A": "Tạo ra một biểu đồ hình tròn cho toàn bộ các thuộc tính định tính",
-        "B": "Vẽ một ma trận đồ thị tán xạ (Scatter plots) cho tất cả các cặp biến số và biểu đồ phân phối (Histogram/KDE) trên đường chéo chính",
+        "B": "Vẽ một ma trận đồ thị tán xạ cho tất cả các cặp biến số và biểu đồ phân phối trên đường chéo chính",
         "C": "Tự động tính toán ma trận nghịch đảo của dữ liệu",
         "D": "Chỉ vẽ một biểu đồ đường duy nhất cho 2 cột đầu tiên"
       },
@@ -2903,7 +2903,7 @@
       "options": {
         "A": "Làm đảo ngược thứ tự các danh mục trên trục X",
         "B": "Làm biểu đồ không thể xuất ra định dạng file PDF",
-        "C": "Khiến máy tính bị lỗi tràn bộ nhớ (buffer overflow)",
+        "C": "Khiến máy tính bị lỗi tràn bộ nhớ",
         "D": "Làm phóng đại giả tạo sự khác biệt nhỏ giữa các nhóm, khiến người xem cảm nhận sai lệch về mức độ chênh lệch thực tế"
       },
       "answer": "D",
@@ -2940,10 +2940,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Biểu đồ phân tán (Scatter Plot) với kích thước của từng điểm được phóng to/thu nhỏ theo một biến định lượng thứ 3 được gọi là loại biểu đồ nào?",
       "options": {
-        "A": "Biểu đồ hình nến (Candlestick Chart)",
-        "B": "Biểu đồ hình phễu (Funnel Chart)",
-        "C": "Biểu đồ thác nước (Waterfall Chart)",
-        "D": "Biểu đồ bong bóng (Bubble Chart)"
+        "A": "Biểu đồ hình nến",
+        "B": "Biểu đồ hình phễu",
+        "C": "Biểu đồ thác nước",
+        "D": "Biểu đồ bong bóng"
       },
       "answer": "D",
       "explanation": "Biểu đồ bong bóng (Bubble Chart) mở rộng Scatter plot bằng cách gán kích thước của hình tròn cho biến số thứ 3 (và có thể gán màu sắc cho biến số thứ 4)."
@@ -2953,10 +2953,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Để trực quan hóa các giai đoạn chuyển đổi của khách hàng trong quy trình bán hàng (từ Khách truy cập -> Xem sản phẩm -> Thêm vào giỏ -> Mua hàng), biểu đồ nào là phù hợp nhất?",
       "options": {
-        "A": "Biểu đồ phân tán (Scatter Plot)",
-        "B": "Biểu đồ đường chuỗi thời gian (Line Chart)",
-        "C": "Biểu đồ hộp (Boxplot)",
-        "D": "Biểu đồ hình phễu (Funnel Chart)"
+        "A": "Biểu đồ phân tán",
+        "B": "Biểu đồ đường chuỗi thời gian",
+        "C": "Biểu đồ hộp",
+        "D": "Biểu đồ hình phễu"
       },
       "answer": "D",
       "explanation": "Funnel Chart (biểu đồ hình phễu) được thiết kế đặc thù để theo dõi tỉ lệ rơi rụng (drop-off) và chuyển đổi qua các giai đoạn tuần tự của một quy trình."
@@ -2969,7 +2969,7 @@
         "A": "Dữ liệu chuỗi thời gian liên tục dưới dạng hình mạng nhện",
         "B": "Phân phối xác suất chuẩn của biến ngẫu nhiên rời rạc",
         "C": "Dữ liệu tọa độ không gian địa lý trên bản đồ vệ tinh",
-        "D": "Dữ liệu có tính phân cấp (Hierarchical data) dưới dạng các hình chữ nhật lồng nhau với diện tích tỉ lệ thuận với giá trị"
+        "D": "Dữ liệu có tính phân cấp dưới dạng các hình chữ nhật lồng nhau với diện tích tỉ lệ thuận với giá trị"
       },
       "answer": "D",
       "explanation": "Treemap hiển thị dữ liệu phân cấp dạng cây bằng các hình chữ nhật lồng nhau, rất hiệu quả để quan sát cấu trúc tỷ trọng của các nhóm con bên trong nhóm cha."
@@ -2979,10 +2979,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Khi muốn thể hiện phân phối mật độ xác suất liên tục mượt mà của một biến thay vì các cột rời rạc của Histogram, ta sử dụng biểu đồ nào?",
       "options": {
-        "A": "Biểu đồ bánh Donut (Donut Chart)",
-        "B": "Biểu đồ ước lượng mật độ hàm nhân (Kernel Density Estimation - KDE Plot)",
-        "C": "Biểu đồ thanh ngang (Horizontal Bar Chart)",
-        "D": "Biểu đồ cột chồng (Stacked Bar Chart)"
+        "A": "Biểu đồ bánh Donut",
+        "B": "Biểu đồ ước lượng mật độ hàm nhân",
+        "C": "Biểu đồ thanh ngang",
+        "D": "Biểu đồ cột chồng"
       },
       "answer": "B",
       "explanation": "KDE Plot (Kernel Density Estimate) ước lượng hàm mật độ xác suất trơn của biến số ngẫu nhiên liên tục, giúp quan sát phân phối mượt mà hơn Histogram."
@@ -2994,7 +2994,7 @@
       "options": {
         "A": "Chỉ được phép sử dụng duy nhất màu đen và màu trắng trên mọi biểu đồ",
         "B": "Không được phép sử dụng biểu đồ đường và biểu đồ phân tán",
-        "C": "Tránh sử dụng cặp màu kết hợp Đỏ - Xanh lá cây (Red-Green) đơn thuần để thể hiện sự đối lập, thay vào đó nên dùng bảng màu an toàn (như Viridis) hoặc kết hợp biểu tượng",
+        "C": "Tránh sử dụng cặp màu kết hợp Đỏ - Xanh lá cây đơn thuần để thể hiện sự đối lập, thay vào đó nên dùng bảng màu an toàn hoặc kết hợp biểu tượng",
         "D": "Bắt buộc phải ghi âm giọng đọc cho từng điểm dữ liệu trên đồ thị"
       },
       "answer": "C",
@@ -3031,10 +3031,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Biểu đồ Violin Plot là sự kết hợp độc đáo giữa hai loại biểu đồ nào?",
       "options": {
-        "A": "Biểu đồ hộp (Boxplot) và Biểu đồ ước lượng mật độ hạt nhân (KDE Plot)",
-        "B": "Biểu đồ tròn (Pie Chart) và Biểu đồ cột (Bar Chart)",
-        "C": "Biểu đồ phân tán (Scatter Plot) và Biểu đồ đường (Line Chart)",
-        "D": "Biểu đồ thác nước (Waterfall) và Biểu đồ hình phễu (Funnel)"
+        "A": "Biểu đồ hộp và Biểu đồ ước lượng mật độ hạt nhân",
+        "B": "Biểu đồ tròn và Biểu đồ cột",
+        "C": "Biểu đồ phân tán và Biểu đồ đường",
+        "D": "Biểu đồ thác nước và Biểu đồ hình phễu"
       },
       "answer": "A",
       "explanation": "Violin Plot kết hợp các thông số tóm tắt của Boxplot (trung vị, tứ phân vị) với đường cong mật độ đối xứng (KDE) ở hai bên, thể hiện rõ các phân phối đa đỉnh."
@@ -3045,7 +3045,7 @@
       "question": "Khi phân tích dữ liệu địa lý hoặc vị trí GPS của các cửa hàng trên toàn quốc, loại trực quan hóa nào là hiệu quả nhất?",
       "options": {
         "A": "Biểu đồ đường chuỗi thời gian",
-        "B": "Bản đồ nhiệt địa lý (Choropleth Map / Geospatial Map)",
+        "B": "Bản đồ nhiệt địa lý",
         "C": "Biểu đồ tròn 3D",
         "D": "Biểu đồ hộp đa biến"
       },
@@ -3059,8 +3059,8 @@
       "options": {
         "A": "Dữ liệu bị lỗi thu thập và cần xóa bỏ toàn bộ",
         "B": "Hai biến hoàn toàn độc lập và không có mối liên hệ nào",
-        "C": "Mối tương quan tuyến tính nghịch (Negative Correlation) giữa hai biến",
-        "D": "Mối tương quan tuyến tính thuận (Positive Correlation) giữa hai biến"
+        "C": "Mối tương quan tuyến tính nghịch giữa hai biến",
+        "D": "Mối tương quan tuyến tính thuận giữa hai biến"
       },
       "answer": "C",
       "explanation": "Đường dốc từ trên trái xuống dưới phải thể hiện: khi biến X tăng thì biến Y có xu hướng giảm, tức tương quan nghịch (hệ số Pearson r < 0)."
@@ -3070,7 +3070,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Khi số lượng quan sát trong Scatter Plot quá lớn (hàng trăm nghìn điểm) gây ra hiện tượng đè lấn điểm (Overplotting) làm đồ thị đen đặc, giải pháp nào sau đây là phù hợp?",
       "options": {
-        "A": "Giảm độ mờ (đặt độ trong suốt alpha < 1.0) hoặc chuyển sang dùng biểu đồ Hexbin (chia lưới lục giác)",
+        "A": "Giảm độ mờ hoặc chuyển sang dùng biểu đồ Hexbin",
         "B": "Chuyển toàn bộ dữ liệu sang biểu đồ hình tròn",
         "C": "Tăng kích thước của tất cả các điểm lên gấp 10 lần",
         "D": "Xóa ngẫu nhiên 99% dữ liệu trước khi vẽ"
@@ -3086,7 +3086,7 @@
         "A": "Thay đổi độ dày của đường viền biểu đồ",
         "B": "Lọc bỏ toàn bộ các hàng có giá trị rỗng trong DataFrame",
         "C": "Xác định độ phân giải DPI của hình ảnh xuất ra",
-        "D": "Phân tách và tô màu các điểm dữ liệu dựa theo giá trị của một biến phân loại (nhóm)"
+        "D": "Phân tách và tô màu các điểm dữ liệu dựa theo giá trị của một biến phân loại"
       },
       "answer": "D",
       "explanation": "Tham số `hue` trong Seaborn dùng để phân nhóm dữ liệu trực quan bằng màu sắc dựa theo một thuộc tính chỉ định."
@@ -3122,7 +3122,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Một biểu đồ có phân phối bị lệch phải (Right-skewed / Positively skewed) khi hiển thị trên Histogram sẽ có hình dạng như thế nào?",
       "options": {
-        "A": "Đỉnh phân phối tập trung lệch về bên trái và có phần 'đuôi' dài kéo dài về phía bên phải (các giá trị lớn)",
+        "A": "Đỉnh phân phối tập trung lệch về bên trái và có phần 'đuôi' dài kéo dài về phía bên phải",
         "B": "Phân phối hoàn toàn phẳng không có đỉnh nào nổi bật",
         "C": "Hình dạng đối xứng hoàn hảo hình chuông với trung bình bằng trung vị",
         "D": "Đỉnh phân phối tập trung ở bên phải và đuôi dài kéo về bên trái"
@@ -3150,7 +3150,7 @@
       "options": {
         "A": "Chỉ vẽ một biến và xóa biến còn lại khỏi báo cáo",
         "B": "Nhân đôi trục hoành X và bỏ qua trục tung Y",
-        "C": "Sử dụng biểu đồ có hai trục tung (Secondary Y-axis / Twin Axes)",
+        "C": "Sử dụng biểu đồ có hai trục tung",
         "D": "Cộng thêm 1.000.000 vào tỷ lệ chuyển đổi để hai biến bằng thang đo"
       },
       "answer": "C",
@@ -3174,7 +3174,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Đặc điểm nào sau đây là một nguyên tắc quan trọng trong việc đặt Tiêu đề (Chart Title) cho một biểu đồ báo cáo quản trị?",
       "options": {
-        "A": "Tiêu đề nên súc tích và nêu bật được thông điệp/phát hiện chính của dữ liệu (Actionable Title) thay vì chỉ mô tả chung chung các biến",
+        "A": "Tiêu đề nên súc tích và nêu bật được thông điệp/phát hiện chính của dữ liệu thay vì chỉ mô tả chung chung các biến",
         "B": "Không nên đặt tiêu đề để người xem tự suy đoán ý nghĩa biểu đồ",
         "C": "Tiêu đề phải dài ít nhất 50 từ và liệt kê toàn bộ công thức toán",
         "D": "Tiêu đề bắt buộc phải viết bằng tiếng Latinh cổ"
@@ -3187,7 +3187,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Để trực quan hóa ma trận nhầm lẫn (Confusion Matrix) của mô hình phân loại nhị phân trong Scikit-Learn hoặc Seaborn, biểu đồ nào thường được sử dụng nhất?",
       "options": {
-        "A": "Biểu đồ nhiệt (Heatmap) có ghi chú số lượng dự đoán (annot=True)",
+        "A": "Biểu đồ nhiệt có ghi chú số lượng dự đoán",
         "B": "Biểu đồ đường chuỗi thời gian",
         "C": "Biểu đồ tròn 3D",
         "D": "Biểu đồ phân tán 3 chiều"
@@ -3200,10 +3200,10 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Biểu đồ đường cong ROC (Receiver Operating Characteristic) biểu diễn mối quan hệ đánh đổi giữa hai đại lượng nào trên hai trục tọa độ?",
       "options": {
-        "A": "Số lượng mẫu dữ liệu và Sai số bình phương trung bình (MSE)",
-        "B": "Độ chính xác (Accuracy) và Thời gian huấn luyện mô hình",
+        "A": "Số lượng mẫu dữ liệu và Sai số bình phương trung bình",
+        "B": "Độ chính xác và Thời gian huấn luyện mô hình",
         "C": "Chi phí quảng cáo và Lợi nhuận ròng của doanh nghiệp",
-        "D": "Tỷ lệ dương tính thật (TPR - Trục Y) và Tỷ lệ dương tính giả (FPR - Trục X) tại các ngưỡng phân loại khác nhau"
+        "D": "Tỷ lệ dương tính thật trên trục Y và Tỷ lệ dương tính giả trên trục X tại các ngưỡng phân loại khác nhau"
       },
       "answer": "D",
       "explanation": "Đường cong ROC vẽ True Positive Rate (Recall / Sensitivity) trên trục Y đối đầu với False Positive Rate (1 - Specificity) trên trục X qua mọi ngưỡng xác suất."
@@ -3239,7 +3239,7 @@
       "chapter": "Chương 5: Trực quan hóa Dữ liệu",
       "question": "Trong phân tích dữ liệu, 'Biểu đồ mạng nhện' (Radar Chart / Spider Chart) thường được sử dụng hiệu quả nhất để làm gì?",
       "options": {
-        "A": "So sánh hiệu suất đa tiêu chí (nhiều thuộc tính định lượng) của một hoặc nhiều đối tượng trên cùng một hệ trục hướng tâm",
+        "A": "So sánh hiệu suất đa tiêu chí của một hoặc nhiều đối tượng trên cùng một hệ trục hướng tâm",
         "B": "Đo lường độ nhiễu của tín hiệu âm thanh kỹ thuật số",
         "C": "Xác định nguyên nhân gốc rễ trong chuỗi cung ứng bằng cây quyết định",
         "D": "Theo dõi biến động giá chứng khoán từng giây theo thời gian thực"
@@ -3265,7 +3265,7 @@
       "chapter": "Chương 6: Ứng dụng và Đạo đức trong Khoa học Dữ liệu",
       "question": "Trong lĩnh vực Thương mại điện tử (E-commerce), ứng dụng nào của Khoa học Dữ liệu giúp các nền tảng như Shopee hay Amazon cá nhân hóa trải nghiệm và gia tăng doanh số bán hàng?",
       "options": {
-        "A": "Hệ thống gợi ý sản phẩm (Recommender Systems) dựa trên hành vi duyệt web và lịch sử mua sắm của người dùng",
+        "A": "Hệ thống gợi ý sản phẩm dựa trên hành vi duyệt web và lịch sử mua sắm của người dùng",
         "B": "Hệ điều hành mã nguồn mở dùng cho điện thoại thông minh",
         "C": "Hệ thống phát hiện lỗi phần cứng trên bo mạch chủ của máy chủ",
         "D": "Thuật toán nén video để phát sóng trực tiếp nhanh hơn"
@@ -3278,7 +3278,7 @@
       "chapter": "Chương 6: Ứng dụng và Đạo đức trong Khoa học Dữ liệu",
       "question": "Trong lĩnh vực Tài chính - Ngân hàng, Khoa học Dữ liệu và Học máy đóng vai trò then chốt trong việc tự động phát hiện hành vi nào theo thời gian thực?",
       "options": {
-        "A": "Gian lận thẻ tín dụng (Credit Card Fraud Detection) và các giao dịch rửa tiền bất thường",
+        "A": "Gian lận thẻ tín dụng và các giao dịch rửa tiền bất thường",
         "B": "Tự động sửa chữa các cây ATM bị hỏng phần cứng tại hiện trường",
         "C": "Tự động in tiền giấy mới khi ngân hàng cạn quỹ tiền mặt",
         "D": "Tự động tạo ra các tài khoản mạng xã hội ảo cho khách hàng"
@@ -3357,7 +3357,7 @@
       "question": "Khái niệm 'Thông tin định danh cá nhân' (Personally Identifiable Information - PII) đề cập đến loại dữ liệu nào?",
       "options": {
         "A": "Dữ liệu về nhiệt độ môi trường và độ ẩm không khí đo được ngoài trời",
-        "B": "Bất kỳ thông tin nào có thể được sử dụng riêng lẻ hoặc kết hợp với thông tin khác để nhận dạng trực tiếp hoặc gián tiếp một cá nhân cụ thể (như CCCD, tên, số điện thoại, email, sinh trắc học)",
+        "B": "Bất kỳ thông tin nào có thể được sử dụng riêng lẻ hoặc kết hợp với thông tin khác để nhận dạng trực tiếp hoặc gián tiếp một cá nhân cụ thể",
         "C": "Dữ liệu về số lượng cổ phiếu giao dịch của các công ty niêm yết trên sàn",
         "D": "Mã nguồn mở của các thuật toán sắp xếp mảng trong máy tính"
       },
@@ -3396,7 +3396,7 @@
       "question": "Mô hình bảo mật K-Anonymity trong xử lý dữ liệu vi mô đảm bảo điều kiện an toàn nào?",
       "options": {
         "A": "Dữ liệu chỉ được chia sẻ cho tối đa K nhà khoa học dữ liệu trong một dự án",
-        "B": "Mỗi bản ghi trong tập dữ liệu sau khi xử lý phải có các thuộc tính bán định danh (như Tuổi, Giới tính, Mã bưu điện) giống hệt với ít nhất (K - 1) bản ghi khác",
+        "B": "Mỗi bản ghi trong tập dữ liệu sau khi xử lý phải có các thuộc tính bán định danh giống hệt với ít nhất K - 1 bản ghi khác",
         "C": "Mỗi thuật toán chỉ được phép lặp lại tối đa K vòng lặp",
         "D": "Dữ liệu phải được sao lưu định kỳ K lần mỗi tuần vào hệ thống lưu trữ"
       },
@@ -3448,8 +3448,8 @@
       "question": "Vụ việc hệ thống tuyển dụng tự động của Amazon bị phát hiện có xu hướng đánh tụt điểm hồ sơ của ứng viên nữ là ví dụ điển hình của loại rủi ro nào?",
       "options": {
         "A": "Do mô hình bị hiện tượng Underfitting do huấn luyện quá ít vòng",
-        "B": "Thiên lệch lịch sử (Historical Bias) trong dữ liệu huấn luyện, do dữ liệu 10 năm trước đó chủ yếu là nam giới được tuyển",
-        "C": "Do hacker bên ngoài tấn công từ chối dịch vụ (DDoS) vào hệ thống",
+        "B": "Thiên lệch lịch sử trong dữ liệu huấn luyện, do dữ liệu 10 năm trước đó chủ yếu là nam giới được tuyển",
+        "C": "Do hacker bên ngoài tấn công từ chối dịch vụ vào hệ thống",
         "D": "Lỗi tràn số nguyên trong mã nguồn hệ điều hành máy chủ"
       },
       "answer": "B",
@@ -3502,7 +3502,7 @@
         "A": "FTP và SSH",
         "B": "TCP và UDP",
         "C": "HTML và CSS",
-        "D": "SHAP (SHapley Additive exPlanations) và LIME (Local Interpretable Model-agnostic Explanations)"
+        "D": "SHAP và LIME"
       },
       "answer": "D",
       "explanation": "SHAP (dựa trên lý thuyết trò chơi Shapley) và LIME là hai kỹ thuật hàng đầu giúp định lượng mức độ đóng góp của từng thuộc tính vào quyết định của mô hình đen."
@@ -3538,7 +3538,7 @@
       "chapter": "Chương 6: Ứng dụng và Đạo đức trong Khoa học Dữ liệu",
       "question": "Hành vi 'Web Scraping' (Cào dữ liệu tự động từ các trang web) có thể đối mặt với rủi ro pháp lý và đạo đức nào sau đây?",
       "options": {
-        "A": "Vi phạm Điều khoản Dịch vụ (Terms of Service) của trang web, xâm phạm bản quyền nội dung hoặc làm quá tải máy chủ của trang mục tiêu",
+        "A": "Vi phạm Điều khoản Dịch vụ của trang web, xâm phạm bản quyền nội dung hoặc làm quá tải máy chủ của trang mục tiêu",
         "B": "Làm hỏng vĩnh viễn card đồ họa của máy tính người thực hiện",
         "C": "Làm thay đổi địa chỉ IP tĩnh của nhà mạng viễn thông",
         "D": "Bị xóa toàn bộ hệ điều hành Windows trên máy trạm cá nhân"
@@ -3577,7 +3577,7 @@
       "chapter": "Chương 6: Ứng dụng và Đạo đức trong Khoa học Dữ liệu",
       "question": "Trong vụ bê bối Cambridge Analytica (2018), dữ liệu của hàng chục triệu người dùng Facebook đã bị khai thác trái phép nhằm mục đích gì?",
       "options": {
-        "A": "Xây dựng hồ sơ tâm lý cử tri (Psychographic Profiling) để phân phát quảng cáo định hướng chính trị nhằm can thiệp vào các cuộc bầu cử",
+        "A": "Xây dựng hồ sơ tâm lý cử tri để phân phát quảng cáo định hướng chính trị nhằm can thiệp vào các cuộc bầu cử",
         "B": "Tấn công phá hoại hạ tầng mạng lưới điện quốc gia",
         "C": "Chế tạo các phần mềm gián điệp theo dõi vệ tinh không gian",
         "D": "Bán thông tin tài khoản ngân hàng để rút tiền trái phép"
@@ -3606,7 +3606,7 @@
         "A": "Tặng mã giảm giá cho khách hàng mới đăng ký tài khoản lần đầu",
         "B": "Giảm giá cho sinh viên và người cao tuổi vào các ngày cuối tuần",
         "C": "Áp dụng giá cố định cho mọi mặt hàng trong siêu thị suốt cả năm",
-        "D": "Tự động tăng giá vọt các mặt hàng thiết yếu (như nước uống, thuốc men, vé xe sơ tán) trong các tình huống khẩn cấp hoặc thiên tai"
+        "D": "Tự động tăng giá vọt các mặt hàng thiết yếu trong các tình huống khẩn cấp hoặc thiên tai"
       },
       "answer": "D",
       "explanation": "Tăng giá trục lợi dựa trên thuật toán (Surge pricing / Price gouging) khi người tiêu dùng rơi vào thế hiểm nghèo (bão lũ, dịch bệnh) là hành vi bị lên án về mặt đạo đức."
@@ -3618,7 +3618,7 @@
       "options": {
         "A": "Vì các máy tính hiện đại có thể tự động phục hồi lại các ký tự văn bản đã xóa mà không cần dữ liệu nguồn",
         "B": "Vì thuật toán học máy chỉ đọc được các tệp dữ liệu có đầy đủ họ tên",
-        "C": "Vì cá nhân vẫn có thể bị nhận diện lại thông qua kỹ thuật 'Tấn công liên kết' (Linkage Attack) kết hợp các thuộc tính bán định danh (như Ngày sinh, Giới tính, Mã bưu chính) với các cơ sở dữ liệu công khai khác",
+        "C": "Vì cá nhân vẫn có thể bị nhận diện lại thông qua kỹ thuật 'Tấn công liên kết' kết hợp các thuộc tính bán định danh với các cơ sở dữ liệu công khai khác",
         "D": "Vì người dùng luôn tự đăng tải thông tin của mình lên mạng xã hội hàng ngày"
       },
       "answer": "C",
@@ -3657,7 +3657,7 @@
       "options": {
         "A": "Mô hình phải luôn ưu tiên kê đơn thuốc đắt tiền nhất cho bệnh nhân",
         "B": "Mô hình chỉ được thử nghiệm trực tiếp trên bệnh nhân mà không cần kiểm thử trong phòng lab",
-        "C": "Mô hình phải được kiểm nghiệm lâm sàng nghiêm ngặt, có cơ chế giám sát của bác sĩ chuyên khoa và tỉ lệ âm tính giả (bỏ sót bệnh) phải được kiểm soát ở mức cực thấp",
+        "C": "Mô hình phải được kiểm nghiệm lâm sàng nghiêm ngặt, có cơ chế giám sát của bác sĩ chuyên khoa và tỉ lệ âm tính giả phải được kiểm soát ở mức cực thấp",
         "D": "Phần mềm y tế không cần phải cập nhật sau khi đã bán ra thị trường"
       },
       "answer": "C",
@@ -3684,7 +3684,7 @@
         "A": "Làm cho máy quay phim kỹ thuật số không ghi hình được nữa",
         "B": "Tự động xóa các bức ảnh gia đình lưu trên điện thoại",
         "C": "Làm giảm tốc độ sạc pin của điện thoại thông minh",
-        "D": "Bị kẻ xấu lạm dụng để bôi nhọ danh dự cá nhân, lừa đảo tài chính qua cuộc gọi mạo danh và lan truyền tin tức giả mạo (Fake News) gây bất ổn xã hội"
+        "D": "Bị kẻ xấu lạm dụng để bôi nhọ danh dự cá nhân, lừa đảo tài chính qua cuộc gọi mạo danh và lan truyền tin tức giả mạo gây bất ổn xã hội"
       },
       "answer": "D",
       "explanation": "Deepfake đe dọa trực tiếp đến an ninh thông tin, niềm tin xã hội và danh dự cá nhân thông qua việc tạo ra các hình ảnh, âm thanh và video giả mạo y như thật."
@@ -3697,7 +3697,7 @@
         "A": "Xóa bỏ toàn bộ phần tiêu đề cột để thách thức người dùng",
         "B": "Cài đặt mã độc vào tệp dữ liệu để theo dõi người tải về",
         "C": "Tăng gấp đôi số lượng dòng dữ liệu bằng cách sao chép lặp lại",
-        "D": "Rà soát, làm sạch và loại bỏ/ẩn danh hóa toàn bộ các trường thông tin nhạy cảm và định danh cá nhân (PII)"
+        "D": "Rà soát, làm sạch và loại bỏ/ẩn danh hóa toàn bộ các trường thông tin nhạy cảm và định danh cá nhân"
       },
       "answer": "D",
       "explanation": "Trước khi phát hành Open Dataset, bắt buộc phải thẩm định và khử định danh toàn diện để đảm bảo không rò rỉ thông tin cá nhân của các đối tượng liên quan."
@@ -3708,7 +3708,7 @@
       "question": "Nguyên tắc 'Công bằng' (Fairness) trong học máy thường được đo lường thông qua tiêu chí nào sau đây?",
       "options": {
         "A": "Mô hình chỉ sử dụng đúng 50% số lượng biến trong tập dữ liệu",
-        "B": "Mô hình đạt được tỷ lệ lỗi dự đoán (như sai số dương tính giả, âm tính giả) tương đương nhau giữa các nhóm nhân khẩu học khác nhau (giới tính, chủng tộc, tôn giáo)",
+        "B": "Mô hình đạt được tỷ lệ lỗi dự đoán tương đương nhau giữa các nhóm nhân khẩu học khác nhau",
         "C": "Mọi người dùng đều phải trả cùng một mức phí đăng ký như nhau",
         "D": "Tất cả các thành viên trong nhóm dự án đều được trả lương bằng nhau"
       },
@@ -3723,7 +3723,7 @@
         "A": "Lỗi phần cứng card mạng của người dùng nữ",
         "B": "Sự tối ưu hóa tuyệt đối không có sai sót của máy tính",
         "C": "Một tính năng bảo mật nhằm bảo vệ người dùng khỏi việc làm áp lực",
-        "D": "Định kiến thuật toán (Algorithmic Bias) khuếch đại bất bình đẳng giới tính sẵn có trong xã hội"
+        "D": "Định kiến thuật toán khuếch đại bất bình đẳng giới tính sẵn có trong xã hội"
       },
       "answer": "D",
       "explanation": "Thuật toán học từ dữ liệu thị trường việc làm lịch sử và vô tình củng cố, khuếch đại khoảng cách giới trong cơ hội nghề nghiệp."
@@ -3735,7 +3735,7 @@
       "options": {
         "A": "Vì dữ liệu sinh trắc học sẽ biến mất sau khi người dùng đi ngủ",
         "B": "Vì dữ liệu sinh trắc học chỉ lưu trữ được trên đĩa mềm từ tính",
-        "C": "Vì dữ liệu sinh trắc học gắn liền bất biến với thân thể con người và không thể thay đổi được (nếu bị lộ dấu vân tay hoặc khuôn mặt thì không thể đổi lại như đổi mật khẩu)",
+        "C": "Vì dữ liệu sinh trắc học gắn liền bất biến với thân thể con người và không thể thay đổi được",
         "D": "Vì dữ liệu sinh trắc học luôn có dung lượng tệp lớn hơn 1 Terabyte"
       },
       "answer": "C",
@@ -3837,7 +3837,7 @@
       "chapter": "Chương 6: Ứng dụng và Đạo đức trong Khoa học Dữ liệu",
       "question": "Trong quản trị rủi ro dữ liệu, 'Kế hoạch ứng phó sự cố rò rỉ dữ liệu' (Data Breach Response Plan) đòi hỏi tổ chức phải làm gì đầu tiên khi phát hiện dữ liệu khách hàng bị rò rỉ?",
       "options": {
-        "A": "Xóa toàn bộ các dấu vết nhật ký truy cập (log files) để che giấu sự việc",
+        "A": "Xóa toàn bộ các dấu vết nhật ký truy cập để che giấu sự việc",
         "B": "Đăng tải toàn bộ dữ liệu còn lại lên mạng Internet miễn phí",
         "C": "Đổ lỗi hoàn toàn cho nhà cung cấp dịch vụ mạng internet",
         "D": "Khoanh vùng cách ly hệ thống bị xâm nhập để ngăn chặn rò rỉ tiếp diễn, kích hoạt nhóm ứng cứu và thông báo cho cơ quan chức năng cùng các nạn nhân bị ảnh hưởng theo luật định"
@@ -3878,7 +3878,7 @@
       "options": {
         "A": "Có, việc xóa tên nhóm nhạy cảm đảm bảo mô hình luôn công bằng 100%",
         "B": "Có, vì máy tính hoàn toàn không thể phân biệt được người dùng nếu không có biến đó",
-        "C": "Không, vì mô hình vẫn có thể học được định kiến thông qua các biến thay thế (Proxy Variables) có mối tương quan ngầm mạnh mẽ với nhóm nhạy cảm (như Trường học, Mã bưu điện, Sở thích)",
+        "C": "Không, vì mô hình vẫn có thể học được định kiến thông qua các biến thay thế có mối tương quan ngầm mạnh mẽ với nhóm nhạy cảm",
         "D": "Không, vì thuật toán sẽ tự động dừng hoạt động nếu thiếu biến giới tính"
       },
       "answer": "C",
@@ -3905,7 +3905,7 @@
         "A": "Khả năng ghi nhớ toàn bộ mã nguồn của hệ điều hành Linux",
         "B": "Tốc độ gõ phím nhanh nhất thế giới đạt trên 200 từ mỗi phút",
         "C": "Khả năng viết các đoạn mã độc tinh vi không thể bị phát hiện",
-        "D": "Sự kết hợp hài hòa giữa năng lực kỹ thuật vững vàng (Toán, Tin, Lập trình) với tư duy phản biện sắc bén và đạo đức nghề nghiệp sâu sắc trong việc phụng sự con người và xã hội"
+        "D": "Sự kết hợp hài hòa giữa năng lực kỹ thuật vững vàng với tư duy phản biện sắc bén và đạo đức nghề nghiệp sâu sắc trong việc phụng sự con người và xã hội"
       },
       "answer": "D",
       "explanation": "Một Data Scientist chân chính không chỉ làm chủ công cụ kỹ thuật mà còn phải có trách nhiệm đạo đức, luôn đặt con người, sự công bằng và an toàn xã hội làm trung tâm của mọi giải pháp."
