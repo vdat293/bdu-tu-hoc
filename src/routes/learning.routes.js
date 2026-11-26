@@ -6,6 +6,7 @@
  */
 import { ApiController } from './_shared/http-deps.js';
 import { Inf1003DeployController } from '../modules/learning/inf1003-deploy.controller.js';
+import { PracticeBankController } from '../modules/learning/practice-bank.controller.js';
 
 export function registerLearningRoutes(router, deps = {}) {
   router.get('/learning/resources', ApiController.getLearningResources);
@@ -23,6 +24,15 @@ export function registerLearningRoutes(router, deps = {}) {
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/start', ApiController.startQuizSetPart);
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/answer', ApiController.answerQuizSetReview);
   router.post('/learning/courses/:courseCode/quiz-sets/:setId/parts/:partIndex/progress', ApiController.saveQuizSetProgress);
+
+  // Ngân hàng ôn tập trắc nghiệm tách biệt (Claymorphism Practice Bank)
+  router.get('/learning/courses/:courseCode/practice-bank', PracticeBankController.getPracticeBankSummary);
+  router.get('/learning/courses/:courseCode/practice-bank/questions', PracticeBankController.getPracticeBankQuestions);
+  router.post('/learning/courses/:courseCode/practice-bank/questions/:questionId/answer', PracticeBankController.answerPracticeBankQuestion);
+  router.post('/learning/courses/:courseCode/practice-bank/questions/:questionId/bookmark', PracticeBankController.togglePracticeBankBookmark);
+  router.post('/learning/courses/:courseCode/practice-bank/exam/start', PracticeBankController.startPracticeMockExam);
+  router.post('/learning/courses/:courseCode/practice-bank/exam/submit', PracticeBankController.submitPracticeMockExam);
+  router.delete('/learning/courses/:courseCode/practice-bank/progress', PracticeBankController.resetPracticeBankProgress);
 
   router.get('/learning/courses/:courseCode/guide', ApiController.getCourseGuide);
   router.get('/learning/courses/:courseCode/guides/:lessonId/progress', ApiController.getGuideProgress);

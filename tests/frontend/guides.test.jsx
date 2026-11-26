@@ -35,6 +35,10 @@ vi.mock('../../client/src/api/guides.js', () => ({
   issueInf1003DeployKey: mocks.issueInf1003DeployKey
 }));
 
+vi.mock('../../client/src/api/practice-bank.js', () => ({
+  getPracticeBankSummary: async () => ({ enabled: false })
+}));
+
 vi.mock('../../client/src/api/community.js', () => ({
   getQuizSets: mocks.getQuizSets,
   createQuizSet: vi.fn(),

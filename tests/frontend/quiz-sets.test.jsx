@@ -39,6 +39,10 @@ vi.mock('../../client/src/api/community.js', () => ({
   getLearningResources: mocks.getLearningResources
 }));
 
+vi.mock('../../client/src/api/practice-bank.js', () => ({
+  getPracticeBankSummary: async () => ({ enabled: false })
+}));
+
 vi.mock('../../client/src/app/providers.jsx', () => ({
   useAuth: () => ({ token: 'test-token', user: { mssv: '24050001', name: 'Sinh viên kiểm thử' } }),
   useRealtimeRoom: () => {},

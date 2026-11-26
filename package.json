@@ -35,6 +35,7 @@
     "grammar:import": "node scripts/import-grammar.js",
     "grammar:extra:import": "node scripts/import-grammar-extra.js",
     "grammar:export": "node scripts/export-grammar.js",
+    "practice-bank:import": "node scripts/import-practice-bank.js",
     "vocab:fix-pos": "node scripts/fix-vocab-pos.js",
     "vocab:fix-pos:apply": "node scripts/fix-vocab-pos.js --apply",
     "bot": "node scripts/discord-bot.js",

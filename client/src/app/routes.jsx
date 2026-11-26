@@ -20,6 +20,7 @@ const LearningPage = lazy(() => import('../features/learning/LearningPage.jsx'))
 const CourseLearningPage = lazy(() => import('../features/learning/CourseLearningPage.jsx'));
 const QuizSetPartPage = lazy(() => import('../features/learning/QuizSetPartPage.jsx'));
 const QuizSetPage = lazy(() => import('../features/learning/QuizSetPage.jsx'));
+const PracticeBankPage = lazy(() => import('../features/learning/practice-bank/PracticeBankPage.jsx'));
 const GuideIndexPage = lazy(() => import('../features/learning/guides/GuideIndexPage.jsx'));
 const GuideLessonPage = lazy(() => import('../features/learning/guides/GuideLessonPage.jsx'));
 const Inf1003DeployLessonPage = lazy(() => import('../features/learning/guides/inf1003/DeployLessonPage.jsx'));
@@ -64,6 +65,7 @@ export default function AppRoutes() {
       <Route path="learning/:courseCode" element={<Lazy><CourseLearningPage /></Lazy>} />
       <Route path="learning/:courseCode/quiz-sets/:setId" element={<Lazy><QuizSetPage /></Lazy>} />
       <Route path="learning/:courseCode/quiz-sets/:setId/parts/:partIndex/:mode" element={<Lazy><QuizSetPartPage /></Lazy>} />
+      <Route path="learning/:courseCode/practice" element={<Lazy><PracticeBankPage /></Lazy>} />
       <Route path="learning/:courseCode/guides" element={<Lazy><GuideIndexPage /></Lazy>} />
       <Route path="learning/INF1003/guides/bai-2" element={<Lazy><Inf1003DeployLessonPage /></Lazy>} />
       <Route path="learning/:courseCode/guides/:lessonId/:stepId" element={<Lazy><GuideLessonPage /></Lazy>} />

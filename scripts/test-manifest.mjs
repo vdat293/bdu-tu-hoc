@@ -84,6 +84,7 @@ export const SAFE_NODE_TESTS = [
   'test-course-quiz.js',
   'test-quiz-set-data.js',
   'test-learning-quiz-controller.js',
+  'test-practice-bank.js',
   'test-broadcast.js',
   'test-profile-controller.js',
   'test-english-controller-auth.js',

@@ -19,6 +19,7 @@ import { useViewportDialog } from '../../components/ViewportModal.jsx';
 import { useTtcdsCapabilities } from '../ttcds/useTtcdsCapabilities.jsx';
 import QuizSetSection from './QuizSetSection.jsx';
 import QuizSetComposerModal from './QuizSetComposerModal.jsx';
+import PracticeBankEntryCard from './practice-bank/PracticeBankEntryCard.jsx';
 import './quiz.css';
 import './guides/guide.css';
 import {
@@ -576,6 +577,9 @@ export default function CourseLearningPage() {
             </button>
           </div>
         </div>
+
+        {/* Phòng Ôn tập Trắc nghiệm riêng theo phong cách Claymorphism (tách biệt với Bộ đề cũ) */}
+        <PracticeBankEntryCard courseCode={courseCode} />
 
         {/* Bộ đề trắc nghiệm riêng của môn học (thay quiz-post cũ) */}
         <QuizSetSection
