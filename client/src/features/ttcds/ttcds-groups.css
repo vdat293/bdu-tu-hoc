@@ -143,11 +143,13 @@ body.theme-dark .club-shimmer::after {
 #tab-ttcds-group > p:first-child { line-height: 1.5; }
 #tab-ttcds .ttcds-panel, #tab-ttcds-group .ttcds-panel { padding: 20px; }
 #tab-ttcds-group .club-directory-hero__action { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.club-member__actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
 
 @media (max-width: 760px) {
   .club-directory-hero { align-items: stretch; flex-direction: column; }
   .club-directory-hero__action { justify-items: stretch; width: 100%; }
   .club-directory-hero__action .btn { width: 100%; }
+  .club-member__actions { justify-content: flex-start; }
 }
 @media (max-width: 480px) {
   .ttcds-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }

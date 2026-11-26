@@ -482,6 +482,9 @@ export default function ClubDetailPage() {
         clanName={clan.name}
         quiz={quizQuery.data}
         isLoading={quizQuery.isLoading}
+        isError={quizQuery.isError}
+        error={quizQuery.error}
+        onRetry={() => quizQuery.refetch()}
         isPending={join.isPending}
         result={joinResult}
         onClose={() => { if (!join.isPending) setShowJoinQuiz(false); }}

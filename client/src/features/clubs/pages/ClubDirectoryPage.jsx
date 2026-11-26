@@ -208,6 +208,9 @@ export default function ClubDirectoryPage() {
         clanName={joinTarget?.name}
         quiz={joinQuizQuery.data}
         isLoading={joinQuizQuery.isLoading}
+        isError={joinQuizQuery.isError}
+        error={joinQuizQuery.error}
+        onRetry={() => joinQuizQuery.refetch()}
         isPending={join.isPending}
         result={joinResult}
         onClose={() => { if (!join.isPending) setJoinTarget(null); }}

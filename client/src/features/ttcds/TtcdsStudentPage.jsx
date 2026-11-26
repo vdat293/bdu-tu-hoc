@@ -840,6 +840,21 @@ export default function TtcdsStudentPage() {
 
   if (caps.isSuccess && !canAccess) return <TtcdsForbiddenNotice />;
 
+  if (caps.isError) {
+    return (
+      <section id="tab-ttcds-student" className="slk-root">
+        <Link className="slk-back" to={back.to} state={back.state}>← {back.label}</Link>
+        <div className="slk-state" role="alert">
+          <h1>Chưa thể xác minh quyền truy cập</h1>
+          <p>{caps.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
+          <div className="slk-state__actions">
+            <button type="button" className="slk-btn" onClick={() => caps.refetch()}>Thử lại</button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (detail.isError) {
     const status = detail.error?.status;
     const isNotFound = status === 404;

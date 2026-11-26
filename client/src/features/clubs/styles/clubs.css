@@ -1522,8 +1522,10 @@ body.theme-dark .clb-skeleton::after {
 .clb-skeleton--line { width: 92%; height: 12px; }
 .clb-skeleton--short { width: 42%; height: 12px; }
 
-/* --- Modal (Portal-safe) --- */
-.clb-modal {
+/* --- Modal (Portal-safe, overrides ViewportModal's legacy .modal-dialog.glass-panel) --- */
+.clb-modal,
+html .clb-modal.modal-dialog.glass-panel,
+html[data-ui-style="claymorphism"] .clb-modal.modal-dialog.glass-panel {
   width: min(540px, calc(100vw - 24px));
   max-height: min(90vh, 760px);
   overflow-y: auto;
@@ -1532,9 +1534,19 @@ body.theme-dark .clb-skeleton::after {
   border-radius: var(--clb-radius-lg);
   background: var(--clb-surface);
   box-shadow: var(--clb-shadow-md);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.clb-modal--sm {
+body.theme-dark .clb-modal.modal-dialog.glass-panel,
+html[data-ui-style="claymorphism"] body.theme-dark .clb-modal.modal-dialog.glass-panel {
+  border-color: var(--clb-border);
+  background: var(--clb-surface);
+  box-shadow: var(--clb-shadow-md);
+}
+
+.clb-modal--sm,
+html .clb-modal.clb-modal--sm.modal-dialog.glass-panel {
   width: min(420px, calc(100vw - 24px));
 }
 
@@ -1695,6 +1707,9 @@ body.theme-dark .clb-skeleton::after {
   .clb-skeleton::after {
     animation: none;
     display: none;
+  }
+  html .clb-modal.modal-dialog.glass-panel {
+    animation: none;
   }
   .clb-root *,
   .clb-modal * {

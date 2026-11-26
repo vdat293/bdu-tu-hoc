@@ -7,6 +7,9 @@ export default function ClanJoinQuizModal({
   clanName,
   quiz,
   isLoading,
+  isError = false,
+  error = null,
+  onRetry,
   isPending,
   result,
   onClose,
@@ -61,15 +64,27 @@ export default function ClanJoinQuizModal({
         </button>
       </div>
 
-      <p className="clb-modal__intro">
-        {hasQuiz
-          ? 'Hoàn thành quiz xác minh trước khi gửi yêu cầu.'
-          : 'CLB chưa bật quiz xác minh. Bạn có thể gửi yêu cầu ngay.'}
-      </p>
+      {!isError && (
+        <p className="clb-modal__intro">
+          {hasQuiz
+            ? 'Hoàn thành quiz xác minh trước khi gửi yêu cầu.'
+            : 'CLB chưa bật quiz xác minh. Bạn có thể gửi yêu cầu ngay.'}
+        </p>
+      )}
 
       <div className="clb-modal__body">
         {isLoading ? (
           <p className="clb-muted" role="status">Đang tải cấu hình gia nhập…</p>
+        ) : isError ? (
+          <div className="clb-empty" role="alert">
+            <h2>Không thể tải cấu hình gia nhập</h2>
+            <p>{error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
+            {onRetry && (
+              <button type="button" className="clb-btn clb-btn--secondary clb-btn--sm" onClick={onRetry}>
+                Thử lại
+              </button>
+            )}
+          </div>
         ) : hasQuiz ? (
           <>
             <div className="clb-quiz-progress" aria-live="polite">
@@ -117,7 +132,7 @@ export default function ClanJoinQuizModal({
         <button type="button" className="clb-btn clb-btn--secondary" onClick={onClose}>Đóng</button>
         {result?.status === 'approved' ? (
           <button type="button" className="clb-btn clb-btn--primary" onClick={onViewClan}>Vào CLB</button>
-        ) : !result?.status && (
+        ) : (!result?.status && !isError) && (
           <button
             type="button"
             className="clb-btn clb-btn--primary"

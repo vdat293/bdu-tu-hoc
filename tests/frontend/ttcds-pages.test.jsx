@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -649,6 +652,26 @@ describe('TTCDS frontend', () => {
       '2405',
       expect.objectContaining({ limit: 20, all: true })
     ), { timeout: 2000 });
+  });
+
+  it('shows an error alert with retry when capabilities fail on the student profile page', async () => {
+    mocks.getTtcdsCapabilities.mockRejectedValue(new Error('Mất kết nối máy chủ'));
+    renderAt(
+      { pathname: '/ttcds/students/24050126', state: { from: '/ttcds/lookup', fromLabel: 'Tra cứu sinh viên' } },
+      '/ttcds/students/:mssv',
+      <TtcdsStudentPage />
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Mất kết nối máy chủ');
+    expect(screen.getByRole('link', { name: '← Tra cứu sinh viên' })).toHaveAttribute('href', '/ttcds/lookup');
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+    expect(document.querySelector('.slk-profile-card')).toBeNull();
+  });
+
+  it('preserves .club-member__actions flex layout rules for #16 group member table', () => {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const css = fs.readFileSync(path.resolve(dir, '../../client/src/features/ttcds/ttcds-groups.css'), 'utf8');
+    expect(css).toMatch(/\.club-member__actions\s*\{[^}]*display:\s*flex/);
   });
 
   it('service page has no admin section anymore', async () => {

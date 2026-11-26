@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -177,5 +180,39 @@ describe('ClubDirectoryPage', () => {
     expect(submitBtn).not.toBeDisabled();
     fireEvent.click(submitBtn);
     expect(onSubmit).toHaveBeenCalledWith([{ questionId: 'q1', selectedIndex: 0 }]);
+  });
+
+  it('shows an error alert with retry and blocks submission when quiz fetch fails', () => {
+    const onSubmit = vi.fn();
+    const onRetry = vi.fn();
+    render(
+      <ClanJoinQuizModal
+        open
+        clanName="CLB Test"
+        quiz={undefined}
+        isLoading={false}
+        isError
+        error={new Error('Lỗi tải quiz')}
+        onRetry={onRetry}
+        isPending={false}
+        result={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Lỗi tải quiz');
+    expect(screen.queryByText(/CLB chưa bật quiz xác minh/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('overrides ViewportModal legacy .modal-dialog.glass-panel styles with higher specificity', () => {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const css = fs.readFileSync(path.resolve(dir, '../../client/src/features/clubs/styles/clubs.css'), 'utf8');
+    expect(css).toContain('html .clb-modal.modal-dialog.glass-panel');
+    expect(css).toContain('body.theme-dark .clb-modal.modal-dialog.glass-panel');
   });
 });
