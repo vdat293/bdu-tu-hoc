@@ -44,6 +44,7 @@ export default function PracticeRunner({
   const [examSelections, setExamSelections] = useState({});
   const [remainingSeconds, setRemainingSeconds] = useState(timeLimitSeconds);
   const examSubmittedRef = useRef(false);
+  const pendingAnswerRef = useRef(false);
   const startedAtRef = useRef(Date.now());
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function PracticeRunner({
   }, [questions, orderIds]);
 
   const currentQuestion = orderedQuestions[currentIndex] || null;
+  const isPracticeAnswered = mode === 'practice' && Boolean(currentQuestion?.progress?.selected_answer);
 
   const triggerExamSubmit = useCallback((force = false) => {
     if (examSubmittedRef.current || submittingExam) return;
@@ -117,36 +119,42 @@ export default function PracticeRunner({
   }, [mode, timeLimitSeconds, triggerExamSubmit]);
 
   const handleSelectOption = useCallback(async (letter) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !currentQuestion.options?.[letter]) return;
     if (mode === 'exam') {
+      if (submittingExam || examSubmittedRef.current) return;
       setExamSelections((prev) => ({ ...prev, [currentQuestion.id]: letter }));
       return;
     }
-    if (checkingQuestionId) return;
-    const res = await onAnswerQuestion(currentQuestion.id, letter);
-    if (res) {
-      setStreak((prev) => (res.is_correct ? prev + 1 : 0));
+    if (isPracticeAnswered || checkingQuestionId || pendingAnswerRef.current) return;
+    pendingAnswerRef.current = true;
+    try {
+      const res = await onAnswerQuestion(currentQuestion.id, letter);
+      if (res) {
+        setStreak((prev) => (res.is_correct ? prev + 1 : 0));
+      }
+    } finally {
+      pendingAnswerRef.current = false;
     }
-  }, [currentQuestion, mode, checkingQuestionId, onAnswerQuestion]);
+  }, [currentQuestion, mode, submittingExam, isPracticeAnswered, checkingQuestionId, onAnswerQuestion]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      const tag = event.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
       if (!currentQuestion) return;
 
       const key = event.key;
       const lower = key.toLowerCase();
       if (['1', '2', '3', '4'].includes(key)) {
+        if (isPracticeAnswered) return;
         event.preventDefault();
         handleSelectOption(OPTION_KEYS[Number(key) - 1]);
       } else if (['a', 'b', 'c', 'd'].includes(lower) && mode === 'practice') {
-        if (lower === 'b' && !event.shiftKey) {
-          // Cho phép phím B chọn đáp án B; dùng S để đánh dấu sao ở bàn phím khi đang làm.
-          handleSelectOption('B');
-        } else {
-          handleSelectOption(lower.toUpperCase());
-        }
+        if (isPracticeAnswered) return;
+        event.preventDefault();
+        handleSelectOption(lower.toUpperCase());
       } else if (lower === 's' && mode === 'practice') {
         event.preventDefault();
         onToggleBookmark?.(currentQuestion.id, !currentQuestion.progress?.is_bookmarked);
@@ -156,7 +164,9 @@ export default function PracticeRunner({
       } else if (key === 'ArrowRight') {
         event.preventDefault();
         setCurrentIndex((idx) => Math.min(orderedQuestions.length - 1, idx + 1));
-      } else if (key === 'Enter' && mode === 'practice' && currentQuestion.progress?.selected_answer) {
+      } else if (key === 'Enter' && isPracticeAnswered) {
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag === 'BUTTON' || activeTag === 'A') return;
         event.preventDefault();
         setCurrentIndex((idx) => Math.min(orderedQuestions.length - 1, idx + 1));
       }
@@ -164,7 +174,7 @@ export default function PracticeRunner({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [currentQuestion, mode, orderedQuestions.length, handleSelectOption, onToggleBookmark]);
+  }, [currentQuestion, mode, isPracticeAnswered, orderedQuestions.length, handleSelectOption, onToggleBookmark]);
 
   const examAnsweredCount = useMemo(
     () => orderedQuestions.filter((q) => Boolean(examSelections[q.id])).length,
@@ -352,7 +362,7 @@ export default function PracticeRunner({
                     type="button"
                     role="radio"
                     aria-checked={isSelected}
-                    disabled={Boolean(checkingQuestionId)}
+                    disabled={Boolean(checkingQuestionId) || isPracticeAnswered || (mode === 'exam' && submittingExam)}
                     className={`clay-pb-option ${stateClass} ${isChecking ? 'is-checking' : ''}`}
                     onClick={() => handleSelectOption(letter)}
                   >

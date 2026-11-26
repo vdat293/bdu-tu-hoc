@@ -80,6 +80,9 @@ for (let ch = 1; ch <= 6; ch += 1) {
 
 const picked = PracticeBankInternals.selectBalancedExamQuestions(sampleRows, 18, () => 0.5);
 assert.equal(picked.length, 18);
+assert.equal(PracticeBankInternals.DEFAULT_MOCK_EXAM_COUNT, 50, 'Mặc định thi thử phải là 50 câu');
+assert.equal(PracticeBankInternals.computeExamTimeLimitSeconds(50), 1500, 'Thi thử 50 câu phải có giới hạn 25 phút (1500s)');
+assert.equal(PracticeBankInternals.computeExamTimeLimitSeconds(20), 600, 'Thi thử 20 câu phải có giới hạn 10 phút (600s)');
 const chapterCounts = new Map();
 for (const row of picked) {
   chapterCounts.set(row.chapter_index, (chapterCounts.get(row.chapter_index) || 0) + 1);

@@ -140,6 +140,7 @@ body.theme-light .clay-pb-scope [data-tone='6'] {
   overflow: hidden;
   border-radius: 30px;
   padding: clamp(20px, 3vw, 28px);
+  margin-bottom: 24px;
   background: var(--pb-canvas);
   box-shadow: var(--pb-shadow);
   border: 1px solid var(--pb-border);
@@ -912,6 +913,10 @@ body.theme-light .clay-pb-scope [data-tone='6'] {
   font-weight: 600;
   line-height: 1.5;
   transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, border-color 0.18s ease;
+}
+
+.clay-pb-option:disabled {
+  cursor: default;
 }
 
 .clay-pb-option:hover:not(:disabled) {

@@ -181,8 +181,74 @@ describe('PracticeBankPage (Hub, Practice Runner, Mock Exam)', () => {
     expect(await screen.findByText(/Chính xác! Đáp án đúng là D/)).toBeInTheDocument();
     expect(screen.getByText('Theo biểu đồ Venn của Drew Conway.')).toBeInTheDocument();
 
+    // Sau khi đã chọn đáp án ở chế độ ôn tập, bàn phím (1-4 / A-D) và click không được phép chọn lại
+    expect(mocks.answerPracticeQuestion).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('radio', { name: /A.*Phương án A/ })).toBeDisabled();
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: 'a' });
+    fireEvent.keyDown(window, { key: 'c' });
+    fireEvent.click(screen.getByRole('radio', { name: /A.*Phương án A/ }));
+    expect(mocks.answerPracticeQuestion).toHaveBeenCalledTimes(1);
+
     fireEvent.click(screen.getByRole('button', { name: /Đánh dấu/ }));
     await waitFor(() => expect(mocks.togglePracticeBookmark).toHaveBeenCalledWith('test-token', 'INF0983', '101', true));
+  });
+
+  it('ignores Ctrl+C / Cmd+C and locks answer after selecting C via keyboard in practice mode', async () => {
+    mocks.getPracticeBankSummary.mockResolvedValue(makeSummary());
+    mocks.getPracticeBankQuestions.mockResolvedValue({
+      bank: { id: '1', course_code: 'INF0983', title: 'KHDL', question_count: 300 },
+      questions: [
+        {
+          id: '101',
+          external_id: 1,
+          chapter_index: 1,
+          chapter_title: 'Chương 1',
+          question_text: 'Câu hỏi kiểm tra phím tắt?',
+          options: { A: 'Đáp A', B: 'Đáp B', C: 'Đáp C', D: 'Đáp D' },
+          correct_answer: null,
+          explanation: null,
+          progress: { selected_answer: null, is_correct: null, is_bookmarked: false, attempts: 0, wrong_count: 0 }
+        }
+      ]
+    });
+    mocks.answerPracticeQuestion.mockResolvedValue({
+      question_id: '101',
+      external_id: 1,
+      selected_answer: 'C',
+      is_correct: false,
+      correct_answer: 'A',
+      explanation: 'Đáp án đúng là A.',
+      attempts: 1,
+      wrong_count: 1,
+      is_bookmarked: false
+    });
+
+    renderWithRouter(
+      <Routes>
+        <Route path="/learning/:courseCode/practice" element={<PracticeBankPage />} />
+      </Routes>,
+      ['/learning/INF0983/practice']
+    );
+
+    expect(await screen.findByText(/Ôn tập theo chương \(6 chương\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Ôn chương 1/i }));
+    expect(await screen.findByText('Câu hỏi kiểm tra phím tắt?')).toBeInTheDocument();
+
+    // Ctrl+C / Cmd+C để copy không được kích hoạt chọn đáp án C
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'c', metaKey: true });
+    expect(mocks.answerPracticeQuestion).not.toHaveBeenCalled();
+
+    // Chọn C bằng phím tắt -> khóa không cho đổi sang đáp án khác bằng phím số hoặc chữ
+    fireEvent.keyDown(window, { key: 'c' });
+    expect(await screen.findByText(/Bạn chọn C — Đáp án đúng là A/)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: 'a' });
+    fireEvent.keyDown(window, { key: '2' });
+    fireEvent.keyDown(window, { key: 'd' });
+    expect(mocks.answerPracticeQuestion).toHaveBeenCalledTimes(1);
   });
 
   it('starts and submits a mock exam and renders chapter breakdown summary', async () => {
@@ -260,7 +326,11 @@ describe('PracticeBankPage (Hub, Practice Runner, Mock Exam)', () => {
     );
 
     expect(await screen.findByText(/Thi thử tổng hợp/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu thi 40 câu/i }));
+    expect(screen.getByRole('button', { name: '50 câu · 25p' })).toHaveClass('is-active');
+    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu thi 50 câu · 25p/i }));
+    await waitFor(() => {
+      expect(mocks.startPracticeMockExam).toHaveBeenCalledWith('test-token', 'INF0983', { count: 50, chapters: undefined });
+    });
 
     expect(await screen.findByText('Câu thi thử 1?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /A.*Đáp A/ }));

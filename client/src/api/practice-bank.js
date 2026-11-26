@@ -54,7 +54,7 @@ export async function togglePracticeBookmark(token, courseCode, questionId, book
   return unwrap(data, data);
 }
 
-export async function startPracticeMockExam(token, courseCode, { count = 40, chapters = [] } = {}) {
+export async function startPracticeMockExam(token, courseCode, { count = 50, chapters = [] } = {}) {
   const data = await request(`${courseBase(courseCode)}/exam/start`, {
     method: 'POST',
     token,

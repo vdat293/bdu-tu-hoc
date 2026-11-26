@@ -56,7 +56,7 @@ export default function PracticeBankEntryCard({ courseCode }) {
             className="clay-pb-btn clay-pb-btn-secondary"
             onClick={() => navigate(`${basePath}?mode=exam`)}
           >
-            Thi thử nhanh
+            Thi thử nhanh (50 câu · 25p)
           </button>
         </div>
       </div>

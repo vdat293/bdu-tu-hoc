@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { chapterTone, formatDuration } from './practice-bank.utils.js';
 
-const EXAM_COUNTS = [20, 40, 60];
+const EXAM_COUNTS = [20, 50, 60];
+const DEFAULT_EXAM_COUNT = 50;
+const SECONDS_PER_EXAM_QUESTION = 30;
+
+function examDurationMinutes(count) {
+  return Math.max(5, Math.round((count * SECONDS_PER_EXAM_QUESTION) / 60));
+}
 
 export default function PracticeChapterGrid({
   summary,
@@ -12,7 +18,7 @@ export default function PracticeChapterGrid({
   onStartExam,
   onResetChapter
 }) {
-  const [examCount, setExamCount] = useState(40);
+  const [examCount, setExamCount] = useState(DEFAULT_EXAM_COUNT);
   const { bank, stats = {}, chapters = [], recent_exams: recentExams = [] } = summary;
   const total = Number(stats.total_questions ?? bank.question_count ?? 0);
   const answered = Number(stats.answered_count || 0);
@@ -136,7 +142,7 @@ export default function PracticeChapterGrid({
             <div className="clay-pb-mode-icon" aria-hidden="true">⏱️</div>
             <h2 className="clay-pb-mode-title" style={{ marginTop: 10 }}>Thi thử tổng hợp</h2>
             <p className="clay-pb-mode-desc">
-              Chọn ngẫu nhiên đều khắp 6 chương, chấm điểm sau khi nộp bài &amp; phân tích chương yếu.
+              Chuẩn thi giữa kì 50 câu · 25 phút, chọn ngẫu nhiên đều khắp {chapters.length || 6} chương &amp; phân tích chương yếu.
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -148,7 +154,7 @@ export default function PracticeChapterGrid({
                   className={`clay-pb-count-pill ${examCount === count ? 'is-active' : ''}`}
                   onClick={() => setExamCount(count)}
                 >
-                  {count} câu · {Math.round((count * 45) / 60)}p
+                  {count} câu · {examDurationMinutes(count)}p
                 </button>
               ))}
             </div>
@@ -158,7 +164,7 @@ export default function PracticeChapterGrid({
               disabled={startingExam}
               onClick={() => onStartExam({ count: examCount })}
             >
-              {startingExam ? 'Đang tạo đề...' : `Bắt đầu thi ${examCount} câu →`}
+              {startingExam ? 'Đang tạo đề...' : `Bắt đầu thi ${examCount} câu · ${examDurationMinutes(examCount)}p →`}
             </button>
           </div>
         </article>

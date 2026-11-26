@@ -3,6 +3,12 @@ import { findAccessibleCourse, normalizeCourseCode } from '../../services/learni
 
 const VALID_ANSWERS = new Set(['A', 'B', 'C', 'D']);
 const VALID_FILTERS = new Set(['all', 'unanswered', 'wrong', 'bookmarked']);
+const DEFAULT_MOCK_EXAM_COUNT = 50;
+const SECONDS_PER_EXAM_QUESTION = 30;
+
+function computeExamTimeLimitSeconds(questionCount) {
+  return Math.max(300, Math.round(Number(questionCount || 0) * SECONDS_PER_EXAM_QUESTION));
+}
 
 function httpError(message, status = 400, code = null) {
   const error = new Error(message);
@@ -480,11 +486,11 @@ export const PracticeBankService = {
     });
   },
 
-  async startMockExam(mssv, courseCode, { count = 40, chapters = [] } = {}) {
+  async startMockExam(mssv, courseCode, { count = DEFAULT_MOCK_EXAM_COUNT, chapters = [] } = {}) {
     requireDatabase();
     const { bank } = await resolveCourseAndBank(mssv, courseCode);
 
-    const parsedCount = Number(count ?? 40);
+    const parsedCount = Number(count ?? DEFAULT_MOCK_EXAM_COUNT);
     if (!Number.isFinite(parsedCount)) {
       throw httpError('Số câu thi thử không hợp lệ.', 400, 'PRACTICE_EXAM_COUNT_INVALID');
     }
@@ -521,7 +527,7 @@ export const PracticeBankService = {
       course_code: bank.course_code,
       chapter_index: cleanChapters.length === 1 ? cleanChapters[0] : null,
       total_questions: selected.length,
-      time_limit_seconds: Math.max(300, Math.round(selected.length * 45)),
+      time_limit_seconds: computeExamTimeLimitSeconds(selected.length),
       questions: selected.map((row) => ({
         id: String(row.id),
         external_id: Number(row.external_id),
@@ -666,6 +672,9 @@ export const PracticeBankService = {
 };
 
 export const PracticeBankInternals = {
+  DEFAULT_MOCK_EXAM_COUNT,
+  SECONDS_PER_EXAM_QUESTION,
+  computeExamTimeLimitSeconds,
   selectBalancedExamQuestions,
   computeChapterBreakdown,
   gradeExamSubmission,
