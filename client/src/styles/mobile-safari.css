@@ -1,0 +1,688 @@
+/* ==========================================================================
+   MOBILE & iOS SAFARI OPTIMIZATION LAYER
+   Loaded last (after style.css, app.css, auth-neumorphism.css, claymorphism.css)
+   so both Neo-Brutalism and Claymorphism feel crisp, native, and lag-free on
+   iPhone Safari (Notch / Dynamic Island / Home Indicator / Dynamic Toolbar).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. GLOBAL iOS SAFARI HYGIENE
+   -------------------------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-layout {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+a,
+button,
+input,
+select,
+textarea,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Lock page scroll cleanly when mobile navigation drawer is open */
+body.sidebar-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Fix Safari `100vh` overshoot on dialogs and loading placeholders */
+.page-loading {
+  min-height: min(420px, calc(100vh - 190px));
+  min-height: min(420px, calc(100dvh - 190px));
+}
+
+.fb-composer-dialog {
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
+#fbc-post-modal > .modal-dialog.fbc-modal {
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
+.clan-join-quiz-dialog {
+  max-height: min(90vh, 760px);
+  max-height: min(90dvh, 760px);
+}
+
+#modal-frame-preview.modal-backdrop {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.frame-picker-modal-window {
+  max-height: 88vh;
+  max-height: min(88dvh, calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+}
+
+.frame-picker-body,
+.fb-composer-dialog .fb-modal-body,
+.fbc-modal-body,
+.reminder-modal-body,
+.notif-panel-list,
+.sidebar-nav {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Confession composer modal: fix .form-input left-padding bleed & ImpactButton width */
+.fb-attachment-url-input.form-input,
+.fb-attachment-title-input.form-input {
+  padding: 6px 4px !important;
+  min-height: 40px;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Keep unranked badge legible on the blue GPA hero banner in both themes */
+#tab-grades .hero-overall-rank-badge.rank-unavailable {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.fb-modal-footer .bdu-impact-wrap {
+  display: flex;
+  width: 100%;
+}
+
+.fb-modal-footer .fb-submit-post-btn {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* Settings switch: expand invisible tap target to >=44px without changing visual pill */
+.settings-switch {
+  position: relative;
+}
+
+.settings-switch::before {
+  content: '';
+  position: absolute;
+  inset: -9px -6px;
+}
+
+/* Sidebar mobile-only header close & quick search trigger */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-close-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.sidebar-mobile-search {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+html[data-ui-style="claymorphism"] .sidebar-mobile-search {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  background: var(--clay-well);
+  color: var(--clay-muted);
+  box-shadow: var(--clay-shadow-well);
+}
+
+/* --------------------------------------------------------------------------
+   2. iOS SAFARI CLAYMORPHISM BACKGROUND & TOUCH HOVER FIXES
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
+  /* iOS Safari does not properly support `background-attachment: fixed` on body
+     and suffers severe repaint/banding jank when scrolling. */
+  html[data-ui-style="claymorphism"] body {
+    background-attachment: scroll;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  /* Prevent stuck `:hover` elevation on touch devices after tapping */
+  html[data-ui-style="claymorphism"] .sidebar .nav-item:hover,
+  html[data-ui-style="claymorphism"] .topbar-btn:hover,
+  html[data-ui-style="claymorphism"] .btn-icon:hover,
+  html[data-ui-style="claymorphism"] .btn-action-sm:hover,
+  html[data-ui-style="claymorphism"] .btn-logout:hover,
+  html[data-ui-style="claymorphism"] .btn:hover:not(:disabled),
+  html[data-ui-style="claymorphism"] .bdu-impact-btn:hover:not(:disabled),
+  html[data-ui-style="claymorphism"] .club-card:hover,
+  html[data-ui-style="claymorphism"] .club-doc:hover,
+  html[data-ui-style="claymorphism"] .vocab-card:hover,
+  html[data-ui-style="claymorphism"] .vocab-mode:hover,
+  html[data-ui-style="claymorphism"] .vocab-set-card:hover,
+  html[data-ui-style="claymorphism"] .gr-path-card:hover,
+  html[data-ui-style="claymorphism"] .gr-lessons .gr-lesson:hover,
+  .settings-style-card:hover,
+  .frame-option-card.is-unlocked:hover,
+  .notif-reminder-btn:hover {
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. PREVENT iOS SAFARI AUTO-ZOOM ON INPUT FOCUS (< 16px triggers page zoom)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea,
+  .form-input,
+  .form-textarea,
+  .custom-select,
+  .form-select,
+  .fb-title-input,
+  .fb-content-textarea,
+  .fb-attachment-url-input,
+  .fb-attachment-title-input,
+  .fb-pill-select,
+  .fbc-composer-input,
+  .share-grade-textarea,
+  .sim-input,
+  .sim-formula-select,
+  .dgrl-page .dgrl-select,
+  .dgrl-page .dgrl-text-input,
+  .dgrl-page .dgrl-textarea,
+  .modal-dialog.enroll-modal .enroll-credential-field input {
+    font-size: 16px !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. TABLET & MOBILE SHELL (<= 1024px) — SAFE AREAS, 100dvh, NATIVE SCROLL
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: min(300px, 84vw);
+    height: 100vh;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .sidebar-header {
+    height: auto;
+    min-height: 62px;
+    padding: 10px 12px;
+  }
+
+  .sidebar-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 10px;
+  }
+
+  .brand-meta {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .brand-title {
+    font-size: 0.96rem;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brand-subtitle {
+    display: block;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sidebar-nav {
+    gap: 16px;
+    padding: 14px 12px 18px;
+  }
+
+  .sidebar .nav-item {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebar-scrim {
+    touch-action: none;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  .sidebar-mobile-search.mobile-only {
+    display: flex !important;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    height: auto;
+    min-height: calc(60px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  .dashboard-body {
+    overflow-y: visible;
+    padding: 14px max(12px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .notif-panel,
+  .user-menu-panel {
+    position: fixed;
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    width: auto;
+    max-height: calc(100vh - 84px);
+    max-height: calc(100dvh - 80px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .notif-mark-all {
+    min-height: 40px;
+    padding: 6px 8px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .notif-reminder-btn {
+    min-height: 44px;
+  }
+
+  .toast-container.toast-region {
+    top: calc(66px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: none;
+  }
+
+  .update-banner {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. PHONE REFINEMENTS (<= 680px)
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 680px) {
+  /* Login safe-area & comfortable touch targets */
+  html[data-ui-style="neumorphism"] .login-wrapper,
+  .login-wrapper {
+    padding: calc(16px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+  }
+
+  .login-theme-toggle-btn {
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+
+  .checkbox-label {
+    min-height: 44px;
+    padding: 6px 0;
+  }
+
+  /* GPA Hero: eliminate email right-border clipping & tighten spacing */
+  #tab-grades .hero-profile {
+    padding: 18px 14px;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  #tab-grades .hero-info {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  #tab-grades .hero-name-line {
+    gap: 6px 10px;
+    margin-bottom: 6px;
+  }
+
+  #tab-grades .hero-name {
+    font-size: 1.38rem;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+  }
+
+  #tab-grades .hero-meta {
+    gap: 4px;
+    font-size: 0.8rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  #tab-grades .hero-meta .meta-item {
+    min-width: 0;
+    max-width: 100%;
+    align-items: flex-start;
+    gap: 6px;
+    line-height: 1.35;
+  }
+
+  #tab-grades .hero-meta .meta-item svg {
+    flex: 0 0 auto;
+    margin-top: 2px;
+  }
+
+  #tab-grades #hero-email {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* GPA Filter search & simulation button touch targets */
+  #tab-grades .search-box input,
+  #tab-grades .sim-toggle-btn,
+  #tab-grades .semester-sim-btn {
+    min-height: 44px;
+  }
+
+  /* GPA Tables: reclaim horizontal padding so course titles breathe */
+  #tab-grades .semester-groups-container {
+    padding: 10px;
+  }
+
+  #tab-grades .semester-card,
+  #tab-grades .semester-block {
+    padding: 12px;
+  }
+
+  #tab-grades .grade-table th,
+  #tab-grades .grade-table td {
+    padding: 10px 6px;
+    font-size: 0.82rem;
+  }
+
+  /* Confession Composer Modal: stack "Thêm vào bài viết" cleanly in 2x2 grid */
+  .fb-modal-body {
+    padding: 14px 14px 10px;
+  }
+
+  .fb-modal-footer {
+    padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .fb-add-to-post-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .fb-add-to-post-label {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .fb-add-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  #modal-create-confession .fb-add-btn,
+  #modal-edit-confession .fb-add-btn,
+  .fb-add-btn {
+    width: 100%;
+    height: auto;
+    min-height: 42px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.25;
+    white-space: nowrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  #modal-create-confession .fb-modal-close-btn,
+  #modal-edit-confession .fb-modal-close-btn {
+    min-width: 38px;
+    min-height: 38px;
+    height: 38px;
+    padding: 0 10px;
+  }
+
+  /* Confession Filter Bar: sleek single-row scrollable pills, no awkward orphan wrap */
+  #tab-confession .forum-filter-bar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  #tab-confession .forum-filter-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  #tab-confession .forum-filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  #tab-confession .forum-filter-pill {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 6px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* Confession Post Action Buttons >= 44px */
+  :is(#tab-confession, #fbc-post-modal) .fbc-action-btn,
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-action {
+    min-height: 44px;
+  }
+
+  /* Confession Post Detail Modal full-height on mobile with safe-area */
+  #fbc-post-modal .fbc-composer {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Learning, Settings, WordFmt touch target polish */
+  #tab-learning .learning-search-input,
+  #tab-learning .learning-course-actions .btn,
+  #tab-learning .learning-course-actions a,
+  .settings-page .btn,
+  #tab-wordfmt .wf-skill-trigger,
+  #tab-wordfmt .wf-autofill-pill,
+  #tab-wordfmt .wf-seg-btn {
+    min-height: 44px;
+  }
+
+  #tab-wordfmt label:has(input[type="checkbox"]) {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #tab-wordfmt input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. NARROW iPHONES (<= 560px — iPhone SE, 13/14/15/16, Pro, Pro Max)
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 560px) {
+  /* De-crowd topbar so page titles read cleanly without truncation.
+     Quick Search stays 1-tap away inside both the mobile sidebar drawer and UserMenuPopover. */
+  .topbar {
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
+    gap: 6px;
+  }
+
+  .topbar-left {
+    gap: 8px;
+  }
+
+  .topbar-title {
+    font-size: 0.98rem;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+  }
+
+  .topbar-search-trigger {
+    display: none !important;
+  }
+
+  .topbar .btn-icon,
+  .topbar-user-btn,
+  .notif-bell-btn {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+
+  .topbar-user-btn .topbar-user-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .notif-panel,
+  .user-menu-panel {
+    top: calc(60px + env(safe-area-inset-top, 0px));
+  }
+
+  /* Confession Post Header: prevent [Web][Toàn trường][...] from crushing author name & badges */
+  :is(#tab-confession, #fbc-post-modal) .fbc-post {
+    padding: 14px 14px 6px;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-head {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 12px;
+    align-items: start;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-head:has(.fbc-avatar.has-inline-frame) {
+    gap: 10px 16px;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-who {
+    grid-column: 2;
+    min-width: 0;
+    padding-right: 40px;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-name {
+    font-size: 14.5px;
+    line-height: 1.3;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-meta {
+    flex-wrap: wrap;
+    white-space: nowrap;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-head-right {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-post-head-right .fbc-menu-wrap {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+  }
+
+  :is(#tab-confession, #fbc-post-modal) .fbc-icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Compact 2x2 GPA stat cards in both Neo-Brutalism & Claymorphism */
+  #tab-grades .stat-card {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+
+  #tab-grades .stat-icon {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    font-size: 0.6rem;
+  }
+
+  #tab-grades .stat-value {
+    font-size: 1.22rem;
+  }
+
+  html[data-ui-style="claymorphism"] #tab-grades .stats-grid {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  html[data-ui-style="claymorphism"] #tab-grades .stat-card {
+    border-radius: 16px;
+  }
+
+  /* Command Palette sits cleanly near top so iOS keyboard doesn't cover results */
+  .palette-backdrop {
+    align-items: flex-start;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .command-palette {
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 36px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+}

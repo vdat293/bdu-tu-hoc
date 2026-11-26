@@ -3,7 +3,11 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fffdf5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no" />
   <title>BDU Tự Học - Cổng Tiện Ích & Tự Động Hóa Sinh Viên Đại Học Bình Dương</title>
   <meta name="description"
     content="Nền tảng tự học, tra cứu bảng điểm, xem lý lịch, thời khóa biểu, chuẩn hóa Word chuẩn viện và tự động hóa khảo sát dành riêng cho sinh viên BDU." />
@@ -31,8 +35,18 @@
         r.dataset.theme = t;
         r.dataset.uiStyle = s;
         r.dataset.vfx = v;
+        r.style.colorScheme = t;
         document.body.classList.toggle('theme-dark', t === 'dark');
         document.body.classList.toggle('theme-light', t !== 'dark');
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) {
+          var bg = s === 'neumorphism'
+            ? (t === 'dark' ? '#141923' : '#e8eef5')
+            : (s === 'claymorphism'
+              ? (t === 'dark' ? '#131b30' : '#edf2ff')
+              : (t === 'dark' ? '#111318' : '#fffdf5'));
+          tc.setAttribute('content', bg);
+        }
       } catch (e) {}
     })();
   </script>

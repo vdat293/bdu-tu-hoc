@@ -7,6 +7,7 @@ import { BduVfxBridge } from '../lib/bdu-vfx/index.js';
 import '../styles/app.css';
 import '../styles/auth-neumorphism.css';
 import '../styles/claymorphism.css';
+import '../styles/mobile-safari.css';
 
 // Cổng bảo trì KHÔNG bọc ở đây nữa: trước đây nó phủ toàn bộ <AppRoutes/> nên
 // một nhóm bị khoá cũng chặn luôn portal/trang đăng nhập, và người dùng không

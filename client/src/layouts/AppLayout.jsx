@@ -178,8 +178,16 @@ export default function AppLayout() {
     document.title = `${meta.title} · BDU Tự Học`;
     mainRef.current?.focus({ preventScroll: true });
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
     setSidebarOpen(false);
   }, [location.key, meta.title]);
+
+  useEffect(() => {
+    document.body.classList.toggle('sidebar-open', sidebarOpen);
+    return () => {
+      document.body.classList.remove('sidebar-open');
+    };
+  }, [sidebarOpen]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -225,9 +233,36 @@ export default function AppLayout() {
               <span className="brand-subtitle">Student Academic Portal</span>
             </div>
           </div>
+          <button
+            type="button"
+            className="btn-icon sidebar-close-btn mobile-only"
+            onClick={() => setSidebarOpen(false)}
+            title="Đóng menu"
+            aria-label="Đóng menu điều hướng"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
 
         <nav id="primary-navigation" className="sidebar-nav">
+          <button
+            type="button"
+            className="sidebar-mobile-search mobile-only"
+            onClick={() => {
+              setSidebarOpen(false);
+              setPaletteOpen(true);
+            }}
+            aria-label="Tìm nhanh trang hoặc chức năng"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <span>Tìm nhanh trang…</span>
+          </button>
           {navGroups.filter((group) => group.items.length > 0).map((group) => (
             <div className="nav-group" key={group.title}>
               <div className="nav-group-title">{group.title}</div>

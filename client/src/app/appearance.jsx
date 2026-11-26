@@ -142,8 +142,18 @@ export function AppearanceProvider({ children }) {
     root.dataset.theme = effectiveTheme;
     root.dataset.uiStyle = effectiveUiStyle;
     root.dataset.vfx = vfxEnabled ? 'on' : 'off';
+    root.style.colorScheme = effectiveTheme;
     document.body.classList.toggle('theme-dark', effectiveTheme === 'dark');
     document.body.classList.toggle('theme-light', effectiveTheme !== 'dark');
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      const color = effectiveUiStyle === 'neumorphism'
+        ? (effectiveTheme === 'dark' ? '#141923' : '#e8eef5')
+        : (effectiveUiStyle === 'claymorphism'
+          ? (effectiveTheme === 'dark' ? '#131b30' : '#edf2ff')
+          : (effectiveTheme === 'dark' ? '#111318' : '#fffdf5'));
+      themeColorMeta.setAttribute('content', color);
+    }
   }, [effectiveTheme, effectiveUiStyle, vfxEnabled]);
 
   const value = useMemo(() => ({
