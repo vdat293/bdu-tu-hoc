@@ -5,9 +5,8 @@ import { createTtcdsGroup, deleteTtcdsGroup, getTtcdsGroups } from '../../api/tt
 import { useAuth, useToasts } from '../../app/providers.jsx';
 import { useConfirm } from '../../components/feedback/ConfirmDialog.jsx';
 import { useViewportDialog, ViewportModal } from '../../components/ViewportModal.jsx';
-import EmptyState from '../clubs/components/EmptyState.jsx';
-import { ClubCardSkeleton } from '../clubs/components/Skeleton.jsx';
-import '../clubs/clubs.css';
+import { TtcdsCardSkeleton as ClubCardSkeleton, TtcdsEmptyState as EmptyState } from './TtcdsShared.jsx';
+import './ttcds-groups.css';
 import { TtcdsForbiddenNotice, useTtcdsCapabilities } from './useTtcdsCapabilities.jsx';
 
 export default function TtcdsPage() {
