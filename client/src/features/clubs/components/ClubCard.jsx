@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { cleanTag, initials, safeNumber } from '../lib/format.js';
+import { cleanTag, safeNumber } from '../lib/format.js';
 import { resolveRoleLabel } from '../lib/roles.js';
+import { ClubAvatar } from './ClubPrimitives.jsx';
 
-// KHÔNG dùng cover-link absolute hack như ClansPage cũ.
-// Card là <article>, tiêu đề là button navigate, footer có nút Mở CLB riêng.
 export default function ClubCard({ club, onJoin, onCancelJoin, joinPending, cancelPending }) {
   const navigate = useNavigate();
   const open = () => navigate(`/clans/${club.id}`);
@@ -12,40 +11,54 @@ export default function ClubCard({ club, onJoin, onCancelJoin, joinPending, canc
   const { name: myRoleName } = resolveRoleLabel(club.role_labels, club.my_role);
 
   return (
-    <article className="club-card" aria-label={club.name}>
-      <div className="club-card__topline">
-        <span className="club-avatar" aria-hidden="true">
-          {club.avatar_url ? <img src={club.avatar_url} alt="" /> : initials(club.name)}
-        </span>
-        <div className="club-card__badges">
-          <span className="club-tag">[{cleanTag(club.tag)}]</span>
-          <span className="club-level">
+    <article className="clb-card" aria-label={club.name}>
+      <div className="clb-card__head">
+        <ClubAvatar src={club.avatar_url} name={club.name} />
+        <div className="clb-card__meta">
+          <span className="clb-card__tag">[{cleanTag(club.tag)}]</span>
+          <span className="clb-card__level">
             Cấp {safeNumber(club.level, 1)}{Number.isFinite(Number(club.xp)) ? ` · ${Number(club.xp)} XP` : ''}
           </span>
         </div>
-        {club.my_role === 'leader' && <span className="club-chip">{myRoleName}</span>}
+        {club.my_role === 'leader' && <span className="clb-chip clb-chip--accent">{myRoleName}</span>}
       </div>
-      <div className="club-card__copy">
+
+      <div className="clb-card__body">
         <h2>
-          <button type="button" className="club-card__title" onClick={open}>
+          <button type="button" className="clb-card__title" onClick={open}>
             {club.name}
           </button>
         </h2>
-        <p>{club.description || 'Không gian học tập, trao đổi kiến thức và tài liệu dành cho sinh viên BDU.'}</p>
+        <p className="clb-card__desc">
+          {club.description || 'Không gian học tập, trao đổi kiến thức và tài liệu dành cho sinh viên BDU.'}
+        </p>
       </div>
-      <footer className="club-card__footer">
-        <span className="club-member-count">{safeNumber(club.member_count)} thành viên</span>
+
+      <footer className="clb-card__foot">
+        <span className="clb-card__count">{safeNumber(club.member_count)} thành viên</span>
         {isJoined ? (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={open}>Mở CLB</button>
+          <button type="button" className="clb-btn clb-btn--secondary clb-btn--sm" onClick={open}>
+            Mở CLB
+          </button>
         ) : isPending ? (
-          <div className="club-pending-actions">
-            <span className="club-chip">Đang chờ duyệt</span>
-            <button type="button" className="club-text-action" onClick={() => onCancelJoin?.(club)} disabled={cancelPending}>
+          <div className="clb-card__pending">
+            <span className="clb-chip clb-chip--warn">Đang chờ duyệt</span>
+            <button
+              type="button"
+              className="clb-link-btn"
+              onClick={() => onCancelJoin?.(club)}
+              disabled={cancelPending}
+            >
               Hủy yêu cầu
             </button>
           </div>
         ) : (
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => onJoin?.(club)} disabled={joinPending}>
+          <button
+            type="button"
+            className="clb-btn clb-btn--primary clb-btn--sm"
+            onClick={() => onJoin?.(club)}
+            disabled={joinPending}
+          >
             Tham gia
           </button>
         )}

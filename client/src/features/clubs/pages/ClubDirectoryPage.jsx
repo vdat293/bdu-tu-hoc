@@ -6,11 +6,9 @@ import { useAuth, useToasts } from '../../../app/providers.jsx';
 import { useViewportDialog, ViewportModal } from '../../../components/ViewportModal.jsx';
 import ClanJoinQuizModal from '../components/ClanJoinQuizModal.jsx';
 import ClubCard from '../components/ClubCard.jsx';
-import { ClubCardSkeleton } from '../components/Skeleton.jsx';
-import EmptyState from '../components/EmptyState.jsx';
+import { ClubCardSkeleton, ClubEmptyState, ClubIcon } from '../components/ClubPrimitives.jsx';
 import { useClubs } from '../hooks/useClubs.js';
-import '../clubs.css';
-import '../motion.css';
+import '../styles/clubs.css';
 
 export default function ClubDirectoryPage() {
   const auth = useAuth();
@@ -38,6 +36,7 @@ export default function ClubDirectoryPage() {
   });
 
   const refreshClans = () => client.invalidateQueries({ queryKey: ['clans'] });
+
   const create = useMutation({
     mutationFn: () => createClan(auth.token, draft),
     onSuccess: (data) => {
@@ -74,8 +73,8 @@ export default function ClubDirectoryPage() {
   const filtered = useMemo(() => {
     const needle = search.toLocaleLowerCase('vi-VN').trim();
     return rawList.filter((clan) => {
-      const text = `${clan.name || ''} ${clan.code || ''} ${clan.tag || ''} ${clan.description || ''}`.toLocaleLowerCase('vi-VN');
-      return (!needle || text.includes(needle)) && (filter === 'all' || Boolean(clan.is_joined));
+      const haystack = `${clan.name || ''} ${clan.code || ''} ${clan.tag || ''} ${clan.description || ''}`.toLocaleLowerCase('vi-VN');
+      return (!needle || haystack.includes(needle)) && (filter === 'all' || Boolean(clan.is_joined));
     });
   }, [filter, rawList, search]);
 
@@ -95,48 +94,102 @@ export default function ClubDirectoryPage() {
   };
 
   return (
-    <section id="tab-clans" className="tab-pane club-experience">
-      <header className="club-directory-hero">
-        <div className="club-directory-hero__copy">
-          <h1>CLB & Nhóm học tập</h1>
-          <p>Khám phá, tham gia hoặc quản lý cộng đồng học tập của bạn.</p>
+    <section id="tab-clans" className="clb-root">
+      <header className="clb-header">
+        <div className="clb-header__copy">
+          <h1>CLB &amp; Nhóm học tập</h1>
+          <p>Khám phá, tham gia và sinh hoạt cùng các cộng đồng học tập tại BDU.</p>
         </div>
-        <div className="club-directory-hero__action">
-          <button type="button" className="btn btn-primary club-primary-action" onClick={openCreate} disabled={query.isSuccess && !canCreateClan} aria-describedby="club-create-permission">
+        <div className="clb-header__actions">
+          <button
+            type="button"
+            className="clb-btn clb-btn--primary"
+            onClick={openCreate}
+            disabled={query.isSuccess && !canCreateClan}
+            aria-describedby="club-create-permission"
+          >
             Thành lập CLB
           </button>
-          {query.isSuccess && !canCreateClan && <p id="club-create-permission" className="club-permission-note">Cần danh hiệu #TTCDS hoặc quyền quản trị để thành lập CLB.</p>}
+          {query.isSuccess && !canCreateClan && (
+            <p id="club-create-permission" className="clb-permission-note">
+              Cần danh hiệu #TTCDS hoặc quyền quản trị để thành lập CLB.
+            </p>
+          )}
         </div>
       </header>
 
-      <div className="club-directory-toolbar" aria-label="Lọc danh sách CLB">
-        <div className="club-segmented" role="group" aria-label="Phạm vi CLB">
-          <button type="button" className={filter === 'all' ? 'is-active' : ''} aria-pressed={filter === 'all'} onClick={() => updateParams({ filter: null })}>Khám phá tất cả</button>
-          <button type="button" className={filter === 'mine' ? 'is-active' : ''} aria-pressed={filter === 'mine'} onClick={() => updateParams({ filter: 'mine' })}>CLB của tôi</button>
+      <div className="clb-toolbar" aria-label="Lọc danh sách CLB">
+        <div className="clb-segmented" role="group" aria-label="Phạm vi CLB">
+          <button
+            type="button"
+            className={filter === 'all' ? 'is-active' : ''}
+            aria-pressed={filter === 'all'}
+            onClick={() => updateParams({ filter: null })}
+          >
+            Khám phá tất cả
+          </button>
+          <button
+            type="button"
+            className={filter === 'mine' ? 'is-active' : ''}
+            aria-pressed={filter === 'mine'}
+            onClick={() => updateParams({ filter: 'mine' })}
+          >
+            CLB của tôi
+          </button>
         </div>
-        <div className="club-search-field">
-          <label className="club-visually-hidden" htmlFor="club-search-input">Tìm CLB hoặc nhóm học tập</label>
-          <div className="club-search-field__control">
-            <input id="club-search-input" type="search" value={search} onChange={(event) => updateParams({ q: event.target.value }, true)} placeholder="Tên, mã hoặc tag CLB" />
-            {search && <button type="button" className="club-icon-button" onClick={() => updateParams({ q: null }, true)} aria-label="Xóa từ khóa tìm kiếm">×</button>}
-          </div>
+
+        <div className="clb-search">
+          <label className="clb-sr-only" htmlFor="club-search-input">Tìm CLB hoặc nhóm học tập</label>
+          <span className="clb-search__icon"><ClubIcon name="search" size={16} /></span>
+          <input
+            id="club-search-input"
+            type="search"
+            className="clb-search__input"
+            value={search}
+            onChange={(event) => updateParams({ q: event.target.value }, true)}
+            placeholder="Tìm theo tên, mã hoặc tag CLB…"
+          />
+          {search && (
+            <button
+              type="button"
+              className="clb-icon-btn clb-search__clear"
+              onClick={() => updateParams({ q: null }, true)}
+              aria-label="Xóa từ khóa tìm kiếm"
+            >
+              <ClubIcon name="close" size={15} />
+            </button>
+          )}
         </div>
       </div>
 
       {query.isLoading ? (
-        <div className="club-directory-grid" aria-label="Đang tải danh sách CLB">
+        <div className="clb-grid" aria-label="Đang tải danh sách CLB">
           {[1, 2, 3].map((item) => <ClubCardSkeleton key={item} />)}
         </div>
       ) : query.isError ? (
-        <div className="club-empty" role="alert"><h2>Chưa thể tải danh sách CLB</h2><p>{query.error?.message || 'Vui lòng thử lại sau ít phút.'}</p><button type="button" className="btn btn-secondary" onClick={() => query.refetch()}>Thử lại</button></div>
+        <div className="clb-empty" role="alert">
+          <h2>Chưa thể tải danh sách CLB</h2>
+          <p>{query.error?.message || 'Vui lòng thử lại sau ít phút.'}</p>
+          <button type="button" className="clb-btn clb-btn--secondary" onClick={() => query.refetch()}>
+            Thử lại
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
-        <EmptyState
+        <ClubEmptyState
           title={search ? 'Không tìm thấy CLB phù hợp' : filter === 'mine' ? 'Bạn chưa tham gia CLB nào' : 'Chưa có CLB nào'}
           hint={search ? 'Thử lại với tên đầy đủ, mã CLB hoặc tag khác.' : filter === 'mine' ? 'Khám phá các nhóm đang hoạt động để bắt đầu.' : 'Hãy là người tiên phong thành lập một cộng đồng học tập.'}
-          action={(search || filter === 'mine') && <button type="button" className="btn btn-secondary" onClick={() => updateParams({ q: null, filter: null })}>Xem tất cả CLB</button>}
+          action={(search || filter === 'mine') && (
+            <button
+              type="button"
+              className="clb-btn clb-btn--secondary"
+              onClick={() => updateParams({ q: null, filter: null })}
+            >
+              Xem tất cả CLB
+            </button>
+          )}
         />
       ) : (
-        <div id="clans-list-grid" className="club-directory-grid">
+        <div id="clans-list-grid" className="clb-grid">
           {filtered.map((clan) => (
             <ClubCard
               key={clan.id}
@@ -150,25 +203,107 @@ export default function ClubDirectoryPage() {
         </div>
       )}
 
-      <ClanJoinQuizModal open={Boolean(joinTarget)} clanName={joinTarget?.name} quiz={joinQuizQuery.data} isLoading={joinQuizQuery.isLoading} isPending={join.isPending} result={joinResult} onClose={() => { if (!join.isPending) setJoinTarget(null); }} onViewClan={() => { if (joinTarget?.id) navigate(`/clans/${joinTarget.id}`); }} onSubmit={(answers) => join.mutate({ clanId: joinTarget.id, answers })} />
+      <ClanJoinQuizModal
+        open={Boolean(joinTarget)}
+        clanName={joinTarget?.name}
+        quiz={joinQuizQuery.data}
+        isLoading={joinQuizQuery.isLoading}
+        isPending={join.isPending}
+        result={joinResult}
+        onClose={() => { if (!join.isPending) setJoinTarget(null); }}
+        onViewClan={() => { if (joinTarget?.id) navigate(`/clans/${joinTarget.id}`); }}
+        onSubmit={(answers) => join.mutate({ clanId: joinTarget.id, answers })}
+      />
 
       {showCreateModal && (
-        <ViewportModal id="modal-create-club" title="Thành lập CLB hoặc nhóm học tập" onClose={() => setShowCreateModal(false)} dialogRef={createDialogRef} className="club-modal club-modal-anim">
-          <div className="club-modal__header">
-            <div><span className="club-eyebrow">CỘNG ĐỒNG MỚI</span><h2>Thành lập CLB</h2></div>
-            <button ref={createCloseRef} type="button" className="club-icon-button" onClick={() => setShowCreateModal(false)} aria-label="Đóng hộp thoại">×</button>
-          </div>
-          <p className="club-modal__intro">Hãy đặt tên rõ ràng để sinh viên dễ tìm đúng cộng đồng học tập của bạn.</p>
-          <form className="club-form" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim() || !draft.code.trim()) { notify('Vui lòng nhập tên và mã định danh của CLB.', 'warning'); return; } create.mutate(); }}>
-            <label htmlFor="new-club-name">Tên CLB hoặc nhóm <span aria-hidden="true">*</span><input id="new-club-name" className="form-input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Ví dụ: CLB Trí tuệ nhân tạo BDU" required /></label>
-            <div className="club-form__two-columns">
-              <label htmlFor="new-club-code">Mã định danh <span aria-hidden="true">*</span><input id="new-club-code" className="form-input" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} placeholder="CLB_AI" required /></label>
-              <label htmlFor="new-club-tag">Tag ngắn<input id="new-club-tag" className="form-input" value={draft.tag} onChange={(event) => setDraft({ ...draft, tag: event.target.value })} placeholder="AI" /></label>
+        <ViewportModal
+          id="modal-create-club"
+          title="Thành lập CLB hoặc nhóm học tập"
+          onClose={() => setShowCreateModal(false)}
+          dialogRef={createDialogRef}
+          className="clb-modal"
+        >
+          <div className="clb-modal__head">
+            <div>
+              <span className="clb-eyebrow">CỘNG ĐỒNG MỚI</span>
+              <h2>Thành lập CLB</h2>
             </div>
-            <label htmlFor="new-club-desc">Mục tiêu và hoạt động<textarea id="new-club-desc" className="form-input" rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Môn học trọng tâm, cách sinh hoạt hoặc tài liệu sẽ chia sẻ…" /></label>
-            <div className="club-modal__footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={create.isPending}>{create.isPending ? 'Đang tạo…' : 'Tạo CLB'}</button>
+            <button
+              ref={createCloseRef}
+              type="button"
+              className="clb-icon-btn"
+              onClick={() => setShowCreateModal(false)}
+              aria-label="Đóng hộp thoại"
+            >
+              <ClubIcon name="close" size={18} />
+            </button>
+          </div>
+          <p className="clb-modal__intro">
+            Đặt tên rõ ràng để sinh viên dễ tìm đúng cộng đồng học tập của bạn.
+          </p>
+          <form
+            className="clb-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!draft.name.trim() || !draft.code.trim()) {
+                notify('Vui lòng nhập tên và mã định danh của CLB.', 'warning');
+                return;
+              }
+              create.mutate();
+            }}
+          >
+            <label className="clb-field" htmlFor="new-club-name">
+              <span>Tên CLB hoặc nhóm *</span>
+              <input
+                id="new-club-name"
+                className="clb-input"
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                placeholder="Ví dụ: CLB Trí tuệ nhân tạo BDU"
+                required
+              />
+            </label>
+            <div className="clb-form-row">
+              <label className="clb-field" htmlFor="new-club-code">
+                <span>Mã định danh *</span>
+                <input
+                  id="new-club-code"
+                  className="clb-input"
+                  value={draft.code}
+                  onChange={(event) => setDraft({ ...draft, code: event.target.value })}
+                  placeholder="CLB_AI"
+                  required
+                />
+              </label>
+              <label className="clb-field" htmlFor="new-club-tag">
+                <span>Tag ngắn</span>
+                <input
+                  id="new-club-tag"
+                  className="clb-input"
+                  value={draft.tag}
+                  onChange={(event) => setDraft({ ...draft, tag: event.target.value })}
+                  placeholder="AI"
+                />
+              </label>
+            </div>
+            <label className="clb-field" htmlFor="new-club-desc">
+              <span>Mục tiêu và hoạt động</span>
+              <textarea
+                id="new-club-desc"
+                className="clb-textarea"
+                rows={4}
+                value={draft.description}
+                onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+                placeholder="Môn học trọng tâm, cách sinh hoạt hoặc tài liệu sẽ chia sẻ…"
+              />
+            </label>
+            <div className="clb-modal__foot">
+              <button type="button" className="clb-btn clb-btn--secondary" onClick={() => setShowCreateModal(false)}>
+                Hủy
+              </button>
+              <button type="submit" className="clb-btn clb-btn--primary" disabled={create.isPending}>
+                {create.isPending ? 'Đang tạo…' : 'Tạo CLB'}
+              </button>
             </div>
           </form>
         </ViewportModal>
