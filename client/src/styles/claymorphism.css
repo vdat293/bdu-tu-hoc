@@ -24,8 +24,8 @@ html[data-ui-style="claymorphism"] body.theme-light {
   --clay-mint-gradient: linear-gradient(135deg, #2dd4bf 0%, #10b981 100%);
   --clay-coral-gradient: linear-gradient(135deg, #fb7185 0%, #ef4444 100%);
   --clay-amber-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  --clay-border: rgba(255, 255, 255, 0.85);
-  --clay-divider: rgba(126, 142, 198, 0.22);
+  --clay-border: rgba(126, 142, 198, 0.28);
+  --clay-divider: rgba(126, 142, 198, 0.24);
   --clay-shadow:
     0 18px 34px -10px rgba(95, 112, 175, 0.22),
     0 6px 14px -4px rgba(95, 112, 175, 0.12),
@@ -96,8 +96,8 @@ html[data-ui-style="claymorphism"] body.theme-dark {
   --clay-mint-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   --clay-coral-gradient: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
   --clay-amber-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  --clay-border: rgba(255, 255, 255, 0.09);
-  --clay-divider: rgba(148, 163, 184, 0.16);
+  --clay-border: rgba(148, 163, 184, 0.22);
+  --clay-divider: rgba(148, 163, 184, 0.18);
   --clay-shadow:
     0 20px 38px -10px rgba(4, 7, 18, 0.65),
     0 6px 14px -4px rgba(4, 7, 18, 0.44),
@@ -425,11 +425,12 @@ html[data-ui-style="claymorphism"] .bdu-impact-btn--invert {
 /* Recessed Clay form controls */
 html[data-ui-style="claymorphism"] .form-input,
 html[data-ui-style="claymorphism"] .form-textarea,
+html[data-ui-style="claymorphism"] .search-input,
 html[data-ui-style="claymorphism"] .custom-select,
 html[data-ui-style="claymorphism"] .form-select,
 html[data-ui-style="claymorphism"] .schedule-dropdown,
 html[data-ui-style="claymorphism"] .club-search-field__control {
-  border: 1px solid var(--clay-divider);
+  border: 1px solid var(--clay-border);
   border-radius: 14px;
   background: var(--clay-well);
   color: var(--clay-ink);
@@ -438,6 +439,7 @@ html[data-ui-style="claymorphism"] .club-search-field__control {
 
 html[data-ui-style="claymorphism"] .form-input:focus,
 html[data-ui-style="claymorphism"] .form-textarea:focus,
+html[data-ui-style="claymorphism"] .search-input:focus,
 html[data-ui-style="claymorphism"] .custom-select:focus,
 html[data-ui-style="claymorphism"] .form-select:focus,
 html[data-ui-style="claymorphism"] .schedule-dropdown:focus,
@@ -637,6 +639,64 @@ html[data-ui-style="claymorphism"] .enroll-chip.is-active {
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 999px;
   box-shadow: var(--clay-shadow-xs);
+}
+
+/* Enrollment (#tab-enrollment has ID specificity in app.css) */
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 22px;
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-search,
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-select select {
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  background: var(--clay-well);
+  box-shadow: var(--clay-shadow-well);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-chip {
+  border: 1px solid var(--clay-border);
+  border-radius: 999px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-chip:hover {
+  background: var(--clay-surface);
+  border-color: var(--clay-accent);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-chip.is-active {
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  border-radius: 999px;
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-table-wrap {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-table thead th {
+  background: var(--clay-surface-soft);
+  border-bottom: 1px solid var(--clay-divider);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-table tbody td {
+  border-bottom: 1px solid var(--clay-divider);
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+html[data-ui-style="claymorphism"] #tab-enrollment .enroll-terminal {
+  border: 1px solid var(--clay-border);
+  border-radius: 18px;
+  box-shadow: var(--clay-shadow-sm);
 }
 
 html[data-ui-style="claymorphism"] .leaderboard-current-rank {
@@ -921,6 +981,21 @@ html[data-ui-style="claymorphism"] .gr-option-letter {
 }
 
 /* Learning, Quiz & Guides (excluding .clay-pb-scope which is already Claymorphism) */
+html[data-ui-style="claymorphism"] .learning-course-card,
+html[data-ui-style="claymorphism"] .learning-post-card {
+  border: 1px solid var(--clay-border);
+  border-radius: 20px;
+  background: var(--clay-surface-soft);
+  box-shadow: var(--clay-shadow-xs);
+}
+
+html[data-ui-style="claymorphism"] .learning-course-card:hover,
+html[data-ui-style="claymorphism"] .learning-post-card:hover {
+  border-color: var(--clay-accent);
+  background: var(--clay-surface);
+  box-shadow: var(--clay-shadow-sm);
+}
+
 html[data-ui-style="claymorphism"] .quiz-runner,
 html[data-ui-style="claymorphism"] .quiz-test,
 html[data-ui-style="claymorphism"] .quiz-set-part-row,
