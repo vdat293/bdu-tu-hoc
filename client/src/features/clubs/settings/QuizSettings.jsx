@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getClanQuiz, updateClanQuiz } from '../../../api/community.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
-import { parseQuizText, QUIZ_IMPORT_SCHEMA } from '../lib/quiz.js';
 import { safeNumber } from '../lib/format.js';
+import { parseQuizText, QUIZ_IMPORT_SCHEMA } from '../lib/quiz.js';
 
-// Bản gọn của form quiz cũ: toggle + ngưỡng đúng + import JSON/CSV + lưu.
 export default function QuizSettings({ clanId, queryBase }) {
   const auth = useAuth();
   const { notify } = useToasts();
@@ -37,7 +36,7 @@ export default function QuizSettings({ clanId, queryBase }) {
     onError: (error) => notify(error.message, 'error')
   });
 
-  const submit = (event) => {
+  const handleSubmit = (event) => {
     event.preventDefault();
     let questions;
     if (importText.trim()) {
@@ -53,29 +52,61 @@ export default function QuizSettings({ clanId, queryBase }) {
   };
 
   return (
-    <form className="club-panel" onSubmit={submit}>
-      <div className="club-settings-row">
-        <div><h2>Quiz gia nhập</h2><p>{quizQuery.data?.total || 0}/30 câu hỏi</p></div>
-        <label className="club-toggle"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /><span>Bật quiz</span></label>
+    <form className="clb-surface clb-form" onSubmit={handleSubmit}>
+      <div className="clb-panel-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h2>Quiz gia nhập</h2>
+          <p>{quizQuery.data?.total || 0}/30 câu hỏi hiện có</p>
+        </div>
+        <label className="clb-toggle">
+          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+          <span>Bật quiz</span>
+        </label>
       </div>
+
       {enabled && (
-        <label htmlFor="club-quiz-min">Số câu đúng tối thiểu
-          <input id="club-quiz-min" className="form-input club-input--sm" type="number" min="0" max="30" value={minCorrect} onChange={(e) => setMinCorrect(Number(e.target.value))} />
+        <label className="clb-field" htmlFor="club-quiz-min">
+          <span>Số câu đúng tối thiểu</span>
+          <input
+            id="club-quiz-min"
+            className="clb-input clb-input--compact"
+            type="number"
+            min="0"
+            max="30"
+            value={minCorrect}
+            onChange={(event) => setMinCorrect(Number(event.target.value))}
+          />
         </label>
       )}
-      <div className="club-form-grid">
-        <label htmlFor="club-quiz-format">Định dạng
-          <select id="club-quiz-format" className="form-input" value={format} onChange={(e) => setFormat(e.target.value)}>
+
+      <div className="clb-form-row">
+        <label className="clb-field" htmlFor="club-quiz-import">
+          <span>Nội dung câu hỏi (để trống để giữ nguyên)</span>
+          <textarea
+            id="club-quiz-import"
+            className="clb-textarea"
+            rows={4}
+            value={importText}
+            onChange={(event) => setImportText(event.target.value)}
+            placeholder={QUIZ_IMPORT_SCHEMA}
+          />
+        </label>
+        <label className="clb-field" htmlFor="club-quiz-format">
+          <span>Định dạng</span>
+          <select
+            id="club-quiz-format"
+            className="clb-select"
+            value={format}
+            onChange={(event) => setFormat(event.target.value)}
+          >
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
           </select>
         </label>
-        <label htmlFor="club-quiz-import">Nội dung câu hỏi (để trống để giữ nguyên)
-          <textarea id="club-quiz-import" className="form-input" rows={4} value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={QUIZ_IMPORT_SCHEMA} />
-        </label>
       </div>
-      <div className="club-settings-actionbar">
-        <button type="submit" className="btn btn-primary" disabled={save.isPending || quizQuery.isLoading}>
+
+      <div className="clb-settings-bar">
+        <button type="submit" className="clb-btn clb-btn--primary" disabled={save.isPending || quizQuery.isLoading}>
           {save.isPending ? 'Đang lưu…' : 'Lưu cấu hình quiz'}
         </button>
       </div>

@@ -7,10 +7,9 @@ import {
   voteClanPoll
 } from '../../../api/community.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
+import { ClubEmptyState, ClubPostSkeleton } from '../components/ClubPrimitives.jsx';
 import InlineComposer from '../components/InlineComposer.jsx';
 import PostCard from '../components/PostCard.jsx';
-import { PostSkeleton } from '../components/Skeleton.jsx';
-import EmptyState from '../components/EmptyState.jsx';
 import CommentsThread from './CommentsThread.jsx';
 import { feedKey, useFeed } from '../hooks/useClubs.js';
 import { postsFrom, safeNumber } from '../lib/format.js';
@@ -46,7 +45,6 @@ function patchPostInCache(client, key, postId, patch) {
   });
 }
 
-// Infinite query wrapper + filter + optimistic like/vote.
 export default function FeedList({ clanId, roleLabels, canPost, canDeleteAny, canPoll, myRole }) {
   const auth = useAuth();
   const { notify } = useToasts();
@@ -81,7 +79,7 @@ export default function FeedList({ clanId, roleLabels, canPost, canDeleteAny, ca
         attachments: payload.url ? [{ url: payload.url, title: payload.title || 'Tài liệu CLB' }] : []
       });
     },
-    onSuccess: (_data, payload, context) => {
+    onSuccess: (_data, _payload, context) => {
       context?.reset?.();
       client.invalidateQueries({ queryKey: key });
       notify('Đã đăng bài trong CLB.', 'success');
@@ -124,7 +122,9 @@ export default function FeedList({ clanId, roleLabels, canPost, canDeleteAny, ca
                 if (String(option.id) === String(optionId)) {
                   return { ...option, is_voted: true, vote_count: safeNumber(option.vote_count) + 1 };
                 }
-                return option.is_voted ? { ...option, is_voted: false, vote_count: Math.max(0, safeNumber(option.vote_count) - 1) } : option;
+                return option.is_voted
+                  ? { ...option, is_voted: false, vote_count: Math.max(0, safeNumber(option.vote_count) - 1) }
+                  : option;
               });
               return { ...post, poll: { ...post.poll, options } };
             });
@@ -163,30 +163,45 @@ export default function FeedList({ clanId, roleLabels, canPost, canDeleteAny, ca
   };
 
   return (
-    <div className="club-feed">
+    <div className="clb-stack">
       {canPost && (
-        <div className="club-panel">
+        <div className="clb-surface">
           <InlineComposer user={auth.user} canPoll={canPoll} isPending={createPost.isPending} onSubmit={submitComposer} />
         </div>
       )}
-      <div className="club-feed-filter">
-        <div className="club-segmented" role="group" aria-label="Lọc bản tin">
+
+      <div className="clb-toolbar">
+        <div className="clb-segmented" role="group" aria-label="Lọc bản tin">
           {FILTERS.map((item) => (
-            <button key={item.id} type="button" className={filter === item.id ? 'is-active' : ''} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+            <button
+              key={item.id}
+              type="button"
+              className={filter === item.id ? 'is-active' : ''}
+              aria-pressed={filter === item.id}
+              onClick={() => setFilter(item.id)}
+            >
               {item.label}
             </button>
           ))}
         </div>
-        {feed.isSuccess && <span className="club-feed-summary">Đã tải {rawPosts.length}/{total} bài</span>}
+        {feed.isSuccess && <span className="clb-muted">Đã tải {rawPosts.length}/{total} bài</span>}
       </div>
+
       {feed.isLoading ? (
-        <div className="club-feed-list"><PostSkeleton /><PostSkeleton /></div>
+        <div className="clb-stack"><ClubPostSkeleton /><ClubPostSkeleton /></div>
       ) : feed.isError ? (
-        <div className="club-empty" role="alert"><h2>Chưa thể tải bản tin</h2><p>{feed.error?.message}</p><button type="button" className="btn btn-secondary" onClick={() => feed.refetch()}>Thử lại</button></div>
+        <div className="clb-empty" role="alert">
+          <h2>Chưa thể tải bản tin</h2>
+          <p>{feed.error?.message}</p>
+          <button type="button" className="clb-btn clb-btn--secondary" onClick={() => feed.refetch()}>Thử lại</button>
+        </div>
       ) : posts.length === 0 ? (
-        <EmptyState title="Chưa có bài đăng phù hợp" hint={filter === 'all' ? 'Hãy bắt đầu cuộc trao đổi đầu tiên của CLB.' : 'Hãy thử bộ lọc khác hoặc đăng một nội dung mới.'} />
+        <ClubEmptyState
+          title="Chưa có bài đăng phù hợp"
+          hint={filter === 'all' ? 'Hãy bắt đầu cuộc trao đổi đầu tiên của CLB.' : 'Hãy thử bộ lọc khác hoặc đăng một nội dung mới.'}
+        />
       ) : (
-        <div className="club-feed-list">
+        <div className="clb-stack">
           {posts.map((post) => (
             <PostCard
               key={post.id}
@@ -206,14 +221,21 @@ export default function FeedList({ clanId, roleLabels, canPost, canDeleteAny, ca
           ))}
         </div>
       )}
+
       {feed.hasNextPage && (
-        <div className="club-load-more">
-          <button type="button" className="btn btn-secondary" onClick={() => feed.fetchNextPage()} disabled={feed.isFetchingNextPage}>
+        <div className="clb-load-more">
+          <button
+            type="button"
+            className="clb-btn clb-btn--secondary"
+            onClick={() => feed.fetchNextPage()}
+            disabled={feed.isFetchingNextPage}
+          >
             {feed.isFetchingNextPage ? 'Đang tải…' : 'Tải thêm bài đăng'}
           </button>
         </div>
       )}
-      <span className="club-visually-hidden" data-testid="club-my-role">{myRole || ''}</span>
+
+      <span className="clb-sr-only" data-testid="club-my-role">{myRole || ''}</span>
     </div>
   );
 }

@@ -25,22 +25,56 @@ export default function ClubSettingsForm({ club }) {
 
   return (
     <form
-      className="club-panel"
+      className="clb-surface clb-form"
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate();
       }}
     >
-      <div className="club-panel-heading">
-        <div><h2>Thông tin công khai</h2><p>Những gì sinh viên thấy trước khi tham gia.</p></div>
+      <div className="clb-panel-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h2>Thông tin công khai</h2>
+          <p>Những gì sinh viên nhìn thấy trước khi tham gia CLB.</p>
+        </div>
       </div>
-      <div className="club-form-grid">
-        <label htmlFor="club-name">Tên CLB<input id="club-name" className="form-input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} required /></label>
-        <label htmlFor="club-tag">Tag<input id="club-tag" className="form-input" value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value })} /></label>
+
+      <div className="clb-form-row">
+        <label className="clb-field" htmlFor="club-name">
+          <span>Tên CLB</span>
+          <input
+            id="club-name"
+            className="clb-input"
+            value={draft.name}
+            onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+            required
+          />
+        </label>
+        <label className="clb-field" htmlFor="club-tag">
+          <span>Tag</span>
+          <input
+            id="club-tag"
+            className="clb-input"
+            value={draft.tag}
+            onChange={(event) => setDraft({ ...draft, tag: event.target.value })}
+          />
+        </label>
       </div>
-      <label htmlFor="club-description">Mô tả<textarea id="club-description" className="form-input" rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
-      <div className="club-settings-actionbar">
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>{save.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+
+      <label className="clb-field" htmlFor="club-description">
+        <span>Mô tả</span>
+        <textarea
+          id="club-description"
+          className="clb-textarea"
+          rows={3}
+          value={draft.description}
+          onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+        />
+      </label>
+
+      <div className="clb-settings-bar">
+        <button type="submit" className="clb-btn clb-btn--primary" disabled={save.isPending}>
+          {save.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
+        </button>
       </div>
     </form>
   );

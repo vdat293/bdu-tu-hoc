@@ -2,12 +2,10 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateClanRoles } from '../../../api/community.js';
 import { useAuth, useToasts } from '../../../app/providers.jsx';
-import RoleBadge from '../components/RoleBadge.jsx';
+import { RoleBadge } from '../components/ClubPrimitives.jsx';
 import { DEFAULT_LABELS, ROLE_ORDER } from '../lib/roles.js';
 
 function normalizeInitial(roleLabels) {
-  // Nhận cả map { role_key: { display_name|name, color } } (từ GET /clans)
-  // lẫn mảng [{ role_key, display_name, color }] (từ GET /roles).
   const byKey = {};
   if (Array.isArray(roleLabels)) {
     for (const item of roleLabels) {
@@ -21,19 +19,20 @@ function normalizeInitial(roleLabels) {
   for (const role of ROLE_ORDER) {
     const fallback = DEFAULT_LABELS[role];
     const entry = byKey[role];
-    if (typeof entry === 'string') next[role] = { name: entry, color: fallback.color };
-    else if (entry && typeof entry === 'object') {
+    if (typeof entry === 'string') {
+      next[role] = { name: entry, color: fallback.color };
+    } else if (entry && typeof entry === 'object') {
       next[role] = {
         name: String(entry.display_name ?? entry.name ?? entry.label ?? fallback.name),
         color: String(entry.color ?? fallback.color)
       };
-    } else next[role] = { ...fallback };
+    } else {
+      next[role] = { ...fallback };
+    }
   }
   return next;
 }
 
-// List 5 roles: preview badge live + input tên 2-20 ký tự + color input
-// + validate trùng tên, nút Lưu gọi PUT /roles.
 export default function RoleLabelEditor({ clanId, initialLabels }) {
   const auth = useAuth();
   const { notify } = useToasts();
@@ -51,18 +50,14 @@ export default function RoleLabelEditor({ clanId, initialLabels }) {
         continue;
       }
       const key = name.toLocaleLowerCase('vi-VN');
-      if (seen.has(key)) {
-        result[role] = `Trùng tên với vai trò ${seen.get(key)}.`;
-      } else {
-        seen.set(key, role);
-      }
+      if (seen.has(key)) result[role] = `Trùng tên với vai trò ${seen.get(key)}.`;
+      else seen.set(key, role);
     }
     return result;
   }, [labels]);
   const hasError = Object.keys(errors).length > 0;
 
   const save = useMutation({
-    // PUT /api/community/clans/:id/roles nhận { roles: [{ role_key, display_name, color }] }.
     mutationFn: (roles) => updateClanRoles(auth.token, clanId, roles),
     onSuccess: () => {
       setTouched(false);
@@ -74,25 +69,32 @@ export default function RoleLabelEditor({ clanId, initialLabels }) {
 
   const previewMap = useMemo(() => {
     const map = {};
-    for (const role of ROLE_ORDER) map[role] = { name: labels[role].name.trim() || DEFAULT_LABELS[role].name, color: labels[role].color };
+    for (const role of ROLE_ORDER) {
+      map[role] = { name: labels[role].name.trim() || DEFAULT_LABELS[role].name, color: labels[role].color };
+    }
     return map;
   }, [labels]);
 
   return (
-    <section className="club-panel" aria-label="Tên hiển thị vai trò">
-      <div className="club-panel-heading">
-        <div><h2>Tên hiển thị vai trò</h2><p>Tùy chỉnh tên và màu badge cho 5 vai trò trong CLB.</p></div>
+    <section className="clb-surface clb-form" aria-label="Tên hiển thị vai trò">
+      <div className="clb-panel-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h2>Tên hiển thị vai trò</h2>
+          <p>Tùy chỉnh tên và màu sắc badge cho 5 cấp bậc trong CLB.</p>
+        </div>
       </div>
-      <div className="club-role-editor">
+
+      <div className="clb-role-list">
         {ROLE_ORDER.map((role) => (
-          <div className="club-role-row" key={role}>
-            <div className="club-role-row__preview">
+          <div className="clb-role-row" key={role}>
+            <div className="clb-role-row__preview">
               <RoleBadge role={role} roleLabels={previewMap} />
               <code>{role}</code>
             </div>
-            <label>Tên hiển thị
+            <label className="clb-field">
+              <span>Tên hiển thị</span>
               <input
-                className="form-input"
+                className="clb-input"
                 value={labels[role].name}
                 minLength={2}
                 maxLength={20}
@@ -102,10 +104,11 @@ export default function RoleLabelEditor({ clanId, initialLabels }) {
                 }}
               />
             </label>
-            <label>Màu
+            <label className="clb-field">
+              <span>Màu</span>
               <input
                 type="color"
-                className="club-color-input"
+                className="clb-color-input"
                 value={/^#[0-9a-fA-F]{6}$/.test(labels[role].color) ? labels[role].color : DEFAULT_LABELS[role].color}
                 onChange={(event) => {
                   setTouched(true);
@@ -113,24 +116,29 @@ export default function RoleLabelEditor({ clanId, initialLabels }) {
                 }}
               />
             </label>
-            {errors[role] && <p className="club-field-error" role="alert">{errors[role]}</p>}
+            {errors[role] && <p className="clb-field-error" role="alert">{errors[role]}</p>}
           </div>
         ))}
       </div>
-      <div className="club-settings-actionbar">
+
+      <div className="clb-settings-bar">
+        {hasError && <span className="clb-muted">Khắc phục lỗi trùng tên / độ dài trước khi lưu.</span>}
         <button
           type="button"
-          className="btn btn-primary"
+          className="clb-btn clb-btn--primary"
           disabled={save.isPending || hasError || !touched}
           onClick={() => {
-            const roles = ROLE_ORDER.map((role) => ({ role_key: role, display_name: labels[role].name.trim(), color: labels[role].color }));
+            const roles = ROLE_ORDER.map((role) => ({
+              role_key: role,
+              display_name: labels[role].name.trim(),
+              color: labels[role].color
+            }));
             save.mutate(roles);
           }}
         >
           {save.isPending ? 'Đang lưu…' : 'Lưu tên vai trò'}
         </button>
       </div>
-      {hasError && <p className="club-muted">Khắc phục lỗi trùng tên / độ dài trước khi lưu.</p>}
     </section>
   );
 }

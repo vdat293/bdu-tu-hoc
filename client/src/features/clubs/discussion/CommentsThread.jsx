@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addCommunityPostComment, getCommunityPostComments } from '../../../api/community.js';
 import { useAuth, useRealtimeRoom, useToasts } from '../../../app/providers.jsx';
-import { formatRelativeTime, initials } from '../lib/format.js';
+import { ClubAvatar } from '../components/ClubPrimitives.jsx';
+import { formatRelativeTime } from '../lib/format.js';
 
-// Lazy load: component chỉ mount khi user mở bình luận.
-// Optimistic add: patch cache onMutate, rollback onError.
 export default function CommentsThread({ postId }) {
   const auth = useAuth();
   const { notify } = useToasts();
@@ -50,43 +49,57 @@ export default function CommentsThread({ postId }) {
     }
   });
 
-  const comments = Array.isArray(query.data?.comments) ? query.data.comments : Array.isArray(query.data) ? query.data : [];
+  const comments = Array.isArray(query.data?.comments)
+    ? query.data.comments
+    : Array.isArray(query.data)
+      ? query.data
+      : [];
 
   return (
-    <section className="club-comments" aria-label="Bình luận bài đăng">
+    <section className="clb-comments" aria-label="Bình luận bài đăng">
       <form
-        className="club-comment-form"
+        className="clb-comment-form"
         onSubmit={(event) => {
           event.preventDefault();
           if (draft.trim()) create.mutate(draft.trim());
         }}
       >
-        <label className="sr-only" htmlFor={`club-comment-${postId}`}>Viết bình luận</label>
+        <label className="clb-sr-only" htmlFor={`club-comment-${postId}`}>Viết bình luận</label>
         <input
           id={`club-comment-${postId}`}
-          className="form-input"
+          className="clb-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           maxLength={2000}
           placeholder="Viết trao đổi trong nhóm…"
         />
-        <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim() || create.isPending}>
+        <button
+          type="submit"
+          className="clb-btn clb-btn--primary clb-btn--sm"
+          disabled={!draft.trim() || create.isPending}
+        >
           {create.isPending ? 'Đang gửi…' : 'Gửi'}
         </button>
       </form>
+
       {query.isLoading ? (
-        <p className="club-muted">Đang tải bình luận…</p>
+        <p className="clb-muted">Đang tải bình luận…</p>
       ) : query.isError ? (
-        <button type="button" className="club-text-action" onClick={() => query.refetch()}>Tải lại bình luận</button>
+        <button type="button" className="clb-link-btn" onClick={() => query.refetch()}>
+          Tải lại bình luận
+        </button>
       ) : comments.length === 0 ? (
-        <p className="club-muted">Chưa có trao đổi nào.</p>
+        <p className="clb-muted">Chưa có trao đổi nào.</p>
       ) : (
-        <div className="club-comment-list">
+        <div className="clb-comment-list">
           {comments.map((comment) => (
-            <article className="club-comment" key={comment.id}>
-              <span className="club-avatar club-avatar--sm" aria-hidden="true">{initials(comment.author?.name)}</span>
-              <div className="club-comment__copy">
-                <header><strong>{comment.author?.name || 'Thành viên CLB'}</strong><time dateTime={comment.created_at}>{formatRelativeTime(comment.created_at)}</time></header>
+            <article className="clb-comment" key={comment.id}>
+              <ClubAvatar src={comment.author?.avatar_url} name={comment.author?.name} size="sm" />
+              <div className="clb-comment__copy">
+                <header className="clb-comment__head">
+                  <strong>{comment.author?.name || 'Thành viên CLB'}</strong>
+                  <time dateTime={comment.created_at}>{formatRelativeTime(comment.created_at)}</time>
+                </header>
                 <p>{comment.content}</p>
               </div>
             </article>
