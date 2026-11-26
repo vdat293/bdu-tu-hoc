@@ -224,6 +224,33 @@ html[data-ui-style="claymorphism"] .sidebar-mobile-search {
    4. TABLET & MOBILE SHELL (<= 1024px) — SAFE AREAS, 100dvh, NATIVE SCROLL
    -------------------------------------------------------------------------- */
 @media (max-width: 1024px) {
+  /* Use `overflow-x: clip` (not `hidden`) on html/body so Safari iOS scrolls
+     the window natively (collapsing its address bar & enabling tap-status-bar
+     scroll-to-top) without breaking `position: sticky` on `.topbar`. */
+  html,
+  body {
+    overflow-x: clip;
+    overflow-y: visible;
+    height: auto;
+  }
+
+  /* Override showcase.css's desktop viewport-locked shell (`height: 100dvh;
+     overflow: hidden`) so mobile pages scroll smoothly via the document. */
+  .app-layout {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .main-content-wrapper {
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .sidebar {
     width: min(300px, 84vw);
     height: 100vh;
@@ -298,8 +325,13 @@ html[data-ui-style="claymorphism"] .sidebar-mobile-search {
     padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
   }
 
-  .dashboard-body {
-    overflow-y: visible;
+  .dashboard-body,
+  .dashboard-body.dashboard-body-survey {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
     padding: 14px max(12px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
   }
 
