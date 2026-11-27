@@ -15,6 +15,7 @@ const VIEW_MSSV = 'TEST_TTCDS_APIVIEW';
 const CREATE_MSSV = 'TEST_TTCDS_APICREATE';
 const OTHER_MSSV = 'TEST_TTCDS_APIOTHER';
 const SYS_MSSV = 'TEST_TTCDS_APISYS';
+const NO_TAG_MSSV = 'TEST_TTCDS_APINOTAG';
 const MEMBER_MSSV = 'TEST_TTCDS_APISV1';
 const OUTSIDER_MSSV = 'TEST_TTCDS_APISV9';
 
@@ -22,7 +23,8 @@ const TOKENS = {
   view: 'ttcds-api-view-token',
   create: 'ttcds-api-create-token',
   other: 'ttcds-api-other-token',
-  sys: 'ttcds-api-sys-token'
+  sys: 'ttcds-api-sys-token',
+  noTag: 'ttcds-api-notag-token'
 };
 
 const STUDENT_FIXTURE = {
@@ -85,18 +87,23 @@ async function runTtcdsApiTest() {
   BduIdentityService.register(TOKENS.create, CREATE_MSSV, { expiresIn: 600 });
   BduIdentityService.register(TOKENS.other, OTHER_MSSV, { expiresIn: 600 });
   BduIdentityService.register(TOKENS.sys, SYS_MSSV, { expiresIn: 600 });
+  BduIdentityService.register(TOKENS.noTag, NO_TAG_MSSV, { expiresIn: 600 });
 
-  // Moi TEST user deu co nametag #TTCDS; chi SYS la system owner.
-  PermissionService.can = async () => true;
+  // Moi TEST user tru NO_TAG_MSSV deu co nametag #TTCDS; chi SYS la system owner.
+  PermissionService.can = async (mssv) =>
+    String(mssv || '').trim().toUpperCase() !== NO_TAG_MSSV;
   PermissionService.isSystemOwner = async (mssv) =>
     String(mssv || '').trim().toUpperCase() === SYS_MSSV;
 
   // Stub service: khong doc kho odp_* that trong test controller nay.
   TtcdsStudentService.searchStudents = async () => ({ ket_qua: [] });
   TtcdsStudentService.getStudent = async (mssv) => {
-    if (String(mssv).toUpperCase() === MEMBER_MSSV) return STUDENT_FIXTURE;
-    const err = new Error('Ban khong co quyen xem sinh vien nay');
-    err.status = 403;
+    const clean = String(mssv).toUpperCase();
+    if (clean === MEMBER_MSSV || clean === OUTSIDER_MSSV) {
+      return { ...STUDENT_FIXTURE, ho_so: { ...STUDENT_FIXTURE.ho_so, mssv: clean } };
+    }
+    const err = new Error('Khong tim thay sinh vien');
+    err.status = 404;
     throw err;
   };
   TtcdsStudentService.getAttendance = async () => ({ tong_so_buoi: 0, so_buoi_vang: 0, nhat_ky: [] });
@@ -181,17 +188,59 @@ async function runTtcdsApiTest() {
     }
     console.log('PASSED: thanh vien trong group xem duoc detail + ren_luyen.');
 
-    console.log('--- [Test 5] GET students/:mssv ngoai group -> 403 ---');
+    console.log('--- [Test 5] Nguoi co tag #TTCDS tra cuu tu do -> 200; khong co tag -> 403 ---');
     {
-      const { res, captured } = mockRes();
-      await TtcdsController.getStudent(
-        mockReq({ token: TOKENS.create, params: { mssv: OUTSIDER_MSSV } }),
-        res
+      for (const token of [TOKENS.view, TOKENS.create]) {
+        const searchRes = mockRes();
+        await TtcdsController.searchStudents(
+          mockReq({ token, queryParams: { q: 'nguyen' } }),
+          searchRes.res
+        );
+        assert.equal(searchRes.captured.statusCode, 200);
+        assert.equal(searchRes.captured.payload.result, true);
+
+        const studentRes = mockRes();
+        await TtcdsController.getStudent(
+          mockReq({ token, params: { mssv: OUTSIDER_MSSV } }),
+          studentRes.res
+        );
+        assert.equal(studentRes.captured.statusCode, 200);
+        assert.equal(studentRes.captured.payload.data?.ho_so?.mssv, OUTSIDER_MSSV);
+
+        const attRes = mockRes();
+        await TtcdsController.getAttendance(
+          mockReq({ token, params: { mssv: OUTSIDER_MSSV } }),
+          attRes.res
+        );
+        assert.equal(attRes.captured.statusCode, 200);
+        assert.equal(attRes.captured.payload.result, true);
+      }
+
+      const deniedSearch = mockRes();
+      await TtcdsController.searchStudents(
+        mockReq({ token: TOKENS.noTag, queryParams: { q: 'nguyen' } }),
+        deniedSearch.res
       );
-      assert.equal(captured.statusCode, 403);
-      assert.equal(captured.payload.result, false);
+      assert.equal(deniedSearch.captured.statusCode, 403);
+      assert.equal(deniedSearch.captured.payload.result, false);
+
+      const deniedStudent = mockRes();
+      await TtcdsController.getStudent(
+        mockReq({ token: TOKENS.noTag, params: { mssv: MEMBER_MSSV } }),
+        deniedStudent.res
+      );
+      assert.equal(deniedStudent.captured.statusCode, 403);
+      assert.equal(deniedStudent.captured.payload.result, false);
+
+      const deniedAtt = mockRes();
+      await TtcdsController.getAttendance(
+        mockReq({ token: TOKENS.noTag, params: { mssv: MEMBER_MSSV } }),
+        deniedAtt.res
+      );
+      assert.equal(deniedAtt.captured.statusCode, 403);
+      assert.equal(deniedAtt.captured.payload.result, false);
     }
-    console.log('PASSED: SV ngoai pham vi phu trach bi 403.');
+    console.log('PASSED: toan bo nguoi co tag #TTCDS duoc tra cuu; nguoi khong co tag bi 403.');
 
     console.log('--- [Test 6] PUT permissions level sai -> 400 ---');
     {

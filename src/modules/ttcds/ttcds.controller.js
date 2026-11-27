@@ -36,26 +36,6 @@ async function assertGroupOwnership(group, requesterMssv, message) {
   throw err;
 }
 
-/**
- * Sinh viên phải thuộc một group của chính người xem (trừ system owner
- * kèm `?all=1`), nếu không 403. Dùng một query JOIN thay vì N+1 listMembers.
- */
-async function assertStudentInScope(requesterMssv, targetMssv, req) {
-  if (isAllFlag(req.query?.all) && await PermissionService.isSystemOwner(requesterMssv)) return;
-  const hit = await query(
-    `SELECT 1 FROM ttcds_group_members m
-     JOIN ttcds_groups g ON g.id = m.group_id
-     WHERE g.owner_mssv = $1 AND m.mssv = $2
-     LIMIT 1`,
-    [normalizeTtcdsMssv(requesterMssv), normalizeTtcdsMssv(targetMssv)]
-  );
-  if (hit.rows.length === 0) {
-    const err = new Error('Bạn không có quyền xem sinh viên này.');
-    err.status = 403;
-    throw err;
-  }
-}
-
 async function assertSystemOwner(requesterMssv) {
   if (await PermissionService.isSystemOwner(requesterMssv)) return;
   const err = new Error('Chỉ quản trị viên hệ thống mới được thực hiện thao tác này.');
@@ -222,8 +202,7 @@ export const TtcdsController = {
       if (q.length < 2) {
         return res.status(400).json({ result: false, message: 'Nhập ít nhất 2 ký tự để tìm kiếm.' });
       }
-      const bypassScope = isAllFlag(req.query?.all) && await PermissionService.isSystemOwner(mssv);
-      const data = await TtcdsStudentService.searchStudents(q, { limit: req.query?.limit, ownerMssv: mssv, bypassScope });
+      const data = await TtcdsStudentService.searchStudents(q, { limit: req.query?.limit });
       return res.json({ result: true, data });
     } catch (err) {
       return sendError(res, err, err?.status || 503, 'Không thể tìm kiếm sinh viên.');
@@ -235,7 +214,6 @@ export const TtcdsController = {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       await TtcdsService.requireAccess(mssv);
       const target = normalizeTtcdsMssv(req.params.mssv);
-      await assertStudentInScope(mssv, target, req);
       const data = await TtcdsStudentService.getStudent(target);
       return res.json({ result: true, data });
     } catch (err) {
@@ -248,7 +226,6 @@ export const TtcdsController = {
       const mssv = await BduIdentityService.resolveVerifiedMssv(req.headers.authorization);
       await TtcdsService.requireAccess(mssv);
       const target = normalizeTtcdsMssv(req.params.mssv);
-      await assertStudentInScope(mssv, target, req);
       const data = await TtcdsStudentService.getAttendance(target, {
         ma_mon_hoc: req.query?.ma_mon_hoc,
         ma_nhom: req.query?.ma_nhom,

@@ -99,6 +99,7 @@ export const SAFE_NODE_TESTS = [
   'test-admin-insights-endpoint.js',
   'test-action-translator.js',
   'test-interaction-telemetry.js',
+  'test-ttcds-lookup-controller.js',
   'test-vps-monitor.js',
   'test-no-mock-data.js',
   'test-docx-caption-placeholders.js',
